@@ -37,6 +37,45 @@ export type ReviewDetail = {
   cells: Cell[];
 };
 
+export type MatterRole = "owner" | "editor" | "viewer";
+
+export type Client = {
+  id: string;
+  name: string;
+  type: "organization" | "individual";
+  clientNumber: string | null;
+  status: "active" | "inactive";
+  createdAt: string;
+};
+
+export type Matter = {
+  id: string;
+  clientId: string;
+  name: string;
+  matterNumber: string | null;
+  practiceArea: string | null;
+  status: "active" | "closed";
+  adverseParties: string[] | null;
+  conflictCleared: boolean;
+  conflictNotes: string | null;
+  leadAttorney: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+// listMattersForUser joins matter + client + the caller's role.
+export type MatterListItem = { matter: Matter; client: Client; role: MatterRole };
+
+export type MatterMember = {
+  userId: string;
+  role: MatterRole;
+  addedAt: string;
+  name: string;
+  email: string;
+};
+
+export type FirmUser = { id: string; name: string; email: string };
+
 export type DocStatus = "pending" | "processing" | "ready" | "failed";
 export type Doc = {
   id: string;
@@ -77,13 +116,51 @@ export const api = {
       method: "PUT",
       body: JSON.stringify({ anthropicKey }),
     }),
+  // Clients & matters (firm organization)
+  listClients: () => req<Client[]>("/api/clients"),
+  createClient: (d: {
+    name: string;
+    type?: "organization" | "individual";
+    clientNumber?: string;
+  }) => req<Client>("/api/clients", { method: "POST", body: JSON.stringify(d) }),
+  listMatters: () => req<MatterListItem[]>("/api/matters"),
+  getMatter: (id: string) => req<Matter>(`/api/matters/${id}`),
+  createMatter: (d: {
+    clientId: string;
+    name: string;
+    matterNumber?: string;
+    practiceArea?: string;
+    adverseParties?: string[];
+  }) => req<Matter>("/api/matters", { method: "POST", body: JSON.stringify(d) }),
+  closeMatter: (id: string) => req<null>(`/api/matters/${id}/close`, { method: "POST" }),
+  clearConflicts: (id: string, notes?: string) =>
+    req<null>(`/api/matters/${id}/clear-conflicts`, {
+      method: "POST",
+      body: JSON.stringify({ notes }),
+    }),
+  checkConflicts: (d: { clientName: string; adverseParties?: string[] }) =>
+    req<{ matches: string[] }>("/api/matters/conflicts-check", {
+      method: "POST",
+      body: JSON.stringify(d),
+    }),
+  listMembers: (id: string) => req<MatterMember[]>(`/api/matters/${id}/members`),
+  addMember: (id: string, userId: string, role: MatterRole) =>
+    req<null>(`/api/matters/${id}/members`, {
+      method: "POST",
+      body: JSON.stringify({ userId, role }),
+    }),
+  removeMember: (id: string, userId: string) =>
+    req<null>(`/api/matters/${id}/members/${userId}`, { method: "DELETE" }),
+  searchUsers: (q: string) => req<FirmUser[]>(`/api/users/search?q=${encodeURIComponent(q)}`),
+
   listDocuments: () => req<Doc[]>("/api/documents"),
-  createDocument: (d: { title: string; markdown: string }) =>
+  createDocument: (d: { title: string; markdown: string; matterId?: string }) =>
     req<Doc>("/api/documents", { method: "POST", body: JSON.stringify(d) }),
-  uploadDocument: (file: File, title?: string) => {
+  uploadDocument: (file: File, title?: string, matterId?: string) => {
     const f = new FormData();
     f.append("file", file);
     if (title) f.append("title", title);
+    if (matterId) f.append("matterId", matterId);
     return upload<Doc>("/api/documents/upload", f);
   },
   retryDocument: (id: string) => req<Doc>(`/api/documents/${id}/retry`, { method: "POST" }),
@@ -91,8 +168,12 @@ export const api = {
     req<Array<{ id: string; title: string; documentIds: string[]; createdAt: string }>>(
       "/api/tabular/reviews"
     ),
-  createReview: (d: { title: string; columnsConfig: Column[]; documentIds: string[] }) =>
-    req<{ id: string }>("/api/tabular/reviews", { method: "POST", body: JSON.stringify(d) }),
+  createReview: (d: {
+    title: string;
+    columnsConfig: Column[];
+    documentIds: string[];
+    matterId?: string;
+  }) => req<{ id: string }>("/api/tabular/reviews", { method: "POST", body: JSON.stringify(d) }),
   getReview: (id: string) => req<ReviewDetail>(`/api/tabular/reviews/${id}`),
   runCell: (id: string, documentId: string, columnIndex: number) =>
     req<ReviewDetail>(`/api/tabular/reviews/${id}/run`, {
@@ -125,13 +206,18 @@ export const api = {
   // Contracts
   listContracts: () =>
     req<Array<{ id: string; title: string; createdAt: string }>>("/api/contracts"),
-  createContract: (d: { title: string; body: string; jurisdiction?: string | null }) =>
-    req<{ id: string }>("/api/contracts", { method: "POST", body: JSON.stringify(d) }),
-  uploadContract: (file: File, title?: string, jurisdiction?: string | null) => {
+  createContract: (d: {
+    title: string;
+    body: string;
+    jurisdiction?: string | null;
+    matterId?: string;
+  }) => req<{ id: string }>("/api/contracts", { method: "POST", body: JSON.stringify(d) }),
+  uploadContract: (file: File, title?: string, jurisdiction?: string | null, matterId?: string) => {
     const f = new FormData();
     f.append("file", file);
     if (title) f.append("title", title);
     if (jurisdiction) f.append("jurisdiction", jurisdiction);
+    if (matterId) f.append("matterId", matterId);
     return upload<{ id: string }>("/api/contracts/upload", f);
   },
   contractDocxUrl: (id: string) => `/api/contracts/${id}/docx`,
@@ -148,8 +234,12 @@ export const api = {
   // Workflows
   listWorkflows: () =>
     req<Array<{ id: string; title: string; type: string; isSystem: boolean }>>("/api/workflows"),
-  createWorkflow: (d: { title: string; type: "assistant" | "tabular"; promptMd: string }) =>
-    req<{ id: string }>("/api/workflows", { method: "POST", body: JSON.stringify(d) }),
+  createWorkflow: (d: {
+    title: string;
+    type: "assistant" | "tabular";
+    promptMd: string;
+    matterId?: string;
+  }) => req<{ id: string }>("/api/workflows", { method: "POST", body: JSON.stringify(d) }),
   getWorkflow: (id: string) => req<WorkflowDetail>(`/api/workflows/${id}`),
   updateWorkflow: (id: string, patch: { title?: string; promptMd?: string }) =>
     req<WorkflowDetail>(`/api/workflows/${id}`, { method: "PATCH", body: JSON.stringify(patch) }),

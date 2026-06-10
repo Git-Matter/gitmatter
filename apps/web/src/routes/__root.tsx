@@ -2,6 +2,7 @@ import { HeadContent, Link, Scripts, createRootRoute } from "@tanstack/react-rou
 import { Toaster } from "@/components/ui/sonner";
 import { AppSidebar } from "../components/AppSidebar";
 import { useSession } from "../lib/auth-client";
+import { MattersProvider } from "../lib/matters-context";
 
 import appCss from "@/styles/globals.css?url";
 
@@ -46,12 +47,14 @@ function Shell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="flex h-dvh bg-background">
-      <AppSidebar />
-      <main className="h-dvh flex-1 overflow-y-auto">
-        <div className="container mx-auto px-6 pt-page pb-12">{children}</div>
-      </main>
-    </div>
+    <MattersProvider>
+      <div className="flex h-dvh bg-background">
+        <AppSidebar />
+        <main className="h-dvh flex-1 overflow-y-auto">
+          <div className="container mx-auto px-6 pt-page pb-12">{children}</div>
+        </main>
+      </div>
+    </MattersProvider>
   );
 }
 

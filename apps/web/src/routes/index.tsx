@@ -5,8 +5,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { PageHeader } from "@/components/PageHeader";
 import { api, type Column, type Doc } from "../lib/api";
 import { useSession } from "../lib/auth-client";
+import { useWorkingMatterId } from "../lib/matters-context";
 
 export const Route = createFileRoute("/")({ component: Home });
 
@@ -53,11 +55,16 @@ function Reviews() {
   }, []);
 
   return (
-    <div className="flex flex-col gap-stack">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Tabular reviews</h1>
-        <Button onClick={() => setCreating((v) => !v)}>{creating ? "Cancel" : "New review"}</Button>
-      </div>
+    <div className="flex flex-col gap-section">
+      <PageHeader
+        title="Tabular reviews"
+        description="Extract a grid of answers across documents. Every cell is a commit."
+        action={
+          <Button onClick={() => setCreating((v) => !v)}>
+            {creating ? "Cancel" : "New review"}
+          </Button>
+        }
+      />
 
       {creating && (
         <CreateReview
@@ -86,6 +93,7 @@ function Reviews() {
 }
 
 function CreateReview({ docs, onCreated }: { docs: Doc[]; onCreated: (id: string) => void }) {
+  const matterId = useWorkingMatterId();
   const [title, setTitle] = useState("");
   const [selected, setSelected] = useState<string[]>([]);
   const [columns, setColumns] = useState<Column[]>([{ index: 0, name: "", prompt: "" }]);
@@ -108,6 +116,7 @@ function CreateReview({ docs, onCreated }: { docs: Doc[]; onCreated: (id: string
         title: title.trim(),
         columnsConfig: cols,
         documentIds: selected,
+        matterId,
       });
       onCreated(id);
     } catch (e) {

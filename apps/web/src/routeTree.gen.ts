@@ -8,304 +8,378 @@
 // You should NOT make any changes in this file as it will be overwritten.
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
-import { Route as rootRouteImport } from "./routes/__root";
-import { Route as WorkflowsRouteImport } from "./routes/workflows";
-import { Route as SignupRouteImport } from "./routes/signup";
-import { Route as SettingsRouteImport } from "./routes/settings";
-import { Route as LoginRouteImport } from "./routes/login";
-import { Route as DocumentsRouteImport } from "./routes/documents";
-import { Route as ContractsRouteImport } from "./routes/contracts";
-import { Route as ChatRouteImport } from "./routes/chat";
-import { Route as IndexRouteImport } from "./routes/index";
-import { Route as ReviewsIdRouteImport } from "./routes/reviews.$id";
-import { Route as ContractsIdRouteImport } from "./routes/contracts.$id";
-import { Route as ApiSplatRouteImport } from "./routes/api/$";
-import { Route as DotwellKnownSplatRouteImport } from "./routes/[.]well-known/$";
+import { Route as rootRouteImport } from './routes/__root'
+import { Route as WorkflowsRouteImport } from './routes/workflows'
+import { Route as SignupRouteImport } from './routes/signup'
+import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as MattersRouteImport } from './routes/matters'
+import { Route as LoginRouteImport } from './routes/login'
+import { Route as DocumentsRouteImport } from './routes/documents'
+import { Route as ContractsRouteImport } from './routes/contracts'
+import { Route as ClientsRouteImport } from './routes/clients'
+import { Route as ChatRouteImport } from './routes/chat'
+import { Route as IndexRouteImport } from './routes/index'
+import { Route as ReviewsIdRouteImport } from './routes/reviews.$id'
+import { Route as MattersIdRouteImport } from './routes/matters.$id'
+import { Route as ContractsIdRouteImport } from './routes/contracts.$id'
+import { Route as ApiSplatRouteImport } from './routes/api/$'
+import { Route as DotwellKnownSplatRouteImport } from './routes/[.]well-known/$'
 
 const WorkflowsRoute = WorkflowsRouteImport.update({
-  id: "/workflows",
-  path: "/workflows",
+  id: '/workflows',
+  path: '/workflows',
   getParentRoute: () => rootRouteImport,
-} as any);
+} as any)
 const SignupRoute = SignupRouteImport.update({
-  id: "/signup",
-  path: "/signup",
+  id: '/signup',
+  path: '/signup',
   getParentRoute: () => rootRouteImport,
-} as any);
+} as any)
 const SettingsRoute = SettingsRouteImport.update({
-  id: "/settings",
-  path: "/settings",
+  id: '/settings',
+  path: '/settings',
   getParentRoute: () => rootRouteImport,
-} as any);
+} as any)
+const MattersRoute = MattersRouteImport.update({
+  id: '/matters',
+  path: '/matters',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LoginRoute = LoginRouteImport.update({
-  id: "/login",
-  path: "/login",
+  id: '/login',
+  path: '/login',
   getParentRoute: () => rootRouteImport,
-} as any);
+} as any)
 const DocumentsRoute = DocumentsRouteImport.update({
-  id: "/documents",
-  path: "/documents",
+  id: '/documents',
+  path: '/documents',
   getParentRoute: () => rootRouteImport,
-} as any);
+} as any)
 const ContractsRoute = ContractsRouteImport.update({
-  id: "/contracts",
-  path: "/contracts",
+  id: '/contracts',
+  path: '/contracts',
   getParentRoute: () => rootRouteImport,
-} as any);
+} as any)
+const ClientsRoute = ClientsRouteImport.update({
+  id: '/clients',
+  path: '/clients',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ChatRoute = ChatRouteImport.update({
-  id: "/chat",
-  path: "/chat",
+  id: '/chat',
+  path: '/chat',
   getParentRoute: () => rootRouteImport,
-} as any);
+} as any)
 const IndexRoute = IndexRouteImport.update({
-  id: "/",
-  path: "/",
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
-} as any);
+} as any)
 const ReviewsIdRoute = ReviewsIdRouteImport.update({
-  id: "/reviews/$id",
-  path: "/reviews/$id",
+  id: '/reviews/$id',
+  path: '/reviews/$id',
   getParentRoute: () => rootRouteImport,
-} as any);
+} as any)
+const MattersIdRoute = MattersIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => MattersRoute,
+} as any)
 const ContractsIdRoute = ContractsIdRouteImport.update({
-  id: "/$id",
-  path: "/$id",
+  id: '/$id',
+  path: '/$id',
   getParentRoute: () => ContractsRoute,
-} as any);
+} as any)
 const ApiSplatRoute = ApiSplatRouteImport.update({
-  id: "/api/$",
-  path: "/api/$",
+  id: '/api/$',
+  path: '/api/$',
   getParentRoute: () => rootRouteImport,
-} as any);
+} as any)
 const DotwellKnownSplatRoute = DotwellKnownSplatRouteImport.update({
-  id: "/.well-known/$",
-  path: "/.well-known/$",
+  id: '/.well-known/$',
+  path: '/.well-known/$',
   getParentRoute: () => rootRouteImport,
-} as any);
+} as any)
 
 export interface FileRoutesByFullPath {
-  "/": typeof IndexRoute;
-  "/chat": typeof ChatRoute;
-  "/contracts": typeof ContractsRouteWithChildren;
-  "/documents": typeof DocumentsRoute;
-  "/login": typeof LoginRoute;
-  "/settings": typeof SettingsRoute;
-  "/signup": typeof SignupRoute;
-  "/workflows": typeof WorkflowsRoute;
-  "/.well-known/$": typeof DotwellKnownSplatRoute;
-  "/api/$": typeof ApiSplatRoute;
-  "/contracts/$id": typeof ContractsIdRoute;
-  "/reviews/$id": typeof ReviewsIdRoute;
+  '/': typeof IndexRoute
+  '/chat': typeof ChatRoute
+  '/clients': typeof ClientsRoute
+  '/contracts': typeof ContractsRouteWithChildren
+  '/documents': typeof DocumentsRoute
+  '/login': typeof LoginRoute
+  '/matters': typeof MattersRouteWithChildren
+  '/settings': typeof SettingsRoute
+  '/signup': typeof SignupRoute
+  '/workflows': typeof WorkflowsRoute
+  '/.well-known/$': typeof DotwellKnownSplatRoute
+  '/api/$': typeof ApiSplatRoute
+  '/contracts/$id': typeof ContractsIdRoute
+  '/matters/$id': typeof MattersIdRoute
+  '/reviews/$id': typeof ReviewsIdRoute
 }
 export interface FileRoutesByTo {
-  "/": typeof IndexRoute;
-  "/chat": typeof ChatRoute;
-  "/contracts": typeof ContractsRouteWithChildren;
-  "/documents": typeof DocumentsRoute;
-  "/login": typeof LoginRoute;
-  "/settings": typeof SettingsRoute;
-  "/signup": typeof SignupRoute;
-  "/workflows": typeof WorkflowsRoute;
-  "/.well-known/$": typeof DotwellKnownSplatRoute;
-  "/api/$": typeof ApiSplatRoute;
-  "/contracts/$id": typeof ContractsIdRoute;
-  "/reviews/$id": typeof ReviewsIdRoute;
+  '/': typeof IndexRoute
+  '/chat': typeof ChatRoute
+  '/clients': typeof ClientsRoute
+  '/contracts': typeof ContractsRouteWithChildren
+  '/documents': typeof DocumentsRoute
+  '/login': typeof LoginRoute
+  '/matters': typeof MattersRouteWithChildren
+  '/settings': typeof SettingsRoute
+  '/signup': typeof SignupRoute
+  '/workflows': typeof WorkflowsRoute
+  '/.well-known/$': typeof DotwellKnownSplatRoute
+  '/api/$': typeof ApiSplatRoute
+  '/contracts/$id': typeof ContractsIdRoute
+  '/matters/$id': typeof MattersIdRoute
+  '/reviews/$id': typeof ReviewsIdRoute
 }
 export interface FileRoutesById {
-  __root__: typeof rootRouteImport;
-  "/": typeof IndexRoute;
-  "/chat": typeof ChatRoute;
-  "/contracts": typeof ContractsRouteWithChildren;
-  "/documents": typeof DocumentsRoute;
-  "/login": typeof LoginRoute;
-  "/settings": typeof SettingsRoute;
-  "/signup": typeof SignupRoute;
-  "/workflows": typeof WorkflowsRoute;
-  "/.well-known/$": typeof DotwellKnownSplatRoute;
-  "/api/$": typeof ApiSplatRoute;
-  "/contracts/$id": typeof ContractsIdRoute;
-  "/reviews/$id": typeof ReviewsIdRoute;
+  __root__: typeof rootRouteImport
+  '/': typeof IndexRoute
+  '/chat': typeof ChatRoute
+  '/clients': typeof ClientsRoute
+  '/contracts': typeof ContractsRouteWithChildren
+  '/documents': typeof DocumentsRoute
+  '/login': typeof LoginRoute
+  '/matters': typeof MattersRouteWithChildren
+  '/settings': typeof SettingsRoute
+  '/signup': typeof SignupRoute
+  '/workflows': typeof WorkflowsRoute
+  '/.well-known/$': typeof DotwellKnownSplatRoute
+  '/api/$': typeof ApiSplatRoute
+  '/contracts/$id': typeof ContractsIdRoute
+  '/matters/$id': typeof MattersIdRoute
+  '/reviews/$id': typeof ReviewsIdRoute
 }
 export interface FileRouteTypes {
-  fileRoutesByFullPath: FileRoutesByFullPath;
+  fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    | "/"
-    | "/chat"
-    | "/contracts"
-    | "/documents"
-    | "/login"
-    | "/settings"
-    | "/signup"
-    | "/workflows"
-    | "/.well-known/$"
-    | "/api/$"
-    | "/contracts/$id"
-    | "/reviews/$id";
-  fileRoutesByTo: FileRoutesByTo;
+    | '/'
+    | '/chat'
+    | '/clients'
+    | '/contracts'
+    | '/documents'
+    | '/login'
+    | '/matters'
+    | '/settings'
+    | '/signup'
+    | '/workflows'
+    | '/.well-known/$'
+    | '/api/$'
+    | '/contracts/$id'
+    | '/matters/$id'
+    | '/reviews/$id'
+  fileRoutesByTo: FileRoutesByTo
   to:
-    | "/"
-    | "/chat"
-    | "/contracts"
-    | "/documents"
-    | "/login"
-    | "/settings"
-    | "/signup"
-    | "/workflows"
-    | "/.well-known/$"
-    | "/api/$"
-    | "/contracts/$id"
-    | "/reviews/$id";
+    | '/'
+    | '/chat'
+    | '/clients'
+    | '/contracts'
+    | '/documents'
+    | '/login'
+    | '/matters'
+    | '/settings'
+    | '/signup'
+    | '/workflows'
+    | '/.well-known/$'
+    | '/api/$'
+    | '/contracts/$id'
+    | '/matters/$id'
+    | '/reviews/$id'
   id:
-    | "__root__"
-    | "/"
-    | "/chat"
-    | "/contracts"
-    | "/documents"
-    | "/login"
-    | "/settings"
-    | "/signup"
-    | "/workflows"
-    | "/.well-known/$"
-    | "/api/$"
-    | "/contracts/$id"
-    | "/reviews/$id";
-  fileRoutesById: FileRoutesById;
+    | '__root__'
+    | '/'
+    | '/chat'
+    | '/clients'
+    | '/contracts'
+    | '/documents'
+    | '/login'
+    | '/matters'
+    | '/settings'
+    | '/signup'
+    | '/workflows'
+    | '/.well-known/$'
+    | '/api/$'
+    | '/contracts/$id'
+    | '/matters/$id'
+    | '/reviews/$id'
+  fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
-  IndexRoute: typeof IndexRoute;
-  ChatRoute: typeof ChatRoute;
-  ContractsRoute: typeof ContractsRouteWithChildren;
-  DocumentsRoute: typeof DocumentsRoute;
-  LoginRoute: typeof LoginRoute;
-  SettingsRoute: typeof SettingsRoute;
-  SignupRoute: typeof SignupRoute;
-  WorkflowsRoute: typeof WorkflowsRoute;
-  DotwellKnownSplatRoute: typeof DotwellKnownSplatRoute;
-  ApiSplatRoute: typeof ApiSplatRoute;
-  ReviewsIdRoute: typeof ReviewsIdRoute;
+  IndexRoute: typeof IndexRoute
+  ChatRoute: typeof ChatRoute
+  ClientsRoute: typeof ClientsRoute
+  ContractsRoute: typeof ContractsRouteWithChildren
+  DocumentsRoute: typeof DocumentsRoute
+  LoginRoute: typeof LoginRoute
+  MattersRoute: typeof MattersRouteWithChildren
+  SettingsRoute: typeof SettingsRoute
+  SignupRoute: typeof SignupRoute
+  WorkflowsRoute: typeof WorkflowsRoute
+  DotwellKnownSplatRoute: typeof DotwellKnownSplatRoute
+  ApiSplatRoute: typeof ApiSplatRoute
+  ReviewsIdRoute: typeof ReviewsIdRoute
 }
 
-declare module "@tanstack/react-router" {
+declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    "/workflows": {
-      id: "/workflows";
-      path: "/workflows";
-      fullPath: "/workflows";
-      preLoaderRoute: typeof WorkflowsRouteImport;
-      parentRoute: typeof rootRouteImport;
-    };
-    "/signup": {
-      id: "/signup";
-      path: "/signup";
-      fullPath: "/signup";
-      preLoaderRoute: typeof SignupRouteImport;
-      parentRoute: typeof rootRouteImport;
-    };
-    "/settings": {
-      id: "/settings";
-      path: "/settings";
-      fullPath: "/settings";
-      preLoaderRoute: typeof SettingsRouteImport;
-      parentRoute: typeof rootRouteImport;
-    };
-    "/login": {
-      id: "/login";
-      path: "/login";
-      fullPath: "/login";
-      preLoaderRoute: typeof LoginRouteImport;
-      parentRoute: typeof rootRouteImport;
-    };
-    "/documents": {
-      id: "/documents";
-      path: "/documents";
-      fullPath: "/documents";
-      preLoaderRoute: typeof DocumentsRouteImport;
-      parentRoute: typeof rootRouteImport;
-    };
-    "/contracts": {
-      id: "/contracts";
-      path: "/contracts";
-      fullPath: "/contracts";
-      preLoaderRoute: typeof ContractsRouteImport;
-      parentRoute: typeof rootRouteImport;
-    };
-    "/chat": {
-      id: "/chat";
-      path: "/chat";
-      fullPath: "/chat";
-      preLoaderRoute: typeof ChatRouteImport;
-      parentRoute: typeof rootRouteImport;
-    };
-    "/": {
-      id: "/";
-      path: "/";
-      fullPath: "/";
-      preLoaderRoute: typeof IndexRouteImport;
-      parentRoute: typeof rootRouteImport;
-    };
-    "/reviews/$id": {
-      id: "/reviews/$id";
-      path: "/reviews/$id";
-      fullPath: "/reviews/$id";
-      preLoaderRoute: typeof ReviewsIdRouteImport;
-      parentRoute: typeof rootRouteImport;
-    };
-    "/contracts/$id": {
-      id: "/contracts/$id";
-      path: "/$id";
-      fullPath: "/contracts/$id";
-      preLoaderRoute: typeof ContractsIdRouteImport;
-      parentRoute: typeof ContractsRoute;
-    };
-    "/api/$": {
-      id: "/api/$";
-      path: "/api/$";
-      fullPath: "/api/$";
-      preLoaderRoute: typeof ApiSplatRouteImport;
-      parentRoute: typeof rootRouteImport;
-    };
-    "/.well-known/$": {
-      id: "/.well-known/$";
-      path: "/.well-known/$";
-      fullPath: "/.well-known/$";
-      preLoaderRoute: typeof DotwellKnownSplatRouteImport;
-      parentRoute: typeof rootRouteImport;
-    };
+    '/workflows': {
+      id: '/workflows'
+      path: '/workflows'
+      fullPath: '/workflows'
+      preLoaderRoute: typeof WorkflowsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/signup': {
+      id: '/signup'
+      path: '/signup'
+      fullPath: '/signup'
+      preLoaderRoute: typeof SignupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/matters': {
+      id: '/matters'
+      path: '/matters'
+      fullPath: '/matters'
+      preLoaderRoute: typeof MattersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/documents': {
+      id: '/documents'
+      path: '/documents'
+      fullPath: '/documents'
+      preLoaderRoute: typeof DocumentsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/contracts': {
+      id: '/contracts'
+      path: '/contracts'
+      fullPath: '/contracts'
+      preLoaderRoute: typeof ContractsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/clients': {
+      id: '/clients'
+      path: '/clients'
+      fullPath: '/clients'
+      preLoaderRoute: typeof ClientsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/chat': {
+      id: '/chat'
+      path: '/chat'
+      fullPath: '/chat'
+      preLoaderRoute: typeof ChatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/reviews/$id': {
+      id: '/reviews/$id'
+      path: '/reviews/$id'
+      fullPath: '/reviews/$id'
+      preLoaderRoute: typeof ReviewsIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/matters/$id': {
+      id: '/matters/$id'
+      path: '/$id'
+      fullPath: '/matters/$id'
+      preLoaderRoute: typeof MattersIdRouteImport
+      parentRoute: typeof MattersRoute
+    }
+    '/contracts/$id': {
+      id: '/contracts/$id'
+      path: '/$id'
+      fullPath: '/contracts/$id'
+      preLoaderRoute: typeof ContractsIdRouteImport
+      parentRoute: typeof ContractsRoute
+    }
+    '/api/$': {
+      id: '/api/$'
+      path: '/api/$'
+      fullPath: '/api/$'
+      preLoaderRoute: typeof ApiSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/.well-known/$': {
+      id: '/.well-known/$'
+      path: '/.well-known/$'
+      fullPath: '/.well-known/$'
+      preLoaderRoute: typeof DotwellKnownSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 interface ContractsRouteChildren {
-  ContractsIdRoute: typeof ContractsIdRoute;
+  ContractsIdRoute: typeof ContractsIdRoute
 }
 
 const ContractsRouteChildren: ContractsRouteChildren = {
   ContractsIdRoute: ContractsIdRoute,
-};
+}
 
-const ContractsRouteWithChildren = ContractsRoute._addFileChildren(ContractsRouteChildren);
+const ContractsRouteWithChildren = ContractsRoute._addFileChildren(
+  ContractsRouteChildren,
+)
+
+interface MattersRouteChildren {
+  MattersIdRoute: typeof MattersIdRoute
+}
+
+const MattersRouteChildren: MattersRouteChildren = {
+  MattersIdRoute: MattersIdRoute,
+}
+
+const MattersRouteWithChildren =
+  MattersRoute._addFileChildren(MattersRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ChatRoute: ChatRoute,
+  ClientsRoute: ClientsRoute,
   ContractsRoute: ContractsRouteWithChildren,
   DocumentsRoute: DocumentsRoute,
   LoginRoute: LoginRoute,
+  MattersRoute: MattersRouteWithChildren,
   SettingsRoute: SettingsRoute,
   SignupRoute: SignupRoute,
   WorkflowsRoute: WorkflowsRoute,
   DotwellKnownSplatRoute: DotwellKnownSplatRoute,
   ApiSplatRoute: ApiSplatRoute,
   ReviewsIdRoute: ReviewsIdRoute,
-};
+}
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
-  ._addFileTypes<FileRouteTypes>();
+  ._addFileTypes<FileRouteTypes>()
 
-import type { getRouter } from "./router.tsx";
-import type { createStart } from "@tanstack/react-start";
-declare module "@tanstack/react-start" {
+import type { getRouter } from './router.tsx'
+import type { createStart } from '@tanstack/react-start'
+declare module '@tanstack/react-start' {
   interface Register {
-    ssr: true;
-    router: Awaited<ReturnType<typeof getRouter>>;
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
   }
 }

@@ -1,6 +1,10 @@
 import { useEffect, useState } from "react";
 import { Link, useRouterState, useRouter } from "@tanstack/react-router";
 import {
+  Briefcase,
+  Building2,
+  Check,
+  ChevronsUpDown,
   FileText,
   FolderOpen,
   Library,
@@ -10,7 +14,9 @@ import {
   Table2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { signOut, useSession } from "../lib/auth-client";
+import { useMatters } from "../lib/matters-context";
 
 const NAV_ITEMS = [
   { href: "/", label: "Reviews", icon: Table2, exact: true },
@@ -18,6 +24,8 @@ const NAV_ITEMS = [
   { href: "/workflows", label: "Workflows", icon: Library },
   { href: "/chat", label: "Chat", icon: MessageSquare },
   { href: "/documents", label: "Documents", icon: FolderOpen },
+  { href: "/clients", label: "Clients", icon: Building2 },
+  { href: "/matters", label: "Matters", icon: Briefcase },
   { href: "/settings", label: "Settings", icon: SettingsIcon },
 ] as const;
 
@@ -76,6 +84,11 @@ export function AppSidebar() {
         </button>
       </div>
 
+      {/* Working-matter switcher */}
+      <div className="px-2.5 pb-2">
+        <MatterSwitcher open={open} />
+      </div>
+
       {/* Nav */}
       <nav className="flex flex-col">
         {NAV_ITEMS.map((item) => {
@@ -129,5 +142,83 @@ export function AppSidebar() {
         </div>
       </div>
     </div>
+  );
+}
+
+const ROLE_LABEL: Record<string, string> = { owner: "Owner", editor: "Editor", viewer: "Viewer" };
+
+function MatterSwitcher({ open }: { open: boolean }) {
+  const { matters, current, setCurrent } = useMatters();
+  const [pop, setPop] = useState(false);
+
+  if (!current) {
+    // No matters loaded yet (or none accessible) — show a quiet placeholder.
+    return open ? (
+      <div className="rounded-lg border border-dashed border-sidebar-border px-2.5 py-2 text-xs text-muted-foreground">
+        No matter selected
+      </div>
+    ) : null;
+  }
+
+  return (
+    <Popover open={pop} onOpenChange={setPop}>
+      <PopoverTrigger
+        title={!open ? `${current.client.name} · ${current.matter.name}` : undefined}
+        className={cn(
+          "flex w-full items-center gap-2 rounded-lg border border-sidebar-border bg-background/60 px-2.5 py-2 text-left transition-colors hover:bg-sidebar-accent/60",
+          !open && "justify-center px-0"
+        )}
+      >
+        <Briefcase className="size-4 shrink-0 text-muted-foreground" />
+        {open && (
+          <>
+            <span className="flex min-w-0 flex-1 flex-col leading-tight">
+              <span className="truncate text-xs font-medium">{current.matter.name}</span>
+              <span className="truncate text-[11px] text-muted-foreground">
+                {current.client.name}
+              </span>
+            </span>
+            <ChevronsUpDown className="size-3.5 shrink-0 text-muted-foreground" />
+          </>
+        )}
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-64 gap-0 p-0">
+        <div className="border-b px-3 py-2 text-xs font-medium text-muted-foreground">
+          Working matter
+        </div>
+        <ul className="max-h-72 overflow-y-auto py-1">
+          {matters.map(({ matter, client, role }) => {
+            const active = matter.id === current.matter.id;
+            return (
+              <li key={matter.id}>
+                <button
+                  onClick={() => {
+                    setCurrent(matter.id);
+                    setPop(false);
+                  }}
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-accent/60"
+                >
+                  <Check className={cn("size-4 shrink-0", active ? "opacity-100" : "opacity-0")} />
+                  <span className="flex min-w-0 flex-1 flex-col leading-tight">
+                    <span className="truncate text-sm">{matter.name}</span>
+                    <span className="truncate text-xs text-muted-foreground">{client.name}</span>
+                  </span>
+                  <span className="shrink-0 text-[11px] text-muted-foreground">
+                    {ROLE_LABEL[role]}
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+        <Link
+          to="/matters"
+          onClick={() => setPop(false)}
+          className="block border-t px-3 py-2 text-xs text-muted-foreground hover:text-foreground"
+        >
+          Manage matters →
+        </Link>
+      </PopoverContent>
+    </Popover>
   );
 }
