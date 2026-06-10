@@ -14,7 +14,9 @@ export const documents = pgTable("documents", {
   userId: text("user_id")
     .notNull()
     .references(() => user.id, { onDelete: "cascade" }),
-  matterId: uuid("matter_id").references(() => matters.id, { onDelete: "cascade" }),
+  matterId: uuid("matter_id")
+    .notNull()
+    .references(() => matters.id, { onDelete: "cascade" }),
   title: text("title").notNull(),
   fileType: text("file_type").notNull(),
   storagePath: text("storage_path"),

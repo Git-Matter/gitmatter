@@ -7,9 +7,10 @@ export const contracts = pgTable("contracts", {
   userId: text("user_id")
     .notNull()
     .references(() => user.id, { onDelete: "cascade" }),
-  // Owning matter. Nullable during the matter rollout; enforced NOT NULL once
-  // existing rows are backfilled.
-  matterId: uuid("matter_id").references(() => matters.id, { onDelete: "cascade" }),
+  // Owning matter — every artifact belongs to one.
+  matterId: uuid("matter_id")
+    .notNull()
+    .references(() => matters.id, { onDelete: "cascade" }),
   createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
   title: text("title").notNull(),
   // Governing-law jurisdiction; overrides the user default for tool resolution.

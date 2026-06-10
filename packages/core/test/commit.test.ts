@@ -1,9 +1,10 @@
 import { afterAll, beforeAll, describe, expect, test } from "vite-plus/test";
 import { randomUUID } from "node:crypto";
 import { db, sql } from "@workspace/db/client";
-import { tabularReviews, user } from "@workspace/db/schema";
+import { clients, tabularReviews, user } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 import { deriveBlame, diffCommits, listCommits, recordCommit } from "../src/core/commit.js";
+import { ensureDefaultMatter } from "../src/platform/matters.js";
 
 const userId = `test-user-${randomUUID()}`;
 let reviewId: string;
@@ -15,10 +16,12 @@ beforeAll(async () => {
     email: `${userId}@example.com`,
     emailVerified: true,
   });
+  const matterId = await ensureDefaultMatter(userId, "Test User");
   const [r] = await db
     .insert(tabularReviews)
     .values({
       userId,
+      matterId,
       createdBy: userId,
       title: "Test Review",
       columnsConfig: [{ index: 0, name: "C0", prompt: "p" }],
@@ -29,7 +32,8 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await db.delete(tabularReviews).where(eq(tabularReviews.id, reviewId));
+  // Deleting the client cascades its matters -> reviews -> members.
+  await db.delete(clients).where(eq(clients.createdBy, userId));
   await db.delete(user).where(eq(user.id, userId));
   await sql.end();
 });

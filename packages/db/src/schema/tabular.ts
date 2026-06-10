@@ -20,7 +20,9 @@ export const tabularReviews = pgTable("tabular_reviews", {
   userId: text("user_id")
     .notNull()
     .references(() => user.id, { onDelete: "cascade" }),
-  matterId: uuid("matter_id").references(() => matters.id, { onDelete: "cascade" }),
+  matterId: uuid("matter_id")
+    .notNull()
+    .references(() => matters.id, { onDelete: "cascade" }),
   createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
   title: text("title").notNull(),
   jurisdiction: text("jurisdiction"),
