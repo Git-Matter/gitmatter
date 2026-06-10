@@ -9,6 +9,9 @@ import {
 } from "@workspace/db/schema";
 import { hashToken } from "./mcp-tokens.js";
 
+// Re-export so consumers can name the client type without reaching into db.
+export type { OAuthClient, OAuthAccessToken } from "@workspace/db/schema";
+
 const ACCESS_TTL_MS = 60 * 60 * 1000; // 1 hour
 const CODE_TTL_MS = 60 * 1000; // 60 seconds
 

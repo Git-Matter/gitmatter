@@ -21,6 +21,13 @@ function Login() {
     const { error } = await signIn.email({ email, password });
     setBusy(false);
     if (error) return toast.error(error.message ?? "Sign in failed");
+    // Bounce back to a server-side `next` (e.g. the OAuth /authorize endpoint).
+    // Only local paths, to avoid an open redirect.
+    const next = new URLSearchParams(window.location.search).get("next");
+    if (next && next.startsWith("/")) {
+      window.location.href = next;
+      return;
+    }
     void router.navigate({ to: "/" });
   }
 
