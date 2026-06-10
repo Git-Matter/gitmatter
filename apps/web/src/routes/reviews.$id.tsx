@@ -93,6 +93,16 @@ function ReviewView() {
           <h1 className="text-2xl tracking-tight">{review.title}</h1>
           <div className="flex items-center gap-2">
             <ModelPicker value={model} onChange={setModel} />
+            <a href={api.reviewExportUrl(id, "csv")}>
+              <Button size="sm" variant="outline">
+                CSV
+              </Button>
+            </a>
+            <a href={api.reviewExportUrl(id, "xlsx")}>
+              <Button size="sm" variant="outline">
+                XLSX
+              </Button>
+            </a>
             <Button size="sm" onClick={runAll}>
               Run all cells
             </Button>

@@ -11,7 +11,7 @@ import {
 } from "@workspace/db/schema";
 import { type Actor, recordCommit } from "../core/commit.js";
 import { completeText, DEFAULT_MODEL, providerForModel, resolveLlmKey } from "./provider.js";
-import { buildCellPrompt } from "./prompts/tabular.js";
+import { buildCellPrompt, normalizeCell } from "./prompts/tabular.js";
 
 const FLAGS = ["green", "grey", "yellow", "red"] as const;
 
@@ -42,11 +42,14 @@ export async function queryCell(params: {
     const flag = FLAGS.includes(parsed.flag as never)
       ? (parsed.flag as CellContent["flag"])
       : "grey";
-    return {
-      summary: String(parsed.summary ?? parsed.value ?? "").trim() || "Not addressed",
-      flag,
-      reasoning: String(parsed.reasoning ?? ""),
-    };
+    return normalizeCell(
+      {
+        summary: String(parsed.summary ?? parsed.value ?? "").trim() || "Not addressed",
+        flag,
+        reasoning: String(parsed.reasoning ?? ""),
+      },
+      params.format
+    );
   } catch {
     return { summary: raw.trim().slice(0, 500) || "Not addressed", flag: "grey", reasoning: "" };
   }

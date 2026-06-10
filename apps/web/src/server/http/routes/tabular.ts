@@ -2,10 +2,13 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import {
   type MatterRole,
+  buildReviewGrid,
   canAccessArtifact,
   createReview,
   diffCommits,
   getReview,
+  gridToCsv,
+  gridToXlsx,
   listCommits,
   listReviews,
   runCell,
@@ -65,6 +68,29 @@ tabularRoute.post("/api/tabular/reviews/:id/run", zValidator("json", runCellSche
     return c.json({ error: msg }, msg.startsWith("No API key") ? 400 : 500);
   }
   return c.json(await getReview(reviewId));
+});
+
+// Export the grid as CSV or XLSX (read-only, no commit).
+tabularRoute.get("/api/tabular/reviews/:id/export", async (c) => {
+  const id = c.req.param("id");
+  if (!(await access(c.get("user").id, id))) return c.json({ error: "Not found" }, 404);
+  const grid = await buildReviewGrid(id);
+  if (!grid) return c.json({ error: "Not found" }, 404);
+  const safe = grid.title.replace(/[^\w.-]+/g, "_") || "review";
+  if (c.req.query("format") === "csv") {
+    return new Response(gridToCsv(grid), {
+      headers: {
+        "Content-Type": "text/csv; charset=utf-8",
+        "Content-Disposition": `attachment; filename="${safe}.csv"`,
+      },
+    });
+  }
+  return new Response(gridToXlsx(grid) as BodyInit, {
+    headers: {
+      "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "Content-Disposition": `attachment; filename="${safe}.xlsx"`,
+    },
+  });
 });
 
 tabularRoute.get("/api/tabular/reviews/:id/history", async (c) => {

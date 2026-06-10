@@ -197,6 +197,8 @@ export const api = {
       body: JSON.stringify({ documentId, columnIndex, model }),
     }),
   history: (id: string) => req<Blame[]>(`/api/tabular/reviews/${id}/history`),
+  reviewExportUrl: (id: string, format: "csv" | "xlsx") =>
+    `/api/tabular/reviews/${id}/export?format=${format}`,
   listTokens: () =>
     req<
       Array<{

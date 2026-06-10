@@ -1,3 +1,5 @@
+import type { CellContent } from "@workspace/db/schema";
+
 function formatSuffix(format?: string): string {
   switch (format) {
     case "number":
@@ -11,9 +13,34 @@ function formatSuffix(format?: string): string {
       return " Respond with Yes or No.";
     case "bulleted_list":
       return " Respond as a markdown bulleted list.";
+    case "tag":
+      return " Respond with a single short label or tag (1-3 words).";
+    case "text":
+      return " Respond with plain prose.";
     default:
       return "";
   }
+}
+
+/**
+ * Light post-extraction cleanup. Coerces a few formats to a canonical shape and
+ * flags a clear mismatch (e.g. a currency column that came back with no number)
+ * so a reviewer notices. Never throws — extraction quality is the model's job.
+ */
+export function normalizeCell(content: CellContent, format?: string): CellContent {
+  const summary = content.summary.trim();
+  if (format === "yes_no") {
+    const lower = summary.toLowerCase();
+    if (lower.startsWith("yes")) return { ...content, summary: "Yes" };
+    if (lower.startsWith("no")) return { ...content, summary: "No" };
+    if (summary && summary !== "Not Found") return { ...content, flag: "yellow" }; // not a clean yes/no
+    return content;
+  }
+  if (format === "currency" || format === "monetary_amount" || format === "number") {
+    const hasNumber = /\d/.test(summary);
+    if (!hasNumber && summary && summary !== "Not Found") return { ...content, flag: "yellow" }; // expected a number, got none
+  }
+  return content;
 }
 
 export const EXTRACTION_SYSTEM = `You are a legal document analyst. Return ONLY valid JSON:
