@@ -6,13 +6,16 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { PageHeader } from "@/components/PageHeader";
 import { JURISDICTIONS } from "@workspace/registry";
 import { api } from "../lib/api";
+import { useWorkingMatterId } from "../lib/matters-context";
 
 export const Route = createFileRoute("/contracts")({ component: Contracts });
 
 function Contracts() {
   const router = useRouter();
+  const matterId = useWorkingMatterId();
   const [contracts, setContracts] = useState<
     Array<{ id: string; title: string; createdAt: string }>
   >([]);
@@ -38,6 +41,7 @@ function Contracts() {
         title: title.trim(),
         body,
         jurisdiction: jurisdiction || null,
+        matterId,
       });
       void router.navigate({ to: "/contracts/$id", params: { id } });
     } catch (e) {
@@ -53,7 +57,7 @@ function Contracts() {
     if (!file) return;
     setUploading(true);
     try {
-      const { id } = await api.uploadContract(file, undefined, jurisdiction || null);
+      const { id } = await api.uploadContract(file, undefined, jurisdiction || null, matterId);
       void router.navigate({ to: "/contracts/$id", params: { id } });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Upload failed");
@@ -63,25 +67,28 @@ function Contracts() {
   }
 
   return (
-    <div className="pt-6">
-      <div className="mb-4 flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Contracts</h1>
-        <div className="flex items-center gap-2">
-          <label className="cursor-pointer rounded-md border px-3 py-1.5 text-sm hover:bg-muted/50">
-            {uploading ? "Uploading…" : "Upload DOCX"}
-            <input
-              type="file"
-              accept=".docx,.doc"
-              disabled={uploading}
-              onChange={onUpload}
-              className="hidden"
-            />
-          </label>
-          <Button onClick={() => setCreating((v) => !v)}>
-            {creating ? "Cancel" : "New contract"}
-          </Button>
-        </div>
-      </div>
+    <div className="flex flex-col gap-section">
+      <PageHeader
+        title="Contracts"
+        description="Redline with tracked changes. Every edit — yours or an agent's — is a commit."
+        action={
+          <div className="flex items-center gap-2">
+            <label className="cursor-pointer rounded-md border px-3 py-1.5 text-sm hover:bg-muted/50">
+              {uploading ? "Uploading…" : "Upload DOCX"}
+              <input
+                type="file"
+                accept=".docx,.doc"
+                disabled={uploading}
+                onChange={onUpload}
+                className="hidden"
+              />
+            </label>
+            <Button onClick={() => setCreating((v) => !v)}>
+              {creating ? "Cancel" : "New contract"}
+            </Button>
+          </div>
+        }
+      />
 
       {creating && (
         <Card>

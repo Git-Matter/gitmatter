@@ -43,7 +43,7 @@ function Chat() {
   return (
     <div className="mx-auto max-w-2xl">
       <div className="mb-2 flex items-center gap-2">
-        <h1 className="text-xl font-semibold">Chat</h1>
+        <h1 className="text-2xl tracking-tight">Chat</h1>
         {jurisdiction && <Badge variant="outline">{jurisdiction}</Badge>}
         {tools.length > 0 && <Badge variant="secondary">{tools.length} MCP tools</Badge>}
       </div>

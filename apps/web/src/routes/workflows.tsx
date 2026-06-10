@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { api, type WorkflowDetail } from "../lib/api";
+import { useWorkingMatterId } from "../lib/matters-context";
 
 export const Route = createFileRoute("/workflows")({ component: Workflows });
 
@@ -28,10 +29,10 @@ function Workflows() {
   }, []);
 
   return (
-    <div className="grid gap-6 pt-6 lg:grid-cols-[1fr_1.4fr]">
+    <div className="grid gap-stack lg:grid-cols-[1fr_1.4fr]">
       <div>
         <div className="mb-3 flex items-center justify-between">
-          <h1 className="text-xl font-semibold">Workflows</h1>
+          <h1 className="text-2xl tracking-tight">Workflows</h1>
           <Button
             size="sm"
             onClick={() => {
@@ -93,6 +94,7 @@ function Workflows() {
 }
 
 function CreateWorkflow({ onCreated }: { onCreated: () => void }) {
+  const matterId = useWorkingMatterId();
   const [title, setTitle] = useState("");
   const [type, setType] = useState<"assistant" | "tabular">("assistant");
   const [promptMd, setPromptMd] = useState("");
@@ -102,7 +104,7 @@ function CreateWorkflow({ onCreated }: { onCreated: () => void }) {
     if (!title.trim() || !promptMd.trim()) return;
     setBusy(true);
     try {
-      await api.createWorkflow({ title: title.trim(), type, promptMd });
+      await api.createWorkflow({ title: title.trim(), type, promptMd, matterId });
       toast.success("Workflow created");
       onCreated();
     } catch (e) {
