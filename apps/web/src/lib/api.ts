@@ -37,7 +37,15 @@ export type ReviewDetail = {
   cells: Cell[];
 };
 
-export type Doc = { id: string; title: string; fileType: string; createdAt: string };
+export type DocStatus = "pending" | "processing" | "ready" | "failed";
+export type Doc = {
+  id: string;
+  title: string;
+  fileType: string;
+  status: DocStatus;
+  extractionError: string | null;
+  createdAt: string;
+};
 
 async function req<T>(path: string, opts?: RequestInit): Promise<T> {
   const r = await fetch(path, {
@@ -52,6 +60,16 @@ async function req<T>(path: string, opts?: RequestInit): Promise<T> {
   return (await r.json()) as T;
 }
 
+// Multipart upload — let the browser set the multipart boundary (no JSON header).
+async function upload<T>(path: string, form: FormData): Promise<T> {
+  const r = await fetch(path, { method: "POST", body: form });
+  if (!r.ok) {
+    const body = (await r.json().catch(() => ({}))) as { error?: string };
+    throw new Error(body.error || r.statusText);
+  }
+  return (await r.json()) as T;
+}
+
 export const api = {
   getKeys: () => req<{ hasAnthropic: boolean }>("/api/keys"),
   setKey: (anthropicKey: string) =>
@@ -62,6 +80,13 @@ export const api = {
   listDocuments: () => req<Doc[]>("/api/documents"),
   createDocument: (d: { title: string; markdown: string }) =>
     req<Doc>("/api/documents", { method: "POST", body: JSON.stringify(d) }),
+  uploadDocument: (file: File, title?: string) => {
+    const f = new FormData();
+    f.append("file", file);
+    if (title) f.append("title", title);
+    return upload<Doc>("/api/documents/upload", f);
+  },
+  retryDocument: (id: string) => req<Doc>(`/api/documents/${id}/retry`, { method: "POST" }),
   listReviews: () =>
     req<Array<{ id: string; title: string; documentIds: string[]; createdAt: string }>>(
       "/api/tabular/reviews"
@@ -102,6 +127,14 @@ export const api = {
     req<Array<{ id: string; title: string; createdAt: string }>>("/api/contracts"),
   createContract: (d: { title: string; body: string; jurisdiction?: string | null }) =>
     req<{ id: string }>("/api/contracts", { method: "POST", body: JSON.stringify(d) }),
+  uploadContract: (file: File, title?: string, jurisdiction?: string | null) => {
+    const f = new FormData();
+    f.append("file", file);
+    if (title) f.append("title", title);
+    if (jurisdiction) f.append("jurisdiction", jurisdiction);
+    return upload<{ id: string }>("/api/contracts/upload", f);
+  },
+  contractDocxUrl: (id: string) => `/api/contracts/${id}/docx`,
   getContract: (id: string) => req<ContractDetail>(`/api/contracts/${id}`),
   proposeEdit: (id: string, d: { find: string; replace: string; reason?: string }) =>
     req<ContractDetail>(`/api/contracts/${id}/edits`, { method: "POST", body: JSON.stringify(d) }),
@@ -142,7 +175,13 @@ export type ContractEdit = {
 };
 
 export type ContractDetail = {
-  contract: { id: string; title: string; body: string; headCommitId: string | null };
+  contract: {
+    id: string;
+    title: string;
+    body: string;
+    headCommitId: string | null;
+    currentVersionId: string | null;
+  };
   edits: ContractEdit[];
 };
 

@@ -1,9 +1,6 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-import { eq } from "drizzle-orm";
-import { db } from "@workspace/db/client";
-import { decrypt } from "@workspace/core";
-import { mcpConnections } from "@workspace/db/schema";
+import { decrypt, listEnabledConnections, type McpConnection } from "@workspace/core";
 import { providersFor } from "@workspace/registry";
 
 export type ExternalTool = {
@@ -16,7 +13,7 @@ export type ExternalTool = {
 
 export type ConnectedServer = { slug: string; client: Client; tools: ExternalTool[] };
 
-function authHeaders(conn: typeof mcpConnections.$inferSelect): Record<string, string> | undefined {
+function authHeaders(conn: McpConnection): Record<string, string> | undefined {
   if (conn.authType === "none" || !conn.authEncrypted) return undefined;
   const secret = decrypt(JSON.parse(conn.authEncrypted));
   if (conn.authType === "bearer") return { Authorization: `Bearer ${secret}` };
@@ -59,12 +56,10 @@ export async function connectEnabledServers(
   jurisdiction: string
 ): Promise<ConnectedServer[]> {
   const allowedProviderIds = new Set(providersFor(jurisdiction).map((p) => p.id));
-  const rows = await db.select().from(mcpConnections).where(eq(mcpConnections.enabled, true));
+  const rows = await listEnabledConnections(userId);
   const visible = rows.filter(
-    (r) =>
-      (r.userId === null || r.userId === userId) &&
-      // No providerId = unmanaged custom connection: always allowed.
-      (!r.providerId || allowedProviderIds.has(r.providerId))
+    // No providerId = unmanaged custom connection: always allowed.
+    (r) => !r.providerId || allowedProviderIds.has(r.providerId)
   );
   const servers: ConnectedServer[] = [];
   for (const conn of visible) {

@@ -7,7 +7,7 @@ export default defineConfig({
   test: {
     // Load root .env into process.env for integration tests (db, auth).
     // bun test did this implicitly; vitest does not expose non-VITE_ vars.
-    setupFiles: ["./vitest.setup.ts"],
+    setupFiles: [new URL("./vitest.setup.ts", import.meta.url).pathname],
   },
   lint: {
     jsPlugins: [{ name: "vite-plus", specifier: "vite-plus/oxlint-plugin" }],
@@ -22,7 +22,7 @@ export default defineConfig({
     trailingComma: "es5",
     printWidth: 100,
     sortTailwindcss: {
-      stylesheet: "packages/ui/src/styles/globals.css",
+      stylesheet: "apps/web/src/styles/globals.css",
       functions: ["cn", "cva"],
     },
     sortPackageJson: false,

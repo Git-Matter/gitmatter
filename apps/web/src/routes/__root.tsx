@@ -1,9 +1,9 @@
 import { HeadContent, Link, Scripts, createRootRoute } from "@tanstack/react-router";
-import { Toaster } from "@workspace/ui/components/sonner";
+import { Toaster } from "@/components/ui/sonner";
 import { AppSidebar } from "../components/AppSidebar";
 import { useSession } from "../lib/auth-client";
 
-import appCss from "@workspace/ui/globals.css?url";
+import appCss from "@/styles/globals.css?url";
 
 export const Route = createRootRoute({
   head: () => ({
@@ -29,7 +29,7 @@ function Shell({ children }: { children: React.ReactNode }) {
   // Logged out (or still resolving on a public page): no sidebar chrome.
   if (isPending || !session) {
     return (
-      <div className="min-h-dvh bg-gray-50/80">
+      <div className="min-h-dvh bg-background">
         {!isPending && !session && (
           <header className="flex h-12 items-center justify-end gap-3 px-4 text-sm">
             <Link to="/login" className="text-muted-foreground hover:text-foreground">
@@ -40,16 +40,16 @@ function Shell({ children }: { children: React.ReactNode }) {
             </Link>
           </header>
         )}
-        <main className="container mx-auto p-4">{children}</main>
+        <main className="container mx-auto px-6 pt-page pb-12">{children}</main>
       </div>
     );
   }
 
   return (
-    <div className="flex h-dvh bg-gray-50/80">
+    <div className="flex h-dvh bg-background">
       <AppSidebar />
       <main className="h-dvh flex-1 overflow-y-auto">
-        <div className="container mx-auto px-6 pb-12">{children}</div>
+        <div className="container mx-auto px-6 pt-page pb-12">{children}</div>
       </main>
     </div>
   );

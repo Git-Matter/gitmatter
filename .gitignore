@@ -19,3 +19,6 @@ todos.json
 
 # local scratch (screenshots etc)
 .scratch
+
+# local plans
+.plans

@@ -3,17 +3,18 @@
   "version": "0.0.1",
   "private": true,
   "scripts": {
-    "build": "vp run -r build",
-    "dev": "vp run -r dev",
+    "build": "turbo run build",
+    "dev": "turbo run dev",
     "lint": "vp lint",
     "format": "vp fmt",
-    "typecheck": "vp run -r typecheck",
-    "test": "vp test",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
     "check": "vp check",
     "prepare": "vp config"
   },
   "devDependencies": {
     "dotenv": "^17.4.2",
+    "turbo": "^2.9.17",
     "typescript": "^6",
     "vite-plus": "catalog:"
   },

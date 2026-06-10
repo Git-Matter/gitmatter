@@ -7,8 +7,7 @@
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "types": ["vite-plus/client"],
     "paths": {
-      "@/*": ["./src/*"],
-      "@workspace/ui/*": ["../../packages/ui/src/*"]
+      "@/*": ["./src/*"]
     },
 
     /* Bundler mode */

@@ -1,10 +1,10 @@
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Button } from "@workspace/ui/components/button";
-import { Input } from "@workspace/ui/components/input";
-import { Label } from "@workspace/ui/components/label";
-import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { api, type Column, type Doc } from "../lib/api";
 import { useSession } from "../lib/auth-client";
 
@@ -15,7 +15,7 @@ function Home() {
   if (isPending) return null;
   if (!session)
     return (
-      <div className="pt-12 text-center">
+      <div className="text-center">
         <h1 className="text-2xl font-semibold">gitcounsel</h1>
         <p className="mt-2 text-muted-foreground">
           Version-controlled legal review. Every change — yours or Claude's — is a commit.
@@ -53,8 +53,8 @@ function Reviews() {
   }, []);
 
   return (
-    <div className="pt-6">
-      <div className="mb-4 flex items-center justify-between">
+    <div className="flex flex-col gap-stack">
+      <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">Tabular reviews</h1>
         <Button onClick={() => setCreating((v) => !v)}>{creating ? "Cancel" : "New review"}</Button>
       </div>
@@ -66,7 +66,7 @@ function Reviews() {
         />
       )}
 
-      <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-stack sm:grid-cols-2 lg:grid-cols-3">
         {reviews.map((r) => (
           <Link key={r.id} to="/reviews/$id" params={{ id: r.id }}>
             <Card className="transition-colors hover:bg-muted/50">
@@ -122,13 +122,13 @@ function CreateReview({ docs, onCreated }: { docs: Doc[]; onCreated: (id: string
       <CardHeader>
         <CardTitle className="text-base">New review</CardTitle>
       </CardHeader>
-      <CardContent className="flex flex-col gap-4">
-        <div className="flex flex-col gap-1.5">
+      <CardContent className="flex flex-col gap-stack">
+        <div className="flex flex-col gap-field">
           <Label>Title</Label>
           <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Q3 NDAs" />
         </div>
 
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-field">
           <Label>Documents</Label>
           {!docs.length && (
             <p className="text-sm text-muted-foreground">

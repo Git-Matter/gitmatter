@@ -1,10 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
-import { Button } from "@workspace/ui/components/button";
-import { Textarea } from "@workspace/ui/components/textarea";
-import { Badge } from "@workspace/ui/components/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { api } from "../lib/api";
 
 export const Route = createFileRoute("/chat")({ component: Chat });
@@ -41,7 +41,7 @@ function Chat() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl pt-6">
+    <div className="mx-auto max-w-2xl">
       <div className="mb-2 flex items-center gap-2">
         <h1 className="text-xl font-semibold">Chat</h1>
         {jurisdiction && <Badge variant="outline">{jurisdiction}</Badge>}
@@ -52,7 +52,7 @@ function Chat() {
         law for Chevron deference."
       </p>
 
-      <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-stack">
         {turns.map((t, i) => (
           <Card key={i} className={t.role === "user" ? "bg-muted/40" : ""}>
             <CardHeader className="pb-1">

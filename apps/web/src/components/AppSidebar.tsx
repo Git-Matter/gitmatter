@@ -9,7 +9,7 @@ import {
   Settings as SettingsIcon,
   Table2,
 } from "lucide-react";
-import { cn } from "@workspace/ui/lib/utils";
+import { cn } from "@/lib/utils";
 import { signOut, useSession } from "../lib/auth-client";
 
 const NAV_ITEMS = [
@@ -48,9 +48,8 @@ export function AppSidebar() {
     <div
       className={cn(
         open ? "w-64" : "w-14",
-        "my-2 mr-0 ml-2 flex flex-col rounded-2xl border border-white/70 bg-white/65 md:my-3 md:ml-3",
-        "shadow-[0_-2px_7px_rgba(15,23,42,0.044),0_5px_12px_rgba(15,23,42,0.095),inset_0_1px_0_rgba(255,255,255,0.85)]",
-        "h-[calc(100dvh-1.5rem)] backdrop-blur-2xl transition-all duration-300"
+        "my-2 mr-0 ml-2 flex flex-col rounded-2xl border border-sidebar-border bg-sidebar text-sidebar-foreground shadow-xs md:my-3 md:ml-3",
+        "h-[calc(100dvh-1.5rem)] transition-all duration-300"
       )}
     >
       {/* Logo + toggle */}
@@ -62,7 +61,7 @@ export function AppSidebar() {
             to="/"
             className="flex items-center gap-1.5 px-2 transition-opacity hover:opacity-80"
           >
-            <span className="grid size-6 place-items-center rounded-md bg-gray-900 text-xs font-bold text-white">
+            <span className="grid size-6 place-items-center rounded-md bg-primary text-xs font-bold text-primary-foreground">
               g
             </span>
             <span className="font-serif text-2xl font-light">gitcounsel</span>
@@ -71,7 +70,7 @@ export function AppSidebar() {
         <button
           onClick={toggle}
           title={open ? "Collapse" : "Expand"}
-          className="flex size-9 items-center justify-center rounded-xl transition-colors hover:bg-gray-100"
+          className="flex size-9 items-center justify-center rounded-xl transition-colors hover:bg-sidebar-accent"
         >
           <PanelLeft className="size-4" />
         </button>
@@ -92,7 +91,9 @@ export function AppSidebar() {
                 title={!open ? label : undefined}
                 className={cn(
                   "flex h-9 items-center gap-3 rounded-md px-2.5 py-2 text-left transition-colors",
-                  active ? "bg-gray-200/60 text-gray-900" : "text-gray-700 hover:bg-gray-100",
+                  active
+                    ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                    : "text-sidebar-foreground/70 hover:bg-sidebar-accent/60",
                   !open && "justify-center"
                 )}
               >
@@ -107,11 +108,11 @@ export function AppSidebar() {
       <div className="flex-1" />
 
       {/* User footer */}
-      <div className="border-t border-white/60 p-2">
+      <div className="border-t border-sidebar-border p-2">
         <div
           className={cn("flex items-center gap-2 rounded-md px-2 py-2", !open && "justify-center")}
         >
-          <span className="grid size-7 shrink-0 place-items-center rounded-full bg-gray-900 text-xs font-semibold text-white">
+          <span className="grid size-7 shrink-0 place-items-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
             {initial}
           </span>
           {open && (
@@ -119,7 +120,7 @@ export function AppSidebar() {
               <span className="truncate text-xs font-medium">{session.user.email}</span>
               <button
                 onClick={() => signOut().then(() => router.navigate({ to: "/login" }))}
-                className="self-start text-xs text-gray-500 hover:text-gray-900"
+                className="self-start text-xs text-muted-foreground hover:text-foreground"
               >
                 Sign out
               </button>

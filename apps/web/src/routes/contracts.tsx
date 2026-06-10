@@ -1,11 +1,11 @@
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Button } from "@workspace/ui/components/button";
-import { Input } from "@workspace/ui/components/input";
-import { Label } from "@workspace/ui/components/label";
-import { Textarea } from "@workspace/ui/components/textarea";
-import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { JURISDICTIONS } from "@workspace/registry";
 import { api } from "../lib/api";
 
@@ -21,6 +21,7 @@ function Contracts() {
   const [jurisdiction, setJurisdiction] = useState("");
   const [creating, setCreating] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     api
@@ -46,13 +47,40 @@ function Contracts() {
     }
   }
 
+  async function onUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setUploading(true);
+    try {
+      const { id } = await api.uploadContract(file, undefined, jurisdiction || null);
+      void router.navigate({ to: "/contracts/$id", params: { id } });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      setUploading(false);
+    }
+  }
+
   return (
     <div className="pt-6">
       <div className="mb-4 flex items-center justify-between">
         <h1 className="text-xl font-semibold">Contracts</h1>
-        <Button onClick={() => setCreating((v) => !v)}>
-          {creating ? "Cancel" : "New contract"}
-        </Button>
+        <div className="flex items-center gap-2">
+          <label className="cursor-pointer rounded-md border px-3 py-1.5 text-sm hover:bg-muted/50">
+            {uploading ? "Uploading…" : "Upload DOCX"}
+            <input
+              type="file"
+              accept=".docx,.doc"
+              disabled={uploading}
+              onChange={onUpload}
+              className="hidden"
+            />
+          </label>
+          <Button onClick={() => setCreating((v) => !v)}>
+            {creating ? "Cancel" : "New contract"}
+          </Button>
+        </div>
       </div>
 
       {creating && (

@@ -1,10 +1,10 @@
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
-import { Button } from "@workspace/ui/components/button";
-import { Input } from "@workspace/ui/components/input";
-import { Label } from "@workspace/ui/components/label";
-import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { signUp } from "../lib/auth-client";
 
 export const Route = createFileRoute("/signup")({ component: Signup });
@@ -26,18 +26,18 @@ function Signup() {
   }
 
   return (
-    <div className="mx-auto max-w-sm pt-12">
+    <div className="mx-auto max-w-sm">
       <Card>
         <CardHeader>
           <CardTitle>Create account</CardTitle>
         </CardHeader>
         <CardContent>
-          <form onSubmit={submit} className="flex flex-col gap-3">
-            <div className="flex flex-col gap-1.5">
+          <form onSubmit={submit} className="flex flex-col gap-stack">
+            <div className="flex flex-col gap-field">
               <Label htmlFor="name">Name</Label>
               <Input id="name" value={name} onChange={(e) => setName(e.target.value)} required />
             </div>
-            <div className="flex flex-col gap-1.5">
+            <div className="flex flex-col gap-field">
               <Label htmlFor="email">Email</Label>
               <Input
                 id="email"
@@ -47,7 +47,7 @@ function Signup() {
                 required
               />
             </div>
-            <div className="flex flex-col gap-1.5">
+            <div className="flex flex-col gap-field">
               <Label htmlFor="password">Password</Label>
               <Input
                 id="password"

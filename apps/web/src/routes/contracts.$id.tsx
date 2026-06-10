@@ -1,11 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Button } from "@workspace/ui/components/button";
-import { Input } from "@workspace/ui/components/input";
-import { Label } from "@workspace/ui/components/label";
-import { Badge } from "@workspace/ui/components/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { DocxView } from "@/components/DocxView";
 import { api, type Blame, type ContractDetail, type ContractEdit } from "../lib/api";
 
 export const Route = createFileRoute("/contracts/$id")({ component: ContractView });
@@ -70,6 +71,7 @@ function ContractView() {
 
   const { contract, edits } = data;
   const pending = edits.filter((e) => e.status === "pending");
+  const isDocx = !!contract.currentVersionId;
 
   return (
     <div className="grid gap-6 pt-6 lg:grid-cols-[1fr_300px]">
@@ -78,10 +80,16 @@ function ContractView() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Current text</CardTitle>
+            <CardTitle className="text-base">
+              {isDocx ? "Document (tracked changes)" : "Current text"}
+            </CardTitle>
           </CardHeader>
           <CardContent>
-            <pre className="text-sm leading-relaxed whitespace-pre-wrap">{contract.body}</pre>
+            {isDocx ? (
+              <DocxView url={api.contractDocxUrl(id)} versionToken={contract.currentVersionId} />
+            ) : (
+              <pre className="text-sm leading-relaxed whitespace-pre-wrap">{contract.body}</pre>
+            )}
           </CardContent>
         </Card>
 

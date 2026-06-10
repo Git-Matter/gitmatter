@@ -5,7 +5,7 @@ import { user } from "./auth.js";
 // linear chain of commits (monotonic seq + parentCommitId). A commit groups one
 // or more field_changes (generic path/before/after triples).
 
-export type ArtifactType = "contract" | "tabular_review" | "workflow";
+export type ArtifactType = "contract" | "tabular_review" | "workflow" | "document";
 export type ActorType = "user" | "agent";
 
 export const commits = pgTable(

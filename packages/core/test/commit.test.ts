@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { db, sql } from "@workspace/db/client";
 import { tabularReviews, user } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
-import { deriveBlame, diffCommits, listCommits, recordCommit } from "../src/commit.js";
+import { deriveBlame, diffCommits, listCommits, recordCommit } from "../src/core/commit.js";
 
 const userId = `test-user-${randomUUID()}`;
 let reviewId: string;

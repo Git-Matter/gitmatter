@@ -1,53 +1,37 @@
 import { Hono } from "hono";
-import { and, eq } from "drizzle-orm";
-import { db } from "@workspace/db/client";
-import { userApiKeys } from "@workspace/db/schema";
+import { zValidator } from "@hono/zod-validator";
 import {
   deleteUserApiKey,
   getUserJurisdiction,
+  hasUserApiKey,
   saveUserApiKey,
   setUserJurisdiction,
 } from "@workspace/core";
-import { getUser } from "../session.js";
+import { type AuthEnv } from "../middleware/auth.js";
+import { apiKeySchema, settingsSchema } from "../schemas/keys.js";
 
-export const keysRoute = new Hono();
+export const keysRoute = new Hono<AuthEnv>();
 
 keysRoute.get("/api/settings", async (c) => {
-  const user = await getUser(c);
-  if (!user) return c.json({ error: "Unauthorized" }, 401);
-  return c.json({ jurisdiction: await getUserJurisdiction(user.id) });
+  return c.json({ jurisdiction: await getUserJurisdiction(c.get("user").id) });
 });
 
-keysRoute.put("/api/settings", async (c) => {
-  const user = await getUser(c);
-  if (!user) return c.json({ error: "Unauthorized" }, 401);
-  const body = (await c.req.json()) as { jurisdiction?: string | null };
-  await setUserJurisdiction(user.id, body.jurisdiction ?? null);
-  return c.json({ jurisdiction: body.jurisdiction ?? null });
+keysRoute.put("/api/settings", zValidator("json", settingsSchema), async (c) => {
+  const jurisdiction = c.req.valid("json").jurisdiction ?? null;
+  await setUserJurisdiction(c.get("user").id, jurisdiction);
+  return c.json({ jurisdiction });
 });
 
 keysRoute.get("/api/keys", async (c) => {
-  const user = await getUser(c);
-  if (!user) return c.json({ error: "Unauthorized" }, 401);
-  const [row] = await db
-    .select({ provider: userApiKeys.provider })
-    .from(userApiKeys)
-    .where(and(eq(userApiKeys.userId, user.id), eq(userApiKeys.provider, "anthropic")));
-  return c.json({ hasAnthropic: !!row });
+  return c.json({ hasAnthropic: await hasUserApiKey(c.get("user").id, "anthropic") });
 });
 
-keysRoute.put("/api/keys", async (c) => {
-  const user = await getUser(c);
-  if (!user) return c.json({ error: "Unauthorized" }, 401);
-  const body = (await c.req.json()) as { anthropicKey?: string };
-  if (!body.anthropicKey) return c.json({ error: "anthropicKey required" }, 400);
-  await saveUserApiKey(user.id, body.anthropicKey, "anthropic");
+keysRoute.put("/api/keys", zValidator("json", apiKeySchema), async (c) => {
+  await saveUserApiKey(c.get("user").id, c.req.valid("json").anthropicKey, "anthropic");
   return c.json({ hasAnthropic: true });
 });
 
 keysRoute.delete("/api/keys", async (c) => {
-  const user = await getUser(c);
-  if (!user) return c.json({ error: "Unauthorized" }, 401);
-  await deleteUserApiKey(user.id, "anthropic");
+  await deleteUserApiKey(c.get("user").id, "anthropic");
   return c.json({ hasAnthropic: false });
 });

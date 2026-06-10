@@ -1,29 +1,28 @@
 import { Hono } from "hono";
+import { zValidator } from "@hono/zod-validator";
 import Anthropic from "@anthropic-ai/sdk";
 import {
   DEFAULT_MODEL,
   getUserApiKey,
   getUserJurisdiction,
+  persistChat,
   searchCaseLaw,
   verifyCitations,
 } from "@workspace/core";
 import { providersFor, resolveJurisdiction } from "@workspace/registry";
-import { db } from "@workspace/db/client";
-import { chatMessages, chats } from "@workspace/db/schema";
 import { connectEnabledServers } from "../../mcp/client.js";
-import { getUser } from "../session.js";
+import { type AuthEnv } from "../middleware/auth.js";
+import { chatSchema } from "../schemas/chat.js";
 
-export const chatRoute = new Hono();
+export const chatRoute = new Hono<AuthEnv>();
 
-chatRoute.post("/api/chat", async (c) => {
-  const user = await getUser(c);
-  if (!user) return c.json({ error: "Unauthorized" }, 401);
+chatRoute.post("/api/chat", zValidator("json", chatSchema), async (c) => {
+  const user = c.get("user");
 
   const apiKey = await getUserApiKey(user.id, "anthropic");
   if (!apiKey) return c.json({ error: "No Anthropic key set" }, 400);
 
-  const body = (await c.req.json()) as { message?: string; jurisdiction?: string };
-  if (!body.message?.trim()) return c.json({ error: "message required" }, 400);
+  const body = c.req.valid("json");
 
   // Jurisdiction: request override > user default > system default. It dictates
   // which MCP providers connect (e.g. CourtListener only for US).
@@ -156,27 +155,7 @@ chatRoute.post("/api/chat", async (c) => {
   }
 
   // Persist conversation (append-only).
-  const [chat] = await db
-    .insert(chats)
-    .values({ userId: user.id, title: body.message.slice(0, 60) })
-    .returning();
-  await db.insert(chatMessages).values([
-    {
-      chatId: chat!.id,
-      seq: 1,
-      actorType: "user",
-      actorId: user.id,
-      role: "user",
-      content: { text: body.message },
-    },
-    {
-      chatId: chat!.id,
-      seq: 2,
-      actorType: "agent",
-      role: "assistant",
-      content: { text: finalText, toolCalls },
-    },
-  ]);
+  await persistChat(user.id, { message: body.message, finalText, toolCalls });
 
   return c.json({ text: finalText, toolCalls, tools: tools.map((t) => t.name), jurisdiction });
 });
