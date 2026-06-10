@@ -12,13 +12,21 @@ What makes it different:
   Desktop, Claude web — to gitcounsel as a connector. A lawyer says _"review these NDAs"_ in their
   own assistant; the agent drives gitcounsel's tools; gitcounsel does the work and records every
   action. The firm's AI on the front, gitcounsel's audited legal engine behind.
-- **Bring your own key.** gitcounsel's own features (review, chat) run on the firm's LLM key
-  (Anthropic or OpenAI), stored encrypted.
+- **Bring your own key.** gitcounsel's own features (review, chat) run on the firm's LLM key —
+  multi-provider (Claude / Gemini / OpenAI / OpenRouter), stored encrypted, configured for zero
+  data retention.
 - **Built for how firms work.** Organized as **Client → Matter → artifacts**, with a legal team
   staffed per matter and every change traceable to a member.
 
-> Inspired by [mikeoss](https://mikeoss.com). gitcounsel adapts its review/workflow surfaces and
-> adds the two things mikeoss lacks: a full audit spine and agent connectivity in both directions.
+## Credits
+
+gitcounsel is heavily inspired by **[mikeoss](https://mikeoss.com)** (mike) — the legal-document AI
+assistant whose review surfaces this project builds on. gitcounsel adapts mikeoss's contract
+redline, tabular review, workflows, and chat, and ports several of its libraries (DOCX tracked
+changes, tabular cell extraction, encrypted key storage, the LLM tool loop). On top of that it adds
+the two things mikeoss does not have: a **git-style audit spine** (every change is a commit with
+blame) and **agent connectivity in both directions** (any AI client can drive the same audited
+tools over MCP). Full credit to mikeoss for the original product and approach.
 
 ## Build & run
 
