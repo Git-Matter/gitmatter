@@ -10,7 +10,7 @@ import {
   tabularReviews,
 } from "@workspace/db/schema";
 import { type Actor, recordCommit } from "../core/commit.js";
-import { DEFAULT_MODEL, completeClaudeText } from "./claude.js";
+import { completeText, DEFAULT_MODEL, providerForModel, resolveLlmKey } from "./provider.js";
 import { buildCellPrompt } from "./prompts/tabular.js";
 
 const FLAGS = ["green", "grey", "yellow", "red"] as const;
@@ -25,7 +25,7 @@ export async function queryCell(params: {
   apiKey?: string | null;
 }): Promise<CellContent> {
   const { system, user } = buildCellPrompt(params);
-  const raw = await completeClaudeText({
+  const raw = await completeText({
     model: params.model ?? DEFAULT_MODEL,
     systemPrompt: system,
     user,
@@ -107,14 +107,16 @@ export async function createReview(
   return reviewId;
 }
 
-/** Run (or re-run) one cell: extract via Claude, then commit the change. */
+/**
+ * Run (or re-run) one cell: extract with the chosen model, then commit. The
+ * model picks the provider; the key is the user's own or the server fallback.
+ */
 export async function runCell(
   actor: Actor,
   params: {
     reviewId: string;
     documentId: string;
     columnIndex: number;
-    apiKey?: string | null;
     model?: string;
   }
 ) {
@@ -129,13 +131,17 @@ export async function runCell(
   const [doc] = await db.select().from(documents).where(eq(documents.id, params.documentId));
   if (!doc) throw new Error("Document not found");
 
+  const model = params.model ?? DEFAULT_MODEL;
+  const { key } = await resolveLlmKey(actor.userId, providerForModel(model));
+  if (!key) throw new Error(`No API key for ${providerForModel(model)}`);
+
   const content = await queryCell({
-    model: params.model,
+    model,
     filename: doc.title,
     documentText: doc.markdown ?? "",
     columnPrompt: col.prompt,
     format: col.format,
-    apiKey: params.apiKey,
+    apiKey: key,
   });
 
   return recordCommit({

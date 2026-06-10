@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ModelPicker } from "@/components/ModelPicker";
 import { api, type Citation } from "../lib/api";
 
 export const Route = createFileRoute("/chat")({ component: Chat });
@@ -34,6 +35,7 @@ function Chat() {
   const [turns, setTurns] = useState<Turn[]>([]);
   const [tools, setTools] = useState<string[]>([]);
   const [jurisdiction, setJurisdiction] = useState<string>("");
+  const [model, setModel] = useState("");
   const [busy, setBusy] = useState(false);
 
   async function send() {
@@ -43,7 +45,7 @@ function Chat() {
     setInput("");
     setBusy(true);
     try {
-      const r = await api.sendChat(message);
+      const r = await api.sendChat(message, model || undefined);
       setTools(r.tools);
       setJurisdiction(r.jurisdiction);
       setTurns((t) => [
@@ -135,9 +137,12 @@ function Chat() {
             if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) void send();
           }}
         />
-        <Button onClick={send} disabled={busy} className="self-end">
-          {busy ? "Thinking…" : "Send (⌘↵)"}
-        </Button>
+        <div className="flex items-center justify-between gap-2">
+          <ModelPicker value={model} onChange={setModel} />
+          <Button onClick={send} disabled={busy}>
+            {busy ? "Thinking…" : "Send (⌘↵)"}
+          </Button>
+        </div>
       </div>
     </div>
   );

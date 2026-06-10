@@ -17,10 +17,10 @@ function Settings() {
     <div className="flex max-w-2xl flex-col gap-section">
       <PageHeader
         title="Settings"
-        description="Jurisdiction, your LLM key, and agent connections."
+        description="Jurisdiction, your LLM keys, and agent connections."
       />
       <JurisdictionCard />
-      <AnthropicKey />
+      <ProviderKeys />
       <ConnectAgent />
     </div>
   );
@@ -89,26 +89,63 @@ function JurisdictionCard() {
   );
 }
 
-function AnthropicKey() {
-  const [hasKey, setHasKey] = useState<boolean | null>(null);
-  const [key, setKey] = useState("");
-  const [busy, setBusy] = useState(false);
+type LlmProvider = "anthropic" | "openai" | "gemini" | "openrouter";
+type ProviderStatus = { provider: LlmProvider; hasUserKey: boolean; source: "user" | "env" | null };
 
-  useEffect(() => {
+const PROVIDER_META: Record<LlmProvider, { label: string; placeholder: string; note?: string }> = {
+  anthropic: { label: "Claude (Anthropic)", placeholder: "sk-ant-…" },
+  openai: { label: "OpenAI", placeholder: "sk-…" },
+  gemini: { label: "Google Gemini", placeholder: "AIza…" },
+  openrouter: {
+    label: "OpenRouter",
+    placeholder: "sk-or-…",
+    note: "Zero data retention by default — the safest out-of-the-box choice.",
+  },
+};
+
+function ProviderKeys() {
+  const [providers, setProviders] = useState<ProviderStatus[]>([]);
+
+  const refresh = () =>
     api
       .getKeys()
-      .then((r) => setHasKey(r.hasAnthropic))
-      .catch(() => setHasKey(false));
+      .then((r) => setProviders(r.providers))
+      .catch(() => {});
+  useEffect(() => {
+    void refresh();
   }, []);
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>LLM provider keys</CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-stack">
+        <p className="text-sm text-muted-foreground">
+          Bring your own key for any provider. Encrypted at rest, used to run chat and cell
+          extraction. Your key overrides any server key; pick the model per chat or review.
+        </p>
+        {providers.map((p) => (
+          <ProviderRow key={p.provider} status={p} onChange={refresh} />
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
+
+function ProviderRow({ status, onChange }: { status: ProviderStatus; onChange: () => void }) {
+  const meta = PROVIDER_META[status.provider];
+  const [key, setKey] = useState("");
+  const [busy, setBusy] = useState(false);
 
   async function save() {
     if (!key.trim()) return;
     setBusy(true);
     try {
-      await api.setKey(key.trim());
-      setHasKey(true);
+      await api.setKey(status.provider, key.trim());
       setKey("");
-      toast.success("Anthropic key saved");
+      onChange();
+      toast.success(`${meta.label} key saved`);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed");
     } finally {
@@ -116,37 +153,42 @@ function AnthropicKey() {
     }
   }
 
+  async function remove() {
+    await api.deleteKey(status.provider);
+    onChange();
+    toast.success(`${meta.label} key removed`);
+  }
+
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          Anthropic API key
-          {hasKey ? (
-            <Badge variant="secondary">configured</Badge>
-          ) : (
-            <Badge variant="outline">not set</Badge>
-          )}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-3">
-        <p className="text-sm text-muted-foreground">
-          Bring your own key. Encrypted at rest, used to run cell extraction (incl. via MCP).
-        </p>
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="key">Key</Label>
-          <Input
-            id="key"
-            type="password"
-            placeholder="sk-ant-…"
-            value={key}
-            onChange={(e) => setKey(e.target.value)}
-          />
-        </div>
-        <Button onClick={save} disabled={busy || !key.trim()} className="self-start">
-          {busy ? "Saving…" : "Save key"}
+    <div className="flex flex-col gap-field border-t border-border pt-stack first:border-t-0 first:pt-0">
+      <div className="flex items-center gap-2">
+        <Label className="flex-1">{meta.label}</Label>
+        {status.source === "user" ? (
+          <Badge variant="secondary">your key</Badge>
+        ) : status.source === "env" ? (
+          <Badge variant="outline">server key</Badge>
+        ) : (
+          <Badge variant="outline">not set</Badge>
+        )}
+      </div>
+      {meta.note && <p className="text-xs text-muted-foreground">{meta.note}</p>}
+      <div className="flex gap-2">
+        <Input
+          type="password"
+          placeholder={meta.placeholder}
+          value={key}
+          onChange={(e) => setKey(e.target.value)}
+        />
+        <Button onClick={save} disabled={busy || !key.trim()}>
+          Save
         </Button>
-      </CardContent>
-    </Card>
+        {status.hasUserKey && (
+          <Button variant="ghost" onClick={remove}>
+            Remove
+          </Button>
+        )}
+      </div>
+    </div>
   );
 }
 

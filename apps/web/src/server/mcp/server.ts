@@ -14,7 +14,6 @@ import {
   getContract,
   getDocument,
   getReview,
-  getUserApiKey,
   getWorkflow,
   hasMatterAccess,
   listClients,
@@ -116,16 +115,23 @@ export function buildMcpServer(account: { userId: string; label: string; jurisdi
   server.registerTool(
     "run_cell",
     {
-      description: "Extract (or re-extract) one cell with Claude and commit the change.",
-      inputSchema: { reviewId: z.string(), documentId: z.string(), columnIndex: z.number() },
+      description: "Extract (or re-extract) one cell with the chosen model and commit the change.",
+      inputSchema: {
+        reviewId: z.string(),
+        documentId: z.string(),
+        columnIndex: z.number(),
+        model: z.string().optional(),
+      },
     },
-    async ({ reviewId, documentId, columnIndex }) => {
+    async ({ reviewId, documentId, columnIndex, model }) => {
       if (!(await canAccessArtifact(actor.userId, "tabular_review", reviewId, "editor")))
         return json({ error: "Not found" });
-      const apiKey = await getUserApiKey(actor.userId, "anthropic");
-      if (!apiKey) return json({ error: "No Anthropic key configured for this account" });
-      const result = await runCell(actor, { reviewId, documentId, columnIndex, apiKey });
-      return json({ committed: result.commit?.seq, changes: result.changes });
+      try {
+        const result = await runCell(actor, { reviewId, documentId, columnIndex, model });
+        return json({ committed: result.commit?.seq, changes: result.changes });
+      } catch (e) {
+        return json({ error: e instanceof Error ? e.message : "failed" });
+      }
     }
   );
 

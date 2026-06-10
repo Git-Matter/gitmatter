@@ -84,6 +84,14 @@ export type Citation = {
   opinion_id?: number;
 };
 
+export type LlmProvider = "anthropic" | "openai" | "gemini" | "openrouter";
+export type LlmModel = { id: string; label: string; provider: LlmProvider };
+export type ProviderStatus = {
+  provider: LlmProvider;
+  hasUserKey: boolean;
+  source: "user" | "env" | null;
+};
+
 export type DocStatus = "pending" | "processing" | "ready" | "failed";
 export type Doc = {
   id: string;
@@ -118,12 +126,12 @@ async function upload<T>(path: string, form: FormData): Promise<T> {
 }
 
 export const api = {
-  getKeys: () => req<{ hasAnthropic: boolean }>("/api/keys"),
-  setKey: (anthropicKey: string) =>
-    req<{ hasAnthropic: boolean }>("/api/keys", {
-      method: "PUT",
-      body: JSON.stringify({ anthropicKey }),
-    }),
+  getKeys: () => req<{ providers: ProviderStatus[] }>("/api/keys"),
+  setKey: (provider: LlmProvider, key: string) =>
+    req<{ ok: true }>("/api/keys", { method: "PUT", body: JSON.stringify({ provider, key }) }),
+  deleteKey: (provider: LlmProvider) =>
+    req<{ ok: true }>(`/api/keys?provider=${provider}`, { method: "DELETE" }),
+  listModels: () => req<LlmModel[]>("/api/models"),
   // Clients & matters (firm organization)
   listClients: () => req<Client[]>("/api/clients"),
   createClient: (d: {
@@ -183,10 +191,10 @@ export const api = {
     matterId?: string;
   }) => req<{ id: string }>("/api/tabular/reviews", { method: "POST", body: JSON.stringify(d) }),
   getReview: (id: string) => req<ReviewDetail>(`/api/tabular/reviews/${id}`),
-  runCell: (id: string, documentId: string, columnIndex: number) =>
+  runCell: (id: string, documentId: string, columnIndex: number, model?: string) =>
     req<ReviewDetail>(`/api/tabular/reviews/${id}/run`, {
       method: "POST",
-      body: JSON.stringify({ documentId, columnIndex }),
+      body: JSON.stringify({ documentId, columnIndex, model }),
     }),
   history: (id: string) => req<Blame[]>(`/api/tabular/reviews/${id}/history`),
   listTokens: () =>
@@ -253,7 +261,7 @@ export const api = {
     req<WorkflowDetail>(`/api/workflows/${id}`, { method: "PATCH", body: JSON.stringify(patch) }),
 
   // Chat (consumes external MCP tools)
-  sendChat: (message: string) =>
+  sendChat: (message: string, model?: string) =>
     req<{
       text: string;
       toolCalls: Array<{ tool: string; input: unknown }>;
@@ -261,7 +269,7 @@ export const api = {
       jurisdiction: string;
       documents: Array<{ id: string; title: string; download: string }>;
       citations: Citation[];
-    }>("/api/chat", { method: "POST", body: JSON.stringify({ message }) }),
+    }>("/api/chat", { method: "POST", body: JSON.stringify({ message, model }) }),
   documentDownloadUrl: (id: string) => `/api/documents/${id}/download`,
 };
 

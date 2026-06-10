@@ -16,4 +16,5 @@ export const createReviewSchema = z.object({
 export const runCellSchema = z.object({
   documentId: z.string(),
   columnIndex: z.number().int(),
+  model: z.string().optional(),
 });

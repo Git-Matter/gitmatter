@@ -12,6 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { ModelPicker } from "@/components/ModelPicker";
 import { api, type Blame, type Cell, type Doc, type ReviewDetail } from "../lib/api";
 
 export const Route = createFileRoute("/reviews/$id")({ component: ReviewView });
@@ -29,6 +30,7 @@ function ReviewView() {
   const [docs, setDocs] = useState<Doc[]>([]);
   const [history, setHistory] = useState<Blame[]>([]);
   const [running, setRunning] = useState<Set<string>>(new Set());
+  const [model, setModel] = useState("");
 
   const loadHistory = useCallback(
     () =>
@@ -62,7 +64,7 @@ function ReviewView() {
     const key = `${documentId}:${columnIndex}`;
     setRunning((s) => new Set(s).add(key));
     try {
-      const updated = await api.runCell(id, documentId, columnIndex);
+      const updated = await api.runCell(id, documentId, columnIndex, model || undefined);
       setData(updated);
       await loadHistory();
     } catch (e) {
@@ -87,11 +89,14 @@ function ReviewView() {
   return (
     <div className="grid gap-6 pt-6 lg:grid-cols-[1fr_280px]">
       <div className="min-w-0">
-        <div className="mb-3 flex items-center justify-between">
-          <h1 className="text-xl font-semibold">{review.title}</h1>
-          <Button size="sm" onClick={runAll}>
-            Run all cells
-          </Button>
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <h1 className="text-2xl tracking-tight">{review.title}</h1>
+          <div className="flex items-center gap-2">
+            <ModelPicker value={model} onChange={setModel} />
+            <Button size="sm" onClick={runAll}>
+              Run all cells
+            </Button>
+          </div>
         </div>
 
         <div className="overflow-x-auto rounded-md border">

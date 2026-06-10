@@ -1,18 +1,21 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
-import Anthropic from "@anthropic-ai/sdk";
 import {
   buildDocxSpec,
   CITATIONS_INSTRUCTION,
+  type ChatMessage,
   createGeneratedDocument,
   DEFAULT_MODEL,
-  getUserApiKey,
+  getLlmClient,
   getUserJurisdiction,
+  type LooseDocxBlock,
   parseCitations,
   persistChat,
+  providerForModel,
+  resolveLlmKey,
   searchCaseLaw,
+  type ToolDef,
   verifyCitations,
-  type LooseDocxBlock,
 } from "@workspace/core";
 import { providersFor, resolveJurisdiction } from "@workspace/registry";
 import { connectEnabledServers } from "../../mcp/client.js";
@@ -22,13 +25,30 @@ import { chatSchema } from "../schemas/chat.js";
 
 export const chatRoute = new Hono<AuthEnv>();
 
+// Flatten an MCP tool result's content blocks into plain text for the model.
+function mcpResultText(content: unknown): string {
+  if (typeof content === "string") return content;
+  if (Array.isArray(content))
+    return content
+      .map((b) =>
+        b && typeof b === "object" && "text" in b
+          ? String((b as { text: unknown }).text)
+          : JSON.stringify(b)
+      )
+      .join("\n");
+  return JSON.stringify(content);
+}
+
 chatRoute.post("/api/chat", zValidator("json", chatSchema), async (c) => {
   const user = c.get("user");
-
-  const apiKey = await getUserApiKey(user.id, "anthropic");
-  if (!apiKey) return c.json({ error: "No Anthropic key set" }, 400);
-
   const body = c.req.valid("json");
+
+  // Model picks the provider; the key is the user's own, else the server's.
+  const model = body.model ?? DEFAULT_MODEL;
+  const provider = providerForModel(model);
+  const { key } = await resolveLlmKey(user.id, provider);
+  if (!key) return c.json({ error: `No API key for ${provider} (set one in Settings)` }, 400);
+  const client = getLlmClient(provider, key);
 
   // Jurisdiction: request override > user default > system default. It dictates
   // which MCP providers connect (e.g. CourtListener only for US).
@@ -36,26 +56,26 @@ chatRoute.post("/api/chat", zValidator("json", chatSchema), async (c) => {
   const servers = await connectEnabledServers(user.id, jurisdiction);
   const toolMap = new Map<
     string,
-    { slug: string; realName: string; client: (typeof servers)[number]["client"] }
+    { realName: string; client: (typeof servers)[number]["client"] }
   >();
-  const tools: Anthropic.Tool[] = servers.flatMap((s) =>
+  const tools: ToolDef[] = servers.flatMap((s) =>
     s.tools.map((t) => {
-      toolMap.set(t.name, { slug: s.slug, realName: t.realName, client: s.client });
+      toolMap.set(t.name, { realName: t.realName, client: s.client });
       return {
         name: t.name,
         description: t.description,
-        input_schema: t.inputSchema as Anthropic.Tool.InputSchema,
+        inputSchema: t.inputSchema as Record<string, unknown>,
       };
     })
   );
 
-  // Baked-in internal tools (jurisdiction-gated), dispatched in-process.
+  // Baked-in internal tools, dispatched in-process.
   const internal = new Map<string, (input: Record<string, unknown>) => Promise<unknown>>();
   if (providersFor(jurisdiction).some((p) => p.id === "courtlistener")) {
     tools.push({
       name: "search_case_law",
       description: "Search US case law opinions (CourtListener) by keyword.",
-      input_schema: {
+      inputSchema: {
         type: "object",
         properties: { query: { type: "string" } },
         required: ["query"],
@@ -65,7 +85,7 @@ chatRoute.post("/api/chat", zValidator("json", chatSchema), async (c) => {
     tools.push({
       name: "verify_citations",
       description: "Verify US reporter citations against CourtListener.",
-      input_schema: {
+      inputSchema: {
         type: "object",
         properties: { citations: { type: "array", items: { type: "string" } } },
         required: ["citations"],
@@ -83,7 +103,7 @@ chatRoute.post("/api/chat", zValidator("json", chatSchema), async (c) => {
     name: "generate_docx",
     description:
       "Generate a downloadable Word (.docx) from structured blocks: {type:'heading',text,level?} | {type:'paragraph',text} | {type:'table',rows:[[..]]} (first row is the header).",
-    input_schema: {
+    inputSchema: {
       type: "object",
       properties: {
         title: { type: "string" },
@@ -105,84 +125,57 @@ chatRoute.post("/api/chat", zValidator("json", chatSchema), async (c) => {
     return { documentId: doc.id, title: doc.title, download };
   });
 
-  const anthropic = new Anthropic({ apiKey });
-  const messages: Anthropic.MessageParam[] = [{ role: "user", content: body.message }];
+  const messages: ChatMessage[] = [{ role: "user", content: body.message }];
   const toolCalls: Array<{ tool: string; input: unknown }> = [];
   let finalText = "";
 
   try {
     for (let i = 0; i < 8; i++) {
-      const res = await anthropic.messages.create({
-        model: DEFAULT_MODEL,
-        max_tokens: 2048,
+      const res = await client.complete({
+        model,
         system: CITATIONS_INSTRUCTION,
         tools: tools.length ? tools : undefined,
         messages,
       });
-      messages.push({ role: "assistant", content: res.content });
-      finalText = res.content
-        .filter((b): b is Anthropic.TextBlock => b.type === "text")
-        .map((b) => b.text)
-        .join("");
-      if (res.stop_reason !== "tool_use") break;
+      finalText = res.text;
+      messages.push({ role: "assistant", content: res.text, toolCalls: res.toolCalls });
+      if (res.stop !== "tool_use" || !res.toolCalls.length) break;
 
-      const results: Anthropic.ToolResultBlockParam[] = [];
-      for (const block of res.content) {
-        if (block.type !== "tool_use") continue;
-        toolCalls.push({ tool: block.name, input: block.input });
-
-        // Internal (baked-in) tool?
-        const internalFn = internal.get(block.name);
-        if (internalFn) {
-          try {
-            const out = await internalFn(block.input as Record<string, unknown>);
-            results.push({
-              type: "tool_result",
-              tool_use_id: block.id,
-              content: JSON.stringify(out),
-            });
-          } catch (e) {
-            results.push({
-              type: "tool_result",
-              tool_use_id: block.id,
-              content: e instanceof Error ? e.message : "tool failed",
-              is_error: true,
-            });
-          }
-          continue;
-        }
-
-        const target = toolMap.get(block.name);
-        if (!target) {
-          results.push({
-            type: "tool_result",
-            tool_use_id: block.id,
-            content: "Unknown tool",
-            is_error: true,
-          });
-          continue;
-        }
+      for (const tc of res.toolCalls) {
+        toolCalls.push({ tool: tc.name, input: tc.input });
         try {
-          const out = await target.client.callTool({
-            name: target.realName,
-            arguments: block.input as Record<string, unknown>,
-          });
-          results.push({
-            type: "tool_result",
-            tool_use_id: block.id,
-            content: out.content as Anthropic.ToolResultBlockParam["content"],
-            is_error: Boolean(out.isError),
+          const internalFn = internal.get(tc.name);
+          if (internalFn) {
+            const out = await internalFn(tc.input);
+            messages.push({ role: "tool", toolCallId: tc.id, content: JSON.stringify(out) });
+            continue;
+          }
+          const target = toolMap.get(tc.name);
+          if (!target) {
+            messages.push({
+              role: "tool",
+              toolCallId: tc.id,
+              content: "Unknown tool",
+              isError: true,
+            });
+            continue;
+          }
+          const out = await target.client.callTool({ name: target.realName, arguments: tc.input });
+          messages.push({
+            role: "tool",
+            toolCallId: tc.id,
+            content: mcpResultText(out.content),
+            isError: Boolean(out.isError),
           });
         } catch (e) {
-          results.push({
-            type: "tool_result",
-            tool_use_id: block.id,
+          messages.push({
+            role: "tool",
+            toolCallId: tc.id,
             content: e instanceof Error ? e.message : "tool failed",
-            is_error: true,
+            isError: true,
           });
         }
       }
-      messages.push({ role: "user", content: results });
     }
   } catch (e) {
     return c.json({ error: e instanceof Error ? e.message : "chat failed" }, 500);
@@ -192,8 +185,6 @@ chatRoute.post("/api/chat", zValidator("json", chatSchema), async (c) => {
 
   // Split the citations block off the prose; store the array, show clean text.
   const { text: displayText, citations } = parseCitations(finalText);
-
-  // Persist conversation (append-only).
   await persistChat(user.id, {
     message: body.message,
     finalText: displayText,

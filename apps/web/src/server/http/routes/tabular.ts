@@ -6,7 +6,6 @@ import {
   createReview,
   diffCommits,
   getReview,
-  getUserApiKey,
   listCommits,
   listReviews,
   runCell,
@@ -55,17 +54,15 @@ tabularRoute.post("/api/tabular/reviews/:id/run", zValidator("json", runCellSche
   const reviewId = c.req.param("id");
   if (!(await access(user.id, reviewId, "editor"))) return c.json({ error: "Not found" }, 404);
 
-  const apiKey = await getUserApiKey(user.id, "anthropic");
-  if (!apiKey) return c.json({ error: "No Anthropic key set" }, 400);
-
   const body = c.req.valid("json");
   try {
     await runCell(
       { type: "user", userId: user.id },
-      { reviewId, documentId: body.documentId, columnIndex: body.columnIndex, apiKey }
+      { reviewId, documentId: body.documentId, columnIndex: body.columnIndex, model: body.model }
     );
   } catch (err) {
-    return c.json({ error: err instanceof Error ? err.message : "run failed" }, 500);
+    const msg = err instanceof Error ? err.message : "run failed";
+    return c.json({ error: msg }, msg.startsWith("No API key") ? 400 : 500);
   }
   return c.json(await getReview(reviewId));
 });
