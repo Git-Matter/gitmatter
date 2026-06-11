@@ -1,16 +1,23 @@
-import { createFileRoute, useRouter } from "@tanstack/react-router";
+import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { signIn } from "../lib/auth-client";
+import { AuthShell } from "../components/AuthShell";
 
-export const Route = createFileRoute("/login")({ component: Login });
+export const Route = createFileRoute("/login")({
+  validateSearch: (s: Record<string, unknown>): { next?: string } => ({
+    next: typeof s.next === "string" ? s.next : undefined,
+  }),
+  component: Login,
+});
 
 function Login() {
   const router = useRouter();
+  const { next } = Route.useSearch();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
@@ -21,9 +28,8 @@ function Login() {
     const { error } = await signIn.email({ email, password });
     setBusy(false);
     if (error) return toast.error(error.message ?? "Sign in failed");
-    // Bounce back to a server-side `next` (e.g. the OAuth /authorize endpoint).
-    // Only local paths, to avoid an open redirect.
-    const next = new URLSearchParams(window.location.search).get("next");
+    // Bounce back to a local `next` (the gated route, or the OAuth /authorize
+    // endpoint). Only local paths, to avoid an open redirect.
     if (next && next.startsWith("/")) {
       window.location.href = next;
       return;
@@ -32,18 +38,16 @@ function Login() {
   }
 
   return (
-    <div className="mx-auto max-w-sm">
+    <AuthShell title="Welcome back" subtitle="Log in to your gitcounsel workspace.">
       <Card>
-        <CardHeader>
-          <CardTitle>Log in</CardTitle>
-        </CardHeader>
-        <CardContent>
+        <CardContent className="pt-6">
           <form onSubmit={submit} className="flex flex-col gap-stack">
             <div className="flex flex-col gap-field">
               <Label htmlFor="email">Email</Label>
               <Input
                 id="email"
                 type="email"
+                autoComplete="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
@@ -54,17 +58,24 @@ function Login() {
               <Input
                 id="password"
                 type="password"
+                autoComplete="current-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
               />
             </div>
-            <Button type="submit" disabled={busy}>
+            <Button type="submit" disabled={busy} className="w-full">
               {busy ? "Signing in…" : "Log in"}
             </Button>
           </form>
         </CardContent>
       </Card>
-    </div>
+      <p className="text-center text-sm text-muted-foreground">
+        No account?{" "}
+        <Link to="/signup" className="text-foreground underline underline-offset-4">
+          Sign up
+        </Link>
+      </p>
+    </AuthShell>
   );
 }

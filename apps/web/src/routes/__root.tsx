@@ -1,8 +1,19 @@
-import { HeadContent, Link, Scripts, createRootRoute } from "@tanstack/react-router";
+import {
+  HeadContent,
+  Link,
+  Scripts,
+  createRootRoute,
+  useRouter,
+  useRouterState,
+} from "@tanstack/react-router";
+import { useEffect } from "react";
 import { Toaster } from "@/components/ui/sonner";
 import { AppSidebar } from "../components/AppSidebar";
 import { useSession } from "../lib/auth-client";
 import { MattersProvider } from "../lib/matters-context";
+
+// Pages a logged-out visitor may see. Everything else redirects to /login.
+const PUBLIC_PATHS = new Set(["/", "/login", "/signup"]);
 
 import appCss from "@/styles/globals.css?url";
 
@@ -24,15 +35,26 @@ export const Route = createRootRoute({
   shellComponent: RootDocument,
 });
 
+function AuthRedirect({ next }: { next: string }) {
+  const router = useRouter();
+  useEffect(() => {
+    void router.navigate({ to: "/login", search: { next } });
+  }, [router, next]);
+  return <div className="min-h-dvh bg-background" />;
+}
+
 function Shell({ children }: { children: React.ReactNode }) {
   const { data: session, isPending } = useSession();
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
 
   // Still resolving the session: don't mount route children yet, so hooks that
   // need a logged-in provider (useMatters) never run without one.
   if (isPending) return <div className="min-h-dvh bg-background" />;
 
-  // Logged out: no sidebar chrome, no MattersProvider.
+  // Logged out: gate protected routes, then render bare chrome (no sidebar,
+  // no MattersProvider) for the public pages.
   if (!session) {
+    if (!PUBLIC_PATHS.has(pathname)) return <AuthRedirect next={pathname} />;
     return (
       <div className="min-h-dvh bg-background">
         <header className="flex h-12 items-center justify-end gap-3 px-4 text-sm">
