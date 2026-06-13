@@ -11,6 +11,13 @@
   --color-destructive-surface: var(--destructive-surface);
   --color-destructive-border: var(--destructive-border);
 
+  /* Quiet Bronze — the one accent (DESIGN.md "One Voice Rule"). State cues
+     only: commit/audit markers, agent-authored indicators, citations,
+     selected-state dots. text-bronze on bg-bronze-tint, or a 6px bg-bronze
+     dot beside label text. Never decoration; ≤10% of any screen. */
+  --color-bronze: var(--bronze);
+  --color-bronze-tint: var(--bronze-tint);
+
   /* Semantic spacing scale. Use these named utilities instead of raw numbers
      so vertical rhythm stays consistent across the app:
        field   -> label <-> control inside one form field (gap-field)
@@ -28,9 +35,16 @@
      background. Text on it stays --destructive. */
   --destructive-surface: oklch(0.955 0.035 27);
   --destructive-border: oklch(0.86 0.075 27);
+
+  /* Quiet Bronze accent + its wash. */
+  --bronze: oklch(0.55 0.09 75);
+  --bronze-tint: oklch(0.94 0.025 75);
 }
 
 .dark {
   --destructive-surface: oklch(0.26 0.055 27);
   --destructive-border: oklch(0.4 0.09 27);
+
+  --bronze: oklch(0.7 0.09 75);
+  --bronze-tint: oklch(0.28 0.04 75);
 }
