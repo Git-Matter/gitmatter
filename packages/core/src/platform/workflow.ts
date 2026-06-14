@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { eq, inArray } from "drizzle-orm";
+import { and, asc, count, desc, eq, ilike, inArray, or } from "drizzle-orm";
 import { db } from "@workspace/db/client";
 import { commits, matters, workflows } from "@workspace/db/schema";
 import type { TabularColumn } from "@workspace/db/schema";
@@ -109,8 +109,51 @@ export async function updateWorkflow(
 
 export async function listWorkflows(userId: string) {
   // System workflows + the user's own.
-  const rows = await db.select().from(workflows);
-  return rows.filter((w) => w.isSystem || w.userId === userId);
+  return db
+    .select()
+    .from(workflows)
+    .where(or(eq(workflows.isSystem, true), eq(workflows.userId, userId)));
+}
+
+export type WorkflowListSource = "builtin" | "custom";
+export type WorkflowListSort = "title" | "type" | "isSystem" | "createdAt" | "updatedAt";
+
+export type WorkflowListParams = {
+  q?: string;
+  source?: WorkflowListSource;
+  page: number;
+  pageSize: number;
+  sort?: WorkflowListSort;
+  dir?: "asc" | "desc";
+};
+
+export async function listWorkflowsPage(userId: string, params: WorkflowListParams) {
+  const q = params.q?.trim();
+  const access = or(eq(workflows.isSystem, true), eq(workflows.userId, userId));
+  const source =
+    params.source === "builtin"
+      ? eq(workflows.isSystem, true)
+      : params.source === "custom"
+        ? eq(workflows.isSystem, false)
+        : undefined;
+  const where = and(access, source, q ? ilike(workflows.title, `%${q}%`) : undefined);
+  const sortCols = {
+    title: workflows.title,
+    type: workflows.type,
+    isSystem: workflows.isSystem,
+    createdAt: workflows.createdAt,
+    updatedAt: workflows.updatedAt,
+  };
+  const sortCol = sortCols[params.sort ?? "title"];
+  const order = params.dir === "asc" ? asc(sortCol) : desc(sortCol);
+  const offset = params.page * params.pageSize;
+
+  const [rows, countRows] = await Promise.all([
+    db.select().from(workflows).where(where).orderBy(order).limit(params.pageSize).offset(offset),
+    db.select({ count: count() }).from(workflows).where(where),
+  ]);
+
+  return { rows, rowCount: Number(countRows[0]?.count ?? 0) };
 }
 
 export async function getWorkflow(workflowId: string) {

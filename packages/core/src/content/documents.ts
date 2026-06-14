@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, ilike, inArray, isNull, or, sql } from "drizzle-orm";
 import { db } from "@workspace/db/client";
 import {
   commits,
@@ -23,6 +23,31 @@ const MAX_ATTEMPTS = 3;
 
 export const DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
+export type DocumentListSort = "title" | "fileType" | "status" | "createdAt";
+
+export type DocumentListParams = {
+  q?: string;
+  status?: "pending" | "processing" | "ready" | "failed";
+  page: number;
+  pageSize: number;
+  sort?: DocumentListSort;
+  dir?: "asc" | "desc";
+  matterId?: string;
+  folderId?: string | null;
+};
+
+const documentListFields = {
+  id: documents.id,
+  title: documents.title,
+  fileType: documents.fileType,
+  status: documents.status,
+  extractionError: documents.extractionError,
+  sizeBytes: documents.sizeBytes,
+  folderId: documents.folderId,
+  currentVersionId: documents.currentVersionId,
+  createdAt: documents.createdAt,
+};
+
 /** Resolve a matter's tenant — documents copy tenantId down for isolation + key building. */
 async function matterTenant(matterId: string): Promise<string> {
   const [m] = await db
@@ -35,7 +60,7 @@ async function matterTenant(matterId: string): Promise<string> {
 
 export function listDocuments(userId: string) {
   return db
-    .select()
+    .select(documentListFields)
     .from(documents)
     .where(eq(documents.userId, userId))
     .orderBy(desc(documents.createdAt));
@@ -50,7 +75,7 @@ export function listMatterDocuments(matterId: string, folderId?: string | null) 
         ? isNull(documents.folderId)
         : eq(documents.folderId, folderId);
   return db
-    .select()
+    .select(documentListFields)
     .from(documents)
     .where(
       folderCond
@@ -58,6 +83,48 @@ export function listMatterDocuments(matterId: string, folderId?: string | null) 
         : eq(documents.matterId, matterId)
     )
     .orderBy(desc(documents.createdAt));
+}
+
+export async function listDocumentsPage(userId: string, params: DocumentListParams) {
+  const q = params.q?.trim();
+  const folderCond =
+    params.folderId === undefined
+      ? undefined
+      : params.folderId === null
+        ? isNull(documents.folderId)
+        : eq(documents.folderId, params.folderId);
+  const where = and(
+    params.matterId ? eq(documents.matterId, params.matterId) : eq(documents.userId, userId),
+    folderCond,
+    params.status === "processing"
+      ? inArray(documents.status, ["pending", "processing"])
+      : params.status
+        ? eq(documents.status, params.status)
+        : undefined,
+    q ? or(ilike(documents.title, `%${q}%`), ilike(documents.fileType, `%${q}%`)) : undefined
+  );
+  const sortCols = {
+    title: documents.title,
+    fileType: documents.fileType,
+    status: documents.status,
+    createdAt: documents.createdAt,
+  };
+  const sortCol = sortCols[params.sort ?? "createdAt"];
+  const order = params.dir === "asc" ? asc(sortCol) : desc(sortCol);
+  const offset = params.page * params.pageSize;
+
+  const [rows, countRows] = await Promise.all([
+    db
+      .select(documentListFields)
+      .from(documents)
+      .where(where)
+      .orderBy(order)
+      .limit(params.pageSize)
+      .offset(offset),
+    db.select({ count: count() }).from(documents).where(where),
+  ]);
+
+  return { rows, rowCount: Number(countRows[0]?.count ?? 0) };
 }
 
 export async function getDocument(id: string) {
@@ -163,7 +230,7 @@ export async function createGeneratedDocument(
 /**
  * Upload a PDF/DOCX: persist the raw bytes to object storage and insert a
  * `pending` row, then return immediately. Markdown extraction (DOCX via mammoth,
- * PDF via the markitdown sidecar) runs in the background worker, which records a
+ * PDF via the docling sidecar) runs in the background worker, which records a
  * system-authored commit when it completes.
  */
 export async function uploadDocument(

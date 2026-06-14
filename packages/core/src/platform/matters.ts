@@ -1,4 +1,4 @@
-import { and, desc, eq, ilike, inArray, or } from "drizzle-orm";
+import { and, asc, count, desc, eq, ilike, inArray, or } from "drizzle-orm";
 import { db } from "@workspace/db/client";
 import {
   type MatterRole,
@@ -41,6 +41,49 @@ export async function listClients(tenantId: string) {
     .from(clients)
     .where(eq(clients.tenantId, tenantId))
     .orderBy(desc(clients.createdAt));
+}
+
+export type ClientListSort = "name" | "type" | "clientNumber" | "status" | "createdAt";
+
+export type ClientListParams = {
+  q?: string;
+  status?: "active" | "inactive";
+  page: number;
+  pageSize: number;
+  sort?: ClientListSort;
+  dir?: "asc" | "desc";
+};
+
+export async function listClientsPage(tenantId: string, params: ClientListParams) {
+  const q = params.q?.trim();
+  const where = and(
+    eq(clients.tenantId, tenantId),
+    params.status ? eq(clients.status, params.status) : undefined,
+    q
+      ? or(
+          ilike(clients.name, `%${q}%`),
+          ilike(clients.type, `%${q}%`),
+          ilike(clients.clientNumber, `%${q}%`)
+        )
+      : undefined
+  );
+  const sortCols = {
+    name: clients.name,
+    type: clients.type,
+    clientNumber: clients.clientNumber,
+    status: clients.status,
+    createdAt: clients.createdAt,
+  };
+  const sortCol = sortCols[params.sort ?? "createdAt"];
+  const order = params.dir === "asc" ? asc(sortCol) : desc(sortCol);
+  const offset = params.page * params.pageSize;
+
+  const [rows, countRows] = await Promise.all([
+    db.select().from(clients).where(where).orderBy(order).limit(params.pageSize).offset(offset),
+    db.select({ count: count() }).from(clients).where(where),
+  ]);
+
+  return { rows, rowCount: Number(countRows[0]?.count ?? 0) };
 }
 
 export async function getClient(id: string) {

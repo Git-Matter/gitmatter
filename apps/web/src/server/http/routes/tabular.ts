@@ -12,6 +12,7 @@ import {
   gridToXlsx,
   listCommits,
   listReviews,
+  listReviewsPage,
   runCell,
   runDocument,
 } from "@workspace/core";
@@ -26,6 +27,29 @@ import {
 
 export const tabularRoute = new Hono<AuthEnv>();
 
+const reviewSorts = ["title", "createdAt"] as const;
+type ReviewSortQuery = (typeof reviewSorts)[number];
+
+function isReviewSort(value: string | undefined): value is ReviewSortQuery {
+  return reviewSorts.some((sort) => sort === value);
+}
+
+function reviewPageQuery(c: { req: { query: (name: string) => string | undefined } }) {
+  const pageSizeRaw = c.req.query("pageSize");
+  if (!pageSizeRaw) return null;
+  const page = Math.max(0, Number(c.req.query("page") ?? 0) || 0);
+  const pageSize = Math.min(200, Math.max(1, Number(pageSizeRaw) || 50));
+  const sort = c.req.query("sort");
+  const dir: "asc" | "desc" = c.req.query("dir") === "asc" ? "asc" : "desc";
+  return {
+    q: c.req.query("q"),
+    page,
+    pageSize,
+    sort: isReviewSort(sort) ? sort : undefined,
+    dir,
+  };
+}
+
 // Fetch a review only if the caller has matter access at `min` role.
 async function access(userId: string, reviewId: string, min: MatterRole = "viewer") {
   if (!(await canAccessArtifact(userId, "tabular_review", reviewId, min))) return null;
@@ -33,6 +57,8 @@ async function access(userId: string, reviewId: string, min: MatterRole = "viewe
 }
 
 tabularRoute.get("/api/tabular/reviews", async (c) => {
+  const paged = reviewPageQuery(c);
+  if (paged) return c.json(await listReviewsPage(c.get("user").id, paged));
   return c.json(await listReviews(c.get("user").id));
 });
 

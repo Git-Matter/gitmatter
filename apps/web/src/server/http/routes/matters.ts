@@ -14,6 +14,7 @@ import {
   getMatter,
   hasMatterAccess,
   listClients,
+  listClientsPage,
   listFolders,
   listMattersForUser,
   listMembers,
@@ -32,9 +33,44 @@ import {
 
 export const mattersRoute = new Hono<AuthEnv>();
 
+const clientStatuses = ["active", "inactive"] as const;
+const clientSorts = ["name", "type", "clientNumber", "status", "createdAt"] as const;
+type ClientStatusQuery = (typeof clientStatuses)[number];
+type ClientSortQuery = (typeof clientSorts)[number];
+
+function isClientStatus(value: string | undefined): value is ClientStatusQuery {
+  return clientStatuses.some((status) => status === value);
+}
+
+function isClientSort(value: string | undefined): value is ClientSortQuery {
+  return clientSorts.some((sort) => sort === value);
+}
+
+function clientPageQuery(c: { req: { query: (name: string) => string | undefined } }) {
+  const pageSizeRaw = c.req.query("pageSize");
+  if (!pageSizeRaw) return null;
+  const page = Math.max(0, Number(c.req.query("page") ?? 0) || 0);
+  const pageSize = Math.min(200, Math.max(1, Number(pageSizeRaw) || 50));
+  const status = c.req.query("status");
+  const sort = c.req.query("sort");
+  const dir: "asc" | "desc" = c.req.query("dir") === "asc" ? "asc" : "desc";
+  return {
+    q: c.req.query("q"),
+    status: isClientStatus(status) ? status : undefined,
+    page,
+    pageSize,
+    sort: isClientSort(sort) ? sort : undefined,
+    dir,
+  };
+}
+
 // ---- Clients (tenant directory) ----
 
-mattersRoute.get("/api/clients", async (c) => c.json(await listClients(c.get("user").tenantId)));
+mattersRoute.get("/api/clients", async (c) => {
+  const paged = clientPageQuery(c);
+  if (paged) return c.json(await listClientsPage(c.get("user").tenantId, paged));
+  return c.json(await listClients(c.get("user").tenantId));
+});
 
 mattersRoute.post("/api/clients", zValidator("json", createClientSchema), async (c) => {
   const user = c.get("user");

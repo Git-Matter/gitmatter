@@ -6,6 +6,7 @@ import {
   getWorkflow,
   listCommits,
   listWorkflows,
+  listWorkflowsPage,
   updateWorkflow,
 } from "@workspace/core";
 import { type AuthEnv } from "../middleware/auth.js";
@@ -14,7 +15,40 @@ import { createWorkflowSchema, patchWorkflowSchema } from "../schemas/workflow.j
 
 export const workflowRoute = new Hono<AuthEnv>();
 
+const workflowSources = ["builtin", "custom"] as const;
+const workflowSorts = ["title", "type", "isSystem", "createdAt", "updatedAt"] as const;
+type WorkflowSourceQuery = (typeof workflowSources)[number];
+type WorkflowSortQuery = (typeof workflowSorts)[number];
+
+function isWorkflowSource(value: string | undefined): value is WorkflowSourceQuery {
+  return workflowSources.some((source) => source === value);
+}
+
+function isWorkflowSort(value: string | undefined): value is WorkflowSortQuery {
+  return workflowSorts.some((sort) => sort === value);
+}
+
+function workflowPageQuery(c: { req: { query: (name: string) => string | undefined } }) {
+  const pageSizeRaw = c.req.query("pageSize");
+  if (!pageSizeRaw) return null;
+  const page = Math.max(0, Number(c.req.query("page") ?? 0) || 0);
+  const pageSize = Math.min(200, Math.max(1, Number(pageSizeRaw) || 50));
+  const source = c.req.query("source");
+  const sort = c.req.query("sort");
+  const dir: "asc" | "desc" = c.req.query("dir") === "asc" ? "asc" : "desc";
+  return {
+    q: c.req.query("q"),
+    source: isWorkflowSource(source) ? source : undefined,
+    page,
+    pageSize,
+    sort: isWorkflowSort(sort) ? sort : undefined,
+    dir,
+  };
+}
+
 workflowRoute.get("/api/workflows", async (c) => {
+  const paged = workflowPageQuery(c);
+  if (paged) return c.json(await listWorkflowsPage(c.get("user").id, paged));
   return c.json(await listWorkflows(c.get("user").id));
 });
 

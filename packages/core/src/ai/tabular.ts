@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, count, desc, eq, ilike, inArray } from "drizzle-orm";
 import { db } from "@workspace/db/client";
 import {
   type CellCitation,
@@ -482,6 +482,44 @@ export async function generateColumnPrompt(params: {
 
 export async function listReviews(userId: string) {
   return db.select().from(tabularReviews).where(eq(tabularReviews.userId, userId));
+}
+
+export type ReviewListSort = "title" | "createdAt";
+
+export type ReviewListParams = {
+  q?: string;
+  page: number;
+  pageSize: number;
+  sort?: ReviewListSort;
+  dir?: "asc" | "desc";
+};
+
+export async function listReviewsPage(userId: string, params: ReviewListParams) {
+  const q = params.q?.trim();
+  const where = and(
+    eq(tabularReviews.userId, userId),
+    q ? ilike(tabularReviews.title, `%${q}%`) : undefined
+  );
+  const sortCols = {
+    title: tabularReviews.title,
+    createdAt: tabularReviews.createdAt,
+  };
+  const sortCol = sortCols[params.sort ?? "createdAt"];
+  const order = params.dir === "asc" ? asc(sortCol) : desc(sortCol);
+  const offset = params.page * params.pageSize;
+
+  const [rows, countRows] = await Promise.all([
+    db
+      .select()
+      .from(tabularReviews)
+      .where(where)
+      .orderBy(order)
+      .limit(params.pageSize)
+      .offset(offset),
+    db.select({ count: count() }).from(tabularReviews).where(where),
+  ]);
+
+  return { rows, rowCount: Number(countRows[0]?.count ?? 0) };
 }
 
 /** Full review with cells and per-cell blame (commit that last set each cell). */
