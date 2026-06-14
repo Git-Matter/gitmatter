@@ -17,6 +17,11 @@ export const auth = betterAuth({
   }),
   emailAndPassword: { enabled: true },
   user: {
+    // Self-service account changes. No email sender is configured, so: changeEmail
+    // applies immediately (current email is never verified) and deleteUser runs
+    // immediately (no sendDeleteAccountVerification callback).
+    changeEmail: { enabled: true },
+    deleteUser: { enabled: true },
     // tenantId/role are owned by the signup hook — not client-settable.
     additionalFields: {
       tenantId: { type: "string", required: false, input: false },

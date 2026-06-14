@@ -15,9 +15,10 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { ModeToggle } from "./ModeToggle";
 import { signOut } from "../lib/auth-client";
 import { useMatters } from "../lib/matters-context";
-import { useChats } from "../lib/queries";
+import { useChats, useClients, useDocuments } from "../lib/queries";
 import type { ServerSession } from "../lib/session";
 
 const NAV_ITEMS = [
@@ -30,37 +31,12 @@ const NAV_ITEMS = [
   { href: "/settings", label: "Settings", icon: SettingsIcon },
 ] as const;
 
-// Sub-context per main route. Each item writes a `?view` filter the route reads.
-// Only sections whose list data actually carries a status are listed — the rest
-// have no panel rather than a filter that doesn't filter. `/assistant` is special
-// (it shows real conversations, not a filter).
-const SUB_NAV: Record<string, { title: string; items: { label: string; view: string }[] }> = {
-  "/documents": {
-    title: "Documents",
-    items: [
-      { label: "All", view: "all" },
-      { label: "Ready", view: "ready" },
-      { label: "Processing", view: "processing" },
-      { label: "Failed", view: "failed" },
-    ],
-  },
-  "/clients": {
-    title: "Clients",
-    items: [
-      { label: "All", view: "all" },
-      { label: "Active", view: "active" },
-      { label: "Archived", view: "inactive" },
-    ],
-  },
-  "/matters": {
-    title: "Matters",
-    items: [
-      { label: "All", view: "all" },
-      { label: "Open", view: "active" },
-      { label: "Closed", view: "closed" },
-    ],
-  },
-};
+// Sections that get a recent-activity sub-panel: a list of the actual items,
+// newest first, linking straight to each one. `/assistant` is special (it shows
+// real conversations).
+const RECENT_SECTIONS = new Set(["/matters", "/documents", "/clients"]);
+
+const RECENT_LIMIT = 12;
 
 function activeSection(pathname: string): string | null {
   const hit = NAV_ITEMS.find((i) => pathname === i.href || pathname.startsWith(`${i.href}/`));
@@ -104,7 +80,7 @@ export function AppSidebar({ session }: { session: NonNullable<ServerSession> })
   // take half the height and scroll independently — otherwise nav sits at the top
   // and a spacer pushes the footer down.
   const showChats = open && subSection === "/assistant";
-  const showSub = open && !!subSection && subSection !== "/assistant" && !!SUB_NAV[subSection];
+  const showSub = open && !!subSection && RECENT_SECTIONS.has(subSection);
   const hasSubPanel = showChats || showSub;
 
   return (
@@ -177,13 +153,16 @@ export function AppSidebar({ session }: { session: NonNullable<ServerSession> })
 
       {/* Dynamic sub-context — bottom half when present. Keyed so it remounts fresh. */}
       {showChats && <ChatHistoryPanel />}
-      {showSub && <SubContext key={subSection} section={subSection} />}
+      {showSub && <RecentPanel key={subSection} section={subSection} />}
 
       {/* No sub-panel: a spacer pushes the footer to the bottom. */}
       {!hasSubPanel && <div className="flex-1" />}
 
       {/* User footer */}
       <div className="border-t border-sidebar-border p-2">
+        <div className={cn("px-2.5 pb-1", !open && "flex justify-center px-0")}>
+          <ModeToggle open={open} />
+        </div>
         <div
           className={cn("flex items-center gap-2 rounded-md px-2 py-2", !open && "justify-center")}
         >
@@ -192,7 +171,10 @@ export function AppSidebar({ session }: { session: NonNullable<ServerSession> })
           </span>
           {open && (
             <div className="flex min-w-0 flex-1 flex-col">
-              <span className="truncate text-xs font-medium">{session.user.email}</span>
+              {session.user.name && (
+                <span className="truncate text-xs font-medium">{session.user.name}</span>
+              )}
+              <span className="truncate text-xs text-muted-foreground">{session.user.email}</span>
               <button
                 onClick={() => signOut().then(() => (window.location.href = "/login"))}
                 className="self-start text-xs text-muted-foreground hover:text-foreground"
@@ -207,43 +189,135 @@ export function AppSidebar({ session }: { session: NonNullable<ServerSession> })
   );
 }
 
-function SubContext({ section }: { section: string | null }) {
-  const sub = section ? SUB_NAV[section] : null;
-  // The active filter is the route's ?view param (default "all" = first item).
-  const view = useRouterState({
-    select: (s) => (s.location.search as { view?: string }).view ?? "all",
-  });
+function RecentPanel({ section }: { section: string }) {
+  if (section === "/matters") return <RecentMatters />;
+  if (section === "/documents") return <RecentDocuments />;
+  if (section === "/clients") return <RecentClients />;
+  return null;
+}
 
-  if (!sub || !section) return null;
+// Shared chrome + row styling for the recent lists.
+const recentRowCls = (active: boolean) =>
+  cn(
+    "flex h-8 items-center gap-3 rounded-md px-2.5 text-left text-sm transition-colors",
+    active
+      ? "bg-sidebar-accent text-sidebar-accent-foreground"
+      : "text-sidebar-foreground/70 hover:bg-sidebar-accent/60"
+  );
 
+function RecentShell({
+  title,
+  empty,
+  isEmpty,
+  children,
+}: {
+  title: string;
+  empty: string;
+  isEmpty: boolean;
+  children: React.ReactNode;
+}) {
   return (
     <div className="flex min-h-0 flex-1 flex-col border-t border-sidebar-border py-2">
-      <div className="px-5 pb-1 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
-        {sub.title}
+      <div className="px-5 pb-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">
+        {title}
       </div>
       <nav className="min-h-0 flex-1 overflow-y-auto">
-        {sub.items.map((item) => {
-          const isActive = item.view === view;
-          return (
-            <div key={item.view} className="px-2.5 py-0.5">
-              <Link
-                to={section}
-                search={{ view: item.view }}
-                className={cn(
-                  "flex h-9 w-full items-center gap-3 rounded-md px-2.5 text-left text-sm transition-colors",
-                  isActive
-                    ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                    : "text-sidebar-foreground/70 hover:bg-sidebar-accent/60"
-                )}
-              >
-                <span className="flex-1 truncate font-medium">{item.label}</span>
-                {isActive && <span className="size-1.5 shrink-0 rounded-full bg-bronze" />}
-              </Link>
-            </div>
-          );
-        })}
+        {isEmpty ? <p className="px-5 py-2 text-xs text-muted-foreground">{empty}</p> : children}
       </nav>
     </div>
+  );
+}
+
+function RecentMatters() {
+  const { matters } = useMatters();
+  const activeId = useRouterState({
+    select: (s) => /^\/matters\/(.+)$/.exec(s.location.pathname)?.[1],
+  });
+  const items = [...matters]
+    .sort((a, b) => b.matter.updatedAt.localeCompare(a.matter.updatedAt))
+    .slice(0, RECENT_LIMIT);
+
+  return (
+    <RecentShell title="Recent matters" empty="No matters yet." isEmpty={items.length === 0}>
+      {items.map(({ matter }) => (
+        <div key={matter.id} className="px-2.5 py-0.5">
+          <Link
+            to="/matters/$id"
+            params={{ id: matter.id }}
+            title={matter.name}
+            className={recentRowCls(matter.id === activeId)}
+          >
+            <span className="flex-1 truncate">{matter.name}</span>
+            {matter.id === activeId && (
+              <span className="size-1.5 shrink-0 rounded-full bg-bronze" />
+            )}
+          </Link>
+        </div>
+      ))}
+    </RecentShell>
+  );
+}
+
+function RecentDocuments() {
+  const { data: docs = [] } = useDocuments();
+  const activeId = useRouterState({
+    select: (s) => /^\/documents\/(.+)$/.exec(s.location.pathname)?.[1],
+  });
+  const items = [...docs]
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    .slice(0, RECENT_LIMIT);
+
+  return (
+    <RecentShell title="Recent documents" empty="No documents yet." isEmpty={items.length === 0}>
+      {items.map((doc) => (
+        <div key={doc.id} className="px-2.5 py-0.5">
+          <Link
+            to="/documents/$id"
+            params={{ id: doc.id }}
+            title={doc.title}
+            className={recentRowCls(doc.id === activeId)}
+          >
+            <span className="flex-1 truncate">{doc.title}</span>
+            {doc.id === activeId && <span className="size-1.5 shrink-0 rounded-full bg-bronze" />}
+          </Link>
+        </div>
+      ))}
+    </RecentShell>
+  );
+}
+
+function RecentClients() {
+  const { data: clients = [] } = useClients();
+  // Clients have no detail route — they open in a dialog on the list page driven
+  // by the ?client param.
+  const activeId = useRouterState({
+    select: (s) =>
+      s.location.pathname === "/clients"
+        ? (s.location.search as { client?: string }).client
+        : undefined,
+  });
+  const items = [...clients]
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    .slice(0, RECENT_LIMIT);
+
+  return (
+    <RecentShell title="Recent clients" empty="No clients yet." isEmpty={items.length === 0}>
+      {items.map((client) => (
+        <div key={client.id} className="px-2.5 py-0.5">
+          <Link
+            to="/clients"
+            search={{ client: client.id }}
+            title={client.name}
+            className={recentRowCls(client.id === activeId)}
+          >
+            <span className="flex-1 truncate">{client.name}</span>
+            {client.id === activeId && (
+              <span className="size-1.5 shrink-0 rounded-full bg-bronze" />
+            )}
+          </Link>
+        </div>
+      ))}
+    </RecentShell>
   );
 }
 
@@ -257,7 +331,7 @@ function ChatHistoryPanel() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col border-t border-sidebar-border py-2">
-      <div className="px-5 pb-1 text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
+      <div className="px-5 pb-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">
         Conversations
       </div>
       <div className="px-2.5 py-0.5">
@@ -328,9 +402,7 @@ function MatterSwitcher({ open }: { open: boolean }) {
           <>
             <span className="flex min-w-0 flex-1 flex-col leading-tight">
               <span className="truncate text-xs font-medium">{current.matter.name}</span>
-              <span className="truncate text-[11px] text-muted-foreground">
-                {current.client.name}
-              </span>
+              <span className="truncate text-xs text-muted-foreground">{current.client.name}</span>
             </span>
             <ChevronsUpDown className="size-3.5 shrink-0 text-muted-foreground" />
           </>
@@ -357,9 +429,7 @@ function MatterSwitcher({ open }: { open: boolean }) {
                     <span className="truncate text-sm">{matter.name}</span>
                     <span className="truncate text-xs text-muted-foreground">{client.name}</span>
                   </span>
-                  <span className="shrink-0 text-[11px] text-muted-foreground">
-                    {ROLE_LABEL[role]}
-                  </span>
+                  <span className="shrink-0 text-xs text-muted-foreground">{ROLE_LABEL[role]}</span>
                 </button>
               </li>
             );

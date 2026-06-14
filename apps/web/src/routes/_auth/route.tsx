@@ -9,6 +9,8 @@ export const Route = createFileRoute("/_auth")({
     if (!context.session) {
       throw redirect({ to: "/login", search: { next: location.href } });
     }
+    // Narrow session to non-null for every route nested under this guard.
+    return { session: context.session };
   },
   component: AuthLayout,
 });
