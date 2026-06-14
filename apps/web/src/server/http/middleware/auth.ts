@@ -1,7 +1,14 @@
 import type { Context, MiddlewareHandler } from "hono";
 import { auth } from "../lib/auth.js";
 
-export type AuthedUser = { id: string; email: string; name: string };
+export type AuthedUser = {
+  id: string;
+  email: string;
+  name: string;
+  // From better-auth additionalFields; always set by the signup hook.
+  tenantId: string;
+  tenantRole: "admin" | "member";
+};
 
 /** Hono env for authenticated routes: `c.get("user")` is typed. */
 export type AuthEnv = { Variables: { user: AuthedUser } };
@@ -10,7 +17,17 @@ export type AuthEnv = { Variables: { user: AuthedUser } };
 export async function getUser(c: Context): Promise<AuthedUser | null> {
   const session = await auth.api.getSession({ headers: c.req.raw.headers });
   if (!session?.user) return null;
-  return { id: session.user.id, email: session.user.email, name: session.user.name };
+  const u = session.user as typeof session.user & {
+    tenantId?: string;
+    tenantRole?: "admin" | "member";
+  };
+  return {
+    id: u.id,
+    email: u.email,
+    name: u.name,
+    tenantId: u.tenantId ?? "",
+    tenantRole: u.tenantRole ?? "member",
+  };
 }
 
 /** Reject unauthenticated requests with 401; otherwise stash the user on context. */

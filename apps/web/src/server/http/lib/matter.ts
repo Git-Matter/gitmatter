@@ -13,5 +13,5 @@ export async function resolveCreateMatter(
   if (matterId) {
     return (await hasMatterAccess(user.id, matterId, "editor")) ? matterId : null;
   }
-  return ensureDefaultMatter(user.id, user.name);
+  return ensureDefaultMatter(user.id, user.name, user.tenantId);
 }

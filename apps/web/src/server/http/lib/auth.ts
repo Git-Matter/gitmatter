@@ -1,7 +1,7 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { tanstackStartCookies } from "better-auth/tanstack-start";
-import { ensureDefaultMatter } from "@workspace/core";
+import { provisionUserTenant } from "@workspace/core";
 import { db } from "@workspace/db/client";
 import { account, session, user, verification } from "@workspace/db/schema";
 
@@ -16,13 +16,21 @@ export const auth = betterAuth({
     schema: { user, session, account, verification },
   }),
   emailAndPassword: { enabled: true },
+  user: {
+    // tenantId/role are owned by the signup hook — not client-settable.
+    additionalFields: {
+      tenantId: { type: "string", required: false, input: false },
+      tenantRole: { type: "string", required: false, input: false },
+    },
+  },
   databaseHooks: {
     user: {
       create: {
-        // Every new user gets a personal client + home matter so they always
-        // have somewhere to put work. Idempotent.
+        // Create-or-invite: a matching pending invite joins that tenant, else a
+        // new tenant is created (user becomes admin). Then provision a home
+        // matter. Idempotent.
         after: async (u) => {
-          await ensureDefaultMatter(u.id, u.name);
+          await provisionUserTenant({ id: u.id, name: u.name, email: u.email });
         },
       },
     },

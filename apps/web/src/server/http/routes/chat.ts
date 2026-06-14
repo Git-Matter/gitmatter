@@ -66,7 +66,7 @@ function withAttachments(
   const lines = attachments.map(
     (a) => `- ${ATTACH_LABELS[a.kind] ?? a.kind}: ${a.label} (id: ${a.id})`
   );
-  return `[The user attached the following for context. Read them with the available tools (fetch, get_review, get_contract, list_matters, list_clients) as needed:\n${lines.join("\n")}]\n\n${message}`;
+  return `[The user attached the following for context. Read them with the available tools (fetch, get_review, get_document, list_matters, list_clients) as needed:\n${lines.join("\n")}]\n\n${message}`;
 }
 
 class HttpError extends Error {

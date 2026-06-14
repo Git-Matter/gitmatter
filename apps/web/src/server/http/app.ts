@@ -11,12 +11,12 @@ import {
 } from "@workspace/core";
 import { resolveJurisdiction } from "@workspace/registry";
 import { chatRoute } from "./routes/chat.js";
-import { contractRoute } from "./routes/contract.js";
 import { documentsRoute } from "./routes/documents.js";
 import { keysRoute } from "./routes/keys.js";
 import { mattersRoute } from "./routes/matters.js";
 import { oauthRoute } from "./routes/oauth.js";
 import { tabularRoute } from "./routes/tabular.js";
+import { tenantsRoute } from "./routes/tenants.js";
 import { tokensRoute } from "./routes/tokens.js";
 import { workflowRoute } from "./routes/workflow.js";
 import { authenticateMcp } from "../mcp/auth.js";
@@ -88,10 +88,10 @@ app.use("/api/*", (c, next) => {
 
 app.route("/", keysRoute);
 app.route("/", mattersRoute);
+app.route("/", tenantsRoute);
 app.route("/", oauthRoute);
 app.route("/", documentsRoute);
 app.route("/", tabularRoute);
-app.route("/", contractRoute);
 app.route("/", workflowRoute);
 app.route("/", chatRoute);
 app.route("/", tokensRoute);
