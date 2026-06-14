@@ -32,7 +32,7 @@ const config = defineConfig({
   plugins: [
     devtools(),
     tailwindcss(),
-    tanstackStart(),
+    tanstackStart({ router: { autoCodeSplitting: true } }),
     viteReact(),
     // React Compiler: plugin-react v6 dropped inline Babel, so run it via
     // @rolldown/plugin-babel. Must come after viteReact().

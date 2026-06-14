@@ -1,0 +1,148 @@
+erDiagram
+  tenants ||--o{ user : "scopes"
+  tenants ||--o{ clients : "scopes"
+  tenants ||--o{ matters : "scopes"
+  tenants ||--o{ tenantInvites : "scopes"
+
+  clients ||--o{ clientContacts : "has"
+  clients ||--o{ matters : "1:N"
+
+  matters ||--o{ matterMembers : "access"
+  user ||--o{ matterMembers : "member"
+
+  matters ||--o{ documents : "files"
+  matters ||--o{ tabularReviews : "files"
+  matters ||--o{ workflows : "files"
+  matters ||--o{ documentFolders : "tree"
+  matters ||--o{ chats : "scoped"
+
+  documents ||--o{ documentVersions : "byte snapshots"
+  documents ||--o{ documentEdits : "redlines"
+  documentVersions ||--o{ documentEdits : "version"
+  documentFolders ||--o{ documents : "folder"
+
+  tabularReviews ||--o{ tabularCells : "1:N"
+
+  commits ||--o{ fieldChanges : "diffs"
+  commits ||..o{ documents : "artifactType=document"
+  commits ||..o{ tabularReviews : "artifactType=tabular_review"
+  commits ||..o{ workflows : "artifactType=workflow"
+
+  chats ||--o{ chatMessages : "turns"
+
+  tenants {
+    uuid id PK
+    text name
+  }
+  user {
+    text id PK
+    text tenantId FK
+    text tenantRole
+    text email
+  }
+  clients {
+    uuid id PK
+    uuid tenantId FK
+    text name
+    text type
+  }
+  matters {
+    uuid id PK
+    uuid clientId FK
+    uuid tenantId FK
+    text status
+    bool conflictCleared
+  }
+  matterMembers {
+    uuid id PK
+    uuid matterId FK
+    text userId FK
+    text role "owner|editor|viewer"
+  }
+  documents {
+    uuid id PK
+    uuid matterId FK
+    uuid tenantId FK
+    text userId FK
+    text fileType
+    text markdown "editable body"
+    text jurisdiction
+    text status
+    uuid currentVersionId
+    uuid headCommitId
+  }
+  documentVersions {
+    uuid id PK
+    uuid documentId FK
+    int versionNumber
+    text storagePath
+    text source "upload|generated|edit|replace"
+    uuid lastCommitId
+  }
+  documentEdits {
+    uuid id PK
+    uuid documentId FK
+    uuid versionId FK
+    text changeId
+    text delWId "docx OOXML"
+    text insWId "docx OOXML"
+    text deletedText
+    text insertedText
+    text status "pending|accepted|rejected"
+    uuid lastCommitId
+  }
+  documentFolders {
+    uuid id PK
+    uuid matterId FK
+    uuid parentFolderId FK "self"
+  }
+  tabularReviews {
+    uuid id PK
+    uuid matterId FK
+    jsonb columnsConfig
+    jsonb documentIds
+    uuid headCommitId
+  }
+  tabularCells {
+    uuid id PK
+    uuid reviewId FK
+    uuid documentId
+    int columnIndex
+    uuid lastCommitId
+  }
+  workflows {
+    uuid id PK
+    uuid matterId FK
+    text type "assistant|tabular"
+    text promptMd
+    bool isSystem
+    uuid headCommitId
+  }
+  commits {
+    uuid id PK
+    text artifactType "document|tabular_review|workflow"
+    uuid artifactId
+    int seq
+    uuid parentCommitId
+    text op
+  }
+  fieldChanges {
+    uuid id PK
+    uuid commitId FK
+    text path
+    jsonb before
+    jsonb after
+  }
+  chats {
+    uuid id PK
+    uuid matterId FK
+    text artifactType
+    uuid artifactId
+  }
+  chatMessages {
+    uuid id PK
+    uuid chatId FK
+    int seq
+    text role
+    jsonb content
+  }
