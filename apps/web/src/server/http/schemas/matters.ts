@@ -14,6 +14,14 @@ export const createMatterSchema = z.object({
   adverseParties: z.array(z.string()).optional(),
 });
 
+export const updateMatterSchema = z.object({
+  clientId: z.string().uuid().optional(),
+  name: z.string().min(1).optional(),
+  matterNumber: z.string().nullish(),
+  practiceArea: z.string().nullish(),
+  jurisdiction: z.string().nullish(),
+});
+
 export const conflictsCheckSchema = z.object({
   clientName: z.string().min(1),
   adverseParties: z.array(z.string()).optional(),

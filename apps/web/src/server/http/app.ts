@@ -5,6 +5,7 @@ import { auth } from "./lib/auth.js";
 import {
   getUserJurisdiction,
   probeEnvProviders,
+  purgeExpiredDocuments,
   seedBuiltinWorkflows,
   seedMcpConnections,
 } from "@workspace/core";
@@ -40,6 +41,10 @@ import { type AuthEnv, requireUser } from "./middleware/auth.js";
 // Seed system workflows + consumed-MCP connections once on boot (idempotent).
 void seedBuiltinWorkflows().catch(() => {});
 void seedMcpConnections().catch(() => {});
+
+// Hard-delete documents past the soft-delete retention window (also runs after
+// each delete). No scheduler here, so boot is the periodic sweep.
+void purgeExpiredDocuments().catch(() => {});
 
 // All server endpoints live under /api and are dispatched here from the
 // TanStack Start catch-all route (src/routes/api/$.ts).

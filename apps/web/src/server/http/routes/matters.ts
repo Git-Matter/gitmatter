@@ -8,6 +8,7 @@ import {
   createClient,
   createFolder,
   createMatter,
+  deleteClients,
   deleteFolder,
   findUserByEmail,
   getClientOverview,
@@ -21,6 +22,9 @@ import {
   removeMember,
   renameFolder,
   searchUsers,
+  selectClients,
+  updateMatter,
+  type ClientSelection,
 } from "@workspace/core";
 import { type AuthEnv } from "../middleware/auth.js";
 import {
@@ -29,6 +33,7 @@ import {
   conflictsCheckSchema,
   createClientSchema,
   createMatterSchema,
+  updateMatterSchema,
 } from "../schemas/matters.js";
 
 export const mattersRoute = new Hono<AuthEnv>();
@@ -78,6 +83,73 @@ mattersRoute.post("/api/clients", zValidator("json", createClientSchema), async 
   return c.json(client, 201);
 });
 
+// Build a ClientSelection from a request: `all` (with the live filter) or an
+// explicit id list. Used by both bulk delete (JSON body) and export (query).
+function clientSelection(src: {
+  all?: unknown;
+  ids?: unknown;
+  q?: string;
+  status?: string;
+}): ClientSelection {
+  if (src.all) {
+    return { all: true, q: src.q, status: isClientStatus(src.status) ? src.status : undefined };
+  }
+  const ids = Array.isArray(src.ids)
+    ? (src.ids as unknown[]).filter((v): v is string => typeof v === "string")
+    : typeof src.ids === "string"
+      ? src.ids.split(",").filter(Boolean)
+      : [];
+  return { ids };
+}
+
+function csvCell(value: string | null | undefined): string {
+  const s = value ?? "";
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+mattersRoute.post("/api/clients/bulk-delete", async (c) => {
+  const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
+  const sel = clientSelection({
+    all: body.all,
+    ids: body.ids,
+    q: typeof body.q === "string" ? body.q : undefined,
+    status: typeof body.status === "string" ? body.status : undefined,
+  });
+  return c.json(await deleteClients(c.get("user").tenantId, sel));
+});
+
+mattersRoute.get("/api/clients/export", async (c) => {
+  const sel = clientSelection({
+    all: c.req.query("all"),
+    ids: c.req.query("ids"),
+    q: c.req.query("q"),
+    status: c.req.query("status"),
+  });
+  const rows = await selectClients(c.get("user").tenantId, sel);
+  const header = ["id", "name", "type", "clientNumber", "status", "createdAt"];
+  const lines = [header.join(",")];
+  for (const r of rows) {
+    lines.push(
+      [
+        r.id,
+        r.name,
+        r.type,
+        r.clientNumber,
+        r.status,
+        r.createdAt instanceof Date ? r.createdAt.toISOString() : r.createdAt,
+      ]
+        .map(csvCell)
+        .join(",")
+    );
+  }
+  return new Response(lines.join("\n"), {
+    headers: {
+      "Content-Type": "text/csv; charset=utf-8",
+      "Content-Disposition": `attachment; filename="clients.csv"`,
+    },
+  });
+});
+
 mattersRoute.get("/api/clients/:id", async (c) => {
   const overview = await getClientOverview(c.get("user").id, c.req.param("id"));
   return overview ? c.json(overview) : c.json({ error: "Not found" }, 404);
@@ -103,6 +175,14 @@ mattersRoute.get("/api/matters/:id", async (c) => {
   if (!(await hasMatterAccess(c.get("user").id, id))) return c.json({ error: "Not found" }, 404);
   const matter = await getMatter(id);
   return matter ? c.json(matter) : c.json({ error: "Not found" }, 404);
+});
+
+mattersRoute.patch("/api/matters/:id", zValidator("json", updateMatterSchema), async (c) => {
+  const id = c.req.param("id");
+  if (!(await hasMatterAccess(c.get("user").id, id, "owner")))
+    return c.json({ error: "Forbidden" }, 403);
+  const updated = await updateMatter(id, c.req.valid("json"));
+  return updated ? c.json(updated) : c.json({ error: "Not found" }, 404);
 });
 
 mattersRoute.post("/api/matters/:id/close", async (c) => {

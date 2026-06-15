@@ -3,9 +3,11 @@ import { streamSSE } from "hono/streaming";
 import { zValidator } from "@hono/zod-validator";
 import {
   activeStoragePath,
+  addDocumentVersion,
   canAccessArtifact,
   createDocument,
   deleteDocument,
+  deleteDocumentVersion,
   docEvents,
   type DocStatusEvent,
   DOCX_MIME,
@@ -21,6 +23,7 @@ import {
   listMatterDocuments,
   listVersions,
   proposeEdit,
+  renameDocument,
   resolveEdit,
   retryDocument,
   uploadDocument,
@@ -30,8 +33,15 @@ import { resolveCreateMatter } from "../lib/matter.js";
 import {
   createDocumentSchema,
   proposeEditSchema,
+  renameDocumentSchema,
   resolveEditSchema,
 } from "../schemas/documents.js";
+
+const MIME_BY_TYPE: Record<string, string> = {
+  docx: DOCX_MIME,
+  doc: "application/msword",
+  pdf: "application/pdf",
+};
 
 export const documentsRoute = new Hono<AuthEnv>();
 
@@ -173,12 +183,17 @@ documentsRoute.get("/api/documents/:id/download", async (c) => {
   const storagePath = await activeStoragePath(doc);
   if (!storagePath) return c.json({ error: "no stored file" }, 404);
   const bytes = await getObject(storagePath);
-  const mime = doc.fileType === "docx" ? DOCX_MIME : "application/octet-stream";
-  const filename = doc.title.endsWith(".docx") ? doc.title : `${doc.title}.docx`;
+  const mime = MIME_BY_TYPE[doc.fileType] ?? "application/octet-stream";
+  const filename = doc.title.endsWith(`.${doc.fileType}`)
+    ? doc.title
+    : `${doc.title}.${doc.fileType}`;
+  // `?inline=1` serves for in-browser preview (e.g. PDF in an iframe) instead of
+  // forcing a download.
+  const disposition = c.req.query("inline") ? "inline" : "attachment";
   return new Response(bytes as BodyInit, {
     headers: {
       "Content-Type": mime,
-      "Content-Disposition": `attachment; filename="${filename.replace(/"/g, "")}"`,
+      "Content-Disposition": `${disposition}; filename="${filename.replace(/"/g, "")}"`,
     },
   });
 });
@@ -189,6 +204,67 @@ documentsRoute.get("/api/documents/:id/versions", async (c) => {
   if (!(await canAccessArtifact(c.get("user").id, "document", id)))
     return c.json({ error: "Not found" }, 404);
   return c.json(await listVersions(id));
+});
+
+// Upload a new version (replaces the active file). Re-runs extraction so the
+// preview/markdown reflect the new bytes. Editor access required.
+documentsRoute.post("/api/documents/:id/versions", async (c) => {
+  const id = c.req.param("id");
+  if (!(await canAccessArtifact(c.get("user").id, "document", id, "editor")))
+    return c.json({ error: "Not found" }, 404);
+  const body = await c.req.parseBody();
+  const file = body.file;
+  if (!(file instanceof File)) return c.json({ error: "file is required" }, 400);
+  const fileType = fileTypeFromName(file.name);
+  if (!fileType) return c.json({ error: "only PDF and DOCX/DOC are supported" }, 400);
+  if (file.size > MAX_UPLOAD_BYTES) return c.json({ error: "file exceeds 25 MB limit" }, 400);
+  const bytes = Buffer.from(await file.arrayBuffer());
+  try {
+    const doc = await addDocumentVersion({ type: "user", userId: c.get("user").id }, id, {
+      fileType,
+      bytes,
+    });
+    enqueueExtraction(doc);
+    return c.json(doc, 202);
+  } catch (err) {
+    return c.json({ error: err instanceof Error ? err.message : "upload failed" }, 502);
+  }
+});
+
+// Download a specific version's stored file. Viewer access is enough.
+documentsRoute.get("/api/documents/:id/versions/:versionId/download", async (c) => {
+  const id = c.req.param("id");
+  if (!(await canAccessArtifact(c.get("user").id, "document", id)))
+    return c.json({ error: "Not found" }, 404);
+  const version = (await listVersions(id)).find((v) => v.id === c.req.param("versionId"));
+  if (!version?.storagePath) return c.json({ error: "no stored file" }, 404);
+  const bytes = await getObject(version.storagePath);
+  const doc = await getDocument(id);
+  const base = doc?.title ?? "document";
+  const filename = base.endsWith(`.${version.fileType}`) ? base : `${base}.${version.fileType}`;
+  return new Response(bytes as BodyInit, {
+    headers: {
+      "Content-Type": MIME_BY_TYPE[version.fileType] ?? "application/octet-stream",
+      "Content-Disposition": `attachment; filename="${filename.replace(/"/g, "")}"`,
+    },
+  });
+});
+
+// Soft-delete a past version (the active one can't be deleted). Editor access.
+documentsRoute.delete("/api/documents/:id/versions/:versionId", async (c) => {
+  const id = c.req.param("id");
+  if (!(await canAccessArtifact(c.get("user").id, "document", id, "editor")))
+    return c.json({ error: "Not found" }, 404);
+  try {
+    await deleteDocumentVersion(
+      { type: "user", userId: c.get("user").id },
+      id,
+      c.req.param("versionId")
+    );
+  } catch (e) {
+    return c.json({ error: e instanceof Error ? e.message : "failed" }, 400);
+  }
+  return c.body(null, 204);
 });
 
 // Re-queue extraction for a failed (or stale-processing) document.
@@ -208,6 +284,21 @@ documentsRoute.get("/api/documents/:id", async (c) => {
   if (!(await canAccessArtifact(c.get("user").id, "document", id)))
     return c.json({ error: "Not found" }, 404);
   const result = await getDocumentDetail(id);
+  if (!result) return c.json({ error: "Not found" }, 404);
+  return c.json(result);
+});
+
+// Rename a document. Editor access required.
+documentsRoute.patch("/api/documents/:id", zValidator("json", renameDocumentSchema), async (c) => {
+  const user = c.get("user");
+  const id = c.req.param("id");
+  if (!(await canAccessArtifact(user.id, "document", id, "editor")))
+    return c.json({ error: "Not found" }, 404);
+  const result = await renameDocument(
+    { type: "user", userId: user.id },
+    id,
+    c.req.valid("json").title
+  );
   if (!result) return c.json({ error: "Not found" }, 404);
   return c.json(result);
 });
@@ -266,8 +357,9 @@ documentsRoute.get("/api/documents/:id/history", async (c) => {
 
 documentsRoute.delete("/api/documents/:id", async (c) => {
   const id = c.req.param("id");
-  if (!(await canAccessArtifact(c.get("user").id, "document", id, "editor")))
+  const user = c.get("user");
+  if (!(await canAccessArtifact(user.id, "document", id, "editor")))
     return c.json({ error: "Not found" }, 404);
-  await deleteDocument(id);
+  await deleteDocument({ type: "user", userId: user.id }, id);
   return c.body(null, 204);
 });

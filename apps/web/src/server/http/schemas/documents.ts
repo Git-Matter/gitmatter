@@ -15,3 +15,5 @@ export const proposeEditSchema = z.object({
 });
 
 export const resolveEditSchema = z.object({ decision: z.enum(["accept", "reject"]) });
+
+export const renameDocumentSchema = z.object({ title: z.string().min(1) });
