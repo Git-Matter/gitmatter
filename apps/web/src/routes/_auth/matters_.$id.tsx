@@ -8,6 +8,7 @@ import {
   MessageSquarePlus,
   MoreHorizontal,
   Pencil,
+  RotateCcw,
   Search,
   TableProperties,
   Trash2,
@@ -306,6 +307,10 @@ function DocumentsTab({
   const { data: docs = [] } = useQuery({
     queryKey: ["matter-docs", matterId, folderId],
     queryFn: () => api.listMatterDocuments(matterId, folderId),
+    // Auto-advance rows while extraction runs (Queued/Extracting -> Ready/Failed)
+    // without polling once everything has settled.
+    refetchInterval: (q) =>
+      q.state.data?.some((d) => d.status === "pending" || d.status === "processing") ? 2000 : false,
   });
 
   const invalidateDocs = () =>
@@ -336,6 +341,15 @@ function DocumentsTab({
       void invalidateDocs();
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Delete failed"),
+  });
+
+  const retryExtract = useMutation({
+    mutationFn: (id: string) => api.retryDocument(id),
+    onSuccess: () => {
+      toast.success("Re-extracting…");
+      void invalidateDocs();
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Re-extract failed"),
   });
 
   const rootFolders = folders.filter((f: Folder) => f.parentFolderId === (folderId ?? null));
@@ -463,6 +477,14 @@ function DocumentsTab({
                         }
                       />
                       <DropdownMenuContent align="end" className="min-w-52">
+                        {d.status === "failed" && (
+                          <DropdownMenuItem
+                            className="whitespace-nowrap"
+                            onClick={() => retryExtract.mutate(d.id)}
+                          >
+                            <RotateCcw className="size-4" /> Re-extract
+                          </DropdownMenuItem>
+                        )}
                         <DropdownMenuItem
                           className="whitespace-nowrap"
                           onClick={() => {

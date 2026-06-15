@@ -484,6 +484,7 @@ function VersionRow({
           variant="ghost"
           size="icon-sm"
           tooltip="Download version"
+          nativeButton={false}
           render={<a href={downloadUrl} download />}
         >
           <Download className="size-3.5" />

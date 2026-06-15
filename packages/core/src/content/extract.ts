@@ -61,10 +61,17 @@ async function extractPdfViaDocling(bytes: Buffer): Promise<ExtractResult> {
     body: JSON.stringify({
       // Ask for json too so we can read the page map for a reliable page count.
       options: { to_formats: ["md", "json"] },
-      file_sources: [{ base64_string: bytes.toString("base64"), filename: "doc.pdf" }],
+      // docling-serve v1 uses `sources` with a `kind` discriminator (the legacy
+      // `file_sources` key returns 422 on current builds).
+      sources: [{ kind: "file", base64_string: bytes.toString("base64"), filename: "doc.pdf" }],
     }),
   });
-  if (!res.ok) throw new Error(`docling-serve responded ${res.status}`);
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(
+      `docling-serve responded ${res.status} ${res.statusText}${body ? `: ${body.slice(0, 500)}` : ""}`
+    );
+  }
   const data = (await res.json()) as {
     document?: { md_content?: string; json_content?: { pages?: Record<string, unknown> } };
   };
