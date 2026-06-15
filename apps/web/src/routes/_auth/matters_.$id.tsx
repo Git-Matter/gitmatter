@@ -409,7 +409,9 @@ function DocumentsTab({
                 <TableCell className="text-muted-foreground">Folder</TableCell>
                 <TableCell className="text-muted-foreground">—</TableCell>
                 <TableCell className="text-muted-foreground">—</TableCell>
-                <TableCell className="text-muted-foreground">{formatShortDate(f.createdAt)}</TableCell>
+                <TableCell className="text-muted-foreground">
+                  {formatShortDate(f.createdAt)}
+                </TableCell>
                 <TableCell />
                 <TableCell />
               </TableRow>
@@ -445,7 +447,9 @@ function DocumentsTab({
                 <TableCell>
                   <VersionChip n={1} />
                 </TableCell>
-                <TableCell className="text-muted-foreground">{formatShortDate(d.createdAt)}</TableCell>
+                <TableCell className="text-muted-foreground">
+                  {formatShortDate(d.createdAt)}
+                </TableCell>
                 <TableCell>
                   <DocStatusCue status={d.status} />
                 </TableCell>

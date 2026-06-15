@@ -74,17 +74,6 @@ export function MatterChatWorkspace({
   const qc = useQueryClient();
   const { data: session } = useSession();
 
-  const s = useChatSession({
-    loaded,
-    matterId,
-    onFirstChat: (chatId) =>
-      void navigate({
-        to: "/matters/$id/assistant/$chatId",
-        params: { id: matterId, chatId },
-        replace: true,
-      }),
-  });
-
   const { data: matter } = useQuery({
     queryKey: ["matter", matterId],
     queryFn: () => api.getMatter(matterId),
@@ -114,6 +103,17 @@ export function MatterChatWorkspace({
       if (activeTabId === docId) setActiveTabId(next[next.length - 1]?.docId ?? null);
       return next;
     });
+
+  const s = useChatSession({
+    loaded,
+    matterId,
+    onFirstChat: (chatId) =>
+      void navigate({
+        to: "/matters/$id/assistant/$chatId",
+        params: { id: matterId, chatId },
+        replace: true,
+      }),
+  });
 
   // When the assistant creates/edits documents, refresh the explorer so the new
   // files appear without a manual reload. Keyed by the set of generated doc ids.

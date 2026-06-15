@@ -1,5 +1,5 @@
 import { createFileRoute, useRouter } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import {
   createColumnHelper,
@@ -19,7 +19,8 @@ import { CreateReviewDialog } from "./reviews/-components/CreateReviewDialog";
 import { api } from "../../lib/api";
 import { queryKeys } from "../../lib/queries";
 import { useColumnSizing } from "../../lib/useColumnSizing";
-import { useDebouncedValue } from "../../lib/useDebouncedValue";
+import { formatShortDate } from "../../lib/format";
+import { useTablePageParams } from "../../lib/useTablePageParams";
 
 export const Route = createFileRoute("/_auth/reviews")({ component: Reviews });
 
@@ -62,15 +63,7 @@ const columns = [
   columnHelper.accessor("createdAt", {
     header: "Created",
     size: 140,
-    cell: (c) => (
-      <span className="text-muted-foreground">
-        {new Date(c.getValue()).toLocaleDateString(undefined, {
-          month: "short",
-          day: "numeric",
-          year: "numeric",
-        })}
-      </span>
-    ),
+    cell: (c) => <span className="text-muted-foreground">{formatShortDate(c.getValue())}</span>,
   }),
 ];
 
@@ -81,19 +74,7 @@ function Reviews() {
   const [sorting, setSorting] = useState<SortingState>([{ id: "createdAt", desc: true }]);
   const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize: 50 });
   const [rowSelection, setRowSelection] = useState({});
-  const search = useDebouncedValue(query, 300);
-  const sort = sorting[0];
-  const pageParams = {
-    q: search,
-    page: pagination.pageIndex,
-    pageSize: pagination.pageSize,
-    sort: sort?.id,
-    dir: sort?.desc ? "desc" : "asc",
-  } as const;
-
-  useEffect(() => {
-    setPagination((current) => ({ ...current, pageIndex: 0 }));
-  }, [search, sort?.desc, sort?.id]);
+  const pageParams = useTablePageParams({ query, sorting, pagination, setPagination });
 
   const { data } = useQuery({
     queryKey: queryKeys.reviewsPage(pageParams),

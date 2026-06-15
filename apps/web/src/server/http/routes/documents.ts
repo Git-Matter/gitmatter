@@ -30,6 +30,7 @@ import {
 } from "@workspace/core";
 import { type AuthEnv } from "../middleware/auth.js";
 import { resolveCreateMatter } from "../lib/matter.js";
+import { parsePageQuery } from "../lib/page-query.js";
 import {
   createDocumentSchema,
   proposeEditSchema,
@@ -49,40 +50,15 @@ const MAX_UPLOAD_BYTES = 25 * 1024 * 1024; // 25 MB
 
 const documentStatuses = ["pending", "processing", "ready", "failed"] as const;
 const documentSorts = ["title", "fileType", "status", "createdAt"] as const;
-type DocumentStatusQuery = (typeof documentStatuses)[number];
-type DocumentSortQuery = (typeof documentSorts)[number];
-
-function isDocumentStatus(value: string | undefined): value is DocumentStatusQuery {
-  return documentStatuses.some((status) => status === value);
-}
-
-function isDocumentSort(value: string | undefined): value is DocumentSortQuery {
-  return documentSorts.some((sort) => sort === value);
-}
-
-function pageQuery(c: { req: { query: (name: string) => string | undefined } }) {
-  const pageSizeRaw = c.req.query("pageSize");
-  if (!pageSizeRaw) return null;
-  const page = Math.max(0, Number(c.req.query("page") ?? 0) || 0);
-  const pageSize = Math.min(200, Math.max(1, Number(pageSizeRaw) || 50));
-  const status = c.req.query("status");
-  const sort = c.req.query("sort");
-  const dir: "asc" | "desc" = c.req.query("dir") === "asc" ? "asc" : "desc";
-  return {
-    q: c.req.query("q"),
-    status: isDocumentStatus(status) ? status : undefined,
-    page,
-    pageSize,
-    sort: isDocumentSort(sort) ? sort : undefined,
-    dir,
-  };
-}
 
 // List documents. With `?matterId=` (and optional `?folderId=`) returns that
 // matter's documents (access-checked); otherwise the caller's own documents.
 documentsRoute.get("/api/documents", async (c) => {
   const matterId = c.req.query("matterId");
-  const paged = pageQuery(c);
+  const paged = parsePageQuery(c, {
+    sorts: documentSorts,
+    filters: { status: documentStatuses },
+  });
   if (matterId) {
     if (!(await hasMatterAccess(c.get("user").id, matterId)))
       return c.json({ error: "Not found" }, 404);

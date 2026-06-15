@@ -9,18 +9,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { CommitHistory } from "@/components/CommitHistory";
 import { DocxView } from "./DocxView";
 import { api, type DocVersion } from "../../../../lib/api";
+import {
+  documentSourceLabel,
+  fileTypeLabel,
+  hasExtensionChanged,
+} from "../../../../lib/documentLabels";
+import { formatBytes, formatDateTime } from "../../../../lib/format";
 
 /**
  * Slide-in drawer with a document's preview + metadata + version history — a
@@ -192,7 +190,7 @@ function DrawerBody({ docId, onClose }: { docId: string; onClose: () => void }) 
   function saveRename() {
     const trimmed = name.trim();
     if (!trimmed) return;
-    if (extensionChanged(doc.title, trimmed)) {
+    if (hasExtensionChanged(doc.title, trimmed)) {
       setExtWarnTitle(trimmed);
       return;
     }
@@ -351,7 +349,7 @@ function DrawerBody({ docId, onClose }: { docId: string; onClose: () => void }) 
                     value={currentVersion ? String(currentVersion.versionNumber) : "—"}
                   />
                   <DataRow label="Owner" value={doc.ownerName ?? "—"} />
-                  <DataRow label="Uploaded" value={new Date(doc.createdAt).toLocaleString()} />
+                  <DataRow label="Uploaded" value={formatDateTime(doc.createdAt)} />
                   <DataRow
                     label="Pages"
                     value={doc.pageCount != null ? String(doc.pageCount) : "—"}
@@ -476,7 +474,7 @@ function VersionRow({
           {deleted && <span className="text-xs text-muted-foreground">· Deleted</span>}
         </div>
         <p className="text-xs text-muted-foreground">
-          {sourceLabel(version.source)} · {new Date(version.createdAt).toLocaleString()}
+          {documentSourceLabel(version.source)} · {formatDateTime(version.createdAt)}
         </p>
       </div>
       {!deleted && (
@@ -502,70 +500,4 @@ function VersionRow({
       )}
     </div>
   );
-}
-
-function ConfirmDialog({
-  open,
-  onOpenChange,
-  title,
-  description,
-  confirmLabel,
-  onConfirm,
-  pending,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  title: string;
-  description: string;
-  confirmLabel: string;
-  onConfirm: () => void;
-  pending: boolean;
-}) {
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent showCloseButton={false}>
-        <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-          <DialogDescription>{description}</DialogDescription>
-        </DialogHeader>
-        <DialogFooter>
-          <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
-          <Button variant="destructive" disabled={pending} onClick={onConfirm}>
-            {confirmLabel}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function fileTypeLabel(fileType: string) {
-  if (fileType.includes("pdf")) return "PDF";
-  if (fileType.includes("word") || fileType.includes("docx") || fileType.includes("doc"))
-    return "DOCX";
-  if (fileType.includes("markdown") || fileType.includes("md")) return "MD";
-  return fileType.split("/").pop() ?? fileType;
-}
-
-function sourceLabel(source: string) {
-  const map: Record<string, string> = {
-    upload: "Uploaded",
-    replace: "Replaced",
-    edit: "Tracked edit",
-    generated: "Generated",
-  };
-  return map[source] ?? source;
-}
-
-function extensionChanged(oldName: string, newName: string) {
-  const ext = (s: string) => (s.includes(".") ? s.slice(s.lastIndexOf(".")).toLowerCase() : "");
-  return ext(oldName) !== ext(newName);
-}
-
-function formatBytes(bytes: number | null) {
-  if (bytes == null) return "—";
-  if (bytes < 1024) return `${bytes} B`;
-  const kb = bytes / 1024;
-  if (kb < 1024) return `${kb.toFixed(1)} KB`;
-  return `${(kb / 1024).toFixed(1)} MB`;
 }

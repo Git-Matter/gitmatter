@@ -24,9 +24,11 @@ import {
   searchUsers,
   selectClients,
   updateMatter,
+  rowsToCsv,
   type ClientSelection,
 } from "@workspace/core";
 import { type AuthEnv } from "../middleware/auth.js";
+import { parsePageQuery } from "../lib/page-query.js";
 import {
   addMemberSchema,
   clearConflictsSchema,
@@ -41,38 +43,18 @@ export const mattersRoute = new Hono<AuthEnv>();
 const clientStatuses = ["active", "inactive"] as const;
 const clientSorts = ["name", "type", "clientNumber", "status", "createdAt"] as const;
 type ClientStatusQuery = (typeof clientStatuses)[number];
-type ClientSortQuery = (typeof clientSorts)[number];
 
 function isClientStatus(value: string | undefined): value is ClientStatusQuery {
   return clientStatuses.some((status) => status === value);
 }
 
-function isClientSort(value: string | undefined): value is ClientSortQuery {
-  return clientSorts.some((sort) => sort === value);
-}
-
-function clientPageQuery(c: { req: { query: (name: string) => string | undefined } }) {
-  const pageSizeRaw = c.req.query("pageSize");
-  if (!pageSizeRaw) return null;
-  const page = Math.max(0, Number(c.req.query("page") ?? 0) || 0);
-  const pageSize = Math.min(200, Math.max(1, Number(pageSizeRaw) || 50));
-  const status = c.req.query("status");
-  const sort = c.req.query("sort");
-  const dir: "asc" | "desc" = c.req.query("dir") === "asc" ? "asc" : "desc";
-  return {
-    q: c.req.query("q"),
-    status: isClientStatus(status) ? status : undefined,
-    page,
-    pageSize,
-    sort: isClientSort(sort) ? sort : undefined,
-    dir,
-  };
-}
-
 // ---- Clients (tenant directory) ----
 
 mattersRoute.get("/api/clients", async (c) => {
-  const paged = clientPageQuery(c);
+  const paged = parsePageQuery(c, {
+    sorts: clientSorts,
+    filters: { status: clientStatuses },
+  });
   if (paged) return c.json(await listClientsPage(c.get("user").tenantId, paged));
   return c.json(await listClients(c.get("user").tenantId));
 });
@@ -102,11 +84,6 @@ function clientSelection(src: {
   return { ids };
 }
 
-function csvCell(value: string | null | undefined): string {
-  const s = value ?? "";
-  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-}
-
 mattersRoute.post("/api/clients/bulk-delete", async (c) => {
   const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
   const sel = clientSelection({
@@ -127,22 +104,18 @@ mattersRoute.get("/api/clients/export", async (c) => {
   });
   const rows = await selectClients(c.get("user").tenantId, sel);
   const header = ["id", "name", "type", "clientNumber", "status", "createdAt"];
-  const lines = [header.join(",")];
-  for (const r of rows) {
-    lines.push(
-      [
-        r.id,
-        r.name,
-        r.type,
-        r.clientNumber,
-        r.status,
-        r.createdAt instanceof Date ? r.createdAt.toISOString() : r.createdAt,
-      ]
-        .map(csvCell)
-        .join(",")
-    );
-  }
-  return new Response(lines.join("\n"), {
+  const csv = rowsToCsv([
+    header,
+    ...rows.map((r) => [
+      r.id,
+      r.name,
+      r.type,
+      r.clientNumber,
+      r.status,
+      r.createdAt instanceof Date ? r.createdAt.toISOString() : r.createdAt,
+    ]),
+  ]);
+  return new Response(csv, {
     headers: {
       "Content-Type": "text/csv; charset=utf-8",
       "Content-Disposition": `attachment; filename="clients.csv"`,

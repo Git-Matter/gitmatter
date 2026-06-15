@@ -18,7 +18,6 @@ import {
   Monitor,
   Moon,
   PanelLeft,
-  Plus,
   Settings as SettingsIcon,
   Sun,
   Table2,
@@ -38,8 +37,9 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { signOut } from "../lib/auth-client";
 import { useMatters } from "../lib/matters-context";
-import { useChats, useClients, useDocuments } from "../lib/queries";
 import type { ServerSession } from "../lib/session";
+import { ChatHistoryPanel } from "./sidebar/ChatHistoryPanel";
+import { RecentPanel } from "./sidebar/RecentPanel";
 
 const NAV_ITEMS = [
   { href: "/assistant", label: "Assistant", icon: MessageSquare },
@@ -56,7 +56,6 @@ const NAV_ITEMS = [
 // real conversations).
 const RECENT_SECTIONS = new Set(["/matters", "/documents", "/clients"]);
 
-const RECENT_LIMIT = 12;
 const NARROW_QUERY = "(max-width: 767px)";
 type AppRouterState = RouterState<RegisteredRouter["routeTree"]>;
 
@@ -316,195 +315,6 @@ function SidebarToggle({ open, onToggle }: { open: boolean; onToggle?: () => voi
     <button onClick={onToggle} title={label} className={className}>
       <PanelLeft className="size-4" />
     </button>
-  );
-}
-
-function RecentPanel({ section, onNavigate }: { section: string; onNavigate?: () => void }) {
-  if (section === "/matters") return <RecentMatters onNavigate={onNavigate} />;
-  if (section === "/documents") return <RecentDocuments onNavigate={onNavigate} />;
-  if (section === "/clients") return <RecentClients onNavigate={onNavigate} />;
-  return null;
-}
-
-// Shared chrome + row styling for the recent lists.
-const recentRowCls = (active: boolean) =>
-  cn(
-    "flex h-8 items-center gap-3 rounded-md px-2.5 text-left text-sm transition-colors",
-    active
-      ? "bg-sidebar-accent text-sidebar-accent-foreground"
-      : "text-sidebar-foreground/70 hover:bg-sidebar-accent/60"
-  );
-
-function RecentShell({
-  title,
-  empty,
-  isEmpty,
-  children,
-}: {
-  title: string;
-  empty: string;
-  isEmpty: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="flex min-h-0 flex-1 flex-col border-t border-sidebar-border py-2">
-      <div className="px-5 pb-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">
-        {title}
-      </div>
-      <nav className="min-h-0 flex-1 overflow-y-auto">
-        {isEmpty ? <p className="px-5 py-2 text-xs text-muted-foreground">{empty}</p> : children}
-      </nav>
-    </div>
-  );
-}
-
-function RecentMatters({ onNavigate }: { onNavigate?: () => void }) {
-  const { matters } = useMatters();
-  const activeId = useRouterState({
-    select: (s: AppRouterState) => /^\/matters\/(.+)$/.exec(s.location.pathname)?.[1],
-  });
-  const items = [...matters]
-    .sort((a, b) => b.matter.updatedAt.localeCompare(a.matter.updatedAt))
-    .slice(0, RECENT_LIMIT);
-
-  return (
-    <RecentShell title="Recent matters" empty="No matters yet." isEmpty={items.length === 0}>
-      {items.map(({ matter }) => (
-        <div key={matter.id} className="px-2.5 py-0.5">
-          <Link
-            to="/matters/$id"
-            params={{ id: matter.id }}
-            onClick={onNavigate}
-            title={matter.name}
-            className={recentRowCls(matter.id === activeId)}
-          >
-            <span className="flex-1 truncate">{matter.name}</span>
-            {matter.id === activeId && (
-              <span className="size-1.5 shrink-0 rounded-full bg-bronze" />
-            )}
-          </Link>
-        </div>
-      ))}
-    </RecentShell>
-  );
-}
-
-function RecentDocuments({ onNavigate }: { onNavigate?: () => void }) {
-  const { data: docs = [] } = useDocuments();
-  const activeId = useRouterState({
-    select: (s: AppRouterState) => /^\/documents\/(.+)$/.exec(s.location.pathname)?.[1],
-  });
-  const items = [...docs]
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-    .slice(0, RECENT_LIMIT);
-
-  return (
-    <RecentShell title="Recent documents" empty="No documents yet." isEmpty={items.length === 0}>
-      {items.map((doc) => (
-        <div key={doc.id} className="px-2.5 py-0.5">
-          <Link
-            to="/documents/$id"
-            params={{ id: doc.id }}
-            onClick={onNavigate}
-            title={doc.title}
-            className={recentRowCls(doc.id === activeId)}
-          >
-            <span className="flex-1 truncate">{doc.title}</span>
-            {doc.id === activeId && <span className="size-1.5 shrink-0 rounded-full bg-bronze" />}
-          </Link>
-        </div>
-      ))}
-    </RecentShell>
-  );
-}
-
-function RecentClients({ onNavigate }: { onNavigate?: () => void }) {
-  const { data: clients = [] } = useClients();
-  // Clients have no detail route — they open in a dialog on the list page driven
-  // by the ?client param.
-  const activeId = useRouterState({
-    select: (s: AppRouterState) =>
-      s.location.pathname === "/clients"
-        ? (s.location.search as { client?: string }).client
-        : undefined,
-  });
-  const items = [...clients]
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-    .slice(0, RECENT_LIMIT);
-
-  return (
-    <RecentShell title="Recent clients" empty="No clients yet." isEmpty={items.length === 0}>
-      {items.map((client) => (
-        <div key={client.id} className="px-2.5 py-0.5">
-          <Link
-            to="/clients"
-            search={{ client: client.id }}
-            onClick={onNavigate}
-            title={client.name}
-            className={recentRowCls(client.id === activeId)}
-          >
-            <span className="flex-1 truncate">{client.name}</span>
-            {client.id === activeId && (
-              <span className="size-1.5 shrink-0 rounded-full bg-bronze" />
-            )}
-          </Link>
-        </div>
-      ))}
-    </RecentShell>
-  );
-}
-
-// Real conversation list for the assistant section. "New chat" starts a fresh
-// thread; each row resumes a conversation.
-function ChatHistoryPanel({ onNavigate }: { onNavigate?: () => void }) {
-  const { data: chats = [] } = useChats();
-  const activeChat = useRouterState({
-    select: (s: AppRouterState) => /^\/assistant\/(.+)$/.exec(s.location.pathname)?.[1],
-  });
-
-  return (
-    <div className="flex min-h-0 flex-1 flex-col border-t border-sidebar-border py-2">
-      <div className="px-5 pb-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">
-        Conversations
-      </div>
-      <div className="px-2.5 py-0.5">
-        <Link
-          to="/assistant"
-          onClick={onNavigate}
-          className="flex h-9 items-center gap-3 rounded-md px-2.5 text-sm font-medium text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent/60"
-        >
-          <Plus className="size-4 shrink-0" />
-          <span className="flex-1">New chat</span>
-        </Link>
-      </div>
-      <nav className="mt-1 min-h-0 flex-1 overflow-y-auto">
-        {chats.length === 0 && (
-          <p className="px-5 py-2 text-xs text-muted-foreground">No conversations yet.</p>
-        )}
-        {chats.map((chat) => {
-          const active = chat.id === activeChat;
-          return (
-            <div key={chat.id} className="px-2.5 py-0.5">
-              <Link
-                to="/assistant/$id"
-                params={{ id: chat.id }}
-                onClick={onNavigate}
-                title={chat.title ?? "Untitled"}
-                className={cn(
-                  "flex h-8 items-center gap-3 rounded-md px-2.5 text-left text-sm transition-colors",
-                  active
-                    ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                    : "text-sidebar-foreground/70 hover:bg-sidebar-accent/60"
-                )}
-              >
-                <span className="flex-1 truncate">{chat.title ?? "Untitled"}</span>
-                {active && <span className="size-1.5 shrink-0 rounded-full bg-bronze" />}
-              </Link>
-            </div>
-          );
-        })}
-      </nav>
-    </div>
   );
 }
 

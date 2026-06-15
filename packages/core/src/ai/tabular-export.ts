@@ -2,6 +2,7 @@ import * as XLSX from "xlsx";
 import { eq, inArray } from "drizzle-orm";
 import { db } from "@workspace/db/client";
 import { documents, tabularCells, tabularReviews } from "@workspace/db/schema";
+import { rowsToCsv } from "../core/csv.js";
 
 // Read-only serialization of a review grid (rows = documents, cols = columns).
 // No commit — exporting doesn't change the artifact.
@@ -35,13 +36,7 @@ export async function buildReviewGrid(reviewId: string): Promise<ReviewGrid | nu
 }
 
 export function gridToCsv(grid: ReviewGrid): string {
-  const esc = (v: string) => {
-    // Neutralize spreadsheet formula injection: cells (extracted from uploaded
-    // docs) that start with = + - @ are prefixed with a single quote.
-    const guarded = /^[=+\-@]/.test(v) ? `'${v}` : v;
-    return /[",\n]/.test(guarded) ? `"${guarded.replace(/"/g, '""')}"` : guarded;
-  };
-  return [grid.headers, ...grid.rows].map((r) => r.map(esc).join(",")).join("\n");
+  return rowsToCsv([grid.headers, ...grid.rows]);
 }
 
 export function gridToXlsx(grid: ReviewGrid): Uint8Array {

@@ -10,8 +10,11 @@ import {
   DEFAULT_MODEL,
   getChat,
   getLlmClient,
+  getMatter,
   getUserJurisdiction,
+  hasMatterAccess,
   listChats,
+  listMatterDocuments,
   LLM_MODELS,
   parseCitations,
   persistChat,
@@ -66,7 +69,23 @@ function withAttachments(
   const lines = attachments.map(
     (a) => `- ${ATTACH_LABELS[a.kind] ?? a.kind}: ${a.label} (id: ${a.id})`
   );
-  return `[The user attached the following for context. Read them with the available tools (fetch, get_review, get_document, list_matters, list_clients) as needed:\n${lines.join("\n")}]\n\n${message}`;
+  return `[The user attached the following for context. Read them with the available tools (fetch, get_document, get_review, list_matter_documents, list_matters, list_clients) as needed:\n${lines.join("\n")}]\n\n${message}`;
+}
+
+// A matter-scoped chat carries its matter as ambient context: the matter name
+// plus a metadata index (id + title + type + status) of its documents — NOT
+// their content. The model reads any document on demand with get_document, so
+// the same file is never re-sent turn after turn. Returns "" when the matter is
+// inaccessible or there's no matter scope.
+async function matterContextBlock(userId: string, matterId: string): Promise<string> {
+  if (!(await hasMatterAccess(userId, matterId, "viewer"))) return "";
+  const matter = await getMatter(matterId);
+  if (!matter) return "";
+  const docs = await listMatterDocuments(matterId);
+  const docLines = docs.length
+    ? docs.map((d) => `- ${d.title} (id: ${d.id}, ${d.fileType}, ${d.status})`).join("\n")
+    : "- (no documents filed yet)";
+  return `\n\n[Matter context] This conversation is filed under the matter "${matter.name}" (id: ${matterId}). Documents in this matter:\n${docLines}\nThe user can see and open these in their workspace. To read one, call get_document with its id (or fetch); call list_matter_documents to refresh the list. You already have these ids — don't ask the user for them.`;
 }
 
 class HttpError extends Error {
@@ -153,17 +172,22 @@ async function runAssistant(
 
   // Continue a conversation: replay prior user/assistant turns (text only) so the
   // model has context, then append this turn.
+  const prior = body.chatId ? await getChat(user.id, body.chatId) : null;
   const messages: ChatMessage[] = [];
-  if (body.chatId) {
-    const prior = await getChat(user.id, body.chatId);
-    for (const turn of prior?.turns ?? [])
-      messages.push(
-        turn.role === "user"
-          ? { role: "user", content: turn.text }
-          : { role: "assistant", content: turn.text }
-      );
-  }
+  for (const turn of prior?.turns ?? [])
+    messages.push(
+      turn.role === "user"
+        ? { role: "user", content: turn.text }
+        : { role: "assistant", content: turn.text }
+    );
   messages.push({ role: "user", content: withAttachments(body.message, body.attachments ?? []) });
+
+  // Matter scope: from the request (new chat) or the chat row (continuation).
+  // Inject the matter's document index into the system prompt once per request.
+  const matterId = body.matterId ?? prior?.matterId ?? undefined;
+  const system = matterId
+    ? CITATIONS_INSTRUCTION + (await matterContextBlock(user.id, matterId))
+    : CITATIONS_INSTRUCTION;
   const toolCalls: Array<{ tool: string; input: unknown }> = [];
   let finalText = "";
 
@@ -173,7 +197,7 @@ async function runAssistant(
         client,
         {
           model,
-          system: CITATIONS_INSTRUCTION,
+          system,
           tools: tools.length ? tools : undefined,
           messages,
           reasoning,

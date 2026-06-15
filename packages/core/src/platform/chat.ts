@@ -104,7 +104,12 @@ export type ChatTurn = {
 export async function getChat(
   userId: string,
   chatId: string
-): Promise<{ id: string; title: string | null; turns: ChatTurn[] } | null> {
+): Promise<{
+  id: string;
+  title: string | null;
+  matterId: string | null;
+  turns: ChatTurn[];
+} | null> {
   const [chat] = await db
     .select()
     .from(chats)
@@ -127,5 +132,5 @@ export async function getChat(
       citations: annotations?.citations,
     };
   });
-  return { id: chat.id, title: chat.title, turns };
+  return { id: chat.id, title: chat.title, matterId: chat.matterId, turns };
 }
