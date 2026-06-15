@@ -22,6 +22,8 @@ export const matters = pgTable(
     name: text("name").notNull(),
     matterNumber: text("matter_number").unique(),
     practiceArea: text("practice_area"),
+    // Governing-law jurisdiction for the matter (registry code, e.g. "US-NY").
+    jurisdiction: text("jurisdiction"),
     status: text("status").$type<"open" | "closed">().notNull().default("open"),
     leadAttorney: text("lead_attorney").references(() => user.id, { onDelete: "set null" }),
     // Adverse-party names, compared against existing clients/matters on open for a

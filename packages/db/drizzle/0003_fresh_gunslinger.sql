@@ -1,0 +1,1 @@
+ALTER TABLE "matters" ADD COLUMN "jurisdiction" text;

@@ -65,6 +65,9 @@ export const documents = pgTable(
     // non-docx document operate as find->replace on this field.
     markdown: text("markdown"),
     sizeBytes: integer("size_bytes"),
+    // Page count of the active file when extraction can determine it (PDF via
+    // docling, DOCX via docProps/app.xml). Null when unknown.
+    pageCount: integer("page_count"),
     status: text("status").$type<DocumentStatus>().notNull().default("ready"),
     extractionError: text("extraction_error"),
     attempts: integer("attempts").notNull().default(0),
@@ -76,6 +79,10 @@ export const documents = pgTable(
     // background extraction is recorded as a system-authored commit.
     headCommitId: uuid("head_commit_id"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
+    // Soft-delete: set on delete, hidden from lists. A purge job hard-deletes
+    // (and frees S3 bytes) after the retention window (30 days).
+    deletedAt: timestamp("deleted_at"),
+    deletedBy: text("deleted_by").references(() => user.id, { onDelete: "set null" }),
   },
   (t) => [
     index("documents_matter_idx").on(t.matterId),

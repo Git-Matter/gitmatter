@@ -15,6 +15,27 @@
       "when": 1781506847821,
       "tag": "0001_drop_markitdown_connection",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1781593247821,
+      "tag": "0002_ordinary_ozymandias",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1781679647821,
+      "tag": "0003_fresh_gunslinger",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1781471626871,
+      "tag": "0004_parched_tinkerer",
+      "breakpoints": true
     }
   ]
 }

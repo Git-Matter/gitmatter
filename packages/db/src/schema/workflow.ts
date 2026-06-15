@@ -1,4 +1,14 @@
-import { boolean, index, jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import {
+  boolean,
+  index,
+  jsonb,
+  pgTable,
+  primaryKey,
+  text,
+  timestamp,
+  unique,
+  uuid,
+} from "drizzle-orm/pg-core";
 import { user } from "./auth.js";
 import { matters } from "./matters.js";
 import { tenants } from "./tenants.js";
@@ -30,3 +40,40 @@ export const workflows = pgTable(
 );
 
 export type Workflow = typeof workflows.$inferSelect;
+
+// Per-email sharing of a custom workflow. Recipients are matched by email so a
+// workflow can be shared before the recipient has signed in.
+export const workflowShares = pgTable(
+  "workflow_shares",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    workflowId: uuid("workflow_id")
+      .notNull()
+      .references(() => workflows.id, { onDelete: "cascade" }),
+    sharedWithEmail: text("shared_with_email").notNull(),
+    allowEdit: boolean("allow_edit").default(false).notNull(),
+    createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => [
+    unique("workflow_share_unique").on(t.workflowId, t.sharedWithEmail),
+    index("workflow_shares_email_idx").on(t.sharedWithEmail),
+  ]
+);
+
+// Built-in (system) workflows a user has hidden from their library.
+export const hiddenWorkflows = pgTable(
+  "hidden_workflows",
+  {
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    workflowId: uuid("workflow_id")
+      .notNull()
+      .references(() => workflows.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.workflowId] })]
+);
+
+export type WorkflowShare = typeof workflowShares.$inferSelect;
