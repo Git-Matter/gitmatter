@@ -9,18 +9,27 @@ import {
   type SortingState,
 } from "@tanstack/react-table";
 import { useForm } from "@tanstack/react-form";
-import { Loader2, Plus, Search } from "lucide-react";
+import { Download, Loader2, Plus, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { DataTable } from "@/components/DataTable";
 import { PageHeader } from "@/components/PageHeader";
 import { StateCue } from "@/components/StateCue";
 import { TablePager } from "@/components/TablePager";
-import { api, type Client } from "../../lib/api";
+import { api, type Client, type ClientSelection } from "../../lib/api";
 import { queryKeys } from "../../lib/queries";
 import { useColumnSizing } from "../../lib/useColumnSizing";
 import { useDebouncedValue } from "../../lib/useDebouncedValue";
@@ -94,6 +103,11 @@ function Clients() {
   const [sorting, setSorting] = useState<SortingState>([{ id: "name", desc: false }]);
   const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize: 50 });
   const [rowSelection, setRowSelection] = useState({});
+  // "Select all matching" spans every row in the DB for the current filter, not
+  // just the loaded page — so it's a flag, not an enumerated id set.
+  const [selectAllMatching, setSelectAllMatching] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const qc = useQueryClient();
   const search = useDebouncedValue(query, 300);
   const sort = sorting[0];
   const pageParams = {
@@ -105,8 +119,11 @@ function Clients() {
     dir: sort?.desc ? "desc" : "asc",
   } as const;
 
+  // A new filter changes which rows exist, so any prior selection is stale.
   useEffect(() => {
     setPagination((current) => ({ ...current, pageIndex: 0 }));
+    setRowSelection({});
+    setSelectAllMatching(false);
   }, [search, sort?.desc, sort?.id, view]);
 
   const { data, isPending } = useQuery({
@@ -157,6 +174,39 @@ function Clients() {
   });
   const showTable = clients.length > 0 || rowCount > 0 || query.trim().length > 0 || view !== "all";
 
+  const selectedIds = Object.keys(rowSelection);
+  const selectedCount = selectAllMatching ? rowCount : selectedIds.length;
+  const selection: ClientSelection = selectAllMatching
+    ? { all: true, q: search, status: view }
+    : { ids: selectedIds };
+
+  function clearSelection() {
+    setRowSelection({});
+    setSelectAllMatching(false);
+  }
+
+  function exportCsv() {
+    const a = document.createElement("a");
+    a.href = api.clientsExportUrl(selection);
+    a.download = "clients.csv";
+    a.click();
+  }
+
+  const deleteMutation = useMutation({
+    mutationFn: () => api.bulkDeleteClients(selection),
+    onSuccess: ({ deleted, skipped }) => {
+      void qc.invalidateQueries({ queryKey: queryKeys.clients });
+      toast.success(
+        skipped > 0
+          ? `Deleted ${deleted}. Skipped ${skipped} with matters.`
+          : `Deleted ${deleted} client${deleted === 1 ? "" : "s"}.`
+      );
+      clearSelection();
+      setConfirmDelete(false);
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Delete failed"),
+  });
+
   return (
     <div className="-mb-12 flex min-h-0 flex-1 flex-col gap-stack">
       <PageHeader
@@ -190,6 +240,41 @@ function Clients() {
               />
             </div>
           </div>
+          {selectedCount > 0 && (
+            <div className="flex h-10 items-center justify-between gap-3 border-b border-border text-sm">
+              <div className="flex items-center gap-3">
+                <span className="font-medium">{selectedCount} selected</span>
+                {!selectAllMatching &&
+                  table.getIsAllRowsSelected() &&
+                  rowCount > clients.length && (
+                    <button
+                      type="button"
+                      className="text-primary hover:underline"
+                      onClick={() => setSelectAllMatching(true)}
+                    >
+                      Select all {rowCount}
+                    </button>
+                  )}
+                <button
+                  type="button"
+                  className="text-muted-foreground hover:text-foreground hover:underline"
+                  onClick={clearSelection}
+                >
+                  Clear
+                </button>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="sm" onClick={exportCsv}>
+                  <Download className="size-4" />
+                  Export CSV
+                </Button>
+                <Button variant="destructive" size="sm" onClick={() => setConfirmDelete(true)}>
+                  <Trash2 className="size-4" />
+                  Delete
+                </Button>
+              </div>
+            </div>
+          )}
           <DataTable
             table={table}
             onRowClick={(client) => setSelected(client)}
@@ -217,6 +302,30 @@ function Clients() {
             void navigate({ to: "/clients", search: (s) => ({ ...s, client: undefined }) });
         }}
       />
+
+      <Dialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              Delete {selectedCount} client{selectedCount === 1 ? "" : "s"}?
+            </DialogTitle>
+            <DialogDescription>
+              This permanently removes the selected clients. Any client that still has matters is
+              kept and reported. This can&apos;t be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
+            <Button
+              variant="destructive"
+              disabled={deleteMutation.isPending}
+              onClick={() => deleteMutation.mutate()}
+            >
+              {deleteMutation.isPending ? "Deleting…" : "Delete"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
