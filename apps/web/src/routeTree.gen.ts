@@ -29,6 +29,8 @@ import { Route as AuthReviewsIdRouteImport } from './routes/_auth/reviews.$id'
 import { Route as AuthMattersIdRouteImport } from './routes/_auth/matters_.$id'
 import { Route as AuthDocumentsIdRouteImport } from './routes/_auth/documents_.$id'
 import { Route as AuthAssistantIdRouteImport } from './routes/_auth/assistant_.$id'
+import { Route as AuthWorkflowsTabularReviewIdRouteImport } from './routes/_auth/workflows.tabular-review.$id'
+import { Route as AuthWorkflowsAssistantIdRouteImport } from './routes/_auth/workflows.assistant.$id'
 
 const UnauthRouteRoute = UnauthRouteRouteImport.update({
   id: '/_unauth',
@@ -127,6 +129,18 @@ const AuthAssistantIdRoute = AuthAssistantIdRouteImport.update({
   path: '/assistant/$id',
   getParentRoute: () => AuthRouteRoute,
 } as any)
+const AuthWorkflowsTabularReviewIdRoute =
+  AuthWorkflowsTabularReviewIdRouteImport.update({
+    id: '/tabular-review/$id',
+    path: '/tabular-review/$id',
+    getParentRoute: () => AuthWorkflowsRoute,
+  } as any)
+const AuthWorkflowsAssistantIdRoute =
+  AuthWorkflowsAssistantIdRouteImport.update({
+    id: '/assistant/$id',
+    path: '/assistant/$id',
+    getParentRoute: () => AuthWorkflowsRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof marketingIndexRoute
@@ -138,7 +152,7 @@ export interface FileRoutesByFullPath {
   '/matters': typeof AuthMattersRoute
   '/reviews': typeof AuthReviewsRouteWithChildren
   '/settings': typeof AuthSettingsRoute
-  '/workflows': typeof AuthWorkflowsRoute
+  '/workflows': typeof AuthWorkflowsRouteWithChildren
   '/login': typeof UnauthLoginRoute
   '/signup': typeof UnauthSignupRoute
   '/api/$': typeof ApiSplatRoute
@@ -146,6 +160,8 @@ export interface FileRoutesByFullPath {
   '/documents/$id': typeof AuthDocumentsIdRoute
   '/matters/$id': typeof AuthMattersIdRoute
   '/reviews/$id': typeof AuthReviewsIdRoute
+  '/workflows/assistant/$id': typeof AuthWorkflowsAssistantIdRoute
+  '/workflows/tabular-review/$id': typeof AuthWorkflowsTabularReviewIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof marketingIndexRoute
@@ -157,7 +173,7 @@ export interface FileRoutesByTo {
   '/matters': typeof AuthMattersRoute
   '/reviews': typeof AuthReviewsRouteWithChildren
   '/settings': typeof AuthSettingsRoute
-  '/workflows': typeof AuthWorkflowsRoute
+  '/workflows': typeof AuthWorkflowsRouteWithChildren
   '/login': typeof UnauthLoginRoute
   '/signup': typeof UnauthSignupRoute
   '/api/$': typeof ApiSplatRoute
@@ -165,6 +181,8 @@ export interface FileRoutesByTo {
   '/documents/$id': typeof AuthDocumentsIdRoute
   '/matters/$id': typeof AuthMattersIdRoute
   '/reviews/$id': typeof AuthReviewsIdRoute
+  '/workflows/assistant/$id': typeof AuthWorkflowsAssistantIdRoute
+  '/workflows/tabular-review/$id': typeof AuthWorkflowsTabularReviewIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -179,7 +197,7 @@ export interface FileRoutesById {
   '/_auth/matters': typeof AuthMattersRoute
   '/_auth/reviews': typeof AuthReviewsRouteWithChildren
   '/_auth/settings': typeof AuthSettingsRoute
-  '/_auth/workflows': typeof AuthWorkflowsRoute
+  '/_auth/workflows': typeof AuthWorkflowsRouteWithChildren
   '/_unauth/login': typeof UnauthLoginRoute
   '/_unauth/signup': typeof UnauthSignupRoute
   '/api/$': typeof ApiSplatRoute
@@ -188,6 +206,8 @@ export interface FileRoutesById {
   '/_auth/documents_/$id': typeof AuthDocumentsIdRoute
   '/_auth/matters_/$id': typeof AuthMattersIdRoute
   '/_auth/reviews/$id': typeof AuthReviewsIdRoute
+  '/_auth/workflows/assistant/$id': typeof AuthWorkflowsAssistantIdRoute
+  '/_auth/workflows/tabular-review/$id': typeof AuthWorkflowsTabularReviewIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -209,6 +229,8 @@ export interface FileRouteTypes {
     | '/documents/$id'
     | '/matters/$id'
     | '/reviews/$id'
+    | '/workflows/assistant/$id'
+    | '/workflows/tabular-review/$id'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -228,6 +250,8 @@ export interface FileRouteTypes {
     | '/documents/$id'
     | '/matters/$id'
     | '/reviews/$id'
+    | '/workflows/assistant/$id'
+    | '/workflows/tabular-review/$id'
   id:
     | '__root__'
     | '/(marketing)'
@@ -250,6 +274,8 @@ export interface FileRouteTypes {
     | '/_auth/documents_/$id'
     | '/_auth/matters_/$id'
     | '/_auth/reviews/$id'
+    | '/_auth/workflows/assistant/$id'
+    | '/_auth/workflows/tabular-review/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -402,6 +428,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthAssistantIdRouteImport
       parentRoute: typeof AuthRouteRoute
     }
+    '/_auth/workflows/tabular-review/$id': {
+      id: '/_auth/workflows/tabular-review/$id'
+      path: '/tabular-review/$id'
+      fullPath: '/workflows/tabular-review/$id'
+      preLoaderRoute: typeof AuthWorkflowsTabularReviewIdRouteImport
+      parentRoute: typeof AuthWorkflowsRoute
+    }
+    '/_auth/workflows/assistant/$id': {
+      id: '/_auth/workflows/assistant/$id'
+      path: '/assistant/$id'
+      fullPath: '/workflows/assistant/$id'
+      preLoaderRoute: typeof AuthWorkflowsAssistantIdRouteImport
+      parentRoute: typeof AuthWorkflowsRoute
+    }
   }
 }
 
@@ -431,6 +471,20 @@ const AuthReviewsRouteWithChildren = AuthReviewsRoute._addFileChildren(
   AuthReviewsRouteChildren,
 )
 
+interface AuthWorkflowsRouteChildren {
+  AuthWorkflowsAssistantIdRoute: typeof AuthWorkflowsAssistantIdRoute
+  AuthWorkflowsTabularReviewIdRoute: typeof AuthWorkflowsTabularReviewIdRoute
+}
+
+const AuthWorkflowsRouteChildren: AuthWorkflowsRouteChildren = {
+  AuthWorkflowsAssistantIdRoute: AuthWorkflowsAssistantIdRoute,
+  AuthWorkflowsTabularReviewIdRoute: AuthWorkflowsTabularReviewIdRoute,
+}
+
+const AuthWorkflowsRouteWithChildren = AuthWorkflowsRoute._addFileChildren(
+  AuthWorkflowsRouteChildren,
+)
+
 interface AuthRouteRouteChildren {
   AuthAssistantRoute: typeof AuthAssistantRoute
   AuthClientsRoute: typeof AuthClientsRoute
@@ -438,7 +492,7 @@ interface AuthRouteRouteChildren {
   AuthMattersRoute: typeof AuthMattersRoute
   AuthReviewsRoute: typeof AuthReviewsRouteWithChildren
   AuthSettingsRoute: typeof AuthSettingsRoute
-  AuthWorkflowsRoute: typeof AuthWorkflowsRoute
+  AuthWorkflowsRoute: typeof AuthWorkflowsRouteWithChildren
   AuthAssistantIdRoute: typeof AuthAssistantIdRoute
   AuthDocumentsIdRoute: typeof AuthDocumentsIdRoute
   AuthMattersIdRoute: typeof AuthMattersIdRoute
@@ -451,7 +505,7 @@ const AuthRouteRouteChildren: AuthRouteRouteChildren = {
   AuthMattersRoute: AuthMattersRoute,
   AuthReviewsRoute: AuthReviewsRouteWithChildren,
   AuthSettingsRoute: AuthSettingsRoute,
-  AuthWorkflowsRoute: AuthWorkflowsRoute,
+  AuthWorkflowsRoute: AuthWorkflowsRouteWithChildren,
   AuthAssistantIdRoute: AuthAssistantIdRoute,
   AuthDocumentsIdRoute: AuthDocumentsIdRoute,
   AuthMattersIdRoute: AuthMattersIdRoute,

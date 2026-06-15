@@ -1,124 +1,228 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  createColumnHelper,
-  getCoreRowModel,
-  useReactTable,
-  type PaginationState,
-  type SortingState,
-} from "@tanstack/react-table";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useEffect, useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import {
+  ChevronDown,
+  Library,
+  MessageSquare,
+  Plus,
+  Search,
+  Sparkles,
+  Table2,
+  User,
+} from "lucide-react";
+import { api, type WorkflowListItem } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
-import { Plus, Search } from "lucide-react";
-import { DataTable } from "@/components/DataTable";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { PageHeader } from "@/components/PageHeader";
 import { PageShell } from "@/components/PageShell";
-import { TablePager } from "@/components/TablePager";
 import { ToolbarTabs } from "@/components/ToolbarTabs";
-import { api, type WorkflowDetail } from "../../lib/api";
-import { queryKeys } from "../../lib/queries";
-import { useColumnSizing } from "../../lib/useColumnSizing";
-import { useDebouncedValue } from "../../lib/useDebouncedValue";
-import { useWorkingMatterId } from "../../lib/matters-context";
+import { cn } from "@/lib/utils";
+import { DisplayWorkflowModal } from "./workflows/-components/DisplayWorkflowModal";
+import { NewWorkflowModal } from "./workflows/-components/NewWorkflowModal";
+import { RowActions } from "./workflows/-components/RowActions";
+import { workflowDetailRoute } from "./workflows/-components/workflowRoutes";
 
 export const Route = createFileRoute("/_auth/workflows")({ component: Workflows });
 
-type WfTab = "all" | "builtin" | "custom";
+type Tab = "all" | "builtin" | "custom" | "hidden";
 
-type WorkflowRow = { id: string; title: string; type: string; isSystem: boolean };
-
-const columnHelper = createColumnHelper<WorkflowRow>();
-const columns = [
-  columnHelper.accessor("title", {
-    header: "Name",
-    size: 360,
-    cell: (c) => <span className="block truncate font-medium">{c.getValue()}</span>,
-  }),
-  columnHelper.accessor("type", {
-    header: "Type",
-    size: 140,
-    cell: (c) => (
-      <Badge variant="outline" className="capitalize">
-        {c.getValue()}
-      </Badge>
-    ),
-  }),
-  columnHelper.accessor("isSystem", {
-    header: "Source",
-    size: 140,
-    cell: (c) => (
-      <span className="text-muted-foreground">{c.getValue() ? "Built-in" : "Custom"}</span>
-    ),
-  }),
+const TABS: { id: Tab; label: string }[] = [
+  { id: "all", label: "All" },
+  { id: "builtin", label: "Built-in" },
+  { id: "custom", label: "Custom" },
+  { id: "hidden", label: "Hidden" },
 ];
 
+function typeMeta(type: WorkflowListItem["type"]) {
+  return type === "tabular"
+    ? { label: "Tabular", Icon: Table2 }
+    : { label: "Assistant", Icon: MessageSquare };
+}
+
 function Workflows() {
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [creating, setCreating] = useState(false);
-  const [tab, setTab] = useState<WfTab>("all");
-  const [query, setQuery] = useState("");
-  const [sorting, setSorting] = useState<SortingState>([{ id: "title", desc: false }]);
-  const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize: 50 });
-  const search = useDebouncedValue(query, 300);
-  const sort = sorting[0];
-  const pageParams = {
-    q: search,
-    source: tab,
-    page: pagination.pageIndex,
-    pageSize: pagination.pageSize,
-    sort: sort?.id,
-    dir: sort?.desc ? "desc" : "asc",
-  } as const;
+  const navigate = useNavigate();
+  const qc = useQueryClient();
+  const { data: workflows = [] } = useQuery({
+    queryKey: ["workflows"],
+    queryFn: () => api.listWorkflows(),
+  });
+
+  const [tab, setTab] = useState<Tab>("all");
+  const [search, setSearch] = useState("");
+  const [practiceFilter, setPracticeFilter] = useState<string | null>(null);
+  const [typeFilter, setTypeFilter] = useState<WorkflowListItem["type"] | null>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [selected, setSelected] = useState<WorkflowListItem | null>(null);
+  const [newOpen, setNewOpen] = useState(false);
+
+  const invalidate = () => qc.invalidateQueries({ queryKey: ["workflows"] });
+
+  const hideMutation = useMutation({
+    mutationFn: (id: string) => api.hideWorkflow(id),
+    onSuccess: invalidate,
+  });
+  const unhideMutation = useMutation({
+    mutationFn: (id: string) => api.unhideWorkflow(id),
+    onSuccess: invalidate,
+  });
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => api.deleteWorkflow(id),
+    onSuccess: invalidate,
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Delete failed"),
+  });
+
+  const visibleBuiltins = workflows.filter((w) => w.isSystem && !w.hidden);
+  const hiddenBuiltins = workflows.filter((w) => w.isSystem && w.hidden);
+  const custom = workflows.filter((w) => !w.isSystem);
+  const byTab =
+    tab === "builtin"
+      ? visibleBuiltins
+      : tab === "custom"
+        ? custom
+        : tab === "hidden"
+          ? hiddenBuiltins
+          : [...visibleBuiltins, ...custom];
+
+  const practices = useMemo(
+    () => Array.from(new Set(byTab.map((w) => w.practice).filter((p): p is string => !!p))).sort(),
+    [byTab]
+  );
+
+  const q = search.toLowerCase();
+  const filtered = byTab
+    .filter((w) => !practiceFilter || w.practice === practiceFilter)
+    .filter((w) => !typeFilter || w.type === typeFilter)
+    .filter((w) => !q || w.title.toLowerCase().includes(q));
 
   useEffect(() => {
-    setPagination((current) => ({ ...current, pageIndex: 0 }));
-  }, [search, sort?.desc, sort?.id, tab]);
+    setSelectedIds([]);
+  }, [tab, practiceFilter, typeFilter]);
 
-  const { data } = useQuery({
-    queryKey: queryKeys.workflowsPage(pageParams),
-    queryFn: () => api.listWorkflowsPage(pageParams),
-    placeholderData: keepPreviousData,
-  });
-  const workflows = data?.rows ?? [];
-  const rowCount = data?.rowCount ?? 0;
+  const allSelected = filtered.length > 0 && filtered.every((w) => selectedIds.includes(w.id));
+  const someSelected = !allSelected && filtered.some((w) => selectedIds.includes(w.id));
 
-  // Selected workflow detail, cached per id — reopening a row is instant.
-  const { data: selected } = useQuery({
-    queryKey: ["workflow", selectedId],
-    queryFn: () => api.getWorkflow(selectedId!),
-    enabled: !!selectedId,
-  });
+  function toggleAll() {
+    setSelectedIds(allSelected ? [] : filtered.map((w) => w.id));
+  }
+  function toggleOne(id: string) {
+    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  }
 
-  const { columnSizing, onColumnSizingChange } = useColumnSizing("workflows");
-  const table = useReactTable({
-    data: workflows,
-    columns,
-    rowCount,
-    getRowId: (row) => row.id,
-    state: { sorting, pagination, columnSizing },
-    onSortingChange: setSorting,
-    onPaginationChange: setPagination,
-    onColumnSizingChange,
-    manualFiltering: true,
-    manualPagination: true,
-    manualSorting: true,
-    enableColumnResizing: true,
-    columnResizeMode: "onChange",
-    getCoreRowModel: getCoreRowModel(),
-  });
+  async function bulkRemove() {
+    const ids = [...selectedIds];
+    setSelectedIds([]);
+    const builtinIds = ids.filter((id) => workflows.find((w) => w.id === id)?.isSystem);
+    const customIds = ids.filter((id) => !workflows.find((w) => w.id === id)?.isSystem);
+    await Promise.all([
+      ...builtinIds.map((id) => api.hideWorkflow(id).catch(() => {})),
+      ...customIds.map((id) => api.deleteWorkflow(id).catch(() => {})),
+    ]);
+    void invalidate();
+  }
+  async function bulkUnhide() {
+    const ids = [...selectedIds];
+    setSelectedIds([]);
+    await Promise.all(ids.map((id) => api.unhideWorkflow(id).catch(() => {})));
+    void invalidate();
+  }
 
-  const dialogOpen = creating || !!selectedId;
-  const closeDialog = () => {
-    setCreating(false);
-    setSelectedId(null);
-  };
+  const toolbarActions = (
+    <div className="flex items-center gap-3">
+      {selectedIds.length > 0 && (
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <button className="flex items-center gap-1 text-xs font-medium text-foreground transition-colors hover:text-foreground/80" />
+            }
+          >
+            Actions
+            <ChevronDown className="h-3.5 w-3.5" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            {tab === "hidden" ? (
+              <DropdownMenuItem onClick={() => void bulkUnhide()}>Unhide</DropdownMenuItem>
+            ) : (
+              <DropdownMenuItem variant="destructive" onClick={() => void bulkRemove()}>
+                Delete
+              </DropdownMenuItem>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
+
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          render={
+            <button
+              className={cn(
+                "flex items-center gap-1 text-xs font-medium transition-colors",
+                typeFilter ? "text-foreground" : "text-muted-foreground hover:text-foreground"
+              )}
+            />
+          }
+        >
+          {typeFilter ? typeMeta(typeFilter).label : "Filter by type"}
+          <ChevronDown className="h-3 w-3" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuCheckboxItem checked={!typeFilter} onClick={() => setTypeFilter(null)}>
+            All Types
+          </DropdownMenuCheckboxItem>
+          {(["assistant", "tabular"] as const).map((t) => (
+            <DropdownMenuCheckboxItem
+              key={t}
+              checked={typeFilter === t}
+              onClick={() => setTypeFilter(t)}
+            >
+              {typeMeta(t).label}
+            </DropdownMenuCheckboxItem>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          render={
+            <button
+              className={cn(
+                "flex items-center gap-1 text-xs font-medium transition-colors",
+                practiceFilter ? "text-foreground" : "text-muted-foreground hover:text-foreground"
+              )}
+            />
+          }
+        >
+          {practiceFilter ?? "Filter by practice"}
+          <ChevronDown className="h-3 w-3" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="max-h-64 overflow-y-auto">
+          <DropdownMenuCheckboxItem
+            checked={!practiceFilter}
+            onClick={() => setPracticeFilter(null)}
+          >
+            All Practices
+          </DropdownMenuCheckboxItem>
+          {practices.map((p) => (
+            <DropdownMenuCheckboxItem
+              key={p}
+              checked={practiceFilter === p}
+              onClick={() => setPracticeFilter(p)}
+            >
+              {p}
+            </DropdownMenuCheckboxItem>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  );
 
   return (
     <PageShell
@@ -127,188 +231,173 @@ function Workflows() {
       header={
         <PageHeader
           title="Workflows"
-          action={
+          actions={[
+            <div
+              key="search"
+              className="flex items-center gap-2 rounded-md border border-input bg-background px-2.5"
+            >
+              <Search className="size-4 shrink-0 text-muted-foreground" />
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search workflows…"
+                className="h-7 w-48 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+              />
+            </div>,
             <Button
+              key="new"
               variant="outline"
               size="icon-sm"
               className="rounded-full"
               title="New workflow"
               aria-label="New workflow"
-              onClick={() => {
-                setSelectedId(null);
-                setCreating(true);
-              }}
+              onClick={() => setNewOpen(true)}
             >
               <Plus className="size-4" />
-            </Button>
-          }
+            </Button>,
+          ]}
         />
       }
     >
-      <ToolbarTabs
-        tabs={[
-          { id: "all" as const, label: "All" },
-          { id: "builtin" as const, label: "Built-in" },
-          { id: "custom" as const, label: "Custom" },
-        ]}
-        active={tab}
-        onChange={setTab}
-        actions={
-          <div className="flex items-center gap-2 rounded-md border border-input bg-background px-2.5">
-            <Search className="size-4 shrink-0 text-muted-foreground" />
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search…"
-              className="h-7 w-48 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+      <ToolbarTabs tabs={TABS} active={tab} onChange={setTab} actions={toolbarActions} />
+
+      <div className="min-h-0 flex-1 overflow-auto">
+        {/* Header row */}
+        <div className="flex h-8 items-center border-b border-border pr-3 text-xs font-medium text-muted-foreground">
+          <div className="flex w-[340px] shrink-0 items-center gap-3 pl-1">
+            <Checkbox
+              checked={allSelected}
+              ref={(el) => {
+                if (el) el.indeterminate = someSelected;
+              }}
+              onChange={toggleAll}
             />
+            <span>Name</span>
           </div>
-        }
+          <div className="ml-auto w-28 shrink-0">Type</div>
+          <div className="w-40 shrink-0">Practice</div>
+          <div className="w-32 shrink-0">Source</div>
+          <div className="w-8 shrink-0" />
+        </div>
+
+        {filtered.length === 0 ? (
+          <EmptyState tab={tab} onNew={() => setNewOpen(true)} />
+        ) : (
+          filtered.map((wf) => {
+            const { label, Icon } = typeMeta(wf.type);
+            return (
+              <div
+                key={wf.id}
+                onClick={() => setSelected(wf)}
+                className="group flex h-10 cursor-pointer items-center border-b border-border/60 pr-3 transition-colors hover:bg-muted/60"
+              >
+                <div className="flex w-[340px] shrink-0 items-center gap-3 pl-1">
+                  <span onClick={(e) => e.stopPropagation()} className="flex">
+                    <Checkbox
+                      checked={selectedIds.includes(wf.id)}
+                      onChange={() => toggleOne(wf.id)}
+                    />
+                  </span>
+                  <span className="min-w-0 flex-1 truncate text-sm text-foreground">
+                    {wf.title}
+                  </span>
+                </div>
+                <div className="ml-auto w-28 shrink-0">
+                  <span className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                    <Icon className="h-3.5 w-3.5" />
+                    {label}
+                  </span>
+                </div>
+                <div className="w-40 shrink-0">
+                  {wf.practice ? (
+                    <span className="text-xs font-medium text-muted-foreground">{wf.practice}</span>
+                  ) : (
+                    <span className="text-xs text-muted-foreground/40">—</span>
+                  )}
+                </div>
+                <div className="w-32 shrink-0">
+                  {wf.isSystem ? (
+                    <span className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                      <Sparkles className="h-3.5 w-3.5" />
+                      Built-in
+                    </span>
+                  ) : wf.isOwner ? (
+                    <span className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                      <User className="h-3.5 w-3.5" />
+                      Myself
+                    </span>
+                  ) : (
+                    <span className="inline-flex max-w-full items-center gap-1.5 truncate text-xs font-medium text-muted-foreground">
+                      <User className="h-3.5 w-3.5 shrink-0" />
+                      <span className="truncate">{wf.sharedByName ?? "Shared"}</span>
+                    </span>
+                  )}
+                </div>
+                <div className="flex w-8 shrink-0 justify-end" onClick={(e) => e.stopPropagation()}>
+                  {wf.isSystem ? (
+                    tab === "hidden" ? (
+                      <RowActions onUnhide={() => unhideMutation.mutate(wf.id)} />
+                    ) : (
+                      <RowActions onHide={() => hideMutation.mutate(wf.id)} />
+                    )
+                  ) : wf.isOwner ? (
+                    <RowActions onDelete={() => deleteMutation.mutate(wf.id)} />
+                  ) : null}
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      <DisplayWorkflowModal
+        workflows={[...visibleBuiltins, ...custom]}
+        workflow={selected}
+        onClose={() => setSelected(null)}
       />
 
-      <DataTable
-        table={table}
-        empty="No workflows here yet."
-        onRowClick={(w) => {
-          setCreating(false);
-          setSelectedId(w.id);
+      <NewWorkflowModal
+        open={newOpen}
+        onClose={() => setNewOpen(false)}
+        onCreated={(wf) => {
+          setNewOpen(false);
+          void invalidate();
+          void navigate(workflowDetailRoute(wf));
         }}
       />
-      <TablePager table={table} />
-
-      <Dialog open={dialogOpen} onOpenChange={(o) => !o && closeDialog()}>
-        <DialogContent className="max-h-[85vh] max-w-2xl overflow-y-auto">
-          {creating ? (
-            <CreateWorkflow onCreated={closeDialog} />
-          ) : selected ? (
-            <EditWorkflow detail={selected} />
-          ) : null}
-        </DialogContent>
-      </Dialog>
     </PageShell>
   );
 }
 
-function CreateWorkflow({ onCreated }: { onCreated: () => void }) {
-  const qc = useQueryClient();
-  const matterId = useWorkingMatterId();
-  const [title, setTitle] = useState("");
-  const [type, setType] = useState<"assistant" | "tabular">("assistant");
-  const [promptMd, setPromptMd] = useState("");
-
-  const createMutation = useMutation({
-    mutationFn: () => api.createWorkflow({ title: title.trim(), type, promptMd, matterId }),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: queryKeys.workflows });
-      toast.success("Workflow created");
-      onCreated();
-    },
-    onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
-  });
-
-  function create() {
-    if (!title.trim() || !promptMd.trim()) return;
-    createMutation.mutate();
-  }
-
+function EmptyState({ tab, onNew }: { tab: Tab; onNew: () => void }) {
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base">New workflow</CardTitle>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-3">
-        <div className="flex flex-col gap-1.5">
-          <Label>Title</Label>
-          <Input value={title} onChange={(e) => setTitle(e.target.value)} />
-        </div>
-        <div className="flex gap-2">
-          {(["assistant", "tabular"] as const).map((t) => (
-            <Button
-              key={t}
-              size="sm"
-              variant={type === t ? "default" : "outline"}
-              onClick={() => setType(t)}
-            >
-              {t}
-            </Button>
-          ))}
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <Label>Prompt</Label>
-          <Textarea rows={6} value={promptMd} onChange={(e) => setPromptMd(e.target.value)} />
-        </div>
-        <Button onClick={create} disabled={createMutation.isPending} className="self-start">
-          {createMutation.isPending ? "Creating…" : "Create"}
-        </Button>
-      </CardContent>
-    </Card>
-  );
-}
-
-function EditWorkflow({ detail }: { detail: WorkflowDetail }) {
-  const qc = useQueryClient();
-  const { workflow, blame } = detail;
-  const [title, setTitle] = useState(workflow.title);
-  const [promptMd, setPromptMd] = useState(workflow.promptMd);
-  const readOnly = workflow.isSystem;
-  const promptBlame = blame["field/prompt_md"];
-
-  useEffect(() => {
-    setTitle(workflow.title);
-    setPromptMd(workflow.promptMd);
-  }, [workflow.id, workflow.title, workflow.promptMd]);
-
-  const saveMutation = useMutation({
-    mutationFn: () => api.updateWorkflow(workflow.id, { title, promptMd }),
-    onSuccess: (updated) => {
-      qc.setQueryData(["workflow", workflow.id], updated);
-      void qc.invalidateQueries({ queryKey: queryKeys.workflows });
-      toast.success("Saved — new commit recorded");
-    },
-    onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
-  });
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-base">
-          {workflow.title}
-          {readOnly && <Badge variant="secondary">system (read-only)</Badge>}
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-3">
-        <div className="flex flex-col gap-1.5">
-          <Label>Title</Label>
-          <Input value={title} onChange={(e) => setTitle(e.target.value)} disabled={readOnly} />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <Label className="flex items-center gap-2">
-            Prompt
-            {promptBlame && (
-              <span className="text-xs font-normal text-muted-foreground">
-                last edited by{" "}
-                {promptBlame.actorType === "agent" ? (promptBlame.agentLabel ?? "agent") : "you"} ·
-                #{promptBlame.seq}
-              </span>
-            )}
-          </Label>
-          <Textarea
-            rows={8}
-            value={promptMd}
-            onChange={(e) => setPromptMd(e.target.value)}
-            disabled={readOnly}
-          />
-        </div>
-        {!readOnly && (
-          <Button
-            onClick={() => saveMutation.mutate()}
-            disabled={saveMutation.isPending}
-            className="self-start"
-          >
-            {saveMutation.isPending ? "Saving…" : "Save"}
+    <div className="mx-auto flex w-full max-w-xs flex-col items-start py-24">
+      <Library className="mb-4 h-8 w-8 text-muted-foreground/30" />
+      {tab === "custom" ? (
+        <>
+          <p className="font-serif text-2xl">Custom Workflows</p>
+          <p className="mt-1 text-left text-xs text-muted-foreground">
+            Build reusable prompts and tabular review templates tailored to your practice.
+          </p>
+          <Button size="sm" className="mt-4 rounded-full" onClick={onNew}>
+            <Plus className="size-3.5" /> Create New
           </Button>
-        )}
-      </CardContent>
-    </Card>
+        </>
+      ) : tab === "hidden" ? (
+        <>
+          <p className="font-serif text-2xl">Hidden Workflows</p>
+          <p className="mt-1 text-left text-xs text-muted-foreground">
+            Built-in workflows you've hidden appear here. You can unhide them at any time.
+          </p>
+        </>
+      ) : (
+        <>
+          <p className="font-serif text-2xl">Workflows</p>
+          <p className="mt-1 text-left text-xs text-muted-foreground">
+            Automate document analysis with reusable prompts and tabular review templates.
+          </p>
+        </>
+      )}
+    </div>
   );
 }
