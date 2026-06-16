@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "./api";
 
 // Shared query hooks. Query keys are centralized here so loaders (via
@@ -16,6 +16,7 @@ export const queryKeys = {
   workflows: ["workflows"] as const,
   workflowsPage: (params: unknown) => ["workflows", "page", params] as const,
   chats: ["chats"] as const,
+  allChats: ["chats", "all"] as const,
   matterChats: (matterId: string) => ["chats", "matter", matterId] as const,
   chat: (id: string) => ["chat", id] as const,
   client: (id: string) => ["client", id] as const,
@@ -27,6 +28,26 @@ export function useChats(matterId?: string) {
   return useQuery({
     queryKey: matterId ? queryKeys.matterChats(matterId) : queryKeys.chats,
     queryFn: () => api.listChats(matterId),
+  });
+}
+
+// Every conversation (global + matter-scoped) for the ChatGPT-style sidebar.
+export function useAllChats() {
+  return useQuery({
+    queryKey: queryKeys.allChats,
+    queryFn: () => api.listAllChats(),
+  });
+}
+
+// Pin/unpin a chat. Invalidates every chat list so the sidebar (all), the global
+// list, and the matter-scoped list all re-sort.
+export function useSetChatPin() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (v: { id: string; pinned: boolean }) => api.setChatPinned(v.id, v.pinned),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["chats"] });
+    },
   });
 }
 

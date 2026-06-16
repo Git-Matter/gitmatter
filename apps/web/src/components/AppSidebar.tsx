@@ -14,10 +14,10 @@ import {
   FolderOpen,
   Library,
   LogOut,
-  MessageSquare,
   Monitor,
   Moon,
   PanelLeft,
+  Plus,
   Settings as SettingsIcon,
   Sun,
   Table2,
@@ -34,35 +34,22 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { signOut } from "../lib/auth-client";
-import { useMatters } from "../lib/matters-context";
 import type { ServerSession } from "../lib/session";
-import { ChatHistoryPanel } from "./sidebar/ChatHistoryPanel";
-import { RecentPanel } from "./sidebar/RecentPanel";
+import { ChatNavPanel } from "./sidebar/ChatNavPanel";
 
+// "New chat" leads the rail (ChatGPT-style); the rest are the app sections.
+const NEW_CHAT = { href: "/assistant", label: "New chat", icon: Plus } as const;
 const NAV_ITEMS = [
-  { href: "/assistant", label: "Assistant", icon: MessageSquare },
   { href: "/reviews", label: "Reviews", icon: Table2 },
   { href: "/workflows", label: "Workflows", icon: Library },
   { href: "/documents", label: "Documents", icon: FolderOpen },
   { href: "/clients", label: "Clients", icon: Building2 },
   { href: "/matters", label: "Matters", icon: Briefcase },
-  { href: "/settings", label: "Settings", icon: SettingsIcon },
 ] as const;
-
-// Sections that get a recent-activity sub-panel: a list of the actual items,
-// newest first, linking straight to each one. `/assistant` is special (it shows
-// real conversations).
-const RECENT_SECTIONS = new Set(["/matters", "/documents", "/clients"]);
 
 const NARROW_QUERY = "(max-width: 767px)";
 type AppRouterState = RouterState<RegisteredRouter["routeTree"]>;
-
-function activeSection(pathname: string): string | null {
-  const hit = NAV_ITEMS.find((i) => pathname === i.href || pathname.startsWith(`${i.href}/`));
-  return hit?.href ?? null;
-}
 
 export function AppSidebar({ session }: { session: NonNullable<ServerSession> }) {
   // User's saved preference. Below md the sidebar force-collapses regardless.
@@ -150,14 +137,6 @@ type SidebarPanelProps = {
 
 function SidebarPanel({ session, open, mode, onNavigate, onToggle }: SidebarPanelProps) {
   const pathname = useRouterState({ select: (s: AppRouterState) => s.location.pathname });
-  const subSection = activeSection(pathname);
-  // The assistant shows real conversations; document/client/matter sections show a
-  // filter sub-nav. When a sub-panel exists, nav (top) and sub-panel (bottom) each
-  // take half the height and scroll independently — otherwise nav sits at the top
-  // and a spacer pushes the footer down.
-  const showChats = open && subSection === "/assistant";
-  const showSub = open && !!subSection && RECENT_SECTIONS.has(subSection);
-  const hasSubPanel = showChats || showSub;
   const size = open ? "w-64" : "w-14";
 
   return (
@@ -188,19 +167,10 @@ function SidebarPanel({ session, open, mode, onNavigate, onToggle }: SidebarPane
         <SidebarToggle open={open} onToggle={onToggle} />
       </div>
 
-      {/* Working-matter switcher */}
-      <div className="px-2.5 pb-2">
-        <MatterSwitcher open={open} onNavigate={onNavigate} />
-      </div>
-
-      {/* Nav */}
-      <nav className={cn("flex flex-col", hasSubPanel && "min-h-0 flex-1 overflow-y-auto")}>
-        {NAV_ITEMS.map((item) => {
-          const { href, label, icon: Icon } = item;
-          const exact = "exact" in item && item.exact;
-          const active = exact
-            ? pathname === href
-            : pathname === href || pathname.startsWith(`${href}/`);
+      {/* Nav — New chat leads, then the app sections (ChatGPT-style rail). */}
+      <nav className="flex shrink-0 flex-col">
+        {[NEW_CHAT, ...NAV_ITEMS].map(({ href, label, icon: Icon }) => {
+          const active = pathname === href || pathname.startsWith(`${href}/`);
           return (
             <div key={href} className="px-2.5 py-0.5">
               <Link
@@ -225,15 +195,17 @@ function SidebarPanel({ session, open, mode, onNavigate, onToggle }: SidebarPane
         })}
       </nav>
 
-      {/* Dynamic sub-context — bottom half when present. Keyed so it remounts fresh. */}
-      {showChats && <ChatHistoryPanel onNavigate={onNavigate} />}
-      {showSub && <RecentPanel key={subSection} section={subSection} onNavigate={onNavigate} />}
-
-      {/* No sub-panel: a spacer pushes the footer to the bottom. */}
-      {!hasSubPanel && <div className="flex-1" />}
+      {/* Chat navigator — Pinned / Matters / Chats. Collapsed rail stays icons-only. */}
+      {open ? (
+        <div className="mt-1 flex min-h-0 flex-1 flex-col">
+          <ChatNavPanel onNavigate={onNavigate} />
+        </div>
+      ) : (
+        <div className="flex-1" />
+      )}
 
       {/* User footer */}
-      <div className="border-t border-sidebar-border p-2">
+      <div className="p-2">
         <UserMenu session={session} open={open} />
       </div>
     </div>
@@ -281,6 +253,11 @@ function UserMenu({ session, open }: { session: NonNullable<ServerSession>; open
         )}
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" side="top" className="w-44">
+        <DropdownMenuItem render={<Link to="/settings" />}>
+          <SettingsIcon className="size-4" />
+          Settings
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
         <DropdownMenuSub>
           <DropdownMenuSubTrigger>
             <Sun className="size-4" />
@@ -315,82 +292,5 @@ function SidebarToggle({ open, onToggle }: { open: boolean; onToggle?: () => voi
     <button onClick={onToggle} title={label} className={className}>
       <PanelLeft className="size-4" />
     </button>
-  );
-}
-
-const ROLE_LABEL: Record<string, string> = { owner: "Owner", editor: "Editor", viewer: "Viewer" };
-
-function MatterSwitcher({ open, onNavigate }: { open: boolean; onNavigate?: () => void }) {
-  const { matters, current, setCurrent } = useMatters();
-  const [pop, setPop] = useState(false);
-
-  if (!current) {
-    // No matters loaded yet (or none accessible) — show a quiet placeholder.
-    return open ? (
-      <div className="rounded-lg border border-dashed border-sidebar-border px-2.5 py-2 text-xs text-muted-foreground">
-        No matter selected
-      </div>
-    ) : null;
-  }
-
-  return (
-    <Popover open={pop} onOpenChange={setPop}>
-      <PopoverTrigger
-        title={!open ? `${current.client.name} · ${current.matter.name}` : undefined}
-        className={cn(
-          "flex w-full items-center gap-2 rounded-lg border border-sidebar-border bg-background/60 px-2.5 py-2 text-left transition-colors hover:bg-sidebar-accent/60",
-          !open && "justify-center px-0"
-        )}
-      >
-        <Briefcase className="size-4 shrink-0 text-muted-foreground" />
-        {open && (
-          <>
-            <span className="flex min-w-0 flex-1 flex-col leading-tight">
-              <span className="truncate text-xs font-medium">{current.matter.name}</span>
-              <span className="truncate text-xs text-muted-foreground">{current.client.name}</span>
-            </span>
-            <ChevronsUpDown className="size-3.5 shrink-0 text-muted-foreground" />
-          </>
-        )}
-      </PopoverTrigger>
-      <PopoverContent align="start" className="w-64 gap-0 p-0">
-        <div className="border-b px-3 py-2 text-xs font-medium text-muted-foreground">
-          Working matter
-        </div>
-        <ul className="max-h-72 overflow-y-auto py-1">
-          {matters.map(({ matter, client, role }) => {
-            const active = matter.id === current.matter.id;
-            return (
-              <li key={matter.id}>
-                <button
-                  onClick={() => {
-                    setCurrent(matter.id);
-                    setPop(false);
-                  }}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-accent/60"
-                >
-                  <Check className={cn("size-4 shrink-0", active ? "opacity-100" : "opacity-0")} />
-                  <span className="flex min-w-0 flex-1 flex-col leading-tight">
-                    <span className="truncate text-sm">{matter.name}</span>
-                    <span className="truncate text-xs text-muted-foreground">{client.name}</span>
-                  </span>
-                  <span className="shrink-0 text-xs text-muted-foreground">{ROLE_LABEL[role]}</span>
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-        <Link
-          to="/matters"
-          onClick={() => {
-            setPop(false);
-            onNavigate?.();
-          }}
-          className="block border-t px-3 py-2 text-xs text-muted-foreground hover:text-foreground"
-        >
-          Manage matters →
-        </Link>
-      </PopoverContent>
-    </Popover>
   );
 }

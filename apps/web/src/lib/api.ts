@@ -78,7 +78,7 @@ export type Matter = {
   name: string;
   practiceArea: string | null;
   jurisdiction: string | null;
-  status: "active" | "closed";
+  status: "open" | "closed";
   adverseParties: string[] | null;
   conflictCleared: boolean;
   conflictNotes: string | null;
@@ -152,6 +152,9 @@ export type Doc = {
   folderId: string | null;
   currentVersionId: string | null;
   createdAt: string;
+  matterId: string | null;
+  matterName: string | null;
+  versionNumber: number | null;
 };
 
 export type PageResult<T> = {
@@ -287,6 +290,9 @@ export const api = {
       name?: string;
       practiceArea?: string | null;
       jurisdiction?: string | null;
+      status?: "open" | "closed";
+      conflictCleared?: boolean;
+      conflictNotes?: string | null;
     }
   ) => req<Matter>(`/api/matters/${id}`, { method: "PATCH", body: JSON.stringify(fields) }),
   clearConflicts: (id: string, notes?: string) =>
@@ -371,6 +377,11 @@ export const api = {
     if (folderId) f.append("folderId", folderId);
     return upload<Doc>("/api/documents/upload", f);
   },
+  linkDocumentsToMatter: (matterId: string, documentIds: string[]) =>
+    req<{ linked: number }>("/api/documents/link", {
+      method: "POST",
+      body: JSON.stringify({ matterId, documentIds }),
+    }),
   retryDocument: (id: string) => req<Doc>(`/api/documents/${id}/retry`, { method: "POST" }),
   deleteDocument: (id: string) => req<null>(`/api/documents/${id}`, { method: "DELETE" }),
   listReviews: () =>
@@ -393,6 +404,13 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ documentId, columnIndex, model }),
     }),
+  // Streaming "Run all": docs run in parallel; cells fill in via handlers.
+  runReviewStream: (
+    id: string,
+    opts: { model?: string },
+    handlers: ReviewRunHandlers,
+    signal?: AbortSignal
+  ) => streamReviewRun(id, opts, handlers, signal),
   history: (id: string) => req<Blame[]>(`/api/tabular/reviews/${id}/history`),
   reviewExportUrl: (id: string, format: "csv" | "xlsx") =>
     `/api/tabular/reviews/${id}/export?format=${format}`,
@@ -432,6 +450,16 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ decision }),
     }),
+  resolveAllEdits: (id: string, decision: "accept" | "reject") =>
+    req<DocumentDetail>(`/api/documents/${id}/edits/resolve-all`, {
+      method: "POST",
+      body: JSON.stringify({ decision }),
+    }),
+  resolveBatch: (id: string, changeIds: string[], decision: "accept" | "reject") =>
+    req<DocumentDetail>(`/api/documents/${id}/edits/resolve-batch`, {
+      method: "POST",
+      body: JSON.stringify({ changeIds, decision }),
+    }),
   documentHistory: (id: string) => req<Blame[]>(`/api/documents/${id}/history`),
 
   // Workflows
@@ -457,6 +485,7 @@ export const api = {
     patch: {
       title?: string;
       promptMd?: string;
+      steps?: WorkflowStep[] | null;
       columnsConfig?: Column[];
       practice?: string | null;
     }
@@ -521,6 +550,13 @@ export const api = {
   // the global (unscoped) assistant chats.
   listChats: (matterId?: string) =>
     req<ChatSummary[]>(`/api/chats${matterId ? `?matterId=${matterId}` : ""}`),
+  // Every chat (global + matter-scoped) for the ChatGPT-style sidebar.
+  listAllChats: () => req<ChatSummary[]>(`/api/chats?scope=all`),
+  setChatPinned: (id: string, pinned: boolean) =>
+    req<{ ok: true }>(`/api/chats/${id}/pin`, {
+      method: "PATCH",
+      body: JSON.stringify({ pinned }),
+    }),
   getChat: (id: string) => req<ChatDetail>(`/api/chats/${id}`),
   documentDownloadUrl: (id: string) => `/api/documents/${id}/download`,
 };
@@ -534,6 +570,16 @@ export type ChatSendOpts = {
   matterId?: string;
 };
 
+// A tracked change touched by an assistant turn, rendered as a chat card.
+export type ChatEdit = {
+  documentId: string;
+  changeId: string;
+  deletedText: string | null;
+  insertedText: string | null;
+  reason: string | null;
+  status: "pending" | "accepted" | "rejected";
+};
+
 export type ChatResult = {
   chatId: string;
   text: string;
@@ -541,14 +587,22 @@ export type ChatResult = {
   tools: string[];
   jurisdiction: string;
   documents: Array<{ id: string; title: string; download: string }>;
+  edits: ChatEdit[];
   citations: Citation[];
 };
 
-export type ChatSummary = { id: string; title: string | null; updatedAt: string };
+export type ChatSummary = {
+  id: string;
+  title: string | null;
+  updatedAt: string;
+  matterId: string | null;
+  pinned: boolean;
+};
 export type ChatTurn = {
   role: "user" | "assistant";
   text: string;
   toolCalls?: Array<{ tool: string; input: unknown }>;
+  edits?: ChatEdit[];
   citations?: Citation[];
 };
 export type ChatDetail = { id: string; title: string | null; turns: ChatTurn[] };
@@ -556,10 +610,92 @@ export type ChatDetail = { id: string; title: string | null; turns: ChatTurn[] }
 export type ChatStreamHandlers = {
   onText?: (delta: string) => void;
   onReasoning?: (delta: string) => void;
-  onTool?: (name: string) => void;
+  onTool?: (name: string, input?: unknown) => void;
   onDone?: (result: ChatResult) => void;
   onError?: (message: string) => void;
 };
+
+// A cell as it streams back from a "Run all" — the fields needed to fill the
+// grid; blame/history arrive on the post-run refetch.
+export type ReviewStreamCell = {
+  documentId: string;
+  columnIndex: number;
+  content: CellContent | null;
+  citations: CellCitation[] | null;
+  status: Cell["status"];
+};
+
+export type ReviewRunHandlers = {
+  onCellStart?: (documentId: string, columnIndex: number) => void;
+  onCell?: (documentId: string, columnIndex: number, cell: ReviewStreamCell) => void;
+  onError?: (documentId: string | null, columnIndex: number | null, message: string) => void;
+  onDone?: () => void;
+};
+
+// Drives the streaming "Run all" — same SSE-over-fetch parsing as streamChat,
+// dispatching per-document progress.
+async function streamReviewRun(
+  id: string,
+  opts: { model?: string },
+  handlers: ReviewRunHandlers,
+  signal?: AbortSignal
+): Promise<void> {
+  const r = await fetch(`/api/tabular/reviews/${id}/run-all`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(opts),
+    signal,
+  });
+  if (!r.ok || !r.body) {
+    handlers.onError?.(null, null, await r.text().catch(() => "run failed"));
+    return;
+  }
+  const reader = r.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  const dispatch = (event: string, data: string) => {
+    const v = data ? (JSON.parse(data) as Record<string, unknown>) : {};
+    if (event === "cell-start")
+      handlers.onCellStart?.(v.documentId as string, v.columnIndex as number);
+    else if (event === "cell")
+      handlers.onCell?.(
+        v.documentId as string,
+        v.columnIndex as number,
+        v.cell as ReviewStreamCell
+      );
+    else if (event === "error")
+      handlers.onError?.(
+        (v.documentId as string) ?? null,
+        (v.columnIndex as number) ?? null,
+        v.message as string
+      );
+    else if (event === "done") handlers.onDone?.();
+  };
+
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const frames = buffer.split("\n\n");
+      buffer = frames.pop() ?? "";
+      for (const frame of frames) {
+        let event = "message";
+        let data = "";
+        for (const line of frame.split("\n")) {
+          if (line.startsWith("event:")) event = line.slice(6).trim();
+          else if (line.startsWith("data:")) data += line.slice(5).trim();
+        }
+        if (data) dispatch(event, data);
+      }
+    }
+  } catch (err) {
+    if ((err as Error)?.name !== "AbortError") throw err;
+  } finally {
+    reader.cancel().catch(() => {});
+  }
+}
 
 // POSTs to the SSE chat endpoint and dispatches events to handlers. Parses the
 // text/event-stream frames off the response body (fetch, not EventSource, so we
@@ -592,8 +728,10 @@ async function streamChat(
     const value = data ? (JSON.parse(data) as unknown) : null;
     if (event === "text") handlers.onText?.(value as string);
     else if (event === "reasoning") handlers.onReasoning?.(value as string);
-    else if (event === "tool") handlers.onTool?.(value as string);
-    else if (event === "done") handlers.onDone?.(value as ChatResult);
+    else if (event === "tool") {
+      const v = value as { name: string; input?: unknown };
+      handlers.onTool?.(v.name, v.input);
+    } else if (event === "done") handlers.onDone?.(value as ChatResult);
     else if (event === "error") handlers.onError?.(value as string);
   };
 
@@ -654,11 +792,15 @@ export type DocumentDetail = {
 
 // A row in the workflows library list (built-ins + own + shared), tagged with
 // the viewer's access flags so the UI can render Source/owner and gate actions.
+// One step of a multi-step assistant workflow (runs as its own chat turn, in order).
+export type WorkflowStep = { title?: string; promptMd: string };
+
 export type WorkflowListItem = {
   id: string;
   title: string;
   type: "assistant" | "tabular";
   promptMd: string;
+  steps: WorkflowStep[] | null;
   columnsConfig: Column[] | null;
   practice: string | null;
   isSystem: boolean;
@@ -691,6 +833,7 @@ export type WorkflowDetail = {
     title: string;
     type: "assistant" | "tabular";
     promptMd: string;
+    steps: WorkflowStep[] | null;
     columnsConfig: Column[] | null;
     practice: string | null;
     isSystem: boolean;
