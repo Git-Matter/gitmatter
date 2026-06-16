@@ -19,6 +19,7 @@ import {
   getDocumentDetail,
   listDocuments,
   listMatterDocuments,
+  type EditSpec,
   proposeEdit,
   resolveEdit,
 } from "../content/index.js";
@@ -103,6 +104,48 @@ export function buildToolCatalog(
         )
           return { error: "Not found" };
         return result;
+      },
+    },
+    {
+      name: "read_review_cells",
+      description:
+        "Read specific cells of a tabular review, filtered by column indices and/or document ids. Returns each cell's extracted value, flag, reasoning, and grounding citations with column + document names. Prefer this over get_review when answering a focused question (e.g. why a cell is flagged, what one column found) instead of dumping the whole grid.",
+      schema: {
+        reviewId: z.string(),
+        columnIndices: z.array(z.number()).optional(),
+        documentIds: z.array(z.string()).optional(),
+      },
+      handler: async ({ reviewId, columnIndices, documentIds }) => {
+        if (!(await canAccessArtifact(actor.userId, "tabular_review", reviewId as string)))
+          return { error: "Not found" };
+        const result = await getReview(reviewId as string);
+        if (!result) return { error: "Not found" };
+        const cols = columnIndices as number[] | undefined;
+        const docs = documentIds as string[] | undefined;
+        const colSet = cols?.length ? new Set(cols) : null;
+        const docSet = docs?.length ? new Set(docs) : null;
+        const colName = new Map(result.review.columnsConfig.map((col) => [col.index, col.name]));
+        const title = new Map(
+          (await listMatterDocuments(result.review.matterId)).map((d) => [d.id, d.title])
+        );
+        const cells = result.cells
+          .filter(
+            (cell) =>
+              cell.content &&
+              (!colSet || colSet.has(cell.columnIndex)) &&
+              (!docSet || docSet.has(cell.documentId))
+          )
+          .map((cell) => ({
+            columnIndex: cell.columnIndex,
+            column: colName.get(cell.columnIndex) ?? `Column ${cell.columnIndex}`,
+            documentId: cell.documentId,
+            document: title.get(cell.documentId) ?? cell.documentId,
+            summary: cell.content!.summary,
+            flag: cell.content!.flag,
+            reasoning: cell.content!.reasoning,
+            citations: cell.citations ?? [],
+          }));
+        return { reviewId, cells };
       },
     },
     {
@@ -419,23 +462,27 @@ export function buildToolCatalog(
     {
       name: "propose_document_edit",
       description:
-        "Propose a tracked change (find -> replace) on a document. Creates a pending edit; the document is unchanged until accepted.",
+        "Propose tracked changes (find -> replace) on a document. Pass ALL edits for this document in a single call via the `edits` array — they land as one version the user accepts or rejects. Keep each `find` to the exact minimal substring being changed; anchor it with `contextBefore`/`contextAfter` (~40 chars of surrounding text, copied verbatim) so the location is unambiguous. The document is unchanged until accepted.",
       schema: {
         documentId: z.string(),
-        find: z.string(),
-        replace: z.string(),
-        reason: z.string().optional(),
+        edits: z
+          .array(
+            z.object({
+              find: z.string(),
+              replace: z.string(),
+              contextBefore: z.string().optional(),
+              contextAfter: z.string().optional(),
+              reason: z.string().optional(),
+            })
+          )
+          .min(1),
       },
-      handler: async ({ documentId, find, replace, reason }) => {
+      handler: async ({ documentId, edits }) => {
         if (!(await canAccessArtifact(actor.userId, "document", documentId as string, "editor")))
           return { error: "Not found" };
         try {
-          const changeId = await proposeEdit(actor, documentId as string, {
-            find: find as string,
-            replace: replace as string,
-            reason: reason as string | undefined,
-          });
-          return { changeId };
+          const changeIds = await proposeEdit(actor, documentId as string, edits as EditSpec[]);
+          return { changeIds };
         } catch (e) {
           return { error: e instanceof Error ? e.message : "failed" };
         }

@@ -18,3 +18,5 @@ export const chatSchema = z.object({
   // continuing an existing chat — scope is fixed at creation.
   matterId: z.string().uuid().optional(),
 });
+
+export const pinSchema = z.object({ pinned: z.boolean() });

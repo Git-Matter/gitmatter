@@ -6,6 +6,9 @@ import {
   type Actor,
   buildToolCatalog,
   CITATIONS_INSTRUCTION,
+  type ChatEdit,
+  REDLINE_INSTRUCTION,
+  getEditsByRef,
   type ChatMessage,
   DEFAULT_MODEL,
   getChat,
@@ -13,6 +16,7 @@ import {
   getMatter,
   getUserJurisdiction,
   hasMatterAccess,
+  listAllChats,
   listChats,
   listMatterDocuments,
   LLM_MODELS,
@@ -20,13 +24,14 @@ import {
   persistChat,
   providerForModel,
   resolveLlmKey,
+  setChatPinned,
   streamComplete,
   type ToolDef,
 } from "@workspace/core";
 import { resolveJurisdiction } from "@workspace/registry";
 import { connectEnabledServers } from "../../mcp/client.js";
 import { type AuthEnv } from "../middleware/auth.js";
-import { chatSchema } from "../schemas/chat.js";
+import { chatSchema, pinSchema } from "../schemas/chat.js";
 
 export const chatRoute = new Hono<AuthEnv>();
 
@@ -103,7 +108,7 @@ type ChatBody = z.infer<typeof chatSchema>;
 type RunHandlers = {
   onText?: (delta: string) => void;
   onReasoning?: (delta: string) => void;
-  onTool?: (name: string) => void;
+  onTool?: (name: string, input: unknown) => void;
 };
 
 type ChatResult = {
@@ -113,6 +118,7 @@ type ChatResult = {
   tools: string[];
   jurisdiction: string;
   documents: Array<{ id: string; title: string; download: string }>;
+  edits: ChatEdit[];
   citations: ReturnType<typeof parseCitations>["citations"];
 };
 
@@ -169,6 +175,9 @@ async function runAssistant(
     }
 
   const generated: Array<{ id: string; title: string; download: string }> = [];
+  // Tracked changes the assistant proposed/resolved this turn, hydrated into
+  // chat cards after the loop.
+  const editRefs: Array<{ documentId: string; changeId: string }> = [];
 
   // Continue a conversation: replay prior user/assistant turns (text only) so the
   // model has context, then append this turn.
@@ -185,9 +194,8 @@ async function runAssistant(
   // Matter scope: from the request (new chat) or the chat row (continuation).
   // Inject the matter's document index into the system prompt once per request.
   const matterId = body.matterId ?? prior?.matterId ?? undefined;
-  const system = matterId
-    ? CITATIONS_INSTRUCTION + (await matterContextBlock(user.id, matterId))
-    : CITATIONS_INSTRUCTION;
+  const base = `${CITATIONS_INSTRUCTION}\n\n${REDLINE_INSTRUCTION}`;
+  const system = matterId ? base + (await matterContextBlock(user.id, matterId)) : base;
   const toolCalls: Array<{ tool: string; input: unknown }> = [];
   let finalText = "";
 
@@ -218,7 +226,7 @@ async function runAssistant(
 
       for (const tc of res.toolCalls) {
         toolCalls.push({ tool: tc.name, input: tc.input });
-        handlers.onTool?.(tc.name);
+        handlers.onTool?.(tc.name, tc.input);
         try {
           const internalFn = internal.get(tc.name);
           if (internalFn) {
@@ -231,6 +239,21 @@ async function runAssistant(
             ) {
               const g = out as { documentId: string; title: string; download: string };
               generated.push({ id: g.documentId, title: g.title, download: g.download });
+            }
+            if (
+              (tc.name === "propose_document_edit" || tc.name === "resolve_document_edit") &&
+              out &&
+              typeof out === "object" &&
+              !("error" in out)
+            ) {
+              const documentId = (tc.input as { documentId?: string })?.documentId;
+              // propose returns a changeId per applied edit; resolve carries one in its input.
+              const changeIds =
+                tc.name === "propose_document_edit"
+                  ? ((out as { changeIds?: string[] }).changeIds ?? [])
+                  : [(tc.input as { changeId?: string })?.changeId].filter((x): x is string => !!x);
+              if (documentId)
+                for (const changeId of changeIds) editRefs.push({ documentId, changeId });
             }
             messages.push({ role: "tool", toolCallId: tc.id, content: JSON.stringify(out) });
             continue;
@@ -268,9 +291,10 @@ async function runAssistant(
 
   // Split the citations block off the prose; store the array, show clean text.
   const { text: displayText, citations } = parseCitations(finalText);
+  const edits = await getEditsByRef(editRefs);
   const chatId = await persistChat(
     user.id,
-    { message: body.message, finalText: displayText, toolCalls, citations },
+    { message: body.message, finalText: displayText, toolCalls, citations, edits },
     body.chatId,
     body.matterId
   );
@@ -282,6 +306,7 @@ async function runAssistant(
     tools: tools.map((t) => t.name),
     jurisdiction,
     documents: generated,
+    edits,
     citations,
   };
 }
@@ -308,7 +333,8 @@ chatRoute.post("/api/chat/stream", zValidator("json", chatSchema), async (c) => 
         onText: (delta) => void stream.writeSSE({ event: "text", data: JSON.stringify(delta) }),
         onReasoning: (delta) =>
           void stream.writeSSE({ event: "reasoning", data: JSON.stringify(delta) }),
-        onTool: (name) => void stream.writeSSE({ event: "tool", data: JSON.stringify(name) }),
+        onTool: (name, input) =>
+          void stream.writeSSE({ event: "tool", data: JSON.stringify({ name, input }) }),
       });
       await stream.writeSSE({ event: "done", data: JSON.stringify(result) });
     } catch (e) {
@@ -318,11 +344,20 @@ chatRoute.post("/api/chat/stream", zValidator("json", chatSchema), async (c) => 
   });
 });
 
-// List the user's conversations for the history panel. `?matterId=` scopes to a
-// matter's chats; omitted returns global (unscoped) chats.
-chatRoute.get("/api/chats", async (c) =>
-  c.json(await listChats(c.get("user").id, c.req.query("matterId")))
-);
+// List the user's conversations for the history panel. `?scope=all` returns every
+// chat (global + matter-scoped) for the ChatGPT-style sidebar; `?matterId=` scopes
+// to one matter; omitted returns global (unscoped) chats.
+chatRoute.get("/api/chats", async (c) => {
+  const userId = c.get("user").id;
+  if (c.req.query("scope") === "all") return c.json(await listAllChats(userId));
+  return c.json(await listChats(userId, c.req.query("matterId")));
+});
+
+// Pin/unpin a conversation so it floats to the sidebar's Pinned section.
+chatRoute.patch("/api/chats/:id/pin", zValidator("json", pinSchema), async (c) => {
+  await setChatPinned(c.get("user").id, c.req.param("id"), c.req.valid("json").pinned);
+  return c.json({ ok: true });
+});
 
 // Load one conversation's turns to resume it.
 chatRoute.get("/api/chats/:id", async (c) => {

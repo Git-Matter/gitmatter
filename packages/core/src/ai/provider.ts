@@ -862,6 +862,10 @@ export async function completeText(params: {
   provider?: LlmProvider;
   temperature?: number;
   jsonSchema?: Record<string, unknown>;
+  // Cache the (large, shared) system prefix — e.g. a document reused across many
+  // per-column extractions. `cacheKey` routes OpenAI to the same prompt cache.
+  cache?: boolean;
+  cacheKey?: string;
 }): Promise<string> {
   const model = params.model ?? DEFAULT_MODEL;
   const provider = params.provider ?? providerForModel(model);
@@ -874,6 +878,8 @@ export async function completeText(params: {
     maxTokens: params.maxTokens,
     temperature: params.temperature,
     jsonSchema: params.jsonSchema,
+    cache: params.cache,
+    cacheKey: params.cacheKey,
   });
   return res.text;
 }
