@@ -1,24 +1,19 @@
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import {
-  createColumnHelper,
-  getCoreRowModel,
-  useReactTable,
-  type PaginationState,
-  type SortingState,
-} from "@tanstack/react-table";
-import { Plus, Search } from "lucide-react";
+import { createColumnHelper, type PaginationState, type SortingState } from "@tanstack/react-table";
+import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DataTable } from "@/components/DataTable";
 import { PageHeader } from "@/components/PageHeader";
 import { PageShell } from "@/components/PageShell";
 import { TablePager } from "@/components/TablePager";
+import { TableSearch } from "@/components/TableSearch";
 import { CreateReviewDialog } from "./reviews/-components/CreateReviewDialog";
 import { api } from "../../lib/api";
 import { queryKeys } from "../../lib/queries";
-import { useColumnSizing } from "../../lib/useColumnSizing";
+import { useDataTable } from "../../lib/useDataTable";
 import { formatShortDate } from "../../lib/format";
 import { useTablePageParams } from "../../lib/useTablePageParams";
 
@@ -84,24 +79,18 @@ function Reviews() {
   const reviews = data?.rows ?? [];
   const rowCount = data?.rowCount ?? 0;
 
-  const { columnSizing, onColumnSizingChange } = useColumnSizing("reviews");
-  const table = useReactTable({
-    data: reviews,
+  const { table } = useDataTable({
     columns,
-    rowCount,
+    data: reviews,
+    sizingKey: "reviews",
     getRowId: (row) => row.id,
-    state: { sorting, pagination, rowSelection, columnSizing },
+    rowCount,
+    sorting,
     onSortingChange: setSorting,
+    pagination,
     onPaginationChange: setPagination,
+    rowSelection,
     onRowSelectionChange: setRowSelection,
-    onColumnSizingChange,
-    manualFiltering: true,
-    manualPagination: true,
-    manualSorting: true,
-    enableRowSelection: true,
-    enableColumnResizing: true,
-    columnResizeMode: "onChange",
-    getCoreRowModel: getCoreRowModel(),
   });
 
   return (
@@ -132,15 +121,7 @@ function Reviews() {
       />
 
       <div className="flex h-10 shrink-0 items-center justify-end border-b border-border">
-        <div className="flex items-center gap-2 rounded-md border border-input bg-background px-2.5">
-          <Search className="size-4 shrink-0 text-muted-foreground" />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search reviews…"
-            className="h-7 w-48 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
-          />
-        </div>
+        <TableSearch value={query} onChange={setQuery} placeholder="Search reviews…" />
       </div>
 
       <DataTable

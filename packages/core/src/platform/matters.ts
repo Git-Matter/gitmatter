@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, ilike, inArray, isNull, or } from "drizzle-orm";
+import { and, asc, count, desc, eq, ilike, inArray, isNull, ne, or } from "drizzle-orm";
 import { db } from "@workspace/db/client";
 import {
   type MatterRole,
@@ -290,6 +290,24 @@ export async function updateMatter(
   return row ?? null;
 }
 
+// Owner name + people-with-access count for a set of matters, keyed by matter id.
+async function matterMemberAgg(matterIds: string[]) {
+  const memberRows = await db
+    .select({ matterId: matterMembers.matterId, role: matterMembers.role, name: user.name })
+    .from(matterMembers)
+    .innerJoin(user, eq(matterMembers.userId, user.id))
+    .where(inArray(matterMembers.matterId, matterIds));
+
+  const byMatter = new Map<string, { owner: string | null; count: number }>();
+  for (const m of memberRows) {
+    const agg = byMatter.get(m.matterId) ?? { owner: null, count: 0 };
+    agg.count += 1;
+    if (m.role === "owner") agg.owner = m.name;
+    byMatter.set(m.matterId, agg);
+  }
+  return byMatter;
+}
+
 /** Matters the user is staffed on, newest first, with the client, the user's
  *  role, the owner's name, and how many people have access (for the list view). */
 export async function listMattersForUser(userId: string) {
@@ -304,26 +322,79 @@ export async function listMattersForUser(userId: string) {
   const matterIds = base.map((b) => b.matter.id);
   if (!matterIds.length) return [];
 
-  // All members of those matters, to derive owner name + people-with-access count.
-  const memberRows = await db
-    .select({ matterId: matterMembers.matterId, role: matterMembers.role, name: user.name })
-    .from(matterMembers)
-    .innerJoin(user, eq(matterMembers.userId, user.id))
-    .where(inArray(matterMembers.matterId, matterIds));
-
-  const byMatter = new Map<string, { owner: string | null; count: number }>();
-  for (const m of memberRows) {
-    const agg = byMatter.get(m.matterId) ?? { owner: null, count: 0 };
-    agg.count += 1;
-    if (m.role === "owner") agg.owner = m.name;
-    byMatter.set(m.matterId, agg);
-  }
-
+  const byMatter = await matterMemberAgg(matterIds);
   return base.map((b) => ({
     ...b,
     ownerName: byMatter.get(b.matter.id)?.owner ?? null,
     memberCount: byMatter.get(b.matter.id)?.count ?? 1,
   }));
+}
+
+export type MatterListScope = "all" | "mine" | "shared";
+export type MatterListSort = "name" | "client" | "updatedAt" | "createdAt";
+
+export type MatterListParams = {
+  q?: string;
+  scope?: MatterListScope;
+  page: number;
+  pageSize: number;
+  sort?: MatterListSort;
+  dir?: "asc" | "desc";
+};
+
+/** Paginated counterpart to listMattersForUser: same row shape (matter + client +
+ *  role + ownerName + memberCount), with server-side scope filter, name/client
+ *  search, sort, and a parallel total count. */
+export async function listMattersPage(userId: string, params: MatterListParams) {
+  const q = params.q?.trim();
+  const where = and(
+    eq(matterMembers.userId, userId),
+    params.scope === "mine"
+      ? eq(matterMembers.role, "owner")
+      : params.scope === "shared"
+        ? ne(matterMembers.role, "owner")
+        : undefined,
+    q ? or(ilike(matters.name, `%${q}%`), ilike(clients.name, `%${q}%`)) : undefined
+  );
+  const sortCols = {
+    name: matters.name,
+    client: clients.name,
+    updatedAt: matters.updatedAt,
+    createdAt: matters.createdAt,
+  };
+  const sortCol = sortCols[params.sort ?? "updatedAt"];
+  const order = params.dir === "asc" ? asc(sortCol) : desc(sortCol);
+  const offset = params.page * params.pageSize;
+
+  const [base, countRows] = await Promise.all([
+    db
+      .select({ matter: matters, client: clients, role: matterMembers.role })
+      .from(matterMembers)
+      .innerJoin(matters, eq(matterMembers.matterId, matters.id))
+      .innerJoin(clients, eq(matters.clientId, clients.id))
+      .where(where)
+      .orderBy(order)
+      .limit(params.pageSize)
+      .offset(offset),
+    db
+      .select({ count: count() })
+      .from(matterMembers)
+      .innerJoin(matters, eq(matterMembers.matterId, matters.id))
+      .innerJoin(clients, eq(matters.clientId, clients.id))
+      .where(where),
+  ]);
+
+  const rowCount = Number(countRows[0]?.count ?? 0);
+  const matterIds = base.map((b) => b.matter.id);
+  if (!matterIds.length) return { rows: [], rowCount };
+
+  const byMatter = await matterMemberAgg(matterIds);
+  const rows = base.map((b) => ({
+    ...b,
+    ownerName: byMatter.get(b.matter.id)?.owner ?? null,
+    memberCount: byMatter.get(b.matter.id)?.count ?? 1,
+  }));
+  return { rows, rowCount };
 }
 
 export async function getMatter(id: string) {

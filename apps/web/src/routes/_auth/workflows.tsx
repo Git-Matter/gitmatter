@@ -1,53 +1,46 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  getCoreRowModel,
-  getPaginationRowModel,
-  useReactTable,
-  type ColumnDef,
-  type PaginationState,
-} from "@tanstack/react-table";
+import { useEffect, useMemo, useState } from "react";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { type PaginationState, type SortingState } from "@tanstack/react-table";
 import { toast } from "sonner";
-import { Library, Plus, Search } from "lucide-react";
+import { Library, Plus } from "lucide-react";
 import { api, type WorkflowListItem } from "@/lib/api";
 import { Button } from "@/components/ui/button";
+import { DataTable } from "@/components/DataTable";
 import { PageHeader } from "@/components/PageHeader";
 import { PageShell } from "@/components/PageShell";
 import { TablePager } from "@/components/TablePager";
+import { TableSearch } from "@/components/TableSearch";
 import { ToolbarTabs } from "@/components/ToolbarTabs";
+import { queryKeys } from "@/lib/queries";
+import { useDataTable } from "@/lib/useDataTable";
+import { useTablePageParams } from "@/lib/useTablePageParams";
 import { DisplayWorkflowModal } from "./workflows/-components/DisplayWorkflowModal";
 import { NewWorkflowModal } from "./workflows/-components/NewWorkflowModal";
-import { WorkflowListHeader } from "./workflows/-components/WorkflowListHeader";
-import { WorkflowRow } from "./workflows/-components/WorkflowRow";
 import { WorkflowToolbarActions } from "./workflows/-components/WorkflowToolbarActions";
+import { workflowColumns } from "./workflows/-components/workflowColumns";
 import { WORKFLOW_TABS, type WorkflowTab } from "./workflows/-components/workflowList";
 import { workflowDetailRoute } from "./workflows/-components/workflowRoutes";
-import { useWorkflowFilters } from "./workflows/-components/useWorkflowFilters";
 
 export const Route = createFileRoute("/_auth/workflows")({ component: Workflows });
-
-// The list renders WorkflowRow itself; the table is used only for client-side
-// pagination math (page slicing + the pager footer), so it needs no columns.
-const NO_COLUMNS: ColumnDef<WorkflowListItem>[] = [];
 
 function Workflows() {
   const navigate = useNavigate();
   const qc = useQueryClient();
-  const { data: workflows = [] } = useQuery({
-    queryKey: ["workflows"],
-    queryFn: () => api.listWorkflows(),
-  });
 
   const [tab, setTab] = useState<WorkflowTab>("all");
   const [search, setSearch] = useState("");
   const [practiceFilter, setPracticeFilter] = useState<string | null>(null);
   const [typeFilter, setTypeFilter] = useState<WorkflowListItem["type"] | null>(null);
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [sorting, setSorting] = useState<SortingState>([]);
+  const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize: 50 });
+  const [rowSelection, setRowSelection] = useState({});
   const [selected, setSelected] = useState<WorkflowListItem | null>(null);
   const [newOpen, setNewOpen] = useState(false);
 
-  const invalidate = () => qc.invalidateQueries({ queryKey: ["workflows"] });
+  // Invalidating the "workflows" prefix covers the paged list, the practices
+  // dropdown, and the non-paged list the modals use.
+  const invalidate = () => qc.invalidateQueries({ queryKey: queryKeys.workflows });
 
   const hideMutation = useMutation({
     mutationFn: (id: string) => api.hideWorkflow(id),
@@ -63,73 +56,96 @@ function Workflows() {
     onError: (e) => toast.error(e instanceof Error ? e.message : "Delete failed"),
   });
 
-  const { visibleBuiltins, custom, filtered, practices } = useWorkflowFilters({
-    workflows,
-    tab,
-    search,
-    practiceFilter,
-    typeFilter,
+  const pageParams = useTablePageParams({
+    query: search,
+    sorting,
+    pagination,
+    setPagination,
+    extraDeps: [tab, typeFilter, practiceFilter],
+    extraParams: { tab, type: typeFilter ?? undefined, practice: practiceFilter ?? undefined },
   });
 
-  const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize: 50 });
-  const table = useReactTable({
-    data: filtered,
-    columns: NO_COLUMNS,
-    getRowId: (w) => w.id,
-    state: { pagination },
-    onPaginationChange: setPagination,
-    // `filtered` is a fresh array each render; reset the page ourselves on
-    // filter/search change instead (below) rather than on every render.
-    autoResetPageIndex: false,
-    getCoreRowModel: getCoreRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
+  const { data } = useQuery({
+    queryKey: queryKeys.workflowsPage(pageParams),
+    queryFn: () => api.listWorkflowsPage(pageParams),
+    placeholderData: keepPreviousData,
+  });
+  const rows = data?.rows ?? [];
+  const rowCount = data?.rowCount ?? 0;
+
+  const { data: practices = [] } = useQuery({
+    queryKey: queryKeys.workflowPractices({ tab, type: typeFilter }),
+    queryFn: () => api.listWorkflowPractices({ tab, type: typeFilter ?? undefined }),
   });
 
+  // A new filter changes which rows exist, so any prior selection is stale.
   useEffect(() => {
-    setSelectedIds([]);
-    setPagination((p) => ({ ...p, pageIndex: 0 }));
-  }, [tab, practiceFilter, typeFilter, search]);
+    setRowSelection({});
+  }, [pageParams.q, tab, typeFilter, practiceFilter]);
 
-  const allSelected = filtered.length > 0 && filtered.every((w) => selectedIds.includes(w.id));
-  const someSelected = !allSelected && filtered.some((w) => selectedIds.includes(w.id));
+  const columns = useMemo(
+    () =>
+      workflowColumns({
+        tab,
+        onHide: (w) => hideMutation.mutate(w.id),
+        onUnhide: (w) => unhideMutation.mutate(w.id),
+        onDelete: (w) => deleteMutation.mutate(w.id),
+      }),
+    [tab, hideMutation, unhideMutation, deleteMutation]
+  );
 
-  function toggleAll() {
-    setSelectedIds(allSelected ? [] : filtered.map((w) => w.id));
-  }
-  function toggleOne(id: string) {
-    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
-  }
+  const { table } = useDataTable({
+    columns,
+    data: rows,
+    sizingKey: "workflows",
+    getRowId: (w) => w.id,
+    enableSorting: false,
+    rowCount,
+    sorting,
+    onSortingChange: setSorting,
+    pagination,
+    onPaginationChange: setPagination,
+    rowSelection,
+    onRowSelectionChange: setRowSelection,
+  });
+
+  // Row selection only spans the loaded page, so the selected rows' originals
+  // carry everything bulk actions need (isSystem to choose hide vs delete).
+  const selectedRows = () => table.getSelectedRowModel().rows.map((r) => r.original);
+  const selectedCount = Object.keys(rowSelection).length;
 
   async function bulkRemove() {
-    const ids = [...selectedIds];
-    setSelectedIds([]);
-    const builtinIds = ids.filter((id) => workflows.find((w) => w.id === id)?.isSystem);
-    const customIds = ids.filter((id) => !workflows.find((w) => w.id === id)?.isSystem);
-    await Promise.all([
-      ...builtinIds.map((id) => api.hideWorkflow(id).catch(() => {})),
-      ...customIds.map((id) => api.deleteWorkflow(id).catch(() => {})),
-    ]);
+    const ws = selectedRows();
+    setRowSelection({});
+    await Promise.all(
+      ws.map((w) =>
+        (w.isSystem ? api.hideWorkflow(w.id) : api.deleteWorkflow(w.id)).catch(() => {})
+      )
+    );
     void invalidate();
   }
   async function bulkUnhide() {
-    const ids = [...selectedIds];
-    setSelectedIds([]);
-    await Promise.all(ids.map((id) => api.unhideWorkflow(id).catch(() => {})));
+    const ws = selectedRows();
+    setRowSelection({});
+    await Promise.all(ws.map((w) => api.unhideWorkflow(w.id).catch(() => {})));
     void invalidate();
   }
 
   const toolbarActions = (
-    <WorkflowToolbarActions
-      selectedCount={selectedIds.length}
-      tab={tab}
-      practices={practices}
-      typeFilter={typeFilter}
-      practiceFilter={practiceFilter}
-      onTypeFilterChange={setTypeFilter}
-      onPracticeFilterChange={setPracticeFilter}
-      onBulkRemove={() => void bulkRemove()}
-      onBulkUnhide={() => void bulkUnhide()}
-    />
+    <div className="flex items-center gap-3">
+      <TableSearch value={search} onChange={setSearch} placeholder="Search workflows…" />
+      <WorkflowToolbarActions
+        selectedCount={selectedCount}
+        tab={tab}
+        practices={practices}
+        typeFilter={typeFilter}
+        practiceFilter={practiceFilter}
+        onTypeFilterChange={setTypeFilter}
+        onPracticeFilterChange={setPracticeFilter}
+        onBulkRemove={() => void bulkRemove()}
+        onBulkUnhide={() => void bulkUnhide()}
+      />
+    </div>
   );
 
   return (
@@ -139,21 +155,8 @@ function Workflows() {
       header={
         <PageHeader
           title="Workflows"
-          actions={[
-            <div
-              key="search"
-              className="flex items-center gap-2 rounded-md border border-input bg-background px-2.5"
-            >
-              <Search className="size-4 shrink-0 text-muted-foreground" />
-              <input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search workflows…"
-                className="h-7 w-48 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
-              />
-            </div>,
+          action={
             <Button
-              key="new"
               variant="outline"
               size="icon-sm"
               className="rounded-full"
@@ -162,49 +165,22 @@ function Workflows() {
               onClick={() => setNewOpen(true)}
             >
               <Plus className="size-4" />
-            </Button>,
-          ]}
+            </Button>
+          }
         />
       }
     >
       <ToolbarTabs tabs={WORKFLOW_TABS} active={tab} onChange={setTab} actions={toolbarActions} />
 
-      <div className="min-h-0 flex-1 overflow-auto">
-        <WorkflowListHeader
-          allSelected={allSelected}
-          someSelected={someSelected}
-          onToggleAll={toggleAll}
-        />
-
-        {filtered.length === 0 ? (
-          <EmptyState tab={tab} onNew={() => setNewOpen(true)} />
-        ) : (
-          table.getRowModel().rows.map((row) => {
-            const workflow = row.original;
-            return (
-              <WorkflowRow
-                key={workflow.id}
-                workflow={workflow}
-                tab={tab}
-                selected={selectedIds.includes(workflow.id)}
-                onOpen={() => setSelected(workflow)}
-                onToggle={() => toggleOne(workflow.id)}
-                onHide={() => hideMutation.mutate(workflow.id)}
-                onUnhide={() => unhideMutation.mutate(workflow.id)}
-                onDelete={() => deleteMutation.mutate(workflow.id)}
-              />
-            );
-          })
-        )}
-      </div>
-
-      {filtered.length > 0 && <TablePager table={table} />}
-
-      <DisplayWorkflowModal
-        workflows={[...visibleBuiltins, ...custom]}
-        workflow={selected}
-        onClose={() => setSelected(null)}
+      <DataTable
+        table={table}
+        onRowClick={setSelected}
+        empty={<EmptyState tab={tab} onNew={() => setNewOpen(true)} />}
       />
+
+      {rowCount > 0 && <TablePager table={table} />}
+
+      <DisplayWorkflowModal workflow={selected} onClose={() => setSelected(null)} />
 
       <NewWorkflowModal
         open={newOpen}

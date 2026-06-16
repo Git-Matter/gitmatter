@@ -7,6 +7,8 @@ import { api } from "./api";
 export const queryKeys = {
   models: ["models"] as const,
   matters: ["matters"] as const,
+  mattersPage: (params: unknown) => ["matters", "page", params] as const,
+  practiceAreas: ["practice-areas"] as const,
   documents: ["documents"] as const,
   documentsPage: (params: unknown) => ["documents", "page", params] as const,
   clients: ["clients"] as const,
@@ -15,6 +17,7 @@ export const queryKeys = {
   reviewsPage: (params: unknown) => ["reviews", "page", params] as const,
   workflows: ["workflows"] as const,
   workflowsPage: (params: unknown) => ["workflows", "page", params] as const,
+  workflowPractices: (params: unknown) => ["workflows", "practices", params] as const,
   chats: ["chats"] as const,
   allChats: ["chats", "all"] as const,
   matterChats: (matterId: string) => ["chats", "matter", matterId] as const,

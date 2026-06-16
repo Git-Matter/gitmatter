@@ -96,7 +96,7 @@ export function documentColumns(handlers: {
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="size-7 text-muted-foreground"
+                    className="size-7 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 aria-expanded:opacity-100"
                     title="Actions"
                     aria-label="Row actions"
                   />

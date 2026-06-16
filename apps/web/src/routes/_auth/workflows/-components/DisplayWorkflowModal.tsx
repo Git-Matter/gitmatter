@@ -18,7 +18,6 @@ import { WorkflowPickerContent } from "./WorkflowPickerContent";
 import { workflowDetailRoute } from "./workflowRoutes";
 
 interface Props {
-  workflows: WorkflowListItem[];
   workflow: WorkflowListItem | null;
   onClose: () => void;
 }
@@ -43,9 +42,16 @@ function Toggle({ on, onToggle }: { on: boolean; onToggle: () => void }) {
   );
 }
 
-export function DisplayWorkflowModal({ workflows, workflow, onClose }: Props) {
+export function DisplayWorkflowModal({ workflow, onClose }: Props) {
   const navigate = useNavigate();
   const { matters } = useMatters();
+  // The in-modal picker browses every workflow — fetch the full (non-paged) list
+  // here rather than receiving the list page's current slice.
+  const { data: workflows = [] } = useQuery({
+    queryKey: ["workflows"],
+    queryFn: () => api.listWorkflows(),
+    enabled: !!workflow,
+  });
   const [screen, setScreen] = useState<"select" | "configure">("select");
   const [selected, setSelected] = useState<WorkflowListItem | null>(workflow);
   const [listSearch, setListSearch] = useState("");

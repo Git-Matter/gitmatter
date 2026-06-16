@@ -9,6 +9,7 @@ import {
   listCommits,
   listHiddenWorkflows,
   listWorkflows,
+  listWorkflowPractices,
   listWorkflowShares,
   listWorkflowsPage,
   shareWorkflow,
@@ -27,16 +28,32 @@ import {
 
 export const workflowRoute = new Hono<AuthEnv>();
 
-const workflowSources = ["builtin", "custom"] as const;
-const workflowSorts = ["title", "type", "isSystem", "createdAt", "updatedAt"] as const;
+const workflowTabs = ["all", "builtin", "custom", "hidden"] as const;
+const workflowTypes = ["assistant", "tabular"] as const;
+const workflowSorts = ["title", "type", "createdAt", "updatedAt"] as const;
+
+function asTab(v: string | undefined) {
+  return workflowTabs.includes(v as (typeof workflowTabs)[number])
+    ? (v as (typeof workflowTabs)[number])
+    : undefined;
+}
+function asType(v: string | undefined) {
+  return workflowTypes.includes(v as (typeof workflowTypes)[number])
+    ? (v as (typeof workflowTypes)[number])
+    : undefined;
+}
 
 workflowRoute.get("/api/workflows", async (c) => {
   const user = c.get("user");
   const paged = parsePageQuery(c, {
     sorts: workflowSorts,
-    filters: { source: workflowSources },
+    filters: { tab: workflowTabs, type: workflowTypes },
   });
-  if (paged) return c.json(await listWorkflowsPage(user.id, paged));
+  if (paged) {
+    // practice is freeform (not a fixed enum), so it's read outside parsePageQuery.
+    const practice = c.req.query("practice")?.trim() || undefined;
+    return c.json(await listWorkflowsPage(user.id, user.email, { ...paged, practice }));
+  }
   return c.json(await listWorkflows(user.id, user.email));
 });
 
@@ -73,6 +90,17 @@ workflowRoute.post("/api/workflows/hidden", zValidator("json", hideWorkflowSchem
 workflowRoute.delete("/api/workflows/hidden/:id", async (c) => {
   await unhideWorkflow(c.get("user").id, c.req.param("id"));
   return c.body(null, 204);
+});
+
+// Distinct practices for the current tab/type (static path — must precede /:id).
+workflowRoute.get("/api/workflows/practices", async (c) => {
+  const user = c.get("user");
+  return c.json(
+    await listWorkflowPractices(user.id, user.email, {
+      tab: asTab(c.req.query("tab")),
+      type: asType(c.req.query("type")),
+    })
+  );
 });
 
 workflowRoute.get("/api/workflows/:id", async (c) => {

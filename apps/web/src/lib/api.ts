@@ -225,14 +225,21 @@ async function req<T>(path: string, opts?: RequestInit): Promise<T> {
   return (await r.json()) as T;
 }
 
-function listQuery(params: ListPageParams): string {
+// Encodes the standard page params plus any extra string filters (status, scope,
+// tab, type, practice, …). The "all" sentinel is dropped so it maps to "no
+// filter" on the server.
+function listQuery(params: ListPageParams & Record<string, unknown>): string {
   const search = new URLSearchParams();
   search.set("page", String(params.page));
   search.set("pageSize", String(params.pageSize));
   if (params.q?.trim()) search.set("q", params.q.trim());
-  if (params.status && params.status !== "all") search.set("status", params.status);
   if (params.sort) search.set("sort", params.sort);
   if (params.dir) search.set("dir", params.dir);
+  const reserved = new Set(["page", "pageSize", "q", "sort", "dir"]);
+  for (const [key, value] of Object.entries(params)) {
+    if (reserved.has(key)) continue;
+    if (typeof value === "string" && value.trim() && value !== "all") search.set(key, value.trim());
+  }
   return search.toString();
 }
 
@@ -284,6 +291,14 @@ export const api = {
     }
   ) => req<Client>(`/api/clients/${id}`, { method: "PATCH", body: JSON.stringify(fields) }),
   listMatters: () => req<MatterListItem[]>("/api/matters"),
+  listMattersPage: (params: ListPageParams & { scope?: string }) =>
+    req<PageResult<MatterListItem>>(`/api/matters?${listQuery(params)}`),
+  listPracticeAreas: () => req<string[]>("/api/practice-areas"),
+  createPracticeArea: (name: string) =>
+    req<{ name: string }>("/api/practice-areas", {
+      method: "POST",
+      body: JSON.stringify({ name }),
+    }),
   getMatter: (id: string) => req<Matter>(`/api/matters/${id}`),
   createMatter: (d: {
     clientId: string;
@@ -473,12 +488,14 @@ export const api = {
 
   // Workflows
   listWorkflows: () => req<WorkflowListItem[]>("/api/workflows"),
-  listWorkflowsPage: (params: ListPageParams & { source?: string }) => {
-    const search = listQuery(params);
-    const source = params.source && params.source !== "all" ? `&source=${params.source}` : "";
-    return req<PageResult<{ id: string; title: string; type: string; isSystem: boolean }>>(
-      `/api/workflows?${search}${source}`
-    );
+  listWorkflowsPage: (
+    params: ListPageParams & { tab?: string; type?: string; practice?: string }
+  ) => req<PageResult<WorkflowListItem>>(`/api/workflows?${listQuery(params)}`),
+  listWorkflowPractices: (opts: { tab?: string; type?: string }) => {
+    const search = new URLSearchParams();
+    if (opts.tab && opts.tab !== "all") search.set("tab", opts.tab);
+    if (opts.type) search.set("type", opts.type);
+    return req<string[]>(`/api/workflows/practices?${search.toString()}`);
   },
   createWorkflow: (d: {
     title: string;

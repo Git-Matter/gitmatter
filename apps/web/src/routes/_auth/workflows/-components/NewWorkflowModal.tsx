@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { MessageSquare, Table2 } from "lucide-react";
 import { api, type WorkflowListItem } from "@/lib/api";
 import { cn } from "@/lib/utils";
-import { PRACTICE_OPTIONS } from "./practices";
+import { PracticeAreaPicker } from "@/components/PracticeAreaPicker";
 import { WorkflowModal } from "./WorkflowModal";
 
 interface Props {
@@ -16,15 +16,11 @@ interface Props {
 export function NewWorkflowModal({ open, onClose, onCreated, editWorkflow, onUpdated }: Props) {
   const [title, setTitle] = useState("");
   const [type, setType] = useState<"assistant" | "tabular">("assistant");
-  const [practice, setPractice] = useState<string>("");
-  const [customPractice, setCustomPractice] = useState("");
+  const [practice, setPractice] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const customInputRef = useRef<HTMLInputElement>(null);
 
   const isEditing = !!editWorkflow;
-  const isOthers = practice === "Others";
-  const effectivePractice = isOthers ? customPractice.trim() || null : practice || null;
   const formId = "workflow-modal-form";
 
   useEffect(() => {
@@ -32,27 +28,14 @@ export function NewWorkflowModal({ open, onClose, onCreated, editWorkflow, onUpd
     if (editWorkflow) {
       setTitle(editWorkflow.title);
       setType(editWorkflow.type);
-      const saved = editWorkflow.practice ?? "";
-      const isKnown = (PRACTICE_OPTIONS as readonly string[]).includes(saved);
-      if (!isKnown && saved) {
-        setPractice("Others");
-        setCustomPractice(saved);
-      } else {
-        setPractice(saved);
-        setCustomPractice("");
-      }
+      setPractice(editWorkflow.practice ?? null);
     } else {
       setTitle("");
       setType("assistant");
-      setPractice("");
-      setCustomPractice("");
+      setPractice(null);
     }
     setError("");
   }, [open, editWorkflow]);
-
-  useEffect(() => {
-    if (isOthers) customInputRef.current?.focus();
-  }, [isOthers]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -63,7 +46,7 @@ export function NewWorkflowModal({ open, onClose, onCreated, editWorkflow, onUpd
       if (isEditing && editWorkflow) {
         const updated = await api.updateWorkflow(editWorkflow.id, {
           title: title.trim(),
-          practice: effectivePractice,
+          practice,
         });
         onUpdated?.({
           ...editWorkflow,
@@ -74,7 +57,7 @@ export function NewWorkflowModal({ open, onClose, onCreated, editWorkflow, onUpd
         const created = await api.createWorkflow({
           title: title.trim(),
           type,
-          practice: effectivePractice,
+          practice,
         });
         onCreated({ id: created.workflow.id, type: created.workflow.type });
       }
@@ -133,27 +116,7 @@ export function NewWorkflowModal({ open, onClose, onCreated, editWorkflow, onUpd
 
         <div className="mt-5">
           <p className="mb-2 text-sm font-medium text-muted-foreground">Practice Area</p>
-          <div className="flex flex-wrap gap-2">
-            {PRACTICE_OPTIONS.map((p) => (
-              <TypeChip
-                key={p}
-                active={practice === p}
-                onClick={() => setPractice(practice === p ? "" : p)}
-              >
-                {p}
-              </TypeChip>
-            ))}
-          </div>
-          {isOthers && (
-            <input
-              ref={customInputRef}
-              type="text"
-              value={customPractice}
-              onChange={(e) => setCustomPractice(e.target.value)}
-              placeholder="Enter practice area…"
-              className="mt-3 w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none"
-            />
-          )}
+          <PracticeAreaPicker value={practice} onChange={setPractice} />
         </div>
 
         {error && <p className="mt-4 text-sm text-destructive">{error}</p>}

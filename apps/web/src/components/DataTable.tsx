@@ -34,7 +34,7 @@ type DataTableProps<T> = {
 
 export function DataTable<T>({
   table,
-  estimateSize = 49,
+  estimateSize = 40,
   measureRows = false,
   onRowClick,
   cellClassName,
@@ -140,20 +140,17 @@ export function DataTable<T>({
   const Body = sizingInfo.isResizingColumn ? MemoBody : DataTableBody;
 
   return (
-    <div
-      ref={setScrollRef}
-      className={cn("min-h-0 flex-1 overflow-auto rounded-lg border border-border", className)}
-    >
+    <div ref={setScrollRef} className={cn("min-h-0 flex-1 overflow-auto", className)}>
       <Table
         className="table-fixed"
-        containerClassName="overflow-x-visible"
+        containerClassName="overflow-x-visible bg-transparent"
         // minWidth keeps the table from ever rendering narrower than its
         // container (e.g. before the width is measured) — otherwise a row's
         // background would stop short of the right edge. table-fixed spreads
         // the slack across the columns.
         style={{ ...columnSizeVars, width: tableWidth, minWidth: "100%" }}
       >
-        <TableHeader className="sticky top-0 z-10 bg-card">
+        <TableHeader className="sticky top-0 z-10 bg-background">
           {table.getHeaderGroups().map((hg) => (
             <TableRow key={hg.id}>
               {hg.headers.map((header) => {
@@ -163,7 +160,7 @@ export function DataTable<T>({
                 return (
                   <TableHead
                     key={header.id}
-                    className="relative"
+                    className="relative h-8"
                     style={{ width: `calc(var(--header-${header.id}-size) * 1px)` }}
                   >
                     {canSort ? (
@@ -283,13 +280,13 @@ function DataRowInner<T>({ row, index, measureRef, onRowClick, cellClassName }: 
     <TableRow
       data-index={index}
       ref={measureRef}
-      className={onRowClick ? "cursor-pointer" : undefined}
+      className={cn("group border-border/60 hover:bg-muted/60", onRowClick && "cursor-pointer")}
       onClick={onRowClick ? () => onRowClick(row.original) : undefined}
     >
       {row.getVisibleCells().map((cell) => (
         <TableCell
           key={cell.id}
-          className={cellClassName}
+          className={cn("py-2", cellClassName)}
           style={{ width: `calc(var(--col-${cell.column.id}-size) * 1px)` }}
         >
           {flexRender(cell.column.columnDef.cell, cell.getContext())}

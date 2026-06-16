@@ -8,6 +8,7 @@ import {
   createClient,
   createFolder,
   createMatter,
+  createPracticeArea,
   deleteClients,
   deleteFolder,
   findUserByEmail,
@@ -18,6 +19,8 @@ import {
   listClientsPage,
   listFolders,
   listMattersForUser,
+  listMattersPage,
+  listPracticeAreas,
   listMembers,
   removeMember,
   renameFolder,
@@ -141,7 +144,14 @@ mattersRoute.get("/api/clients/:id", async (c) => {
 
 // ---- Matters ----
 
-mattersRoute.get("/api/matters", async (c) => c.json(await listMattersForUser(c.get("user").id)));
+const matterScopes = ["all", "mine", "shared"] as const;
+const matterSorts = ["name", "client", "updatedAt", "createdAt"] as const;
+
+mattersRoute.get("/api/matters", async (c) => {
+  const paged = parsePageQuery(c, { sorts: matterSorts, filters: { scope: matterScopes } });
+  if (paged) return c.json(await listMattersPage(c.get("user").id, paged));
+  return c.json(await listMattersForUser(c.get("user").id));
+});
 
 mattersRoute.post(
   "/api/matters/conflicts-check",
@@ -295,4 +305,16 @@ mattersRoute.get("/api/users/search", async (c) => {
   const q = c.req.query("q")?.trim();
   if (!q) return c.json([]);
   return c.json(await searchUsers(c.get("user").tenantId, q));
+});
+
+// ---- Practice areas (per-user pick list, shared by workflows + matters) ----
+
+mattersRoute.get("/api/practice-areas", async (c) =>
+  c.json(await listPracticeAreas(c.get("user").id))
+);
+
+mattersRoute.post("/api/practice-areas", async (c) => {
+  const body = (await c.req.json().catch(() => ({}))) as { name?: string };
+  if (!body.name?.trim()) return c.json({ error: "name required" }, 400);
+  return c.json({ name: await createPracticeArea(c.get("user").id, body.name) }, 201);
 });

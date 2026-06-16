@@ -64,7 +64,7 @@ export function clientColumns(onEdit: (client: Client) => void) {
         <Button
           variant="ghost"
           size="icon"
-          className="size-7"
+          className="size-7 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
           title="Edit client"
           aria-label="Edit client"
           onClick={(e) => {

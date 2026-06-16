@@ -24,6 +24,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { PracticeAreaPicker } from "@/components/PracticeAreaPicker";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { useDebouncedValue } from "@/lib/useDebouncedValue";
@@ -122,7 +123,7 @@ export function EditMatterModal({
   const [clientId, setClientId] = useState(matter.clientId);
   const [clientName, setClientName] = useState("");
   const [name, setName] = useState(matter.name);
-  const [practiceArea, setPracticeArea] = useState(matter.practiceArea ?? "");
+  const [practiceArea, setPracticeArea] = useState<string | null>(matter.practiceArea ?? null);
   const [jurisdiction, setJurisdiction] = useState(matter.jurisdiction ?? "");
   const [status, setStatus] = useState(matter.status);
   const [conflictCleared, setConflictCleared] = useState(matter.conflictCleared);
@@ -141,7 +142,7 @@ export function EditMatterModal({
     setClientId(matter.clientId);
     setClientName(currentClient?.client.name ?? "");
     setName(matter.name);
-    setPracticeArea(matter.practiceArea ?? "");
+    setPracticeArea(matter.practiceArea ?? null);
     setJurisdiction(matter.jurisdiction ?? "");
     setStatus(matter.status);
     setConflictCleared(matter.conflictCleared);
@@ -153,7 +154,7 @@ export function EditMatterModal({
       api.updateMatter(matter.id, {
         clientId,
         name: name.trim(),
-        practiceArea: practiceArea.trim() || null,
+        practiceArea,
         jurisdiction: jurisdiction || null,
         // Status + conflict clearance are owner-only.
         ...(canClose && {
@@ -195,7 +196,7 @@ export function EditMatterModal({
           </div>
           <div className="flex flex-col gap-1.5">
             <Label>Practice area</Label>
-            <Input value={practiceArea} onChange={(e) => setPracticeArea(e.target.value)} />
+            <PracticeAreaPicker value={practiceArea} onChange={setPracticeArea} />
           </div>
           <div className="flex flex-col gap-1.5">
             <Label>Jurisdiction</Label>

@@ -1,5 +1,17 @@
 import { randomUUID } from "node:crypto";
-import { and, asc, count, desc, eq, ilike, inArray, or } from "drizzle-orm";
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  ilike,
+  inArray,
+  isNotNull,
+  notInArray,
+  or,
+  sql,
+} from "drizzle-orm";
 import { db } from "@workspace/db/client";
 import {
   commits,
@@ -147,35 +159,13 @@ export async function updateWorkflow(
   });
 }
 
-// Built-ins + the user's own + workflows shared to their email, each tagged with
-// per-viewer access flags and a `hidden` marker. The UI loads this whole set
-// once and slices it into tabs / filters client-side (counts are small).
-export async function listWorkflows(userId: string, email?: string): Promise<EnrichedWorkflow[]> {
-  const e = email?.trim().toLowerCase() || null;
-  const [hiddenRows, shareRows] = await Promise.all([
-    db
-      .select({ id: hiddenWorkflows.workflowId })
-      .from(hiddenWorkflows)
-      .where(eq(hiddenWorkflows.userId, userId)),
-    e
-      ? db.select().from(workflowShares).where(eq(workflowShares.sharedWithEmail, e))
-      : Promise.resolve([] as WorkflowShare[]),
-  ]);
-  const hiddenSet = new Set(hiddenRows.map((h) => h.id));
-  const shareByWorkflow = new Map(shareRows.map((s) => [s.workflowId, s]));
-  const sharedIds = shareRows.map((s) => s.workflowId);
-
-  const rows = await db
-    .select()
-    .from(workflows)
-    .where(
-      or(
-        eq(workflows.isSystem, true),
-        eq(workflows.userId, userId),
-        sharedIds.length ? inArray(workflows.id, sharedIds) : undefined
-      )
-    );
-
+// Layer per-viewer access flags + the `hidden` marker onto raw workflow rows.
+// Shared by listWorkflows (full set) and listWorkflowsPage (a page).
+async function enrichWorkflows(
+  rows: Workflow[],
+  userId: string,
+  ctx: { hiddenIds: string[]; shareByWorkflow: Map<string, WorkflowShare> }
+): Promise<EnrichedWorkflow[]> {
   const ownerIds = [
     ...new Set(
       rows
@@ -190,15 +180,34 @@ export async function listWorkflows(userId: string, email?: string): Promise<Enr
         .where(inArray(user.id, ownerIds))
     : [];
   const ownerName = new Map(owners.map((o) => [o.id, o.name || o.email]));
+  const hiddenSet = new Set(ctx.hiddenIds);
 
   return rows.map((r) => {
     const isOwner = !r.isSystem && r.userId === userId;
-    const share = shareByWorkflow.get(r.id);
+    const share = ctx.shareByWorkflow.get(r.id);
     const allowEdit = r.isSystem ? false : isOwner ? true : (share?.allowEdit ?? false);
     const sharedByName =
       !r.isSystem && !isOwner ? (ownerName.get(r.userId ?? "") ?? "Shared") : null;
     return { ...r, isOwner, allowEdit, sharedByName, hidden: hiddenSet.has(r.id) };
   });
+}
+
+// Built-ins + the user's own + workflows shared to their email, each tagged with
+// per-viewer access flags and a `hidden` marker. The full set — used by the
+// workflow pickers and the run modal; the list page uses listWorkflowsPage.
+export async function listWorkflows(userId: string, email?: string): Promise<EnrichedWorkflow[]> {
+  const ctx = await workflowAccessContext(userId, email);
+  const rows = await db
+    .select()
+    .from(workflows)
+    .where(
+      or(
+        eq(workflows.isSystem, true),
+        eq(workflows.userId, userId),
+        ctx.sharedIds.length ? inArray(workflows.id, ctx.sharedIds) : undefined
+      )
+    );
+  return enrichWorkflows(rows, userId, ctx);
 }
 
 // Resolve a viewer's access to one workflow. Covers ownership, per-email shares,
@@ -238,32 +247,88 @@ async function resolveWorkflowAccess(
   return { isOwner: false, allowEdit: canEdit, sharedByName, canView, canEdit };
 }
 
-export type WorkflowListSource = "builtin" | "custom";
-export type WorkflowListSort = "title" | "type" | "isSystem" | "createdAt" | "updatedAt";
+export type WorkflowListTab = "all" | "builtin" | "custom" | "hidden";
+export type WorkflowListType = "assistant" | "tabular";
+export type WorkflowListSort = "title" | "type" | "createdAt" | "updatedAt";
 
 export type WorkflowListParams = {
   q?: string;
-  source?: WorkflowListSource;
+  tab?: WorkflowListTab;
+  type?: WorkflowListType;
+  practice?: string;
   page: number;
   pageSize: number;
   sort?: WorkflowListSort;
   dir?: "asc" | "desc";
 };
 
-export async function listWorkflowsPage(userId: string, params: WorkflowListParams) {
-  const q = params.q?.trim();
-  const access = or(eq(workflows.isSystem, true), eq(workflows.userId, userId));
-  const source =
-    params.source === "builtin"
-      ? eq(workflows.isSystem, true)
-      : params.source === "custom"
-        ? eq(workflows.isSystem, false)
-        : undefined;
-  const where = and(access, source, q ? ilike(workflows.title, `%${q}%`) : undefined);
+// Per-viewer access data fetched once: which built-ins this user has hidden, and
+// which workflows are shared to their email. Drives both the paged list and the
+// practice-filter dropdown so they resolve the same set.
+async function workflowAccessContext(userId: string, email?: string) {
+  const e = email?.trim().toLowerCase() || null;
+  const [hiddenRows, shareRows] = await Promise.all([
+    db
+      .select({ id: hiddenWorkflows.workflowId })
+      .from(hiddenWorkflows)
+      .where(eq(hiddenWorkflows.userId, userId)),
+    e
+      ? db.select().from(workflowShares).where(eq(workflowShares.sharedWithEmail, e))
+      : Promise.resolve([] as WorkflowShare[]),
+  ]);
+  return {
+    hiddenIds: hiddenRows.map((h) => h.id),
+    sharedIds: shareRows.map((s) => s.workflowId),
+    shareByWorkflow: new Map(shareRows.map((s) => [s.workflowId, s])),
+  };
+}
+
+// The WHERE shared by the paged list and the practices dropdown. Tab semantics
+// mirror the old client-side useWorkflowFilters: builtin = visible system,
+// hidden = system the user hid, custom = the user's own + shared, all = the lot
+// minus hidden built-ins.
+function workflowListWhere(
+  userId: string,
+  ctx: { hiddenIds: string[]; sharedIds: string[] },
+  f: { tab?: WorkflowListTab; type?: WorkflowListType; practice?: string; q?: string }
+) {
+  const { hiddenIds, sharedIds } = ctx;
+  const accessible = or(
+    eq(workflows.isSystem, true),
+    eq(workflows.userId, userId),
+    sharedIds.length ? inArray(workflows.id, sharedIds) : undefined
+  );
+  const notHidden = hiddenIds.length ? notInArray(workflows.id, hiddenIds) : undefined;
+  const isHidden = hiddenIds.length ? inArray(workflows.id, hiddenIds) : sql`false`;
+  const tab = f.tab ?? "all";
+  const tabWhere =
+    tab === "builtin"
+      ? and(eq(workflows.isSystem, true), notHidden)
+      : tab === "hidden"
+        ? and(eq(workflows.isSystem, true), isHidden)
+        : tab === "custom"
+          ? eq(workflows.isSystem, false)
+          : notHidden; // "all"
+  const q = f.q?.trim();
+  return and(
+    accessible,
+    tabWhere,
+    f.type ? eq(workflows.type, f.type) : undefined,
+    f.practice ? eq(workflows.practice, f.practice) : undefined,
+    q ? ilike(workflows.title, `%${q}%`) : undefined
+  );
+}
+
+export async function listWorkflowsPage(
+  userId: string,
+  email: string | undefined,
+  params: WorkflowListParams
+): Promise<{ rows: EnrichedWorkflow[]; rowCount: number }> {
+  const ctx = await workflowAccessContext(userId, email);
+  const where = workflowListWhere(userId, ctx, params);
   const sortCols = {
     title: workflows.title,
     type: workflows.type,
-    isSystem: workflows.isSystem,
     createdAt: workflows.createdAt,
     updatedAt: workflows.updatedAt,
   };
@@ -276,7 +341,29 @@ export async function listWorkflowsPage(userId: string, params: WorkflowListPara
     db.select({ count: count() }).from(workflows).where(where),
   ]);
 
-  return { rows, rowCount: Number(countRows[0]?.count ?? 0) };
+  return {
+    rows: await enrichWorkflows(rows, userId, ctx),
+    rowCount: Number(countRows[0]?.count ?? 0),
+  };
+}
+
+/** Distinct non-null practices within the current tab/type — powers the practice
+ *  filter dropdown (which can no longer be derived from a fully-loaded list). */
+export async function listWorkflowPractices(
+  userId: string,
+  email: string | undefined,
+  opts: { tab?: WorkflowListTab; type?: WorkflowListType }
+): Promise<string[]> {
+  const ctx = await workflowAccessContext(userId, email);
+  const where = and(
+    workflowListWhere(userId, ctx, { tab: opts.tab, type: opts.type }),
+    isNotNull(workflows.practice)
+  );
+  const rows = await db
+    .selectDistinct({ practice: workflows.practice })
+    .from(workflows)
+    .where(where);
+  return [...new Set(rows.map((r) => r.practice).filter((p): p is string => !!p))].sort();
 }
 
 async function blameFor(wf: Workflow): Promise<Record<string, unknown>> {

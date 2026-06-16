@@ -1,21 +1,17 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  getCoreRowModel,
-  useReactTable,
-  type PaginationState,
-  type SortingState,
-} from "@tanstack/react-table";
-import { Loader2, Plus, Search } from "lucide-react";
+import { type PaginationState, type SortingState } from "@tanstack/react-table";
+import { Loader2, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/DataTable";
 import { PageHeader } from "@/components/PageHeader";
 import { TablePager } from "@/components/TablePager";
+import { TableSearch } from "@/components/TableSearch";
 import { api, type Client, type ClientSelection } from "../../lib/api";
 import { queryKeys } from "../../lib/queries";
-import { useColumnSizing } from "../../lib/useColumnSizing";
+import { useDataTable } from "../../lib/useDataTable";
 import { useTablePageParams } from "../../lib/useTablePageParams";
 import { ClientDialog } from "./clients/-components/ClientDialog";
 import { ClientSelectionBar } from "./clients/-components/ClientSelectionBar";
@@ -88,26 +84,19 @@ function Clients() {
     setSelected(selectedOverview.client);
   }, [selectedOverview]);
 
-  const { columnSizing, onColumnSizingChange } = useColumnSizing("clients");
   const columns = useMemo(() => clientColumns((c) => setSelected(c)), []);
-
-  const table = useReactTable({
-    data: clients,
+  const { table } = useDataTable({
     columns,
-    rowCount,
+    data: clients,
+    sizingKey: "clients",
     getRowId: (row) => row.id,
-    state: { sorting, pagination, rowSelection, columnSizing },
+    rowCount,
+    sorting,
     onSortingChange: setSorting,
+    pagination,
     onPaginationChange: setPagination,
+    rowSelection,
     onRowSelectionChange: setRowSelection,
-    onColumnSizingChange,
-    manualFiltering: true,
-    manualPagination: true,
-    manualSorting: true,
-    enableRowSelection: true,
-    enableColumnResizing: true,
-    columnResizeMode: "onChange",
-    getCoreRowModel: getCoreRowModel(),
   });
   const showTable = clients.length > 0 || rowCount > 0 || query.trim().length > 0 || view !== "all";
 
@@ -167,15 +156,7 @@ function Clients() {
       {showTable && (
         <>
           <div className="flex h-10 items-center justify-end border-b border-border">
-            <div className="flex items-center gap-2 rounded-md border border-input bg-background px-2.5">
-              <Search className="size-4 shrink-0 text-muted-foreground" />
-              <input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search clients…"
-                className="h-7 w-48 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
-              />
-            </div>
+            <TableSearch value={query} onChange={setQuery} placeholder="Search clients…" />
           </div>
           <ClientSelectionBar
             table={table}

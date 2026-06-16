@@ -1,24 +1,23 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  getCoreRowModel,
-  getSortedRowModel,
-  useReactTable,
-  type SortingState,
-} from "@tanstack/react-table";
-import { Plus, Search } from "lucide-react";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { type PaginationState, type SortingState } from "@tanstack/react-table";
+import { Plus } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DataTable } from "@/components/DataTable";
+import { PracticeAreaPicker } from "@/components/PracticeAreaPicker";
 import { PageHeader } from "@/components/PageHeader";
+import { TablePager } from "@/components/TablePager";
+import { TableSearch } from "@/components/TableSearch";
 import { ToolbarTabs } from "@/components/ToolbarTabs";
 import { api, type MatterListItem } from "../../lib/api";
 import { queryKeys } from "../../lib/queries";
-import { useColumnSizing } from "../../lib/useColumnSizing";
+import { useDataTable } from "../../lib/useDataTable";
+import { useTablePageParams } from "../../lib/useTablePageParams";
 import { useMatters } from "../../lib/matters-context";
 import { matterColumns } from "./matters/-components/matterColumns";
 import { EditMatterModal } from "./matters/-components/EditMatterModal";
@@ -37,14 +36,39 @@ type Scope = "all" | "mine" | "shared";
 function Matters() {
   const navigate = useNavigate();
   const qc = useQueryClient();
-  const { matters, refresh, setCurrent } = useMatters();
+  const { refresh, setCurrent } = useMatters();
   const [creating, setCreating] = useState(false);
   const [scope, setScope] = useState<Scope>("all");
   const [query, setQuery] = useState("");
   const [sorting, setSorting] = useState<SortingState>([{ id: "updatedAt", desc: true }]);
+  const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize: 50 });
   const [rowSelection, setRowSelection] = useState({});
   const [editing, setEditing] = useState<MatterListItem | null>(null);
   const [peopleFor, setPeopleFor] = useState<MatterListItem | null>(null);
+
+  const pageParams = useTablePageParams({
+    query,
+    sorting,
+    pagination,
+    setPagination,
+    extraDeps: [scope],
+    extraParams: { scope },
+  });
+
+  const { data } = useQuery({
+    queryKey: queryKeys.mattersPage(pageParams),
+    queryFn: () => api.listMattersPage(pageParams),
+    placeholderData: keepPreviousData,
+  });
+  const shown = data?.rows ?? [];
+  const rowCount = data?.rowCount ?? 0;
+
+  // Mutations touch both the sidebar's full list (the matters context) and this
+  // paged query, so refresh both.
+  const refreshMatters = () => {
+    refresh();
+    void qc.invalidateQueries({ queryKey: queryKeys.matters });
+  };
 
   const closeMutation = useMutation({
     mutationFn: (m: MatterListItem) =>
@@ -53,7 +77,7 @@ function Matters() {
       }),
     onSuccess: (_, m) => {
       toast.success(m.matter.status === "closed" ? "Matter reopened" : "Matter closed");
-      refresh();
+      refreshMatters();
       void qc.invalidateQueries({ queryKey: ["matter", m.matter.id] });
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Update failed"),
@@ -69,35 +93,18 @@ function Matters() {
     [closeMutation]
   );
 
-  const shown = useMemo(
-    () =>
-      matters
-        .filter((m) =>
-          scope === "all" ? true : scope === "mine" ? m.role === "owner" : m.role !== "owner"
-        )
-        .filter((m) => {
-          const q = query.trim().toLowerCase();
-          return (
-            !q || m.matter.name.toLowerCase().includes(q) || m.client.name.toLowerCase().includes(q)
-          );
-        }),
-    [matters, query, scope]
-  );
-
-  const { columnSizing, onColumnSizingChange } = useColumnSizing("matters");
-  const table = useReactTable({
-    data: shown,
+  const { table } = useDataTable({
     columns,
+    data: shown,
+    sizingKey: "matters",
     getRowId: (m) => m.matter.id,
-    state: { sorting, rowSelection, columnSizing },
+    rowCount,
+    sorting,
     onSortingChange: setSorting,
+    pagination,
+    onPaginationChange: setPagination,
+    rowSelection,
     onRowSelectionChange: setRowSelection,
-    onColumnSizingChange,
-    enableRowSelection: true,
-    enableColumnResizing: true,
-    columnResizeMode: "onChange",
-    getCoreRowModel: getCoreRowModel(),
-    getSortedRowModel: getSortedRowModel(),
   });
 
   return (
@@ -127,24 +134,14 @@ function Matters() {
         ]}
         active={scope}
         onChange={setScope}
-        actions={
-          <div className="flex items-center gap-2 rounded-md border border-input bg-background px-2.5">
-            <Search className="size-4 shrink-0 text-muted-foreground" />
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search matters…"
-              className="h-7 w-48 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
-            />
-          </div>
-        }
+        actions={<TableSearch value={query} onChange={setQuery} placeholder="Search matters…" />}
       />
 
       {creating && (
         <CreateMatter
           onCreated={(id) => {
             setCreating(false);
-            refresh();
+            refreshMatters();
             setCurrent(id);
           }}
         />
@@ -153,12 +150,13 @@ function Matters() {
       <DataTable
         table={table}
         empty={
-          matters.length
+          query || scope !== "all"
             ? "No matters match this filter."
             : "No matters yet. Create one to start filing work."
         }
         onRowClick={(m) => navigate({ to: "/matters/$id", params: { id: m.matter.id } })}
       />
+      <TablePager table={table} />
 
       {editing && (
         <EditMatterModal
@@ -167,7 +165,7 @@ function Matters() {
           onOpenChange={(open) => !open && setEditing(null)}
           canClose={editing.role === "owner"}
           onSaved={() => {
-            refresh();
+            refreshMatters();
             void qc.invalidateQueries({ queryKey: ["matter", editing.matter.id] });
           }}
         />
@@ -193,7 +191,7 @@ function CreateMatter({ onCreated }: { onCreated: (id: string) => void }) {
   });
   const [clientId, setClientId] = useState("");
   const [name, setName] = useState("");
-  const [practiceArea, setPracticeArea] = useState("");
+  const [practiceArea, setPracticeArea] = useState<string | null>(null);
   const [adverse, setAdverse] = useState("");
   const [conflicts, setConflicts] = useState<string[] | null>(null);
 
@@ -231,7 +229,7 @@ function CreateMatter({ onCreated }: { onCreated: (id: string) => void }) {
     createMutation.mutate({
       clientId,
       name: name.trim(),
-      practiceArea: practiceArea.trim() || undefined,
+      practiceArea: practiceArea ?? undefined,
       adverseParties: adverseParties(),
     });
   }
@@ -277,11 +275,7 @@ function CreateMatter({ onCreated }: { onCreated: (id: string) => void }) {
           </div>
           <div className="flex flex-col gap-field">
             <Label>Practice area (optional)</Label>
-            <Input
-              value={practiceArea}
-              onChange={(e) => setPracticeArea(e.target.value)}
-              placeholder="Corporate"
-            />
+            <PracticeAreaPicker value={practiceArea} onChange={setPracticeArea} />
           </div>
         </div>
 
