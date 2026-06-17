@@ -25,6 +25,9 @@ import { workflowDetailRoute } from "./-components/workflowRoutes";
 export const Route = createFileRoute("/_auth/workflows/")({ component: Workflows });
 
 function Workflows() {
+  // See Matters: React Compiler can't track the stable TanStack table's in-place
+  // data changes, so it skips the re-render that fills the table. Opt out.
+  "use no memo";
   const navigate = useNavigate();
   const qc = useQueryClient();
 
@@ -97,7 +100,6 @@ function Workflows() {
   const { table } = useDataTable({
     columns,
     data: rows,
-    sizingKey: "workflows",
     getRowId: (w) => w.id,
     enableSorting: false,
     rowCount,

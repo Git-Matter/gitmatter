@@ -7,10 +7,12 @@ import {
   documentVersions,
   documents,
   matterDocuments,
+  matterMembers,
   matters,
   user,
   type Document,
 } from "@workspace/db/schema";
+import { shareCountByArtifact, sharedArtifactIds } from "../platform/shares.js";
 import { type Actor, recordCommit } from "../core/commit.js";
 import { extractMarkdown, type SupportedFileType } from "./extract.js";
 import { emitDocStatus } from "./extractionEvents.js";
@@ -26,6 +28,8 @@ export const DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordproc
 
 export type DocumentListSort = "title" | "fileType" | "status" | "createdAt";
 
+export type ShareScope = "all" | "mine" | "shared";
+
 export type DocumentListParams = {
   q?: string;
   status?: "pending" | "processing" | "ready" | "failed";
@@ -35,6 +39,9 @@ export type DocumentListParams = {
   dir?: "asc" | "desc";
   matterId?: string;
   folderId?: string | null;
+  // Visibility scope for the user-scoped (non-matter) view:
+  // mine = owned, shared = shared with me, all = owned + shared + matter-inherited.
+  scope?: ShareScope;
 };
 
 const documentListFields = {
@@ -98,8 +105,40 @@ export async function listDocumentsPage(userId: string, params: DocumentListPara
       : params.folderId === null
         ? isNull(folderCol)
         : eq(folderCol, params.folderId);
+
+  // The user-scoped (non-matter) view honors a visibility scope. "shared" reads
+  // direct shares; "all" also folds in matter-inherited access (docs whose origin
+  // or linked matter the user is a member of).
+  let scopeCond;
+  if (!byMatter) {
+    const scope: ShareScope = params.scope ?? "all";
+    const owned = eq(documents.userId, userId);
+    const sharedIds = await sharedArtifactIds("document", userId);
+    const sharedCond = sharedIds.length ? inArray(documents.id, sharedIds) : sql`false`;
+    if (scope === "mine") {
+      scopeCond = owned;
+    } else if (scope === "shared") {
+      scopeCond = sharedCond;
+    } else {
+      const myMatters = db
+        .select({ matterId: matterMembers.matterId })
+        .from(matterMembers)
+        .where(eq(matterMembers.userId, userId));
+      const linkedDocs = db
+        .select({ id: matterDocuments.documentId })
+        .from(matterDocuments)
+        .where(inArray(matterDocuments.matterId, myMatters));
+      scopeCond = or(
+        owned,
+        sharedCond,
+        inArray(documents.matterId, myMatters),
+        inArray(documents.id, linkedDocs)
+      );
+    }
+  }
+
   const where = and(
-    byMatter ? eq(matterDocuments.matterId, params.matterId!) : eq(documents.userId, userId),
+    byMatter ? eq(matterDocuments.matterId, params.matterId!) : scopeCond,
     isNull(documents.deletedAt),
     folderCond,
     params.status === "processing"
@@ -124,10 +163,13 @@ export async function listDocumentsPage(userId: string, params: DocumentListPara
       ...documentListFields,
       matterId: documents.matterId,
       matterName: matters.name,
+      ownerId: documents.userId,
+      ownerName: user.name,
       versionNumber: documentVersions.versionNumber,
     })
     .from(documents)
     .leftJoin(matters, eq(matters.id, documents.matterId))
+    .leftJoin(user, eq(user.id, documents.userId))
     .leftJoin(documentVersions, eq(documentVersions.id, documents.currentVersionId))
     .$dynamic();
   const countQuery = db.select({ count: count() }).from(documents).$dynamic();
@@ -141,7 +183,23 @@ export async function listDocumentsPage(userId: string, params: DocumentListPara
     countQuery.where(where),
   ]);
 
-  return { rows, rowCount: Number(countRows[0]?.count ?? 0) };
+  // Attach "people with access": the owner plus everyone the doc is shared with.
+  const shares = await shareCountByArtifact(
+    "document",
+    rows.map((r) => r.id)
+  );
+  const withShares = rows.map(({ ownerId, ...r }) => {
+    const s = shares.get(r.id);
+    const names = [r.ownerName, ...(s?.names ?? [])].filter((n): n is string => !!n).slice(0, 3);
+    return {
+      ...r,
+      isOwner: ownerId === userId,
+      shareCount: (s?.count ?? 0) + 1,
+      sharedNames: names,
+    };
+  });
+
+  return { rows: withShares, rowCount: Number(countRows[0]?.count ?? 0) };
 }
 
 export async function getDocument(id: string) {
@@ -767,9 +825,7 @@ async function resolveDocxEdits(
 ) {
   const v = await latestVersion(doc.id);
   if (!v?.storagePath) throw new Error("Document has no stored version");
-  const wIds = edits
-    .flatMap((e) => [e.delWId, e.insWId])
-    .filter((x): x is string => !!x);
+  const wIds = edits.flatMap((e) => [e.delWId, e.insWId]).filter((x): x is string => !!x);
   const { bytes: newBytes } = await resolveTrackedChange(
     await loadDocxBytes(v.storagePath),
     wIds,
@@ -905,10 +961,7 @@ export async function resolveEdits(
     .select()
     .from(documentEdits)
     .where(
-      and(
-        eq(documentEdits.documentId, documentId),
-        inArray(documentEdits.changeId, changeIds)
-      )
+      and(eq(documentEdits.documentId, documentId), inArray(documentEdits.changeId, changeIds))
     );
   const pending = edits.filter((e) => e.status === "pending");
   if (!pending.length) throw new Error("No pending edits to resolve");
@@ -935,11 +988,13 @@ export async function resolveEdits(
         .set({ status, resolvedBy: actor.userId, resolvedAt: new Date(), lastCommitId: commitId })
         .where(inArray(documentEdits.id, editIds));
 
-      const changes: Array<{ path: string; before: unknown; after: unknown }> = pending.map((e) => ({
-        path: `edit/${e.changeId}/status`,
-        before: "pending",
-        after: status,
-      }));
+      const changes: Array<{ path: string; before: unknown; after: unknown }> = pending.map(
+        (e) => ({
+          path: `edit/${e.changeId}/status`,
+          before: "pending",
+          after: status,
+        })
+      );
 
       if (decision === "accept" && doc.markdown !== null) {
         let md = doc.markdown;

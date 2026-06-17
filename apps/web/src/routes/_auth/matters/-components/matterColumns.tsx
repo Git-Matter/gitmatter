@@ -8,6 +8,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { SharedWithCell } from "@/components/SharedWithCell";
 import { StateCue } from "@/components/StateCue";
 import { formatShortDate } from "@/lib/format/format";
 import type { MatterListItem } from "@/lib/data/api";
@@ -43,7 +44,7 @@ export function matterColumns(handlers: {
     columnHelper.accessor((m) => m.matter.name, {
       id: "name",
       header: "Name",
-      size: 260,
+      size: 140,
       cell: (c) => (
         <span className="block truncate font-medium">
           {c.getValue()}
@@ -58,35 +59,43 @@ export function matterColumns(handlers: {
     columnHelper.accessor((m) => m.client.name, {
       id: "client",
       header: "Client",
-      size: 180,
+      size: 140,
       cell: (c) => <span className="text-muted-foreground">{c.getValue()}</span>,
     }),
     columnHelper.accessor((m) => (m.role === "owner" ? "Me" : (m.ownerName ?? "—")), {
       id: "owner",
       header: "Owner",
-      size: 140,
+      size: 100,
       cell: (c) => <span className="text-muted-foreground">{c.getValue()}</span>,
     }),
     columnHelper.accessor((m) => m.memberCount, {
       id: "shared",
       header: "Shared with",
-      size: 130,
-      cell: (c) => (
-        <span className="text-muted-foreground">
-          {c.getValue() > 1 ? `${c.getValue()} people` : "Private"}
-        </span>
-      ),
+      size: 80,
+      meta: { noTruncate: true },
+      cell: (c) => {
+        const m = c.row.original;
+        return (
+          <div onClick={(e) => e.stopPropagation()}>
+            <SharedWithCell
+              count={m.memberCount}
+              names={m.ownerName ? [m.ownerName] : []}
+              onClick={() => handlers.onManagePeople(m)}
+            />
+          </div>
+        );
+      },
     }),
     columnHelper.accessor((m) => m.matter.updatedAt, {
       id: "updatedAt",
       header: "Recent activity",
-      size: 140,
+      size: 100,
       cell: (c) => <span className="text-muted-foreground">{formatShortDate(c.getValue())}</span>,
     }),
     columnHelper.accessor((m) => m.matter.createdAt, {
       id: "createdAt",
       header: "Created",
-      size: 140,
+      size: 100,
       cell: (c) => <span className="text-muted-foreground">{formatShortDate(c.getValue())}</span>,
     }),
     columnHelper.display({
@@ -94,6 +103,7 @@ export function matterColumns(handlers: {
       header: "",
       size: 64,
       enableResizing: false,
+      meta: { noTruncate: true },
       cell: (c) => {
         const m = c.row.original;
         const isOwner = m.role === "owner";
@@ -105,7 +115,7 @@ export function matterColumns(handlers: {
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="size-7 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 aria-expanded:opacity-100"
+                    className="size-7 text-muted-foreground"
                     title="Actions"
                     aria-label="Row actions"
                   />

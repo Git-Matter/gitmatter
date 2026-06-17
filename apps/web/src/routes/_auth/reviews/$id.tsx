@@ -3,7 +3,20 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type ColumnDef, getCoreRowModel, useReactTable } from "@tanstack/react-table";
 import { toast } from "sonner";
+import {
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  History as HistoryIcon,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ActorBadge } from "@/components/ActorBadge";
@@ -19,7 +32,6 @@ import {
   type ReviewStreamCell,
 } from "@/lib/data/api";
 import { queryKeys } from "@/lib/data/queries";
-import { useColumnSizing } from "@/lib/hooks/table/useColumnSizing";
 import { useSelectedModel } from "@/lib/hooks/state/useSelectedModel";
 
 export const Route = createFileRoute("/_auth/reviews/$id")({ component: ReviewView });
@@ -32,6 +44,9 @@ const FLAG_COLOR: Record<string, string> = {
 };
 
 function ReviewView() {
+  // See Matters: React Compiler can't track the stable TanStack table's in-place
+  // data changes, so it skips the re-render that fills the table. Opt out.
+  "use no memo";
   const { id } = Route.useParams();
   const qc = useQueryClient();
   const reviewKey = ["review", id];
@@ -49,6 +64,18 @@ function ReviewView() {
   const runAllAbort = useRef<AbortController | null>(null);
   useEffect(() => () => runAllAbort.current?.abort(), []);
   const [model, setModel] = useSelectedModel();
+  const [historyCollapsed, setHistoryCollapsed] = useState(false);
+  useEffect(() => {
+    const saved = localStorage.getItem("reviewHistoryCollapsed");
+    if (saved !== null) setHistoryCollapsed(saved === "true");
+  }, []);
+  function toggleHistory() {
+    setHistoryCollapsed((v) => {
+      const next = !v;
+      localStorage.setItem("reviewHistoryCollapsed", String(next));
+      return next;
+    });
+  }
 
   const runMutation = useMutation({
     mutationFn: (v: { documentId: string; columnIndex: number }) =>
@@ -171,17 +198,11 @@ function ReviewView() {
     return cols;
   }, [review]);
 
-  const { columnSizing, onColumnSizingChange } = useColumnSizing("reviews");
-
   const table = useReactTable({
     data: tableData,
     columns,
     getRowId: (row) => row.docId,
-    state: { columnSizing },
-    onColumnSizingChange,
     enableSorting: false,
-    enableColumnResizing: true,
-    columnResizeMode: "onChange",
     getCoreRowModel: getCoreRowModel(),
     meta: { run, running, cellOf } satisfies ReviewMeta,
   });
@@ -198,7 +219,11 @@ function ReviewView() {
     );
 
   return (
-    <div className="grid min-h-0 flex-1 gap-6 overflow-y-auto pt-6 lg:grid-cols-[1fr_280px]">
+    <div
+      className={`grid min-h-0 flex-1 gap-6 overflow-y-auto pt-6 ${
+        historyCollapsed ? "lg:grid-cols-[1fr_auto]" : "lg:grid-cols-[1fr_280px]"
+      }`}
+    >
       <div className="min-w-0">
         <div className="mb-3">
           <PageHeader
@@ -207,18 +232,27 @@ function ReviewView() {
             action={
               <div className="flex items-center gap-2">
                 <ModelPicker value={model} onChange={setModel} />
-                <a href={api.reviewExportUrl(id, "csv")}>
-                  <Button size="sm" variant="outline">
-                    CSV
-                  </Button>
-                </a>
-                <a href={api.reviewExportUrl(id, "xlsx")}>
-                  <Button size="sm" variant="outline">
-                    XLSX
-                  </Button>
-                </a>
+                <DropdownMenu>
+                  <DropdownMenuTrigger
+                    render={
+                      <Button size="sm" variant="outline">
+                        <Download className="size-3.5" />
+                        Export
+                        <ChevronDown className="size-3.5 opacity-60" />
+                      </Button>
+                    }
+                  />
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem render={<a href={api.reviewExportUrl(id, "csv")} />}>
+                      CSV
+                    </DropdownMenuItem>
+                    <DropdownMenuItem render={<a href={api.reviewExportUrl(id, "xlsx")} />}>
+                      XLSX
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
                 <Button size="sm" onClick={runAll} disabled={runningAll}>
-                  {runningAll ? "Running…" : "Run all cells"}
+                  {runningAll ? "Running…" : "Run"}
                 </Button>
               </div>
             }
@@ -234,10 +268,26 @@ function ReviewView() {
         />
       </div>
 
-      <aside>
-        <h2 className="mb-2 text-sm font-semibold">History</h2>
-        <CommitHistory commits={history} />
-      </aside>
+      {historyCollapsed ? (
+        <aside className="hidden lg:flex lg:flex-col lg:items-center lg:gap-2 lg:border-l lg:border-border lg:pl-2">
+          <Button variant="ghost" size="icon-sm" tooltip="Show history" onClick={toggleHistory}>
+            <ChevronLeft className="size-3.5" />
+          </Button>
+          <HistoryIcon className="size-3.5 text-muted-foreground" />
+        </aside>
+      ) : (
+        <aside className="lg:border-l lg:border-border lg:pl-6">
+          <div className="mb-3 flex items-center justify-between border-b border-border pb-2">
+            <h2 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+              History
+            </h2>
+            <Button variant="ghost" size="icon-sm" tooltip="Hide history" onClick={toggleHistory}>
+              <ChevronRight className="size-3.5" />
+            </Button>
+          </div>
+          <CommitHistory commits={history} />
+        </aside>
+      )}
     </div>
   );
 }

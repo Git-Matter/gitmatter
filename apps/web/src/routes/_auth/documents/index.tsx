@@ -9,7 +9,9 @@ import { DataTable } from "@/components/DataTable";
 import { PageHeader } from "@/components/PageHeader";
 import { TablePager } from "@/components/TablePager";
 import { TableSearch } from "@/components/TableSearch";
+import { ToolbarTabs } from "@/components/ToolbarTabs";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { SharePeopleDialog, documentShareSource } from "@/components/SharePeopleDialog";
 import { api, type Doc } from "@/lib/data/api";
 import { queryKeys } from "@/lib/data/queries";
 import { useDataTable } from "@/lib/hooks/table/useDataTable";
@@ -29,11 +31,15 @@ export const Route = createFileRoute("/_auth/documents/")({
 });
 
 function Documents() {
+  // See Matters: React Compiler can't track the stable TanStack table's in-place
+  // data changes, so it skips the re-render that fills the table. Opt out.
+  "use no memo";
   const qc = useQueryClient();
   const matterId = useWorkingMatterId();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const { view = "all" } = Route.useSearch();
   const [query, setQuery] = useState("");
+  const [scope, setScope] = useState<"all" | "mine" | "shared">("all");
   const [sorting, setSorting] = useState<SortingState>([{ id: "createdAt", desc: true }]);
   const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize: 50 });
   const [rowSelection, setRowSelection] = useState({});
@@ -42,8 +48,8 @@ function Documents() {
     sorting,
     pagination,
     setPagination,
-    extraDeps: [view],
-    extraParams: { status: view },
+    extraDeps: [view, scope],
+    extraParams: { status: view, scope },
   });
 
   const { data, isPending } = useQuery({
@@ -66,6 +72,7 @@ function Documents() {
   }, [qc]);
 
   const [confirmDelete, setConfirmDelete] = useState<Doc | null>(null);
+  const [shareFor, setShareFor] = useState<Doc | null>(null);
   const retryMutation = useMutation({
     mutationFn: (id: string) => api.retryDocument(id),
     onSuccess: () => invalidateDocs(),
@@ -93,6 +100,7 @@ function Documents() {
         onRetry: (id) => retryMutation.mutate(id),
         onDownload: (id) => window.open(api.documentDownloadUrl(id), "_blank"),
         onDelete: (doc) => setConfirmDelete(doc),
+        onManagePeople: (doc) => setShareFor(doc),
       }),
     [retryMutation]
   );
@@ -100,7 +108,6 @@ function Documents() {
   const { table } = useDataTable({
     columns,
     data: docs,
-    sizingKey: "documents",
     getRowId: (row) => row.id,
     rowCount,
     sorting,
@@ -110,7 +117,8 @@ function Documents() {
     rowSelection,
     onRowSelectionChange: setRowSelection,
   });
-  const showTable = docs.length > 0 || rowCount > 0 || query.trim().length > 0 || view !== "all";
+  const showTable =
+    docs.length > 0 || rowCount > 0 || query.trim().length > 0 || view !== "all" || scope !== "all";
 
   return (
     <div
@@ -155,9 +163,18 @@ function Documents() {
       />
 
       {showTable && (
-        <div className="flex h-10 items-center justify-end border-b border-border">
-          <TableSearch value={query} onChange={setQuery} placeholder="Search documents…" />
-        </div>
+        <ToolbarTabs
+          tabs={[
+            { id: "all" as const, label: "All" },
+            { id: "mine" as const, label: "Mine" },
+            { id: "shared" as const, label: "Shared with me" },
+          ]}
+          active={scope}
+          onChange={setScope}
+          actions={
+            <TableSearch value={query} onChange={setQuery} placeholder="Search documents…" />
+          }
+        />
       )}
 
       {showTable && (
@@ -187,6 +204,14 @@ function Documents() {
         )
       )}
       <DocumentDrawer docId={selectedId} onClose={() => setSelectedId(null)} />
+
+      {shareFor && (
+        <SharePeopleDialog
+          source={documentShareSource(shareFor.id, shareFor.title, shareFor.isOwner)}
+          open
+          onOpenChange={(open) => !open && setShareFor(null)}
+        />
+      )}
 
       <ConfirmDialog
         open={!!confirmDelete}

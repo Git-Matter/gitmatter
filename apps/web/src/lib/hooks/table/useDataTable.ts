@@ -10,11 +10,9 @@ import {
   type RowSelectionState,
   type SortingState,
 } from "@tanstack/react-table";
-import { useColumnSizing } from "./useColumnSizing";
-
 // The single source of truth for how every list table is wired. Bakes in row
-// selection, column-resize persistence, and the page-size/row-model defaults so
-// routes stop hand-rolling (and drifting) their own useReactTable config.
+// selection and the page-size/row-model defaults so routes stop hand-rolling
+// (and drifting) their own useReactTable config.
 //
 // "server" mode (the default, used by all current lists): manual pagination /
 // sorting / filtering — the route owns `sorting` + `pagination` because its
@@ -24,7 +22,6 @@ import { useColumnSizing } from "./useColumnSizing";
 type UseDataTableOptions<T> = {
   columns: ColumnDef<T, any>[];
   data: T[];
-  sizingKey: string;
   getRowId: (row: T) => string;
   mode?: "server" | "client";
   enableSorting?: boolean;
@@ -47,8 +44,6 @@ export function useDataTable<T>(opts: UseDataTableOptions<T>) {
   const enableSorting = opts.enableSorting ?? true;
   const paginated = server ? true : (opts.paginated ?? true);
 
-  const { columnSizing, onColumnSizingChange } = useColumnSizing(opts.sizingKey);
-
   // Uncontrolled fallbacks for client-mode tables. Always declared (hooks can't
   // be conditional); ignored when the caller passes controlled state.
   const [innerSorting, setInnerSorting] = useState<SortingState>(opts.defaultSorting ?? []);
@@ -67,15 +62,12 @@ export function useDataTable<T>(opts: UseDataTableOptions<T>) {
     columns: opts.columns,
     getRowId: opts.getRowId,
     rowCount: server ? opts.rowCount : undefined,
-    state: { sorting, pagination, rowSelection, columnSizing },
+    state: { sorting, pagination, rowSelection },
     onSortingChange: opts.onSortingChange ?? setInnerSorting,
     onPaginationChange: opts.onPaginationChange ?? setInnerPagination,
     onRowSelectionChange: opts.onRowSelectionChange ?? setInnerSelection,
-    onColumnSizingChange,
     enableRowSelection: true,
     enableSorting,
-    enableColumnResizing: true,
-    columnResizeMode: "onChange",
     manualFiltering: server,
     manualPagination: server,
     manualSorting: server,

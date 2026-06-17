@@ -3,9 +3,12 @@ import { streamSSE } from "hono/streaming";
 import { zValidator } from "@hono/zod-validator";
 import {
   activeStoragePath,
+  addArtifactShareByEmail,
   addDocumentVersion,
   canAccessArtifact,
   createDocument,
+  listArtifactShares,
+  removeArtifactShare,
   deleteDocument,
   deleteDocumentVersion,
   docEvents,
@@ -55,6 +58,8 @@ const MAX_UPLOAD_BYTES = 25 * 1024 * 1024; // 25 MB
 
 const documentStatuses = ["pending", "processing", "ready", "failed"] as const;
 const documentSorts = ["title", "fileType", "status", "createdAt"] as const;
+const shareScopes = ["all", "mine", "shared"] as const;
+const shareRoles = ["viewer", "editor", "owner"] as const;
 
 // List documents. With `?matterId=` (and optional `?folderId=`) returns that
 // matter's documents (access-checked); otherwise the caller's own documents.
@@ -62,7 +67,7 @@ documentsRoute.get("/api/documents", async (c) => {
   const matterId = c.req.query("matterId");
   const paged = parsePageQuery(c, {
     sorts: documentSorts,
-    filters: { status: documentStatuses },
+    filters: { status: documentStatuses, scope: shareScopes },
   });
   if (matterId) {
     if (!(await hasMatterAccess(c.get("user").id, matterId)))
@@ -384,8 +389,42 @@ documentsRoute.get("/api/documents/:id/history", async (c) => {
 documentsRoute.delete("/api/documents/:id", async (c) => {
   const id = c.req.param("id");
   const user = c.get("user");
-  if (!(await canAccessArtifact(user.id, "document", id, "editor")))
+  if (!(await canAccessArtifact(user.id, "document", id, "owner")))
     return c.json({ error: "Not found" }, 404);
   await deleteDocument({ type: "user", userId: user.id }, id);
+  return c.body(null, 204);
+});
+
+// ---- Sharing (people with access). Owner-only manage; viewer can list. ----
+
+documentsRoute.get("/api/documents/:id/shares", async (c) => {
+  const id = c.req.param("id");
+  if (!(await canAccessArtifact(c.get("user").id, "document", id)))
+    return c.json({ error: "Not found" }, 404);
+  return c.json(await listArtifactShares("document", id));
+});
+
+documentsRoute.post("/api/documents/:id/shares/by-email", async (c) => {
+  const id = c.req.param("id");
+  if (!(await canAccessArtifact(c.get("user").id, "document", id, "owner")))
+    return c.json({ error: "Not found" }, 404);
+  const body = (await c.req.json().catch(() => ({}))) as { email?: string; role?: string };
+  if (!body.email?.trim()) return c.json({ error: "email required" }, 400);
+  const role = shareRoles.includes(body.role as (typeof shareRoles)[number])
+    ? (body.role as (typeof shareRoles)[number])
+    : "editor";
+  try {
+    const userId = await addArtifactShareByEmail("document", id, body.email.trim(), role);
+    return c.json({ userId }, 201);
+  } catch (e) {
+    return c.json({ error: e instanceof Error ? e.message : "failed" }, 400);
+  }
+});
+
+documentsRoute.delete("/api/documents/:id/shares/:userId", async (c) => {
+  const id = c.req.param("id");
+  if (!(await canAccessArtifact(c.get("user").id, "document", id, "owner")))
+    return c.json({ error: "Not found" }, 404);
+  await removeArtifactShare("document", id, c.req.param("userId"));
   return c.body(null, 204);
 });

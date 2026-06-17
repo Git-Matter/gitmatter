@@ -34,6 +34,10 @@ export const Route = createFileRoute("/_auth/matters/")({
 type Scope = "all" | "mine" | "shared";
 
 function Matters() {
+  // React Compiler memoizes <DataTable table={table} />; the TanStack table is a
+  // stable reference whose rows mutate in place, so the compiler can't see data
+  // changes and skips the re-render that fills the table. Opt this component out.
+  "use no memo";
   const navigate = useNavigate();
   const qc = useQueryClient();
   const { refresh, setCurrent } = useMatters();
@@ -96,7 +100,6 @@ function Matters() {
   const { table } = useDataTable({
     columns,
     data: shown,
-    sizingKey: "matters",
     getRowId: (m) => m.matter.id,
     rowCount,
     sorting,

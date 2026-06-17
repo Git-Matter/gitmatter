@@ -1,5 +1,5 @@
 import { createFileRoute, useRouter } from "@tanstack/react-router";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { createColumnHelper, type PaginationState, type SortingState } from "@tanstack/react-table";
 import { Plus } from "lucide-react";
@@ -10,8 +10,11 @@ import { PageHeader } from "@/components/PageHeader";
 import { PageShell } from "@/components/PageShell";
 import { TablePager } from "@/components/TablePager";
 import { TableSearch } from "@/components/TableSearch";
+import { ToolbarTabs } from "@/components/ToolbarTabs";
 import { CreateReviewDialog } from "./-components/CreateReviewDialog";
-import { api } from "@/lib/data/api";
+import { SharedWithCell } from "@/components/SharedWithCell";
+import { SharePeopleDialog, reviewShareSource } from "@/components/SharePeopleDialog";
+import { api, type ReviewListItem } from "@/lib/data/api";
 import { queryKeys } from "@/lib/data/queries";
 import { useDataTable } from "@/lib/hooks/table/useDataTable";
 import { formatShortDate } from "@/lib/format/format";
@@ -19,57 +22,87 @@ import { useTablePageParams } from "@/lib/hooks/table/useTablePageParams";
 
 export const Route = createFileRoute("/_auth/reviews/")({ component: Reviews });
 
-type ReviewRow = { id: string; title: string; documentIds: string[]; createdAt: string };
+const columnHelper = createColumnHelper<ReviewListItem>();
 
-const columnHelper = createColumnHelper<ReviewRow>();
-const columns = [
-  columnHelper.display({
-    id: "select",
-    size: 44,
-    enableResizing: false,
-    header: ({ table }) => (
-      <Checkbox
-        checked={table.getIsAllRowsSelected()}
-        onChange={table.getToggleAllRowsSelectedHandler()}
-        aria-label="Select all"
-      />
-    ),
-    cell: ({ row }) => (
-      <Checkbox
-        checked={row.getIsSelected()}
-        onChange={row.getToggleSelectedHandler()}
-        onClick={(e) => e.stopPropagation()}
-        aria-label="Select row"
-      />
-    ),
-  }),
-  columnHelper.accessor("title", {
-    header: "Name",
-    size: 360,
-    cell: (c) => <span className="block truncate font-medium">{c.getValue()}</span>,
-  }),
-  columnHelper.accessor((r) => r.documentIds.length, {
-    id: "documents",
-    header: "Documents",
-    size: 120,
-    enableSorting: false,
-    cell: (c) => <span className="text-muted-foreground">{c.getValue()}</span>,
-  }),
-  columnHelper.accessor("createdAt", {
-    header: "Created",
-    size: 140,
-    cell: (c) => <span className="text-muted-foreground">{formatShortDate(c.getValue())}</span>,
-  }),
-];
+function reviewColumns(onManagePeople: (r: ReviewListItem) => void) {
+  return [
+    columnHelper.display({
+      id: "select",
+      size: 44,
+      enableResizing: false,
+      header: ({ table }) => (
+        <Checkbox
+          checked={table.getIsAllRowsSelected()}
+          onChange={table.getToggleAllRowsSelectedHandler()}
+          aria-label="Select all"
+        />
+      ),
+      cell: ({ row }) => (
+        <Checkbox
+          checked={row.getIsSelected()}
+          onChange={row.getToggleSelectedHandler()}
+          onClick={(e) => e.stopPropagation()}
+          aria-label="Select row"
+        />
+      ),
+    }),
+    columnHelper.accessor("title", {
+      header: "Name",
+      size: 360,
+      cell: (c) => <span className="block truncate font-medium">{c.getValue()}</span>,
+    }),
+    columnHelper.accessor((r) => r.documentIds.length, {
+      id: "documents",
+      header: "Documents",
+      size: 120,
+      enableSorting: false,
+      cell: (c) => <span className="text-muted-foreground">{c.getValue()}</span>,
+    }),
+    columnHelper.accessor("createdAt", {
+      header: "Created",
+      size: 140,
+      cell: (c) => <span className="text-muted-foreground">{formatShortDate(c.getValue())}</span>,
+    }),
+    columnHelper.display({
+      id: "shared",
+      header: "Shared with",
+      size: 130,
+      cell: (c) => {
+        const r = c.row.original;
+        return (
+          <div onClick={(e) => e.stopPropagation()}>
+            <SharedWithCell
+              count={r.shareCount}
+              names={r.sharedNames}
+              onClick={() => onManagePeople(r)}
+            />
+          </div>
+        );
+      },
+    }),
+  ];
+}
 
 function Reviews() {
+  // See Matters: React Compiler can't track the stable TanStack table's in-place
+  // data changes, so it skips the re-render that fills the table. Opt out.
+  "use no memo";
   const router = useRouter();
   const [creating, setCreating] = useState(false);
   const [query, setQuery] = useState("");
   const [sorting, setSorting] = useState<SortingState>([{ id: "createdAt", desc: true }]);
   const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize: 50 });
   const [rowSelection, setRowSelection] = useState({});
-  const pageParams = useTablePageParams({ query, sorting, pagination, setPagination });
+  const [shareFor, setShareFor] = useState<ReviewListItem | null>(null);
+  const [scope, setScope] = useState<"all" | "mine" | "shared">("all");
+  const pageParams = useTablePageParams({
+    query,
+    sorting,
+    pagination,
+    setPagination,
+    extraDeps: [scope],
+    extraParams: { scope },
+  });
 
   const { data } = useQuery({
     queryKey: queryKeys.reviewsPage(pageParams),
@@ -78,11 +111,11 @@ function Reviews() {
   });
   const reviews = data?.rows ?? [];
   const rowCount = data?.rowCount ?? 0;
+  const columns = useMemo(() => reviewColumns(setShareFor), []);
 
   const { table } = useDataTable({
     columns,
     data: reviews,
-    sizingKey: "reviews",
     getRowId: (row) => row.id,
     rowCount,
     sorting,
@@ -120,9 +153,16 @@ function Reviews() {
         onCreated={(id) => router.navigate({ to: "/reviews/$id", params: { id } })}
       />
 
-      <div className="flex h-10 shrink-0 items-center justify-end border-b border-border">
-        <TableSearch value={query} onChange={setQuery} placeholder="Search reviews…" />
-      </div>
+      <ToolbarTabs
+        tabs={[
+          { id: "all" as const, label: "All" },
+          { id: "mine" as const, label: "Mine" },
+          { id: "shared" as const, label: "Shared with me" },
+        ]}
+        active={scope}
+        onChange={setScope}
+        actions={<TableSearch value={query} onChange={setQuery} placeholder="Search reviews…" />}
+      />
 
       <DataTable
         table={table}
@@ -130,6 +170,14 @@ function Reviews() {
         onRowClick={(r) => router.navigate({ to: "/reviews/$id", params: { id: r.id } })}
       />
       <TablePager table={table} />
+
+      {shareFor && (
+        <SharePeopleDialog
+          source={reviewShareSource(shareFor.id, shareFor.title, shareFor.isOwner)}
+          open
+          onOpenChange={(open) => !open && setShareFor(null)}
+        />
+      )}
     </PageShell>
   );
 }

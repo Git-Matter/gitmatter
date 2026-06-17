@@ -120,7 +120,28 @@ export type MatterMember = {
   email: string;
 };
 
+// A person with access to a shareable artifact (document/review). Same shape as
+// MatterMember, but the intrinsic owner row carries a null addedAt.
+export type SharePerson = {
+  userId: string;
+  role: MatterRole;
+  addedAt: string | null;
+  name: string;
+  email: string;
+};
+
+// What gets shared, mapped to its route base by the api wrappers.
+export type ArtifactShareScope = "document" | "review";
+
 export type FirmUser = { id: string; name: string; email: string };
+
+// A member of the caller's organization (for settings + the share picker).
+export type TenantMember = {
+  id: string;
+  name: string;
+  email: string;
+  role: "admin" | "member" | null;
+};
 
 // A context item the user attaches to a chat message. The backend prepends a
 // reference line so the model reads it via the tool catalog (fetch/get_review/…).
@@ -154,7 +175,23 @@ export type Doc = {
   createdAt: string;
   matterId: string | null;
   matterName: string | null;
+  ownerName: string | null;
   versionNumber: number | null;
+  // Whether the caller owns it (can manage sharing). People with access (owner +
+  // shares) for the avatar stack.
+  isOwner: boolean;
+  shareCount: number;
+  sharedNames: string[];
+};
+
+export type ReviewListItem = {
+  id: string;
+  title: string;
+  documentIds: string[];
+  createdAt: string;
+  isOwner: boolean;
+  shareCount: number;
+  sharedNames: string[];
 };
 
 export type PageResult<T> = {
@@ -169,6 +206,8 @@ export type ListPageParams = {
   pageSize: number;
   sort?: string;
   dir?: "asc" | "desc";
+  // Visibility scope for shareable lists: all | mine | shared.
+  scope?: string;
 };
 
 // A bulk client selection: explicit ids, or "all matching the current filter".
@@ -241,6 +280,11 @@ function listQuery(params: ListPageParams & Record<string, unknown>): string {
     if (typeof value === "string" && value.trim() && value !== "all") search.set(key, value.trim());
   }
   return search.toString();
+}
+
+// Route base for a shareable artifact scope.
+function shareBase(scope: ArtifactShareScope): string {
+  return scope === "document" ? "/api/documents" : "/api/tabular/reviews";
 }
 
 // statusText is empty over HTTP/2, so always fall back to the status code.
@@ -345,6 +389,25 @@ export const api = {
   getMatterPeople: (id: string) => req<MatterMember[]>(`/api/matters/${id}/people`),
   searchUsers: (q: string) => req<FirmUser[]>(`/api/users/search?q=${encodeURIComponent(q)}`),
 
+  // Per-artifact sharing (documents, reviews). Keyed by scope -> route base.
+  listArtifactShares: (scope: ArtifactShareScope, id: string) =>
+    req<SharePerson[]>(`${shareBase(scope)}/${id}/shares`),
+  addArtifactShareByEmail: (
+    scope: ArtifactShareScope,
+    id: string,
+    email: string,
+    role: MatterRole = "editor"
+  ) =>
+    req<{ userId: string }>(`${shareBase(scope)}/${id}/shares/by-email`, {
+      method: "POST",
+      body: JSON.stringify({ email, role }),
+    }),
+  removeArtifactShare: (scope: ArtifactShareScope, id: string, userId: string) =>
+    req<null>(`${shareBase(scope)}/${id}/shares/${userId}`, { method: "DELETE" }),
+
+  // Everyone in the caller's organization (settings members + share picker).
+  listTenantMembers: () => req<TenantMember[]>("/api/tenant/members"),
+
   // Document folders (per matter)
   listFolders: (matterId: string) => req<Folder[]>(`/api/matters/${matterId}/folders`),
   createFolder: (matterId: string, name: string, parentFolderId?: string | null) =>
@@ -413,9 +476,7 @@ export const api = {
       "/api/tabular/reviews"
     ),
   listReviewsPage: (params: ListPageParams) =>
-    req<PageResult<{ id: string; title: string; documentIds: string[]; createdAt: string }>>(
-      `/api/tabular/reviews?${listQuery(params)}`
-    ),
+    req<PageResult<ReviewListItem>>(`/api/tabular/reviews?${listQuery(params)}`),
   createReview: (d: {
     title: string;
     columnsConfig: Column[];

@@ -5,11 +5,18 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { api } from "@/lib/data/api";
+import { useSession } from "@/lib/auth/auth-client";
 
 export function OrganizationCard() {
   const qc = useQueryClient();
+  const { data: session } = useSession();
   const { data: tenant } = useQuery({ queryKey: ["tenant"], queryFn: () => api.getTenant() });
+  const { data: members = [] } = useQuery({
+    queryKey: ["tenant-members"],
+    queryFn: () => api.listTenantMembers(),
+  });
   const { data: invites = [], isError } = useQuery({
     queryKey: ["invites"],
     queryFn: () => api.listInvites(),
@@ -48,6 +55,36 @@ export function OrganizationCard() {
           {tenant ? tenant.name : "Your organization"}. Matters, reviews, and workflows can only be
           shared with people in this organization.
         </p>
+
+        <div className="flex flex-col gap-2">
+          <Label>Members{members.length > 0 ? ` (${members.length})` : ""}</Label>
+          <ul className="flex flex-col divide-y divide-border">
+            {members.map((m) => (
+              <li key={m.id} className="flex items-center justify-between py-2.5">
+                <div className="flex min-w-0 items-center gap-3">
+                  <Avatar size="sm">
+                    <AvatarFallback>{(m.name || m.email).slice(0, 1).toUpperCase()}</AvatarFallback>
+                  </Avatar>
+                  <div className="flex min-w-0 flex-col">
+                    <span className="truncate text-sm">
+                      {m.name || m.email}
+                      {m.id === session?.user.id && (
+                        <span className="text-muted-foreground"> (You)</span>
+                      )}
+                    </span>
+                    <span className="truncate text-xs text-muted-foreground">{m.email}</span>
+                  </div>
+                </div>
+                {m.role && (
+                  <span className="text-xs text-muted-foreground capitalize">{m.role}</span>
+                )}
+              </li>
+            ))}
+            {!members.length && (
+              <li className="py-2 text-sm text-muted-foreground">No members yet.</li>
+            )}
+          </ul>
+        </div>
 
         {isAdmin ? (
           <>

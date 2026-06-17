@@ -67,6 +67,7 @@ export function workflowColumns(handlers: {
       id: "source",
       header: "Source",
       size: 140,
+      meta: { noTruncate: true },
       cell: (c) => {
         const w = c.row.original;
         if (w.isSystem) {
@@ -98,6 +99,7 @@ export function workflowColumns(handlers: {
       header: "",
       size: 64,
       enableResizing: false,
+      meta: { noTruncate: true },
       cell: (c) => {
         const w = c.row.original;
         return (

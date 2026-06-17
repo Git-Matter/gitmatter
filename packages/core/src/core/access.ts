@@ -3,6 +3,7 @@ import { db } from "@workspace/db/client";
 import {
   type ArtifactType,
   type MatterRole,
+  artifactShares,
   documents,
   matterMembers,
   matters,
@@ -37,23 +38,56 @@ const MATTER_TABLE = {
   document: documents,
 } as const;
 
-/** True if the user is a member of the matter with at least `min` role. */
-export async function hasMatterAccess(
-  userId: string,
-  matterId: string,
-  min: MatterRole = "viewer"
-): Promise<boolean> {
-  // Join the matter so we can assert same-tenant as defense-in-depth against
-  // cross-tenant id injection (membership normally implies same tenant).
+/**
+ * The caller's role on a matter, or null if not a member. Asserts same-tenant as
+ * defense-in-depth against cross-tenant id injection (membership normally implies
+ * same tenant).
+ */
+async function matterRole(userId: string, matterId: string): Promise<MatterRole | null> {
   const [row] = await db
     .select({ role: matterMembers.role, matterTenant: matters.tenantId, userTenant: user.tenantId })
     .from(matterMembers)
     .innerJoin(matters, eq(matterMembers.matterId, matters.id))
     .innerJoin(user, eq(matterMembers.userId, user.id))
     .where(and(eq(matterMembers.matterId, matterId), eq(matterMembers.userId, userId)));
-  if (!row) return false;
-  if (row.matterTenant !== row.userTenant) return false;
-  return ROLE_RANK[row.role] >= ROLE_RANK[min];
+  if (!row) return null;
+  if (row.matterTenant !== row.userTenant) return null;
+  return row.role;
+}
+
+/** The caller's direct share role on an artifact, or null. Tenant-checked. */
+async function artifactShareRole(
+  userId: string,
+  artifactType: ArtifactType,
+  artifactId: string,
+  artifactTenant: string
+): Promise<MatterRole | null> {
+  const [row] = await db
+    .select({ role: artifactShares.role, userTenant: user.tenantId })
+    .from(artifactShares)
+    .innerJoin(user, eq(artifactShares.userId, user.id))
+    .where(
+      and(
+        eq(artifactShares.artifactType, artifactType),
+        eq(artifactShares.artifactId, artifactId),
+        eq(artifactShares.userId, userId)
+      )
+    );
+  if (!row) return null;
+  // Defense-in-depth: shares are tenant-bound at write time, re-check on read.
+  if (row.userTenant !== artifactTenant) return null;
+  return row.role;
+}
+
+/** True if the user is a member of the matter with at least `min` role. */
+export async function hasMatterAccess(
+  userId: string,
+  matterId: string,
+  min: MatterRole = "viewer"
+): Promise<boolean> {
+  const role = await matterRole(userId, matterId);
+  if (!role) return false;
+  return ROLE_RANK[role] >= ROLE_RANK[min];
 }
 
 /**
@@ -77,10 +111,25 @@ export async function canAccessArtifact(
   const table = MATTER_TABLE[artifactType];
   if (!table) throw new Error(`canAccessArtifact: unsupported artifact type "${artifactType}"`);
   const [row] = await db
-    .select({ matterId: table.matterId, ownerId: table.userId })
+    .select({ matterId: table.matterId, ownerId: table.userId, tenantId: table.tenantId })
     .from(table)
     .where(eq(table.id, artifactId));
   if (!row) return false;
-  if (!row.matterId) return row.ownerId === userId;
-  return hasMatterAccess(userId, row.matterId, min);
+
+  // The intrinsic owner always has full access (covers the not-yet-backfilled
+  // null-matterId case too).
+  if (row.ownerId === userId) return true;
+
+  // Effective role = the higher of matter membership and a direct artifact share.
+  let best = -1;
+  if (row.matterId) {
+    const mRole = await matterRole(userId, row.matterId);
+    if (mRole) best = Math.max(best, ROLE_RANK[mRole]);
+  }
+  if (row.tenantId) {
+    const sRole = await artifactShareRole(userId, artifactType, artifactId, row.tenantId);
+    if (sRole) best = Math.max(best, ROLE_RANK[sRole]);
+  }
+  if (best < 0) return false;
+  return best >= ROLE_RANK[min];
 }

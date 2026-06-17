@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, asc, count, desc, eq, ilike, inArray } from "drizzle-orm";
+import { and, asc, count, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
 import { db } from "@workspace/db/client";
 import {
   type CellCitation,
@@ -7,11 +7,14 @@ import {
   type TabularColumn,
   commits,
   documents,
+  matterMembers,
   matters,
   tabularCells,
   tabularReviews,
+  user,
 } from "@workspace/db/schema";
 import { type Actor, recordCommit } from "../core/commit.js";
+import { shareCountByArtifact, sharedArtifactIds } from "../platform/shares.js";
 import { completeText, DEFAULT_MODEL, providerForModel, resolveLlmKey } from "./provider.js";
 import { buildCellPrompt, buildRowPrompt, normalizeCell } from "./prompts/tabular.js";
 
@@ -627,20 +630,37 @@ export async function listReviews(userId: string) {
 
 export type ReviewListSort = "title" | "createdAt";
 
+export type ReviewListScope = "all" | "mine" | "shared";
+
 export type ReviewListParams = {
   q?: string;
   page: number;
   pageSize: number;
   sort?: ReviewListSort;
   dir?: "asc" | "desc";
+  // mine = owned, shared = shared with me, all = owned + shared + matter-inherited.
+  scope?: ReviewListScope;
 };
 
 export async function listReviewsPage(userId: string, params: ReviewListParams) {
   const q = params.q?.trim();
-  const where = and(
-    eq(tabularReviews.userId, userId),
-    q ? ilike(tabularReviews.title, `%${q}%`) : undefined
-  );
+  const scope: ReviewListScope = params.scope ?? "all";
+  const owned = eq(tabularReviews.userId, userId);
+  const sharedIds = await sharedArtifactIds("tabular_review", userId);
+  const sharedCond = sharedIds.length ? inArray(tabularReviews.id, sharedIds) : sql`false`;
+  let scopeCond;
+  if (scope === "mine") {
+    scopeCond = owned;
+  } else if (scope === "shared") {
+    scopeCond = sharedCond;
+  } else {
+    const myMatters = db
+      .select({ matterId: matterMembers.matterId })
+      .from(matterMembers)
+      .where(eq(matterMembers.userId, userId));
+    scopeCond = or(owned, sharedCond, inArray(tabularReviews.matterId, myMatters));
+  }
+  const where = and(scopeCond, q ? ilike(tabularReviews.title, `%${q}%`) : undefined);
   const sortCols = {
     title: tabularReviews.title,
     createdAt: tabularReviews.createdAt,
@@ -660,7 +680,30 @@ export async function listReviewsPage(userId: string, params: ReviewListParams) 
     db.select({ count: count() }).from(tabularReviews).where(where),
   ]);
 
-  return { rows, rowCount: Number(countRows[0]?.count ?? 0) };
+  // Attach "people with access": owner + everyone the review is shared with.
+  const ownerIds = [...new Set(rows.map((r) => r.userId).filter((x): x is string => !!x))];
+  const ownerRows = ownerIds.length
+    ? await db.select({ id: user.id, name: user.name }).from(user).where(inArray(user.id, ownerIds))
+    : [];
+  const ownerName = new Map(ownerRows.map((o) => [o.id, o.name]));
+  const shares = await shareCountByArtifact(
+    "tabular_review",
+    rows.map((r) => r.id)
+  );
+  const withShares = rows.map((r) => {
+    const s = shares.get(r.id);
+    const names = [ownerName.get(r.userId ?? ""), ...(s?.names ?? [])].filter(
+      (n): n is string => !!n
+    );
+    return {
+      ...r,
+      isOwner: r.userId === userId,
+      shareCount: (s?.count ?? 0) + 1,
+      sharedNames: names.slice(0, 3),
+    };
+  });
+
+  return { rows: withShares, rowCount: Number(countRows[0]?.count ?? 0) };
 }
 
 /** Full review with cells and per-cell blame (commit that last set each cell). */

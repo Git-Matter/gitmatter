@@ -30,6 +30,9 @@ export const Route = createFileRoute("/_auth/clients/")({
 });
 
 function Clients() {
+  // See Matters: React Compiler can't track the stable TanStack table's in-place
+  // data changes, so it skips the re-render that fills the table. Opt out.
+  "use no memo";
   const { view = "all", client } = Route.useSearch();
   const navigate = useNavigate();
   const [creating, setCreating] = useState(false);
@@ -88,7 +91,6 @@ function Clients() {
   const { table } = useDataTable({
     columns,
     data: clients,
-    sizingKey: "clients",
     getRowId: (row) => row.id,
     rowCount,
     sorting,

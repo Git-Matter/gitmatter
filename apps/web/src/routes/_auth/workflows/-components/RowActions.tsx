@@ -7,8 +7,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-// Icon-only row action menu (hidden until row hover / menu open). Renders only
-// the handlers it's given.
+// Icon-only row action menu. Renders only the handlers it's given.
 export function RowActions({
   onDelete,
   onHide,
@@ -27,7 +26,7 @@ export function RowActions({
             size="icon-xs"
             title="Actions"
             aria-label="Row actions"
-            className="text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 aria-expanded:opacity-100"
+            className="text-muted-foreground"
           />
         }
       >

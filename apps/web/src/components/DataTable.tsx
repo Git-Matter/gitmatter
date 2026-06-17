@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { flexRender, type Row, type Table as RTable } from "@tanstack/react-table";
+import { flexRender, type Row, type RowData, type Table as RTable } from "@tanstack/react-table";
 import type { VirtualItem } from "@tanstack/react-virtual";
 import { ChevronDown, ChevronsUpDown, ChevronUp } from "lucide-react";
 import { cn } from "@/lib/util/utils";
@@ -13,13 +13,26 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
-// A row-virtualized, column-resizable table. Resizing follows TanStack's
-// "performant" pattern: column widths are published as CSS variables on the
-// <table> and read by every cell, so a drag only mutates those vars (a cheap
-// repaint) instead of re-rendering the rows. During an active drag the body is
-// swapped for a memoized copy that ignores everything but the data reference,
-// so per-frame state churn never reaches the row tree. Widths persist via the
-// table's columnSizing state (see useColumnSizing).
+declare module "@tanstack/react-table" {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  interface ColumnMeta<TData extends RowData, TValue> {
+    // Opt out of the default ellipsis truncation (e.g. avatar groups, icon buttons).
+    noTruncate?: boolean;
+  }
+}
+
+// A row-virtualized table. Column widths are published as CSS variables on the
+// <table> and read by every cell. Each column's `size` is its base width;
+// flexible columns scale to fill the container (or shrink toward their minSize),
+// and fixed columns (those with `enableResizing: false`) keep their exact width.
+// When the flexible columns can't shrink any further the table overflows and
+// scrolls horizontally instead of cramming.
+//
+// GOTCHA: the consuming component MUST start with `"use no memo"`. The `table`
+// prop is a stable TanStack reference whose rows mutate in place, so the React
+// Compiler (on in this project) memoizes <DataTable> and skips the re-render
+// when query data loads — the table renders empty until some other state change.
+// Not a virtualization issue. See react-compiler-tanstack-table notes.
 type DataTableProps<T> = {
   table: RTable<T>;
   estimateSize?: number;
@@ -46,6 +59,27 @@ export function DataTable<T>({
     setScrollEl(node);
   }, []);
   const rows = table.getRowModel().rows;
+
+  // Track the container width so flexible columns can stretch to fill it instead
+  // of leaving empty space on the right. Fixed columns (the checkbox, the actions
+  // column) keep their exact size; the remaining width is split among flexible
+  // columns in proportion to their base size.
+  const [containerWidth, setContainerWidth] = React.useState(0);
+  React.useEffect(() => {
+    if (!scrollEl) return;
+    const ro = new ResizeObserver(([entry]) => {
+      // Floor so the computed table width never exceeds the real container
+      // width — an off-by-a-subpixel overflow would toggle the horizontal
+      // scrollbar, which resizes the container, which re-fires this observer:
+      // a feedback loop that tanks performance.
+      if (!entry) return;
+      const nextWidth = Math.floor(entry.contentRect.width);
+      setContainerWidth((currentWidth) => (currentWidth === nextWidth ? currentWidth : nextWidth));
+    });
+    ro.observe(scrollEl);
+    return () => ro.disconnect();
+  }, [scrollEl]);
+
   const virtualizer = useVirtualizer({
     count: rows.length,
     enabled: !!scrollEl,
@@ -71,43 +105,21 @@ export function DataTable<T>({
   const leafColumns = table.getVisibleLeafColumns();
   const colSpan = leafColumns.length;
 
-  // Track the container width so resizable columns can stretch to fill it
-  // instead of leaving empty space on the right. Fixed (non-resizable) columns
-  // — like the checkbox — keep their exact size; the remaining width is split
-  // among resizable columns in proportion to their current size, so a manual
-  // resize still adjusts the ratio between them.
-  const [containerWidth, setContainerWidth] = React.useState(0);
-  React.useEffect(() => {
-    if (!scrollEl) return;
-    const ro = new ResizeObserver(([entry]) => {
-      // Floor so the computed table width never exceeds the real container
-      // width — an off-by-a-subpixel overflow would toggle the horizontal
-      // scrollbar, which resizes the container, which re-fires this observer:
-      // a feedback loop that tanks performance during a column drag.
-      if (!entry) return;
-      const nextWidth = Math.floor(entry.contentRect.width);
-      setContainerWidth((currentWidth) => (currentWidth === nextWidth ? currentWidth : nextWidth));
-    });
-    ro.observe(scrollEl);
-    return () => ro.disconnect();
-  }, [scrollEl]);
-
-  const sizingInfo = table.getState().columnSizingInfo;
-  const sizing = table.getState().columnSizing;
   const { columnSizeVars, tableWidth } = React.useMemo(() => {
+    // A column is flexible unless it explicitly opts out via enableResizing:false.
+    const isFlexible = (c: (typeof leafColumns)[number]) => c.columnDef.enableResizing !== false;
     const fixedTotal = leafColumns
-      .filter((c) => !c.getCanResize())
+      .filter((c) => !isFlexible(c))
       .reduce((s, c) => s + c.getSize(), 0);
-    const resizableTotal = leafColumns
-      .filter((c) => c.getCanResize())
-      .reduce((s, c) => s + c.getSize(), 0);
+    const flexibleTotal = leafColumns.filter(isFlexible).reduce((s, c) => s + c.getSize(), 0);
     const available = containerWidth - fixedTotal;
-    // Scale resizable columns to fill the container — growing into empty space
-    // or shrinking to avoid overflow — but never below each column's minSize.
-    // Past that floor the table overflows and scrolls instead of cramming.
-    const scale = containerWidth > 0 && resizableTotal > 0 ? available / resizableTotal : 1;
+    // Grow flexible columns to fill leftover space, but never shrink them below
+    // their base size: when the columns don't all fit, the table keeps its
+    // comfortable widths and scrolls horizontally instead of cramming/truncating.
+    const scale =
+      containerWidth > 0 && flexibleTotal > 0 ? Math.max(1, available / flexibleTotal) : 1;
     const widthOf = (c: (typeof leafColumns)[number]) =>
-      c.getCanResize() ? Math.max(c.getSize() * scale, c.columnDef.minSize ?? 80) : c.getSize();
+      isFlexible(c) ? c.getSize() * scale : c.getSize();
     const vars: Record<string, number> = {};
     for (const header of table.getFlatHeaders()) {
       const w = widthOf(header.column);
@@ -119,9 +131,9 @@ export function DataTable<T>({
       columnSizeVars: vars,
       tableWidth: Math.floor(containerWidth > 0 ? Math.max(baseWidth, containerWidth) : baseWidth),
     };
-    // Recompute on resize (in progress/commit) or container width change.
+    // Recompute on container width change (column sizes are static).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sizingInfo, sizing, containerWidth]);
+  }, [containerWidth]);
 
   const bodyProps: BodyProps<T> = {
     table,
@@ -136,8 +148,6 @@ export function DataTable<T>({
     cellClassName,
     empty,
   };
-  // Freeze the row tree during a drag: only the CSS vars on <table> change.
-  const Body = sizingInfo.isResizingColumn ? MemoBody : DataTableBody;
 
   return (
     <div ref={setScrollRef} className={cn("min-h-0 flex-1 overflow-auto", className)}>
@@ -160,7 +170,7 @@ export function DataTable<T>({
                 return (
                   <TableHead
                     key={header.id}
-                    className="relative h-8"
+                    className="h-8 overflow-hidden"
                     style={{ width: `calc(var(--header-${header.id}-size) * 1px)` }}
                   >
                     {canSort ? (
@@ -180,24 +190,13 @@ export function DataTable<T>({
                     ) : (
                       flexRender(header.column.columnDef.header, header.getContext())
                     )}
-                    {header.column.getCanResize() && (
-                      <span
-                        onMouseDown={header.getResizeHandler()}
-                        onTouchStart={header.getResizeHandler()}
-                        onClick={(e) => e.stopPropagation()}
-                        className={cn(
-                          "absolute end-0 top-0 h-full w-1 cursor-col-resize touch-none select-none hover:bg-border",
-                          header.column.getIsResizing() && "bg-primary"
-                        )}
-                      />
-                    )}
                   </TableHead>
                 );
               })}
             </TableRow>
           ))}
         </TableHeader>
-        <Body {...bodyProps} />
+        <DataTableBody {...bodyProps} />
       </Table>
     </div>
   );
@@ -283,15 +282,22 @@ function DataRowInner<T>({ row, index, measureRef, onRowClick, cellClassName }: 
       className={cn("group border-border/60 hover:bg-muted/60", onRowClick && "cursor-pointer")}
       onClick={onRowClick ? () => onRowClick(row.original) : undefined}
     >
-      {row.getVisibleCells().map((cell) => (
-        <TableCell
-          key={cell.id}
-          className={cn("py-2", cellClassName)}
-          style={{ width: `calc(var(--col-${cell.column.id}-size) * 1px)` }}
-        >
-          {flexRender(cell.column.columnDef.cell, cell.getContext())}
-        </TableCell>
-      ))}
+      {row.getVisibleCells().map((cell) => {
+        // Clip every cell so content never bleeds into the next column. Text
+        // cells truncate to an ellipsis; columns that opt out (avatar groups,
+        // icon buttons) render as-is but are still clipped at the boundary.
+        const noTruncate = cell.column.columnDef.meta?.noTruncate;
+        const content = flexRender(cell.column.columnDef.cell, cell.getContext());
+        return (
+          <TableCell
+            key={cell.id}
+            className={cn("overflow-hidden py-2", cellClassName)}
+            style={{ width: `calc(var(--col-${cell.column.id}-size) * 1px)` }}
+          >
+            {noTruncate ? content : <div className="min-w-0 truncate">{content}</div>}
+          </TableCell>
+        );
+      })}
     </TableRow>
   );
 }
@@ -299,9 +305,8 @@ function DataRowInner<T>({ row, index, measureRef, onRowClick, cellClassName }: 
 // Cell widths come from CSS vars on the <table>, so a row's output depends only
 // on its data + selection — never on scroll position or column width. Memoizing
 // on those means a scroll that shifts the window re-renders only the row(s) that
-// entered it (not the whole visible set), and a column resize re-renders no rows
-// at all (the CSS vars cascade). onRowClick/cellClassName are stable across a
-// scroll (the route doesn't re-render), so comparing by reference is safe.
+// entered it (not the whole visible set). onRowClick/cellClassName are stable
+// across a scroll (the route doesn't re-render), so comparing by reference is safe.
 const DataRow = React.memo(
   DataRowInner,
   (prev, next) =>
@@ -311,12 +316,3 @@ const DataRow = React.memo(
     prev.onRowClick === next.onRowClick &&
     prev.cellClassName === next.cellClassName
 ) as typeof DataRowInner;
-
-// Only re-render the row tree when the data changes. Mounted exclusively during
-// an active resize, when no scroll (and thus no virtual-window change) happens,
-// so ignoring item/padding props is safe — the swap back to the live body on
-// drag end picks up the committed widths.
-const MemoBody = React.memo(
-  DataTableBody,
-  (prev, next) => prev.table.options.data === next.table.options.data
-) as typeof DataTableBody;

@@ -3,6 +3,7 @@ import { streamSSE } from "hono/streaming";
 import { zValidator } from "@hono/zod-validator";
 import {
   type MatterRole,
+  addArtifactShareByEmail,
   buildReviewGrid,
   canAccessArtifact,
   createReview,
@@ -11,9 +12,11 @@ import {
   getReview,
   gridToCsv,
   gridToXlsx,
+  listArtifactShares,
   listCommits,
   listReviews,
   listReviewsPage,
+  removeArtifactShare,
   runCell,
   runDocument,
   runReviewStreaming,
@@ -32,6 +35,8 @@ import {
 export const tabularRoute = new Hono<AuthEnv>();
 
 const reviewSorts = ["title", "createdAt"] as const;
+const shareScopes = ["all", "mine", "shared"] as const;
+const shareRoles = ["viewer", "editor", "owner"] as const;
 
 // Fetch a review only if the caller has matter access at `min` role.
 async function access(userId: string, reviewId: string, min: MatterRole = "viewer") {
@@ -40,7 +45,7 @@ async function access(userId: string, reviewId: string, min: MatterRole = "viewe
 }
 
 tabularRoute.get("/api/tabular/reviews", async (c) => {
-  const paged = parsePageQuery(c, { sorts: reviewSorts });
+  const paged = parsePageQuery(c, { sorts: reviewSorts, filters: { scope: shareScopes } });
   if (paged) return c.json(await listReviewsPage(c.get("user").id, paged));
   return c.json(await listReviews(c.get("user").id));
 });
@@ -203,4 +208,38 @@ tabularRoute.get("/api/tabular/reviews/:id/diff", async (c) => {
   const from = Number(c.req.query("from") ?? "0");
   const to = Number(c.req.query("to") ?? "0");
   return c.json(await diffCommits("tabular_review", c.req.param("id"), from, to));
+});
+
+// ---- Sharing (people with access). Owner-only manage; viewer can list. ----
+
+tabularRoute.get("/api/tabular/reviews/:id/shares", async (c) => {
+  const id = c.req.param("id");
+  if (!(await canAccessArtifact(c.get("user").id, "tabular_review", id)))
+    return c.json({ error: "Not found" }, 404);
+  return c.json(await listArtifactShares("tabular_review", id));
+});
+
+tabularRoute.post("/api/tabular/reviews/:id/shares/by-email", async (c) => {
+  const id = c.req.param("id");
+  if (!(await canAccessArtifact(c.get("user").id, "tabular_review", id, "owner")))
+    return c.json({ error: "Not found" }, 404);
+  const body = (await c.req.json().catch(() => ({}))) as { email?: string; role?: string };
+  if (!body.email?.trim()) return c.json({ error: "email required" }, 400);
+  const role = shareRoles.includes(body.role as (typeof shareRoles)[number])
+    ? (body.role as (typeof shareRoles)[number])
+    : "editor";
+  try {
+    const userId = await addArtifactShareByEmail("tabular_review", id, body.email.trim(), role);
+    return c.json({ userId }, 201);
+  } catch (e) {
+    return c.json({ error: e instanceof Error ? e.message : "failed" }, 400);
+  }
+});
+
+tabularRoute.delete("/api/tabular/reviews/:id/shares/:userId", async (c) => {
+  const id = c.req.param("id");
+  if (!(await canAccessArtifact(c.get("user").id, "tabular_review", id, "owner")))
+    return c.json({ error: "Not found" }, 404);
+  await removeArtifactShare("tabular_review", id, c.req.param("userId"));
+  return c.body(null, 204);
 });

@@ -8,6 +8,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { SharedWithCell } from "@/components/SharedWithCell";
 import { fileTypeLabel } from "@/lib/format/documentLabels";
 import { formatShortDate } from "@/lib/format/format";
 import type { Doc } from "@/lib/data/api";
@@ -19,6 +20,7 @@ export function documentColumns(handlers: {
   onRetry: (id: string) => void;
   onDownload: (id: string) => void;
   onDelete: (doc: Doc) => void;
+  onManagePeople: (doc: Doc) => void;
 }) {
   return [
     columnHelper.display({
@@ -81,10 +83,29 @@ export function documentColumns(handlers: {
       cell: (c) => <span className="text-muted-foreground">{formatShortDate(c.getValue())}</span>,
     }),
     columnHelper.display({
+      id: "shared",
+      header: "Shared with",
+      size: 130,
+      meta: { noTruncate: true },
+      cell: (c) => {
+        const doc = c.row.original;
+        return (
+          <div onClick={(e) => e.stopPropagation()}>
+            <SharedWithCell
+              count={doc.shareCount}
+              names={doc.sharedNames}
+              onClick={() => handlers.onManagePeople(doc)}
+            />
+          </div>
+        );
+      },
+    }),
+    columnHelper.display({
       id: "actions",
       header: "",
       size: 64,
       enableResizing: false,
+      meta: { noTruncate: true },
       cell: (c) => {
         const doc = c.row.original;
         const canRetry = doc.status === "failed" || doc.status === "processing";
@@ -96,7 +117,7 @@ export function documentColumns(handlers: {
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="size-7 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 aria-expanded:opacity-100"
+                    className="size-7 text-muted-foreground"
                     title="Actions"
                     aria-label="Row actions"
                   />
@@ -107,6 +128,9 @@ export function documentColumns(handlers: {
               <DropdownMenuContent align="end">
                 <DropdownMenuItem onClick={() => handlers.onDownload(doc.id)}>
                   Download
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handlers.onManagePeople(doc)}>
+                  Manage people
                 </DropdownMenuItem>
                 {canRetry && (
                   <DropdownMenuItem onClick={() => handlers.onRetry(doc.id)}>

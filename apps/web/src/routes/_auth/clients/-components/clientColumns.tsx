@@ -1,5 +1,5 @@
 import { createColumnHelper } from "@tanstack/react-table";
-import { Pencil } from "lucide-react";
+import { Building2, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { StateCue } from "@/components/StateCue";
@@ -56,15 +56,29 @@ export function clientColumns(onEdit: (client: Client) => void) {
         ),
     }),
     columnHelper.display({
+      id: "shared",
+      header: "Shared with",
+      size: 150,
+      meta: { noTruncate: true },
+      // Clients are org-wide — visible to everyone in the organization.
+      cell: () => (
+        <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
+          <Building2 className="size-3.5" />
+          Everyone in org
+        </span>
+      ),
+    }),
+    columnHelper.display({
       id: "actions",
       header: "",
       size: 64,
       enableResizing: false,
+      meta: { noTruncate: true },
       cell: (c) => (
         <Button
           variant="ghost"
           size="icon"
-          className="size-7 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
+          className="size-7"
           title="Edit client"
           aria-label="Edit client"
           onClick={(e) => {

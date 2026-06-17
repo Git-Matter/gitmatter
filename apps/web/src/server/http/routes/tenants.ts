@@ -1,5 +1,11 @@
 import { Hono } from "hono";
-import { createInvite, getTenant, listInvites, revokeInvite } from "@workspace/core";
+import {
+  createInvite,
+  getTenant,
+  listInvites,
+  listTenantMembers,
+  revokeInvite,
+} from "@workspace/core";
 import { type AuthEnv } from "../middleware/auth.js";
 
 export const tenantsRoute = new Hono<AuthEnv>();
@@ -8,6 +14,12 @@ export const tenantsRoute = new Hono<AuthEnv>();
 tenantsRoute.get("/api/tenant", async (c) => {
   const t = await getTenant(c.get("user").tenantId);
   return t ? c.json(t) : c.json({ error: "Not found" }, 404);
+});
+
+// Everyone in the caller's organization — backs the settings members list and
+// the share picker. Any member may read it.
+tenantsRoute.get("/api/tenant/members", async (c) => {
+  return c.json(await listTenantMembers(c.get("user").tenantId));
 });
 
 // Pending invites — tenant admins only.
