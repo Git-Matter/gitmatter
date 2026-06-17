@@ -31,7 +31,8 @@ export function OrganizationCard() {
     mutationFn: () => api.createInvite(email.trim()),
     onSuccess: (inv) => {
       setEmail("");
-      setFresh(inv.token);
+      // With a real email provider the server emails the link and omits the token.
+      setFresh("token" in inv ? inv.token : null);
       void invalidate();
       toast.success("Invite created");
     },

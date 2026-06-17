@@ -11,6 +11,15 @@ import type {
   ProviderCatalog,
 } from "@workspace/contracts";
 import { getUserApiKey } from "../core/keys.js";
+import { fetchWithTimeout } from "../core/fetch.js";
+import { getEnv } from "../core/config.js";
+
+// Optional hard timeout (ms) for LLM SDK calls. Unset by default so long
+// streaming generations are never cut off; set LLM_TIMEOUT_MS to enforce one.
+function llmTimeoutMs(): number | undefined {
+  const v = Number(getEnv("LLM_TIMEOUT_MS"));
+  return Number.isFinite(v) && v > 0 ? v : undefined;
+}
 
 export type { LlmModel, LlmProvider, ModelCapabilities, OpenRouterModel, ProviderCatalog };
 
@@ -130,7 +139,7 @@ let orCache: { at: number; models: RawOpenRouterModel[] } | null = null;
 
 async function loadOpenRouterModels(): Promise<RawOpenRouterModel[]> {
   if (orCache && Date.now() - orCache.at < OR_CACHE_TTL_MS) return orCache.models;
-  const res = await fetch(OR_MODELS_URL);
+  const res = await fetchWithTimeout(OR_MODELS_URL, { timeoutMs: 30_000 });
   if (!res.ok) throw new Error(`OpenRouter models ${res.status}`);
   const json = (await res.json()) as { data?: RawOpenRouterModel[] };
   orCache = { at: Date.now(), models: json.data ?? [] };
@@ -182,7 +191,7 @@ export async function resolveLlmKey(
 ): Promise<{ key: string | null; source: "user" | "env" | null }> {
   const userKey = await getUserApiKey(userId, provider);
   if (userKey) return { key: userKey, source: "user" };
-  const envKey = process.env[PROVIDERS[provider].envKey];
+  const envKey = getEnv(PROVIDERS[provider].envKey);
   if (envKey) return { key: envKey, source: "env" };
   return { key: null, source: null };
 }
@@ -392,13 +401,19 @@ class AnthropicClient implements LlmClient {
   }
 
   async complete(req: CompleteRequest): Promise<CompleteResult> {
-    const anthropic = new Anthropic({ apiKey: this.apiKey });
+    const anthropic = new Anthropic({
+      apiKey: this.apiKey,
+      ...(llmTimeoutMs() ? { timeout: llmTimeoutMs() } : {}),
+    });
     const res = await anthropic.messages.create(this.buildParams(req));
     return this.finalize(req, res.content, res.stop_reason);
   }
 
   async stream(req: CompleteRequest, handlers: StreamHandlers): Promise<CompleteResult> {
-    const anthropic = new Anthropic({ apiKey: this.apiKey });
+    const anthropic = new Anthropic({
+      apiKey: this.apiKey,
+      ...(llmTimeoutMs() ? { timeout: llmTimeoutMs() } : {}),
+    });
     const s = anthropic.messages.stream(this.buildParams(req));
     if (handlers.onText) s.on("text", (delta) => handlers.onText!(delta));
     if (handlers.onReasoning) s.on("thinking", (delta) => handlers.onReasoning!(delta));
@@ -499,12 +514,18 @@ class OpenAIResponsesClient implements LlmClient {
   }
 
   async complete(req: CompleteRequest): Promise<CompleteResult> {
-    const openai = new OpenAI({ apiKey: this.apiKey });
+    const openai = new OpenAI({
+      apiKey: this.apiKey,
+      ...(llmTimeoutMs() ? { timeout: llmTimeoutMs() } : {}),
+    });
     return this.finalize(await openai.responses.create(this.buildParams(req)));
   }
 
   async stream(req: CompleteRequest, handlers: StreamHandlers): Promise<CompleteResult> {
-    const openai = new OpenAI({ apiKey: this.apiKey });
+    const openai = new OpenAI({
+      apiKey: this.apiKey,
+      ...(llmTimeoutMs() ? { timeout: llmTimeoutMs() } : {}),
+    });
     // buildParams returns the NonStreaming shape; stream() takes the same fields
     // minus `stream`, so the cast through the method's own param type is safe.
     const s = openai.responses.stream(
@@ -627,13 +648,19 @@ class GeminiClient implements LlmClient {
   }
 
   async complete(req: CompleteRequest): Promise<CompleteResult> {
-    const ai = new GoogleGenAI({ apiKey: this.apiKey });
+    const ai = new GoogleGenAI({
+      apiKey: this.apiKey,
+      ...(llmTimeoutMs() ? { httpOptions: { timeout: llmTimeoutMs() } } : {}),
+    });
     const res = await ai.models.generateContent(this.buildRequest(req));
     return this.finalize(res.candidates?.[0]?.content?.parts ?? []);
   }
 
   async stream(req: CompleteRequest, handlers: StreamHandlers): Promise<CompleteResult> {
-    const ai = new GoogleGenAI({ apiKey: this.apiKey });
+    const ai = new GoogleGenAI({
+      apiKey: this.apiKey,
+      ...(llmTimeoutMs() ? { httpOptions: { timeout: llmTimeoutMs() } } : {}),
+    });
     const gen = await ai.models.generateContentStream(this.buildRequest(req));
     const parts: Part[] = [];
     for await (const chunk of gen) {
@@ -718,9 +745,10 @@ class OpenRouterClient implements LlmClient {
 
   async complete(req: CompleteRequest): Promise<CompleteResult> {
     const client = new OpenRouter({ apiKey: this.apiKey });
-    const res = await client.chat.send({
-      chatRequest: { stream: false, ...this.chatRequest(req) },
-    });
+    const res = await client.chat.send(
+      { chatRequest: { stream: false, ...this.chatRequest(req) } },
+      llmTimeoutMs() ? { timeoutMs: llmTimeoutMs() } : undefined
+    );
     const choice = res.choices[0];
     const toolCalls = (choice?.message.toolCalls ?? []).map((tc) => ({
       id: tc.id,
@@ -736,9 +764,10 @@ class OpenRouterClient implements LlmClient {
 
   async stream(req: CompleteRequest, handlers: StreamHandlers): Promise<CompleteResult> {
     const client = new OpenRouter({ apiKey: this.apiKey });
-    const events = await client.chat.send({
-      chatRequest: { stream: true, ...this.chatRequest(req) },
-    });
+    const events = await client.chat.send(
+      { chatRequest: { stream: true, ...this.chatRequest(req) } },
+      llmTimeoutMs() ? { timeoutMs: llmTimeoutMs() } : undefined
+    );
 
     let text = "";
     let finishReason: string | null = null;
@@ -804,7 +833,7 @@ let envProbe: Record<LlmProvider, boolean> | null = null;
 export function probeEnvProviders(): Record<LlmProvider, boolean> {
   const out = {} as Record<LlmProvider, boolean>;
   for (const provider of Object.keys(PROVIDERS) as LlmProvider[]) {
-    const key = process.env[PROVIDERS[provider].envKey];
+    const key = getEnv(PROVIDERS[provider].envKey);
     if (!key) {
       out[provider] = false;
       continue;
@@ -869,7 +898,7 @@ export async function completeText(params: {
 }): Promise<string> {
   const model = params.model ?? DEFAULT_MODEL;
   const provider = params.provider ?? providerForModel(model);
-  const key = params.apiKey ?? process.env[PROVIDERS[provider].envKey];
+  const key = params.apiKey ?? getEnv(PROVIDERS[provider].envKey);
   if (!key) throw new Error(`No API key for ${provider} (set one in account settings)`);
   const res = await getLlmClient(provider, key).complete({
     model,

@@ -1,6 +1,8 @@
 import * as mammoth from "mammoth";
 import JSZip from "jszip";
 import { XMLParser } from "fast-xml-parser";
+import { fetchWithTimeout } from "../core/fetch.js";
+import { getEnv } from "../core/config.js";
 
 // mammoth ships markdown conversion at runtime but omits it from its type defs.
 const convertToMarkdown = (
@@ -54,8 +56,8 @@ async function docxPageCount(bytes: Buffer): Promise<number | null> {
 }
 
 async function extractPdfViaDocling(bytes: Buffer): Promise<ExtractResult> {
-  const url = process.env.DOCLING_URL || "http://localhost:5001/v1/convert/source";
-  const res = await fetch(url, {
+  const url = getEnv("DOCLING_URL") || "http://localhost:5001/v1/convert/source";
+  const res = await fetchWithTimeout(url, {
     method: "POST",
     headers: { "content-type": "application/json", accept: "application/json" },
     body: JSON.stringify({
@@ -65,6 +67,8 @@ async function extractPdfViaDocling(bytes: Buffer): Promise<ExtractResult> {
       // `file_sources` key returns 422 on current builds).
       sources: [{ kind: "file", base64_string: bytes.toString("base64"), filename: "doc.pdf" }],
     }),
+    // PDF conversion (incl. OCR) can be slow; allow a generous window.
+    timeoutMs: 120_000,
   });
   if (!res.ok) {
     const body = await res.text().catch(() => "");

@@ -28,8 +28,19 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
 
       <main className="flex-1">{children}</main>
 
-      <footer className="px-6 py-8 text-center text-sm text-muted-foreground">
-        © gitcounsel — the audited legal backend any AI agent plugs into.
+      <footer className="flex flex-col items-center gap-2 px-6 py-8 text-center text-sm text-muted-foreground">
+        <nav className="flex items-center gap-4">
+          <Link to="/privacy" className="hover:text-foreground">
+            Privacy
+          </Link>
+          <Link to="/terms" className="hover:text-foreground">
+            Terms
+          </Link>
+          <Link to="/security" className="hover:text-foreground">
+            Security
+          </Link>
+        </nav>
+        <span>© gitcounsel — the audited legal backend any AI agent plugs into.</span>
       </footer>
     </div>
   );

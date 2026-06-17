@@ -1,9 +1,5 @@
 import { ChevronDown } from "lucide-react";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Shimmer } from "@/components/ai-elements/shimmer";
 import { type Step } from "./useChatSession";
 
@@ -52,7 +48,7 @@ function ReasoningStep({ step }: { step: Extract<Step, { kind: "reasoning" }> })
         <ChevronDown className="size-3.5 transition-transform group-aria-expanded:rotate-180" />
       </CollapsibleTrigger>
       <CollapsibleContent>
-        <p className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground/70">{step.text}</p>
+        <p className="mt-1 text-sm whitespace-pre-wrap text-muted-foreground/70">{step.text}</p>
       </CollapsibleContent>
     </Collapsible>
   );
@@ -66,7 +62,9 @@ function ReasoningStep({ step }: { step: Extract<Step, { kind: "reasoning" }> })
 export function StepsTimeline({ steps }: { steps: Step[] }) {
   if (!steps.length) return null;
   const working = steps.some((s) => (s.kind === "reasoning" ? s.streaming : !s.done));
-  const header = working ? "Working…" : `Completed in ${steps.length} step${steps.length > 1 ? "s" : ""}`;
+  const header = working
+    ? "Working…"
+    : `Completed in ${steps.length} step${steps.length > 1 ? "s" : ""}`;
 
   return (
     <Collapsible defaultOpen className="not-prose mb-4 rounded-md border">

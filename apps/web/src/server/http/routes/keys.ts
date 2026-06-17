@@ -6,12 +6,14 @@ import {
   getUserJurisdiction,
   hasUserApiKey,
   type LlmProvider,
+  recordAudit,
   resolveLlmKey,
   searchOpenRouterModels,
   saveUserApiKey,
   setUserJurisdiction,
 } from "@workspace/core";
 import { type AuthEnv } from "../middleware/auth.js";
+import { clientMeta } from "../lib/request-meta.js";
 import { apiKeySchema, providerEnum, settingsSchema } from "../schemas/keys.js";
 
 export const keysRoute = new Hono<AuthEnv>();
@@ -63,7 +65,14 @@ keysRoute.get("/api/keys", async (c) => {
 
 keysRoute.put("/api/keys", zValidator("json", apiKeySchema), async (c) => {
   const { provider, key } = c.req.valid("json");
-  await saveUserApiKey(c.get("user").id, key, provider);
+  const userId = c.get("user").id;
+  await saveUserApiKey(userId, key, provider);
+  void recordAudit({
+    eventType: "apikey.create",
+    actorId: userId,
+    target: provider,
+    ...clientMeta(c),
+  });
   return c.json({ ok: true });
 });
 
@@ -71,6 +80,13 @@ keysRoute.delete("/api/keys", async (c) => {
   const provider = c.req.query("provider");
   if (!provider || !PROVIDERS.includes(provider as never))
     return c.json({ error: "unknown provider" }, 400);
-  await deleteUserApiKey(c.get("user").id, provider);
+  const userId = c.get("user").id;
+  await deleteUserApiKey(userId, provider);
+  void recordAudit({
+    eventType: "apikey.delete",
+    actorId: userId,
+    target: provider,
+    ...clientMeta(c),
+  });
   return c.json({ ok: true });
 });

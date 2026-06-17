@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@workspace/db/client";
 import { mcpConnections } from "@workspace/db/schema";
 import { PROVIDERS } from "@workspace/registry";
+import { getEnv } from "../core/config.js";
 
 export type McpConnection = typeof mcpConnections.$inferSelect;
 
@@ -25,7 +26,7 @@ export async function seedMcpConnections() {
       .from(mcpConnections)
       .where(eq(mcpConnections.providerId, p.id));
     if (existing.length) continue;
-    const url = (p.urlEnv && process.env[p.urlEnv]) || FALLBACK_URL[p.id];
+    const url = (p.urlEnv && getEnv(p.urlEnv)) || FALLBACK_URL[p.id];
     if (!url) continue;
     await db.insert(mcpConnections).values({
       providerId: p.id,

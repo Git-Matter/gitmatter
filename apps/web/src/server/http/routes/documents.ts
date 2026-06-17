@@ -27,6 +27,7 @@ import {
   listMatterDocuments,
   listVersions,
   proposeEdit,
+  recordAudit,
   renameDocument,
   resolveAllEdits,
   resolveEdit,
@@ -37,6 +38,7 @@ import {
 import { type AuthEnv } from "../middleware/auth.js";
 import { resolveCreateMatter } from "../lib/matter.js";
 import { parsePageQuery } from "../lib/page-query.js";
+import { clientMeta } from "../lib/request-meta.js";
 import {
   createDocumentSchema,
   linkDocumentsSchema,
@@ -129,6 +131,13 @@ documentsRoute.post("/api/documents/upload", async (c) => {
   try {
     const doc = await uploadDocument(user.id, { title, fileType, bytes, matterId, folderId });
     enqueueExtraction(doc); // extract in-process, serialized per user
+    void recordAudit({
+      eventType: "document.upload",
+      actorId: user.id,
+      target: doc.id,
+      metadata: { title, fileType, matterId },
+      ...clientMeta(c),
+    });
     return c.json(doc, 202);
   } catch (err) {
     // Storage/extraction-setup failures (e.g. S3 not configured) surface here.
@@ -179,6 +188,12 @@ documentsRoute.get("/api/documents/:id/download", async (c) => {
   const storagePath = await activeStoragePath(doc);
   if (!storagePath) return c.json({ error: "no stored file" }, 404);
   const bytes = await getObject(storagePath);
+  void recordAudit({
+    eventType: "document.download",
+    actorId: c.get("user").id,
+    target: id,
+    ...clientMeta(c),
+  });
   const mime = MIME_BY_TYPE[doc.fileType] ?? "application/octet-stream";
   const filename = doc.title.endsWith(`.${doc.fileType}`)
     ? doc.title

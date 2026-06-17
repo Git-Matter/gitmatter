@@ -6,6 +6,7 @@ import {
   type PutObjectCommandInput,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { getEnv, requireEnv } from "./config.js";
 
 // Object storage. S3-compatible only — Cloudflare R2 (prod) or any S3 endpoint;
 // only the env vars change, never the code. S3 is required (no local fallback):
@@ -13,28 +14,22 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 let cachedClient: S3Client | null = null;
 
-function env(name: string): string {
-  const v = process.env[name];
-  if (!v) throw new Error(`${name} is not set`);
-  return v;
-}
-
 export function s3(): S3Client {
   if (cachedClient) return cachedClient;
   cachedClient = new S3Client({
-    endpoint: env("S3_ENDPOINT"),
-    region: env("S3_REGION"),
+    endpoint: requireEnv("S3_ENDPOINT"),
+    region: requireEnv("S3_REGION"),
     credentials: {
-      accessKeyId: env("S3_ACCESS_KEY"),
-      secretAccessKey: env("S3_SECRET_KEY"),
+      accessKeyId: requireEnv("S3_ACCESS_KEY"),
+      secretAccessKey: requireEnv("S3_SECRET_KEY"),
     },
-    forcePathStyle: process.env.S3_FORCE_PATH_STYLE === "true",
+    forcePathStyle: getEnv("S3_FORCE_PATH_STYLE") === "true",
   });
   return cachedClient;
 }
 
 function bucket(): string {
-  return env("S3_BUCKET");
+  return requireEnv("S3_BUCKET");
 }
 
 // Tenant-scoped object key: tenantId/userId/matterId/artifactId[.ext | /v{n}.ext].
@@ -74,6 +69,16 @@ export async function getObject(key: string): Promise<Uint8Array> {
 
 export async function deleteObject(key: string): Promise<void> {
   await s3().send(new DeleteObjectCommand({ Bucket: bucket(), Key: key }));
+}
+
+/**
+ * Is a storage error just "the object is already gone"? S3 reports a missing key
+ * as 404 / NoSuchKey / NotFound. Treat those as success when deleting so a purge
+ * stays idempotent and only genuine failures (perms, network, 5xx) are surfaced.
+ */
+export function isAlreadyDeleted(err: unknown): boolean {
+  const e = err as { name?: string; $metadata?: { httpStatusCode?: number } };
+  return e?.$metadata?.httpStatusCode === 404 || e?.name === "NoSuchKey" || e?.name === "NotFound";
 }
 
 // Presigned URL for direct client upload/download without proxying bytes through

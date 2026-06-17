@@ -71,6 +71,9 @@ export function ChatTurns({
                   >
                     <FileText className="size-4 text-muted-foreground" />
                     <span className="flex-1 truncate">{d.title}</span>
+                    <span className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
+                      AI draft
+                    </span>
                     <span className="text-xs text-muted-foreground">Open</span>
                   </button>
                 ) : (
@@ -81,6 +84,9 @@ export function ChatTurns({
                   >
                     <FileDown className="size-4 text-muted-foreground" />
                     <span className="flex-1 truncate">{d.title}</span>
+                    <span className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
+                      AI draft
+                    </span>
                     <span className="text-xs text-muted-foreground">Download .docx</span>
                   </a>
                 )

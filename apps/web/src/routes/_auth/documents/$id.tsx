@@ -166,6 +166,12 @@ function DocumentView() {
               </div>
             )}
           </div>
+          {pending.length > 0 && (
+            <p className="text-xs text-muted-foreground">
+              AI-proposed edits are drafts — review each change before accepting. Not a substitute
+              for a lawyer's review.
+            </p>
+          )}
           {edits.map((e) => (
             <Card key={e.id}>
               <CardContent className="flex flex-col gap-2 py-3">

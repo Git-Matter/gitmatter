@@ -426,12 +426,16 @@ export const api = {
   // Tenant invites (admins)
   getTenant: () => req<{ id: string; name: string }>("/api/tenant"),
   listInvites: () => req<TenantInvite[]>("/api/tenant/invites"),
+  // Returns the full invite (incl. token) in dev; when a real email provider is
+  // configured the server emails the link and returns only an acknowledgement.
   createInvite: (email: string, role: "admin" | "member" = "member") =>
-    req<TenantInvite>("/api/tenant/invites", {
+    req<TenantInvite | { ok: true; email: string; role: string }>("/api/tenant/invites", {
       method: "POST",
       body: JSON.stringify({ email, role }),
     }),
   revokeInvite: (id: string) => req<null>(`/api/tenant/invites/${id}`, { method: "DELETE" }),
+  // Browser-download URL for the full per-tenant data export (admin only).
+  tenantDataExportUrl: () => "/api/tenant/export",
 
   listDocuments: () => req<Doc[]>("/api/documents"),
   listDocumentsPage: (params: ListPageParams) =>

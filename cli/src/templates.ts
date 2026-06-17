@@ -24,12 +24,23 @@ services:
     expose:
       - "5001"
 
+  # One-shot schema migration. Runs to completion before web starts; keeps the
+  # serving container immutable (no schema mutation at app boot).
+  migrate:
+    image: \${GITCOUNSEL_IMAGE:-ghcr.io/gitcounsel/gitcounsel:latest}
+    restart: "no"
+    environment:
+      DATABASE_URL: \${DATABASE_URL}
+    command: ["sh", "-c", "cd /app/packages/db && bun run migrate"]
+
   web:
     image: \${GITCOUNSEL_IMAGE:-ghcr.io/gitcounsel/gitcounsel:latest}
     restart: unless-stopped
     depends_on:
       docling:
         condition: service_started
+      migrate:
+        condition: service_completed_successfully
     environment:
       DATABASE_URL: \${DATABASE_URL}
       BETTER_AUTH_SECRET: \${BETTER_AUTH_SECRET}
@@ -63,6 +74,12 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+
+  # Bundled DB: the migration step waits for Postgres to be healthy.
+  migrate:
+    depends_on:
+      postgres:
+        condition: service_healthy
 
   web:
     depends_on:

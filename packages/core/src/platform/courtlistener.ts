@@ -2,10 +2,13 @@
 // Exposed as gitcounsel's own tools — over our MCP server (to Claude/agents) and
 // inside in-app chat. API-only; needs COURTLISTENER_API_TOKEN.
 
+import { fetchWithTimeout } from "../core/fetch.js";
+import { getEnv } from "../core/config.js";
+
 const BASE = "https://www.courtlistener.com/api/rest/v4";
 
 function headers(): Record<string, string> {
-  const token = process.env.COURTLISTENER_API_TOKEN?.trim();
+  const token = getEnv("COURTLISTENER_API_TOKEN")?.trim();
   if (!token) throw new Error("COURTLISTENER_API_TOKEN must be set");
   return {
     Accept: "application/json",
@@ -15,9 +18,10 @@ function headers(): Record<string, string> {
 }
 
 async function clFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(path.startsWith("http") ? path : `${BASE}${path}`, {
+  const res = await fetchWithTimeout(path.startsWith("http") ? path : `${BASE}${path}`, {
     ...init,
     headers: headers(),
+    timeoutMs: 30_000,
   });
   if (!res.ok) {
     const detail = await res.text().catch(() => "");

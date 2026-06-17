@@ -6,6 +6,10 @@ import {
   getUserJurisdiction,
   probeEnvProviders,
   purgeExpiredDocuments,
+  purgeExpiredTokens,
+  purgeOldAuditEvents,
+  purgeOldChats,
+  recordAudit,
   seedBuiltinWorkflows,
   seedMcpConnections,
 } from "@workspace/core";
@@ -22,6 +26,7 @@ import { workflowRoute } from "./routes/workflow.js";
 import { authenticateMcp } from "../mcp/auth.js";
 import { buildMcpServer } from "../mcp/server.js";
 import { serverOrigin } from "./lib/origin.js";
+import { clientMeta } from "./lib/request-meta.js";
 import { type AuthEnv, requireUser } from "./middleware/auth.js";
 
 // Probe which AI providers have a server env key at boot, so the model catalog
@@ -42,9 +47,22 @@ import { type AuthEnv, requireUser } from "./middleware/auth.js";
 void seedBuiltinWorkflows().catch(() => {});
 void seedMcpConnections().catch(() => {});
 
-// Hard-delete documents past the soft-delete retention window (also runs after
-// each delete). No scheduler here, so boot is the periodic sweep.
-void purgeExpiredDocuments().catch(() => {});
+// Retention sweeps. No scheduler here, so boot is the periodic sweep: hard-delete
+// documents past their soft-delete window, dead auth/MCP tokens, old audit events,
+// and (when enabled) inactive chats. All windows are env-configurable.
+//
+// Guarded to run once per process via a global flag, so a dev HMR module reload
+// doesn't re-fire these full-table delete scans. (A real deployment should move
+// this to a scheduled job rather than coupling retention to process boot.)
+const SWEPT = Symbol.for("gitcounsel.retentionSwept");
+const g = globalThis as Record<symbol, boolean>;
+if (!g[SWEPT]) {
+  g[SWEPT] = true;
+  void purgeExpiredDocuments().catch(() => {});
+  void purgeExpiredTokens().catch(() => {});
+  void purgeOldAuditEvents().catch(() => {});
+  void purgeOldChats().catch(() => {});
+}
 
 // All server endpoints live under /api and are dispatched here from the
 // TanStack Start catch-all route (src/routes/api/$.ts).
@@ -68,8 +86,36 @@ app.use(
   })
 );
 
-// better-auth owns /api/auth/* (sign-up, sign-in, session, etc.).
-app.on(["GET", "POST"], "/api/auth/*", (c) => auth.handler(c.req.raw));
+// better-auth owns /api/auth/* (sign-up, sign-in, session, etc.). We wrap it to
+// record the two security events better-auth has no DB hook for: a failed
+// sign-in (401) and a sign-out. Login is captured via the session-create hook.
+app.on(["GET", "POST"], "/api/auth/*", async (c) => {
+  const path = c.req.path;
+  const isSignIn = path.includes("/sign-in");
+  const isSignOut = path.includes("/sign-out");
+  // Capture the actor before sign-out clears the session.
+  let actorId: string | null = null;
+  if (isSignOut) {
+    const session = await auth.api.getSession({ headers: c.req.raw.headers }).catch(() => null);
+    actorId = session?.user?.id ?? null;
+  }
+  // Clone so we can read the attempted email on a failed sign-in without
+  // consuming the body better-auth needs.
+  const probe = isSignIn ? c.req.raw.clone() : null;
+
+  const res = await auth.handler(c.req.raw);
+
+  if (isSignOut && res.ok) {
+    void recordAudit({ eventType: "auth.logout", actorId, ...clientMeta(c) });
+  } else if (isSignIn && res.status === 401) {
+    const email = await probe!
+      .json()
+      .then((b: { email?: string }) => b?.email ?? null)
+      .catch(() => null);
+    void recordAudit({ eventType: "auth.failed", target: email, ...clientMeta(c) });
+  }
+  return res;
+});
 
 // Everything else under /api requires a session. Health + auth are public; the
 // MCP endpoint authenticates separately via an access token.

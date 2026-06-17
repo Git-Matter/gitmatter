@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { and, desc, eq, gt, isNull } from "drizzle-orm";
 import { db } from "@workspace/db/client";
 import { type TenantRole, tenantInvites, tenants, user } from "@workspace/db/schema";
+import { recordAudit } from "./audit.js";
 import { ensureDefaultMatter } from "./matters.js";
 
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -52,6 +53,13 @@ export async function provisionUserTenant(u: {
       .update(tenantInvites)
       .set({ acceptedAt: new Date() })
       .where(eq(tenantInvites.id, invite.id));
+    void recordAudit({
+      eventType: "invite.accept",
+      actorId: u.id,
+      tenantId,
+      target: invite.id,
+      metadata: { email: u.email, role },
+    });
   } else {
     const [t] = await db
       .insert(tenants)
@@ -86,6 +94,13 @@ export async function createInvite(
       expiresAt: new Date(Date.now() + INVITE_TTL_MS),
     })
     .returning();
+  void recordAudit({
+    eventType: "invite.create",
+    actorId: invitedBy,
+    tenantId,
+    target: row!.id,
+    metadata: { email: row!.email, role },
+  });
   return row!;
 }
 

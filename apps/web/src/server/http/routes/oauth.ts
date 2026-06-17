@@ -3,13 +3,17 @@ import {
   type OAuthClient,
   createAuthCode,
   exchangeCode,
+  fetchWithTimeout,
   getOAuthClient,
+  isPrivateHost,
+  recordAudit,
   refreshAccessToken,
   registerDcrClient,
   upsertCimdClient,
 } from "@workspace/core";
 import { type AuthEnv, getUser } from "../middleware/auth.js";
 import { mcpResourceUri, serverOrigin } from "../lib/origin.js";
+import { clientMeta } from "../lib/request-meta.js";
 
 export const oauthRoute = new Hono<AuthEnv>();
 
@@ -66,10 +70,9 @@ async function fetchCimd(
   try {
     const u = new URL(clientId);
     if (u.protocol !== "https:") return null;
-    if (/^(localhost$|127\.|0\.0\.0\.0|10\.|192\.168\.|169\.254\.|::1$)/i.test(u.hostname))
-      return null;
-    const res = await fetch(clientId, {
-      signal: AbortSignal.timeout(5000),
+    if (isPrivateHost(u.hostname)) return null;
+    const res = await fetchWithTimeout(clientId, {
+      timeoutMs: 5000,
       headers: { accept: "application/json" },
     });
     if (!res.ok) return null;
@@ -178,6 +181,13 @@ oauthRoute.post("/api/oauth/authorize/decision", async (c) => {
     scope: form.scope,
     resource: form.resource,
   });
+  void recordAudit({
+    eventType: "oauth.consent",
+    actorId: user.id,
+    target: form.client_id,
+    metadata: { scope: form.scope, redirectUri },
+    ...clientMeta(c),
+  });
   return c.redirect(`${redirectUri}${sep}code=${encodeURIComponent(code)}${stateQ}`);
 });
 
@@ -208,6 +218,13 @@ oauthRoute.post("/api/oauth/token", async (c) => {
       refreshToken: form.refresh_token ?? "",
       clientId: form.client_id ?? "",
     });
+    if (!("error" in r)) {
+      void recordAudit({
+        eventType: "oauth.token_refresh",
+        target: form.client_id,
+        ...clientMeta(c),
+      });
+    }
     return "error" in r ? c.json({ error: r.error }, 400) : tokenJson(r);
   }
   return c.json({ error: "unsupported_grant_type" }, 400);
@@ -227,6 +244,12 @@ oauthRoute.post("/api/oauth/register", async (c) => {
       typeof body.token_endpoint_auth_method === "string"
         ? body.token_endpoint_auth_method
         : "none",
+  });
+  void recordAudit({
+    eventType: "oauth.client_register",
+    target: client.clientId,
+    metadata: { clientName: client.clientName, redirectUris: client.redirectUris },
+    ...clientMeta(c),
   });
   return c.json(
     {

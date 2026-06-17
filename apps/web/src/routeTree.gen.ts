@@ -17,6 +17,9 @@ import { Route as ApiSplatRouteImport } from './routes/api/$'
 import { Route as UnauthSignupRouteImport } from './routes/_unauth/signup'
 import { Route as UnauthLoginRouteImport } from './routes/_unauth/login'
 import { Route as DotwellKnownSplatRouteImport } from './routes/[.]well-known/$'
+import { Route as marketingTermsRouteImport } from './routes/(marketing)/terms'
+import { Route as marketingSecurityRouteImport } from './routes/(marketing)/security'
+import { Route as marketingPrivacyRouteImport } from './routes/(marketing)/privacy'
 import { Route as marketingAboutRouteImport } from './routes/(marketing)/about'
 import { Route as AuthWorkflowsIndexRouteImport } from './routes/_auth/workflows/index'
 import { Route as AuthSettingsIndexRouteImport } from './routes/_auth/settings/index'
@@ -70,6 +73,21 @@ const DotwellKnownSplatRoute = DotwellKnownSplatRouteImport.update({
   id: '/.well-known/$',
   path: '/.well-known/$',
   getParentRoute: () => rootRouteImport,
+} as any)
+const marketingTermsRoute = marketingTermsRouteImport.update({
+  id: '/terms',
+  path: '/terms',
+  getParentRoute: () => marketingRouteRoute,
+} as any)
+const marketingSecurityRoute = marketingSecurityRouteImport.update({
+  id: '/security',
+  path: '/security',
+  getParentRoute: () => marketingRouteRoute,
+} as any)
+const marketingPrivacyRoute = marketingPrivacyRouteImport.update({
+  id: '/privacy',
+  path: '/privacy',
+  getParentRoute: () => marketingRouteRoute,
 } as any)
 const marketingAboutRoute = marketingAboutRouteImport.update({
   id: '/about',
@@ -159,6 +177,9 @@ const AuthMattersIdAssistantChatIdRoute =
 export interface FileRoutesByFullPath {
   '/': typeof marketingIndexRoute
   '/about': typeof marketingAboutRoute
+  '/privacy': typeof marketingPrivacyRoute
+  '/security': typeof marketingSecurityRoute
+  '/terms': typeof marketingTermsRoute
   '/.well-known/$': typeof DotwellKnownSplatRoute
   '/login': typeof UnauthLoginRoute
   '/signup': typeof UnauthSignupRoute
@@ -182,6 +203,9 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof marketingIndexRoute
   '/about': typeof marketingAboutRoute
+  '/privacy': typeof marketingPrivacyRoute
+  '/security': typeof marketingSecurityRoute
+  '/terms': typeof marketingTermsRoute
   '/.well-known/$': typeof DotwellKnownSplatRoute
   '/login': typeof UnauthLoginRoute
   '/signup': typeof UnauthSignupRoute
@@ -208,6 +232,9 @@ export interface FileRoutesById {
   '/_auth': typeof AuthRouteRouteWithChildren
   '/_unauth': typeof UnauthRouteRouteWithChildren
   '/(marketing)/about': typeof marketingAboutRoute
+  '/(marketing)/privacy': typeof marketingPrivacyRoute
+  '/(marketing)/security': typeof marketingSecurityRoute
+  '/(marketing)/terms': typeof marketingTermsRoute
   '/.well-known/$': typeof DotwellKnownSplatRoute
   '/_unauth/login': typeof UnauthLoginRoute
   '/_unauth/signup': typeof UnauthSignupRoute
@@ -234,6 +261,9 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/about'
+    | '/privacy'
+    | '/security'
+    | '/terms'
     | '/.well-known/$'
     | '/login'
     | '/signup'
@@ -257,6 +287,9 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/about'
+    | '/privacy'
+    | '/security'
+    | '/terms'
     | '/.well-known/$'
     | '/login'
     | '/signup'
@@ -282,6 +315,9 @@ export interface FileRouteTypes {
     | '/_auth'
     | '/_unauth'
     | '/(marketing)/about'
+    | '/(marketing)/privacy'
+    | '/(marketing)/security'
+    | '/(marketing)/terms'
     | '/.well-known/$'
     | '/_unauth/login'
     | '/_unauth/signup'
@@ -369,6 +405,27 @@ declare module '@tanstack/react-router' {
       fullPath: '/.well-known/$'
       preLoaderRoute: typeof DotwellKnownSplatRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/(marketing)/terms': {
+      id: '/(marketing)/terms'
+      path: '/terms'
+      fullPath: '/terms'
+      preLoaderRoute: typeof marketingTermsRouteImport
+      parentRoute: typeof marketingRouteRoute
+    }
+    '/(marketing)/security': {
+      id: '/(marketing)/security'
+      path: '/security'
+      fullPath: '/security'
+      preLoaderRoute: typeof marketingSecurityRouteImport
+      parentRoute: typeof marketingRouteRoute
+    }
+    '/(marketing)/privacy': {
+      id: '/(marketing)/privacy'
+      path: '/privacy'
+      fullPath: '/privacy'
+      preLoaderRoute: typeof marketingPrivacyRouteImport
+      parentRoute: typeof marketingRouteRoute
     }
     '/(marketing)/about': {
       id: '/(marketing)/about'
@@ -487,11 +544,17 @@ declare module '@tanstack/react-router' {
 
 interface marketingRouteRouteChildren {
   marketingAboutRoute: typeof marketingAboutRoute
+  marketingPrivacyRoute: typeof marketingPrivacyRoute
+  marketingSecurityRoute: typeof marketingSecurityRoute
+  marketingTermsRoute: typeof marketingTermsRoute
   marketingIndexRoute: typeof marketingIndexRoute
 }
 
 const marketingRouteRouteChildren: marketingRouteRouteChildren = {
   marketingAboutRoute: marketingAboutRoute,
+  marketingPrivacyRoute: marketingPrivacyRoute,
+  marketingSecurityRoute: marketingSecurityRoute,
+  marketingTermsRoute: marketingTermsRoute,
   marketingIndexRoute: marketingIndexRoute,
 }
 
@@ -565,10 +628,11 @@ export const routeTree = rootRouteImport
   ._addFileTypes<FileRouteTypes>()
 
 import type { getRouter } from './router.tsx'
-import type { createStart } from '@tanstack/react-start'
+import type { startInstance } from './start.ts'
 declare module '@tanstack/react-start' {
   interface Register {
     ssr: true
     router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
   }
 }

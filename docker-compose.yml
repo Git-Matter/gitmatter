@@ -28,6 +28,20 @@ services:
     expose:
       - "5001"
 
+  # One-shot schema migration. Runs to completion before web starts; keeps the
+  # serving container immutable (no schema mutation at app boot).
+  migrate:
+    build:
+      context: .
+      dockerfile: infrastructure/Dockerfile.web
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://gitcounsel:gitcounsel@postgres:5432/gitcounsel
+    command: ["sh", "-c", "cd /app/packages/db && bun run migrate"]
+    restart: "no"
+
   web:
     build:
       context: .
@@ -35,6 +49,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     environment:
       DATABASE_URL: postgres://gitcounsel:gitcounsel@postgres:5432/gitcounsel
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?set in .env}

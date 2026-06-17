@@ -1,7 +1,24 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-import { decrypt, listEnabledConnections, type McpConnection } from "@workspace/core";
+import {
+  decrypt,
+  getEnv,
+  isPrivateHost,
+  listEnabledConnections,
+  type McpConnection,
+} from "@workspace/core";
 import { providersFor } from "@workspace/registry";
+
+// Hard timeout for consumed-MCP requests (connect + listTools) so a slow or hung
+// external server can't stall a chat turn.
+const MCP_REQUEST_TIMEOUT_MS = 15_000;
+
+// Allow connecting to private/loopback MCP URLs only when explicitly enabled
+// (local dev against a sidecar). Off in production to prevent SSRF. Read at call
+// time so a runtime env binding (Workers) is respected.
+function allowPrivateMcp(): boolean {
+  return getEnv("ALLOW_PRIVATE_MCP") === "true";
+}
 
 export type ExternalTool = {
   serverSlug: string;
@@ -31,8 +48,8 @@ async function connect(
     headers ? { requestInit: { headers } } : undefined
   );
   const client = new Client({ name: "gitcounsel", version: "0.1.0" });
-  await client.connect(transport);
-  const { tools } = await client.listTools();
+  await client.connect(transport, { timeout: MCP_REQUEST_TIMEOUT_MS });
+  const { tools } = await client.listTools(undefined, { timeout: MCP_REQUEST_TIMEOUT_MS });
   return {
     slug,
     client,
@@ -64,6 +81,16 @@ export async function connectEnabledServers(
   const servers: ConnectedServer[] = [];
   for (const conn of visible) {
     const slug = (conn.providerId ?? conn.name).toLowerCase().replace(/[^a-z0-9]+/g, "_");
+    // SSRF guard for unmanaged (custom, no providerId) connections: refuse private/
+    // loopback destinations unless explicitly allowed. Built-in providers are
+    // operator-seeded and trusted (a dev sidecar may legitimately be on localhost).
+    if (!conn.providerId && !allowPrivateMcp()) {
+      try {
+        if (isPrivateHost(new URL(conn.url).hostname)) continue;
+      } catch {
+        continue; // unparseable URL: skip
+      }
+    }
     try {
       servers.push(await connect(conn.url, slug, authHeaders(conn)));
     } catch {

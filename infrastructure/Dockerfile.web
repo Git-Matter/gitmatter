@@ -1,5 +1,7 @@
 # Builds the whole monorepo and serves the TanStack Start app (Hono mounted
-# behind /api/$). On start it applies the schema (drizzle-kit push) then serves.
+# behind /api/$). The serving container is immutable: it does NOT mutate the
+# schema on boot. Run migrations as a separate, controlled step (the `migrate`
+# one-shot service in docker-compose, or `drizzle-kit migrate` in CI/CD).
 FROM oven/bun:1.3.14 AS build
 WORKDIR /app
 COPY package.json bun.lock turbo.json ./
@@ -14,5 +16,5 @@ WORKDIR /app
 COPY --from=build /app /app
 ENV NODE_ENV=production PORT=4280
 EXPOSE 4280
-# Apply schema (push, per the self-host workflow) then serve the built output.
-CMD ["sh", "-c", "cd /app/packages/db && bun run push && cd /app/apps/web && bunx vite preview --host 0.0.0.0 --port ${PORT:-4280}"]
+# Serve the built output. Schema migrations run in a separate step, not here.
+CMD ["sh", "-c", "cd /app/apps/web && bunx vite preview --host 0.0.0.0 --port ${PORT:-4280}"]

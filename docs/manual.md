@@ -14,7 +14,7 @@ product is, see the [README](../README.md).
   provider's native SDK, configured for zero data retention; keys encrypted at rest
 - **MCP** — `@modelcontextprotocol/sdk` (server + client, Streamable HTTP)
 - **Storage** — S3-compatible object storage (Cloudflare R2 or any S3 endpoint); **required**
-- **Deploy** — docker-compose: web + postgres + courtlistener-mcp + docling (docling-serve sidecar)
+- **Deploy** — docker-compose: web + postgres + docling (docling-serve sidecar)
 
 ## Prerequisites
 
@@ -90,8 +90,9 @@ index.html`) — the root is not an app.
 docker compose up --build
 ```
 
-Runs `web` + `postgres` (pgvector) + `courtlistener-mcp` + `docling` (internal-network-only). The
-web image applies the schema on boot, then serves.
+Runs `web` + `postgres` (pgvector) + `docling` (internal-network-only). A one-shot `migrate` service
+applies the schema and exits; `web` waits for it to finish, then serves. The serving container does
+not mutate the schema itself.
 
 ## Connect an AI agent (MCP)
 
@@ -137,11 +138,13 @@ server address (the token only works here) and the login step reuses your gitcou
 
 ### Consumed MCP + chat
 
-The in-app **Chat** (your LLM key) also _consumes_ external MCP servers — gitcounsel acts as an MCP
-client. One is seeded:
+The in-app **Chat** (your LLM key) can also _consume_ external MCP servers — gitcounsel acts as an
+MCP client for any global or per-user connection you add. None are seeded by default.
 
-- **CourtListener** (`services/courtlistener-mcp`, a Bun MCP server we ship) — `search_case_law`,
-  `verify_citations`. Set `COURTLISTENER_API_TOKEN`.
+**CourtListener** legal-research tools (`search_case_law`, `verify_citations`) are **not** a
+consumed MCP server — they are baked into the backend as gitcounsel's own tools, exposed over
+gitcounsel's MCP server and in-app chat. Set `COURTLISTENER_API_TOKEN` to enable them. There is no
+`courtlistener-mcp` sidecar.
 
 Document extraction (PDF → markdown) uses **Docling** (`docling-serve`), called directly over its
 REST API — not an MCP server. No auth, so it runs internal-network-only (never published to the

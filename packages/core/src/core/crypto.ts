@@ -1,4 +1,5 @@
 import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from "node:crypto";
+import { requireEnv } from "./config.js";
 
 // AES-256-GCM, ported from mike's userApiKeys encryption. A scrypt KDF derives a
 // 32-byte key from ENCRYPTION_KEY. Each value gets a fresh 12-byte IV; the GCM
@@ -10,8 +11,7 @@ let cachedKey: Buffer | null = null;
 
 function key(): Buffer {
   if (cachedKey) return cachedKey;
-  const secret = process.env.ENCRYPTION_KEY;
-  if (!secret) throw new Error("ENCRYPTION_KEY is not set");
+  const secret = requireEnv("ENCRYPTION_KEY");
   cachedKey = scryptSync(secret, "gitcounsel.salt.v1", 32);
   return cachedKey;
 }

@@ -12,6 +12,7 @@ import {
   user,
   type Document,
 } from "@workspace/db/schema";
+import { recordAudit } from "../platform/audit.js";
 import { shareCountByArtifact, sharedArtifactIds } from "../platform/shares.js";
 import { type Actor, recordCommit } from "../core/commit.js";
 import { extractMarkdown, type SupportedFileType } from "./extract.js";
@@ -22,7 +23,30 @@ import {
   extractDocxBodyText,
   resolveTrackedChange,
 } from "./docx/trackedChanges.js";
-import { buildStoragePath, deleteObject, getObject, putObject } from "../core/storage.js";
+import {
+  buildStoragePath,
+  deleteObject,
+  getObject,
+  isAlreadyDeleted,
+  putObject,
+} from "../core/storage.js";
+
+/**
+ * Delete a stored object, tolerating "already gone" (idempotent purge) but
+ * recording any genuine failure to the audit log instead of silently dropping it.
+ */
+async function deleteObjectAudited(storagePath: string): Promise<void> {
+  try {
+    await deleteObject(storagePath);
+  } catch (err) {
+    if (isAlreadyDeleted(err)) return;
+    void recordAudit({
+      eventType: "storage.delete_failed",
+      target: storagePath,
+      metadata: { error: err instanceof Error ? err.message : String(err) },
+    });
+  }
+}
 
 export const DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
@@ -460,7 +484,7 @@ export async function purgeExpiredDocuments(): Promise<number> {
       .from(documentVersions)
       .where(eq(documentVersions.documentId, id));
     for (const v of versions) {
-      if (v.storagePath) await deleteObject(v.storagePath).catch(() => {});
+      if (v.storagePath) await deleteObjectAudited(v.storagePath);
     }
     await db.delete(documents).where(eq(documents.id, id));
   }
@@ -566,7 +590,16 @@ export async function deleteDocumentVersion(actor: Actor, documentId: string, ve
     .where(and(eq(documentVersions.id, versionId), eq(documentVersions.documentId, documentId)));
   if (!v) throw new Error("Version not found");
   if (v.deletedAt) throw new Error("Version already deleted");
-  if (v.storagePath) await deleteObject(v.storagePath);
+  // Interactive delete: tolerate an already-gone object, but surface a genuine
+  // storage failure to the caller (the route returns an error) rather than
+  // soft-deleting the row while bytes remain orphaned.
+  if (v.storagePath) {
+    try {
+      await deleteObject(v.storagePath);
+    } catch (err) {
+      if (!isAlreadyDeleted(err)) throw err;
+    }
+  }
   await recordCommit({
     artifactType: "document",
     artifactId: documentId,
