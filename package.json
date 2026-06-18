@@ -4,6 +4,8 @@
   "private": true,
   "scripts": {
     "build": "turbo run build",
+    "docs:build": "turbo run build --filter=docs",
+    "docs:dev": "turbo run dev --filter=docs",
     "dev": "bun scripts/dev.ts",
     "lint": "vp lint",
     "format": "vp fmt",

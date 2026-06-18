@@ -1,0 +1,57 @@
+---
+title: Backup & restore
+description: Back up your database and file storage, and practice recovery.
+---
+
+gitcounsel keeps its data in two places:
+
+- **Postgres** (the database) — accounts, matters, document details, the audit log, and tokens.
+- **Object storage** (the file store, such as S3 or R2) — the actual document files.
+
+Back up both. If you restore the database without its files, document links point at files that are not there; if you keep the files without a matching database, nothing points at them. They only work as a matched pair.
+
+## Postgres
+
+### Back up
+
+```bash
+bun scripts/db-backup.ts                 # → gitcounsel-<timestamp>.dump
+bun scripts/db-backup.ts /backups/x.dump # explicit path
+```
+
+This produces a single compressed backup file (`pg_dump -Fc`, Postgres's custom dump format). It needs the `postgresql-client` package (which provides the `pg_dump` tool) and `DATABASE_URL` set in `.env`.
+
+Schedule backups off-host (run them automatically with cron, CI, or your managed-Postgres provider's automated backups) and keep the backup files somewhere other than the database server, so a server failure does not take your backups with it. For managed Postgres (Neon, Supabase, RDS, Crunchy), also use the provider's point-in-time recovery (rewind the database to any moment) in addition to these dumps.
+
+### Restore
+
+```bash
+# Point DATABASE_URL at the TARGET db (a scratch db for drills), then:
+bun scripts/db-restore.ts gitcounsel-<timestamp>.dump
+```
+
+<Callout type="warn">
+  `db-restore.ts` runs `pg_restore --clean --if-exists`, which **drops and recreates** the database
+  contents (deletes what is there and rebuilds it from the backup). It is destructive. Never run it
+  against production unless you intend to overwrite it.
+</Callout>
+
+## Object storage (S3 / R2)
+
+Turn on **versioning** on the bucket (the file store keeps old copies of every file) so that overwritten or deleted files can be recovered:
+
+- **Cloudflare R2** — enable object versioning on the bucket (dashboard, or `wrangler r2 bucket` settings).
+- **AWS S3 or compatible** — enable Bucket Versioning, and optionally add a lifecycle rule to expire (eventually delete) old versions.
+
+With versioning on, gitcounsel's document purge (which deletes files) leaves recoverable earlier versions behind until your lifecycle policy expires them.
+
+## Restore drill
+
+A drill is a practice run of recovery, so you know it works before you ever need it for real. Do this before launch, and repeat it periodically.
+
+1. Take a backup: `bun scripts/db-backup.ts`.
+2. Create a scratch database (a throwaway test database) and set `DATABASE_URL` to it.
+3. Restore into it: `bun scripts/db-restore.ts <dump>`.
+4. Point the app at the scratch database and confirm it starts up and serves `/api/health`.
+5. Spot-check one firm's data: members, matters, and a document download against the versioned bucket.
+6. Record how long the restore took on the clock. That number is your recovery-time objective (how long getting back online realistically takes).

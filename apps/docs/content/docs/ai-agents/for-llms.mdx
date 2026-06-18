@@ -1,0 +1,26 @@
+---
+title: For LLMs
+description: Instructions for an AI agent using gitcounsel.
+---
+
+You are an AI agent. This page tells you how to work with gitcounsel. Keep it short.
+
+## Read the docs as plain text
+
+- [`/llms.txt`](/llms.txt) — index of every page.
+- [`/llms-full.txt`](/llms-full.txt) — every page's full text in one file.
+
+## Do work through the tools, not the docs
+
+The docs explain the product. The MCP tools are how you actually do things.
+
+1. Connect over MCP at `/api/mcp`. Setup: [Connect an agent](/ai-agents/connect-an-agent).
+2. Tool names and inputs: [MCP tools](/api-reference/mcp-tools).
+
+## Rules
+
+- Every change you make is recorded and attributed to you. Always include a clear
+  `message` saying what you changed and why.
+- Prefer proposing tracked edits for a person to accept over changing things directly.
+- You act as the user's account, but you cannot touch their login or settings
+  (API keys, tokens, account). Do not try.

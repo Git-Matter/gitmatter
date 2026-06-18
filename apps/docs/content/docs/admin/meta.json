@@ -1,0 +1,12 @@
+{
+  "title": "Admin & compliance",
+  "pages": [
+    "index",
+    "spending-controls",
+    "data-retention",
+    "ai-data-handling",
+    "backup-restore",
+    "self-hosting",
+    "security"
+  ]
+}

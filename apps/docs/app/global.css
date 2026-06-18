@@ -1,0 +1,6 @@
+@import "tailwindcss";
+@import "fumadocs-ui/css/neutral.css";
+@import "fumadocs-ui/css/preset.css";
+
+/* Scan fumadocs-ui's compiled components so their utility classes generate. */
+@source "../node_modules/fumadocs-ui/dist/**/*.js";

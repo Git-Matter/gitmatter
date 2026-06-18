@@ -1,0 +1,30 @@
+---
+title: Security
+description: The audit trail, encrypted secrets, and agent limits behind gitcounsel.
+---
+
+gitcounsel is built for firms that are skeptical of AI and need to prove what happened. This page summarizes its security and compliance posture. Each point is backed by the behavior described elsewhere in these docs.
+
+## Audited by design
+
+Every change, whether made by a person in the UI or by an AI agent, is recorded as a commit with author, message, field-level diff (exactly what changed), and blame (who changed it), in one shared history. Security and operational events (logins, the full life of tokens and keys, OAuth sign-ins, uploads, failed file deletions, budget overruns) are written to an audit log (a tamper-evident record of who did what). By default that log is kept for 365 days. See [data retention](/admin/data-retention).
+
+## Encrypted secrets at rest
+
+User secrets (LLM keys and MCP credentials) are encrypted with AES-256-GCM, a strong industry-standard encryption method. "At rest" means stored scrambled, so they are unreadable if the database is stolen. The encryption key is derived from your configured `ENCRYPTION_KEY` using a scrypt key-derivation function (which turns your setting into a proper encryption key). Keys are loaded only when needed and never stored in plaintext (never stored readable).
+
+## Bring your own key, with zero data retention
+
+gitcounsel's own features (chat and review) run on the firm's own LLM key across multiple providers (Claude / Gemini / OpenAI / OpenRouter). A user's key overrides any server-wide key, so requests bill and log under the firm's own provider account. The defaults are set for the strictest privacy posture each provider allows, so providers keep as little of your data as possible. See [AI data handling](/admin/ai-data-handling) for the per-provider detail and how to enable true zero data retention (the provider keeps and trains on nothing).
+
+## SSRF guards on consumed MCP servers
+
+The in-app chat can act as an MCP client and connect to external MCP servers that you add. Those outbound connections have an SSRF guard, which blocks the server from being tricked into calling internal addresses (server-side request forgery). None are configured by default.
+
+## Agents stay inside their lane
+
+When an AI agent connects over MCP, it acts as your gitcounsel account, and everything it does lands in the same commit log, marked as done by an agent. An agent can drive product features (reviews, contracts, workflows, documents, document generation, search, and audit), but it can **never** touch authentication or user settings such as keys, tokens, or account details.
+
+## Where the data lives
+
+Data is split between Postgres (accounts, matters, document details, the audit log, tokens) and S3-compatible object storage (the document files themselves). For protecting that data against loss, see [backup &amp; restore](/admin/backup-restore).

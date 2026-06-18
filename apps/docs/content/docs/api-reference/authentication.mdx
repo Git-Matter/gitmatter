@@ -1,0 +1,117 @@
+---
+title: Authentication
+description: Authenticate to the gitcounsel MCP server and REST API with static tokens or OAuth 2.1.
+---
+
+gitcounsel accepts two kinds of credentials, both presented as a bearer token in the
+HTTP `Authorization` header:
+
+```http
+Authorization: Bearer <token>
+```
+
+- **Static MCP tokens** — long-lived secrets you mint yourself. Simplest for
+  command-line tools and scripts.
+- **OAuth 2.1** — for clients (ChatGPT, the native Claude connectors) that log the
+  user in and walk an approval screen. No token to paste.
+
+Whichever you use, the caller acts as **your** gitcounsel account, and every mutation
+is recorded as an agent in your history.
+
+## Static MCP tokens
+
+A token is minted by `POST /api/mcp-tokens` (or via **Settings → Connect** in the app).
+Tokens carry the `gc_` prefix.
+
+The plaintext token is returned **once**, at mint time, and never again — only its
+**SHA-256 hash** is stored. If you lose a token, revoke it and mint a new one.
+
+| Operation | Endpoint                                                                                  |
+| --------- | ----------------------------------------------------------------------------------------- |
+| Mint      | `POST /api/mcp-tokens` — body `{ "label": "..." }`; returns `{ "token": "gc_..." }` once. |
+| List      | `GET /api/mcp-tokens` — id, label, created, last used, revoked (never the secret).        |
+| Revoke    | `DELETE /api/mcp-tokens/:id` — sets `revokedAt`; the token stops working immediately.     |
+
+Present the token to the MCP endpoint:
+
+```bash
+claude mcp add --transport http gitcounsel https://<host>/api/mcp \
+  --header "Authorization: Bearer gc_..."
+```
+
+<Callout type="warn">
+  Treat the token like a password. It grants full access to everything your account can reach.
+  Revoke unused tokens. The token's last-used time is tracked, and use is audited.
+</Callout>
+
+## OAuth 2.1
+
+gitcounsel is both an OAuth 2.1 **resource server** and **authorization server** at the
+same origin. Clients that support OAuth discover the endpoints automatically and never
+need a pasted token.
+
+### Discovery
+
+| Document                      | URL                                       | RFC      |
+| ----------------------------- | ----------------------------------------- | -------- |
+| Protected-resource metadata   | `/.well-known/oauth-protected-resource`   | RFC 9728 |
+| Authorization-server metadata | `/.well-known/oauth-authorization-server` | RFC 8414 |
+
+The protected-resource document points at this server as the authorization server and
+advertises the single `mcp` scope. The authorization-server document advertises the
+`authorization_code` and `refresh_token` grants, the `code` response type, and `S256`
+as the only supported PKCE code-challenge method.
+
+### Authorization-code flow with PKCE
+
+1. The client sends the user to `GET /api/oauth/authorize` with `response_type=code`,
+   `client_id`, `redirect_uri`, a PKCE `code_challenge`, and `code_challenge_method=S256`.
+   `S256` is **required** — plain challenges are rejected.
+2. gitcounsel reuses the user's existing session (bouncing through `/login` if needed)
+   and shows a consent page.
+3. On approval (`POST /api/oauth/authorize/decision`), it redirects back to the
+   `redirect_uri` with an authorization `code`.
+4. The client exchanges the code at `POST /api/oauth/token` with `grant_type=authorization_code`,
+   the `code`, `client_id`, `redirect_uri`, and the PKCE `code_verifier`.
+
+The token response is a standard bearer token:
+
+```json
+{
+  "access_token": "...",
+  "token_type": "Bearer",
+  "expires_in": 3600,
+  "refresh_token": "...",
+  "scope": "mcp"
+}
+```
+
+### Refresh rotation
+
+Call `POST /api/oauth/token` with `grant_type=refresh_token`, the `refresh_token`, and
+`client_id` to obtain a fresh access token. Refresh tokens rotate on each use.
+
+### Audience-bound tokens
+
+Access tokens are bound to this gitcounsel server's address (the resource indicated in
+the protected-resource metadata). A token issued here only works here — it cannot be
+replayed against another resource.
+
+### Client registration
+
+Clients can register in two ways:
+
+- **Dynamic Client Registration (RFC 7591)** — `POST /api/oauth/register` with
+  `redirect_uris` (and optionally `client_name`, `token_endpoint_auth_method`). Returns
+  a `client_id` and echoes the registration.
+- **Client ID Metadata Documents** — an `https://` URL `client_id` that resolves to a
+  JSON metadata document (ChatGPT's preferred path). gitcounsel fetches it on first use
+  (HTTPS only, no private hosts, size-capped) and validates the `redirect_uri` against it.
+
+<Callout type="info">
+  The OAuth scope is limited to `mcp` — product features only. OAuth-authorized agents can act on
+  the artifacts you can access; they cannot change your account, keys, or settings.
+</Callout>
+
+For a step-by-step client walkthrough, see
+[Connect an agent](/ai-agents/connect-an-agent).

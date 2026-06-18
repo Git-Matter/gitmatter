@@ -1,0 +1,87 @@
+---
+title: Connect an agent
+description: Connect Claude, ChatGPT, or another AI assistant to gitcounsel.
+---
+
+Connecting an AI assistant to gitcounsel takes a few minutes and you only do it once.
+There are two ways to sign in:
+
+- **The easy way (recommended): a secure login.** You sign in to gitcounsel and tap
+  "approve" — the same way you connect any other service to an app. There is no code
+  to copy and paste. This is called OAuth. It is how Claude Desktop and ChatGPT
+  connect.
+- **A secret code (a token).** gitcounsel can create a secret code, like a password,
+  that you give to your AI tool. This is mainly used by technical command-line tools.
+
+Either way, the assistant acts as **your** gitcounsel account, and everything it does
+is recorded under the assistant's name in your history.
+
+## The easy way: sign in and approve
+
+This path needs no code. You add gitcounsel inside your AI tool, sign in, and approve
+access. "Connector" below just means the feature in your AI tool for adding outside
+services.
+
+### ChatGPT (Developer Mode, paid plans)
+
+In ChatGPT, go to **Settings → Connectors** and add a custom connector. For the
+address, use gitcounsel's connection address: `https://<host>/api/mcp` (replace
+`<host>` with your gitcounsel web address). ChatGPT then takes you to a gitcounsel
+sign-in and approval page. Approve it, and you are connected. There is nothing to copy.
+
+### Claude Desktop / web (custom connector)
+
+In Claude, add a connector using the same address: `https://<host>/api/mcp`. Claude
+takes you through the same sign-in and approval. Approve it, and you are connected.
+
+<Callout type="warn">
+  A note mostly for people running their own gitcounsel server or testing on their own computer: the
+  sign-in-and-approve method needs gitcounsel to be reachable at a real, secure web address (one
+  that starts with `https://`). If you are testing on your own machine, you can use a tool like
+  `cloudflared` or `ngrok` to create a temporary secure address that points at your local
+  gitcounsel, then use that address in place of `http://localhost:4280`. If you are using a normal
+  hosted gitcounsel, this does not affect you.
+</Callout>
+
+## For technical users
+
+The rest of this page is for developers using command-line tools. If you are a lawyer
+connecting Claude or ChatGPT, you can skip it — the easy way above is all you need.
+
+These tools use a secret code (a token) instead of the sign-in screen.
+
+### Create a token
+
+Go to **Settings → Connect** and create a token. The full token is shown **once** —
+copy it then. If you lose it, revoke it and create a new one.
+
+### Claude Code (CLI, static token)
+
+Run this command (it tells Claude Code where gitcounsel is and passes your token):
+
+```bash
+claude mcp add --transport http gitcounsel http://localhost:4280/api/mcp \
+  --header "Authorization: Bearer <token>"
+```
+
+### Codex CLI (static token)
+
+Add this to `~/.codex/config.toml` (it points Codex at gitcounsel and tells it which
+token to use):
+
+```toml
+[mcp_servers.gitcounsel]
+url = "http://localhost:4280/api/mcp"
+bearer_token_env_var = "GITCOUNSEL_TOKEN"
+```
+
+### How the sign-in (OAuth) side works
+
+This section is for developers who want the technical details of the secure login.
+gitcounsel is an OAuth 2.1 resource + authorization server. It serves discovery at
+`/.well-known/oauth-protected-resource` and `/.well-known/oauth-authorization-server`,
+runs the authorization-code flow with PKCE (S256), and supports both Client ID
+Metadata Documents (ChatGPT's preferred path) and dynamic client registration. Access
+tokens are bound to the gitcounsel server address (the token only works here) and the
+login step reuses your existing gitcounsel session. For the full token API, see
+[Authentication](/api-reference/authentication).

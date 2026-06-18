@@ -1,0 +1,105 @@
+---
+title: MCP tools
+description: Reference for every tool in the gitcounsel MCP / assistant catalog.
+---
+
+The gitcounsel MCP server at `/api/mcp` and the in-app assistant share one tool
+catalog. Every tool runs as the acting user (attributed as an agent in history) and
+enforces the same per-artifact access checks regardless of how it is reached.
+
+The catalog has **26 tools**. The last two — case-law search and citation
+verification — are jurisdiction-gated and only appear when the user's jurisdiction
+includes a US legal-research provider (CourtListener).
+
+<Callout type="info">
+The git audit spine — `history`, `diff`, `blame`, `show_commit` — works the same way
+over every artifact type: `tabular_review`, `workflow`, and `document`. Each mutation
+is a commit attributed to an actor (a user, or an agent with a label such as
+`mcp:<token>` or `chat`).
+</Callout>
+
+## Audit / blame
+
+These cover "who changed what, exactly, and with what" across any artifact.
+
+| Tool          | Purpose                                                                         | Key inputs                                       |
+| ------------- | ------------------------------------------------------------------------------- | ------------------------------------------------ |
+| `history`     | List an artifact's commit history (newest first): seq, actor, op, message.      | `artifactType`, `artifactId`                     |
+| `diff`        | Field-level diff of an artifact between two commit sequence numbers.            | `artifactType`, `artifactId`, `fromSeq`, `toSeq` |
+| `blame`       | Which commit last set a given field path — who, when, and how.                  | `artifactType`, `artifactId`, `path`             |
+| `show_commit` | Full detail of one commit: actor, op, message, and every before → after change. | `commitId`                                       |
+
+`artifactType` is one of `tabular_review`, `workflow`, `document`. Example `path`
+values for `blame`: `cell/<documentId>/<columnIndex>` (review), `field/prompt_md`
+(workflow), `markdown` (document).
+
+## Tabular reviews
+
+| Tool                | Purpose                                                                                   | Key inputs                                        |
+| ------------------- | ----------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| `list_reviews`      | List the user's tabular reviews.                                                          | _(none)_                                          |
+| `get_review`        | Get a review's columns, cells, and per-cell blame.                                        | `reviewId`                                        |
+| `read_review_cells` | Read specific cells (values, flags, reasoning, citations), filtered by column / document. | `reviewId`, `columnIndices?`, `documentIds?`      |
+| `create_review`     | Create a tabular review over documents with extraction columns.                           | `title`, `documentIds`, `columns`, `matterId?`    |
+| `run_cell`          | Extract (or re-extract) one cell with the chosen model and commit it.                     | `reviewId`, `documentId`, `columnIndex`, `model?` |
+
+Each entry in `columns` is `{ name, prompt, format?, tags? }`.
+
+## Documents
+
+| Tool                    | Purpose                                                                           | Key inputs                           |
+| ----------------------- | --------------------------------------------------------------------------------- | ------------------------------------ |
+| `list_matter_documents` | List documents filed under a matter, with title, type, and status.                | `matterId`                           |
+| `get_document`          | Get a document's markdown and its tracked edits (status + blame).                 | `documentId`                         |
+| `generate_docx`         | Generate a downloadable `.docx` from structured blocks and file it as a document. | `title`, `blocks`, `matterId?`       |
+| `propose_document_edit` | Propose tracked changes (find → replace); lands as one version to accept/reject.  | `documentId`, `edits`                |
+| `resolve_document_edit` | Accept (apply) or reject a tracked change.                                        | `documentId`, `changeId`, `decision` |
+
+`blocks` entries are `{type:'heading',text,level?}`, `{type:'paragraph',text}`, or
+`{type:'table',rows}` (first row is the header). Each `edits` entry is
+`{ find, replace, contextBefore?, contextAfter?, reason? }`. `decision` is
+`accept` or `reject`.
+
+## Workflows
+
+| Tool             | Purpose                                                   | Key inputs                                                 |
+| ---------------- | --------------------------------------------------------- | ---------------------------------------------------------- |
+| `list_workflows` | List available workflow templates (system + user).        | _(none)_                                                   |
+| `read_workflow`  | Read a workflow template and its per-field blame.         | `workflowId`                                               |
+| `write_workflow` | Create a workflow, or update one by passing `workflowId`. | `workflowId?`, `title?`, `type?`, `promptMd?`, `matterId?` |
+
+`type` is `assistant` or `tabular`. To create, `title`, `type`, and `promptMd` are
+required.
+
+## Clients &amp; matters
+
+| Tool            | Purpose                                                        | Key inputs                          |
+| --------------- | -------------------------------------------------------------- | ----------------------------------- |
+| `list_clients`  | List the firm's clients.                                       | _(none)_                            |
+| `create_client` | Create a client for your firm.                                 | `name`, `type?`, `clientNumber?`    |
+| `list_matters`  | List the matters you're staffed on, with client and your role. | _(none)_                            |
+| `create_matter` | Create a matter for a client; you become its owner.            | `clientId`, `name`, `practiceArea?` |
+
+`type` (client) is `organization` or `individual`.
+
+## Search / fetch
+
+These follow the ChatGPT company-knowledge schema.
+
+| Tool     | Purpose                                                                     | Key inputs |
+| -------- | --------------------------------------------------------------------------- | ---------- |
+| `search` | Search your reviews and documents by keyword (matches titles). Returns ids. | `query`    |
+| `fetch`  | Fetch the full content of a search result by its id.                        | `id`       |
+
+`search` returns ids of the form `review:<id>` or `document:<id>`; pass those to
+`fetch`.
+
+## Legal research
+
+Jurisdiction-gated — only present when the user's jurisdiction includes CourtListener
+(US case law).
+
+| Tool               | Purpose                                                                        | Key inputs                                                 |
+| ------------------ | ------------------------------------------------------------------------------ | ---------------------------------------------------------- |
+| `search_case_law`  | Search US case law opinions (CourtListener) by keyword, with optional filters. | `query`, `court?`, `filedAfter?`, `filedBefore?`, `limit?` |
+| `verify_citations` | Verify / normalize US reporter citations (e.g. `467 U.S. 837`).                | `citations`                                                |

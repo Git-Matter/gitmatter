@@ -1,0 +1,178 @@
+---
+title: REST API
+description: HTTP endpoints under /api, grouped by resource.
+---
+
+The gitcounsel REST API is served under the base path `/api`. All routes (except the
+public ones noted below) require an authenticated session or a bearer token — see
+[Authentication](/api-reference/authentication).
+
+Unless stated otherwise, request and response bodies are JSON.
+
+## MCP tokens
+
+| Method | Path                  | Purpose                                                        |
+| ------ | --------------------- | -------------------------------------------------------------- |
+| GET    | `/api/mcp-tokens`     | List your MCP tokens (id, label, created, last used, revoked). |
+| POST   | `/api/mcp-tokens`     | Mint a token; full token returned **once**.                    |
+| DELETE | `/api/mcp-tokens/:id` | Revoke a token.                                                |
+
+## OAuth
+
+Discovery and the OAuth endpoints are public.
+
+| Method | Path                                            | Purpose                                                   |
+| ------ | ----------------------------------------------- | --------------------------------------------------------- |
+| GET    | `/.well-known/oauth-protected-resource`         | Protected-resource metadata (RFC 9728).                   |
+| GET    | `/.well-known/oauth-protected-resource/api/mcp` | Same metadata, path-suffixed for the MCP endpoint.        |
+| GET    | `/.well-known/oauth-authorization-server`       | Authorization-server metadata (RFC 8414).                 |
+| GET    | `/api/oauth/authorize`                          | Authorization endpoint (auth-code + PKCE; shows consent). |
+| POST   | `/api/oauth/authorize/decision`                 | Record the user's approve/deny decision.                  |
+| POST   | `/api/oauth/token`                              | Token endpoint (`authorization_code`, `refresh_token`).   |
+| POST   | `/api/oauth/register`                           | Dynamic client registration (RFC 7591).                   |
+
+## Clients
+
+| Method | Path                       | Purpose                                       |
+| ------ | -------------------------- | --------------------------------------------- |
+| GET    | `/api/clients`             | List clients (supports paging + filters).     |
+| POST   | `/api/clients`             | Create a client.                              |
+| PATCH  | `/api/clients/:id`         | Update a client.                              |
+| POST   | `/api/clients/bulk-delete` | Delete clients by id list or `all` selection. |
+| GET    | `/api/clients/export`      | Export clients as CSV.                        |
+| GET    | `/api/clients/:id`         | Client overview.                              |
+
+## Matters
+
+| Method | Path                                 | Purpose                                    |
+| ------ | ------------------------------------ | ------------------------------------------ |
+| GET    | `/api/matters`                       | List matters you can access.               |
+| POST   | `/api/matters`                       | Create a matter.                           |
+| POST   | `/api/matters/conflicts-check`       | Run a conflicts check.                     |
+| GET    | `/api/matters/:id`                   | Get a matter.                              |
+| PATCH  | `/api/matters/:id`                   | Update a matter (owner only).              |
+| POST   | `/api/matters/:id/close`             | Close a matter (owner only).               |
+| POST   | `/api/matters/:id/clear-conflicts`   | Clear flagged conflicts (owner only).      |
+| GET    | `/api/matters/:id/members`           | List matter members.                       |
+| POST   | `/api/matters/:id/members`           | Add a member by user id (owner only).      |
+| POST   | `/api/matters/:id/members/by-email`  | Add a tenant member by email (owner only). |
+| DELETE | `/api/matters/:id/members/:userId`   | Remove a member (owner only).              |
+| GET    | `/api/matters/:id/people`            | People with access (members + roles).      |
+| GET    | `/api/matters/:id/folders`           | List document folders.                     |
+| POST   | `/api/matters/:id/folders`           | Create a folder (editor).                  |
+| PATCH  | `/api/matters/:id/folders/:folderId` | Rename a folder (editor).                  |
+| DELETE | `/api/matters/:id/folders/:folderId` | Delete a folder (editor).                  |
+| GET    | `/api/users/search`                  | Search firm users by query.                |
+| GET    | `/api/practice-areas`                | List your practice-area pick list.         |
+| POST   | `/api/practice-areas`                | Add a practice area.                       |
+
+## Documents
+
+| Method | Path                                              | Purpose                                                           |
+| ------ | ------------------------------------------------- | ----------------------------------------------------------------- |
+| GET    | `/api/documents`                                  | List documents (yours, or a matter's via `?matterId=`).           |
+| POST   | `/api/documents`                                  | Create a document from pasted text/markdown.                      |
+| POST   | `/api/documents/upload`                           | Upload a PDF/DOCX (multipart); extraction runs in the background. |
+| POST   | `/api/documents/link`                             | Link existing documents into a matter.                            |
+| GET    | `/api/documents/events`                           | Live extraction status (SSE).                                     |
+| GET    | `/api/documents/:id`                              | Document detail with tracked edits + blame.                       |
+| PATCH  | `/api/documents/:id`                              | Rename a document (editor).                                       |
+| DELETE | `/api/documents/:id`                              | Delete a document (owner).                                        |
+| GET    | `/api/documents/:id/download`                     | Download the stored file (`?inline=1` to preview).                |
+| GET    | `/api/documents/:id/versions`                     | List versions.                                                    |
+| POST   | `/api/documents/:id/versions`                     | Upload a new version (editor).                                    |
+| GET    | `/api/documents/:id/versions/:versionId/download` | Download a specific version.                                      |
+| DELETE | `/api/documents/:id/versions/:versionId`          | Soft-delete a past version (editor).                              |
+| POST   | `/api/documents/:id/retry`                        | Re-queue extraction (editor).                                     |
+| GET    | `/api/documents/:id/history`                      | Commit history.                                                   |
+| POST   | `/api/documents/:id/edits`                        | Propose a tracked change (editor).                                |
+| POST   | `/api/documents/:id/edits/resolve-all`            | Accept/reject all pending changes (editor).                       |
+| POST   | `/api/documents/:id/edits/resolve-batch`          | Accept/reject a set of changes (editor).                          |
+| POST   | `/api/documents/:id/edits/:changeId/resolve`      | Accept/reject one change (editor).                                |
+| GET    | `/api/documents/:id/shares`                       | List people with access.                                          |
+| POST   | `/api/documents/:id/shares/by-email`              | Share by email (owner).                                           |
+| DELETE | `/api/documents/:id/shares/:userId`               | Remove a share (owner).                                           |
+
+## Tabular reviews
+
+| Method | Path                                       | Purpose                                                      |
+| ------ | ------------------------------------------ | ------------------------------------------------------------ |
+| GET    | `/api/tabular/reviews`                     | List reviews.                                                |
+| POST   | `/api/tabular/reviews`                     | Create a review.                                             |
+| GET    | `/api/tabular/reviews/:id`                 | Get a review.                                                |
+| POST   | `/api/tabular/reviews/:id/run`             | Run one cell (editor).                                       |
+| POST   | `/api/tabular/reviews/:id/run-doc`         | Run all columns for one document (editor).                   |
+| POST   | `/api/tabular/reviews/:id/run-all`         | Run every cell, streaming progress (SSE, editor).            |
+| POST   | `/api/tabular/prompt`                      | Draft a column extraction prompt from its title/format/tags. |
+| GET    | `/api/tabular/reviews/:id/export`          | Export the grid as CSV or XLSX (`?format=csv`).              |
+| GET    | `/api/tabular/reviews/:id/history`         | Commit history.                                              |
+| GET    | `/api/tabular/reviews/:id/diff`            | Field-level diff (`?from=&to=`).                             |
+| GET    | `/api/tabular/reviews/:id/shares`          | List people with access.                                     |
+| POST   | `/api/tabular/reviews/:id/shares/by-email` | Share by email (owner).                                      |
+| DELETE | `/api/tabular/reviews/:id/shares/:userId`  | Remove a share (owner).                                      |
+
+## Workflows
+
+| Method | Path                                 | Purpose                                      |
+| ------ | ------------------------------------ | -------------------------------------------- |
+| GET    | `/api/workflows`                     | List workflows (system + user).              |
+| POST   | `/api/workflows`                     | Create a workflow.                           |
+| GET    | `/api/workflows/hidden`              | List hidden built-ins.                       |
+| POST   | `/api/workflows/hidden`              | Hide a built-in.                             |
+| DELETE | `/api/workflows/hidden/:id`          | Unhide a built-in.                           |
+| GET    | `/api/workflows/practices`           | Distinct practices for the current tab/type. |
+| GET    | `/api/workflows/:id`                 | Get a workflow.                              |
+| PATCH  | `/api/workflows/:id`                 | Update a workflow (editor; not system).      |
+| DELETE | `/api/workflows/:id`                 | Delete a workflow.                           |
+| GET    | `/api/workflows/:id/shares`          | List shares (owner/editor).                  |
+| POST   | `/api/workflows/:id/share`           | Share with emails (owner/editor).            |
+| DELETE | `/api/workflows/:id/shares/:shareId` | Remove a share (owner/editor).               |
+| GET    | `/api/workflows/:id/history`         | Commit history.                              |
+
+## Chat
+
+| Method | Path                 | Purpose                                            |
+| ------ | -------------------- | -------------------------------------------------- |
+| POST   | `/api/chat`          | Run the assistant; buffered JSON response.         |
+| POST   | `/api/chat/stream`   | Run the assistant; Server-Sent Events stream.      |
+| GET    | `/api/chats`         | List conversations (`?scope=all` or `?matterId=`). |
+| GET    | `/api/chats/:id`     | Load one conversation's turns.                     |
+| PATCH  | `/api/chats/:id/pin` | Pin/unpin a conversation.                          |
+
+## Settings, models, keys
+
+| Method | Path                     | Purpose                               |
+| ------ | ------------------------ | ------------------------------------- |
+| GET    | `/api/settings`          | Get your settings (jurisdiction).     |
+| PUT    | `/api/settings`          | Update your settings.                 |
+| GET    | `/api/models`            | Model catalog for the picker.         |
+| GET    | `/api/models/openrouter` | Live OpenRouter model search (`?q=`). |
+| GET    | `/api/keys`              | Per-provider key status.              |
+| PUT    | `/api/keys`              | Save a provider API key.              |
+| DELETE | `/api/keys`              | Delete a provider key (`?provider=`). |
+
+## Tenant
+
+| Method | Path                      | Purpose                                        |
+| ------ | ------------------------- | ---------------------------------------------- |
+| GET    | `/api/tenant`             | Current tenant.                                |
+| GET    | `/api/tenant/members`     | Everyone in your organization.                 |
+| GET    | `/api/tenant/invites`     | Pending invites (admin only).                  |
+| POST   | `/api/tenant/invites`     | Create an invite (admin only).                 |
+| DELETE | `/api/tenant/invites/:id` | Revoke an invite (admin only).                 |
+| GET    | `/api/tenant/export`      | Full per-tenant data export, zip (admin only). |
+
+## Health
+
+Public; no authentication required.
+
+| Method | Path                | Purpose                         |
+| ------ | ------------------- | ------------------------------- |
+| GET    | `/api/health`       | Liveness check.                 |
+| GET    | `/api/health/ready` | Readiness check (dependencies). |
+
+## MCP endpoint
+
+| Method | Path       | Purpose                                                                            |
+| ------ | ---------- | ---------------------------------------------------------------------------------- |
+| ALL    | `/api/mcp` | The MCP server (bearer token or OAuth). See [MCP tools](/api-reference/mcp-tools). |
