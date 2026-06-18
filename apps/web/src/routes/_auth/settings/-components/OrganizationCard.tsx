@@ -6,8 +6,19 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Progress, ProgressLabel } from "@/components/ui/progress";
 import { api } from "@/lib/data/api";
 import { useSession } from "@/lib/auth/auth-client";
+
+const GB = 1024 * 1024 * 1024;
+const MB = 1024 * 1024;
+
+// Adaptive units: a tenant may sit at a few MB while the cap is in GB.
+function formatBytes(n: number): string {
+  if (n >= GB) return `${(n / GB).toFixed(2)} GB`;
+  if (n >= MB) return `${(n / MB).toFixed(1)} MB`;
+  return `${Math.round(n / 1024)} KB`;
+}
 
 export function OrganizationCard() {
   const qc = useQueryClient();
@@ -21,6 +32,10 @@ export function OrganizationCard() {
     queryKey: ["invites"],
     queryFn: () => api.listInvites(),
     retry: false,
+  });
+  const { data: storage } = useQuery({
+    queryKey: ["tenant-storage"],
+    queryFn: () => api.getTenantStorage(),
   });
   const [email, setEmail] = useState("");
   const [fresh, setFresh] = useState<string | null>(null);
@@ -56,6 +71,32 @@ export function OrganizationCard() {
           {tenant ? tenant.name : "Your organization"}. Matters, reviews, and workflows can only be
           shared with people in this organization.
         </p>
+
+        {storage && (
+          <div className="flex flex-col gap-2">
+            {storage.limit > 0 ? (
+              <Progress
+                value={Math.min(100, (storage.used / storage.limit) * 100)}
+                className="flex-col items-stretch gap-1.5"
+              >
+                <div className="flex items-baseline justify-between">
+                  <ProgressLabel>Storage</ProgressLabel>
+                  <span className="text-sm text-muted-foreground tabular-nums">
+                    {formatBytes(storage.used)} of {formatBytes(storage.limit)}
+                  </span>
+                </div>
+              </Progress>
+            ) : (
+              <div className="flex items-baseline justify-between text-sm">
+                <span className="font-medium">Storage</span>
+                <span className="text-muted-foreground">{formatBytes(storage.used)} used</span>
+              </div>
+            )}
+            <p className="text-xs text-muted-foreground">
+              Shared across everyone in your organization.
+            </p>
+          </div>
+        )}
 
         <div className="flex flex-col gap-2">
           <Label>Members{members.length > 0 ? ` (${members.length})` : ""}</Label>

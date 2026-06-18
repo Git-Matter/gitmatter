@@ -34,6 +34,7 @@ import {
   resolveEdit,
   resolveEdits,
   retryDocument,
+  StorageQuotaError,
   uploadDocument,
 } from "@workspace/core";
 import { type AuthEnv } from "../middleware/auth.js";
@@ -158,6 +159,8 @@ documentsRoute.post("/api/documents/upload", async (c) => {
     });
     return c.json(doc, 202);
   } catch (err) {
+    // Tenant over its shared storage quota: 507 Insufficient Storage.
+    if (err instanceof StorageQuotaError) return c.json({ error: err.message }, 507);
     // Storage/extraction-setup failures (e.g. S3 not configured) surface here.
     const message = err instanceof Error ? err.message : "upload failed";
     return c.json({ error: `Could not store file: ${message}` }, 502);
@@ -259,6 +262,7 @@ documentsRoute.post("/api/documents/:id/versions", async (c) => {
     enqueueExtraction(doc);
     return c.json(doc, 202);
   } catch (err) {
+    if (err instanceof StorageQuotaError) return c.json({ error: err.message }, 507);
     return c.json({ error: err instanceof Error ? err.message : "upload failed" }, 502);
   }
 });

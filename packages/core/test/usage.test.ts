@@ -1,9 +1,22 @@
 import { afterAll, afterEach, beforeAll, describe, expect, test } from "vite-plus/test";
 import { randomUUID } from "node:crypto";
 import { db, sql } from "@workspace/db/client";
-import { auditEvents, tenants, usageEvents, user } from "@workspace/db/schema";
+import {
+  auditEvents,
+  documentVersions,
+  documents,
+  tenants,
+  usageEvents,
+  user,
+} from "@workspace/db/schema";
 import { and, eq } from "drizzle-orm";
-import { recordLlmUsage, recordToolCall } from "../src/platform/usage.js";
+import {
+  assertStorageWithinQuota,
+  recordLlmUsage,
+  recordToolCall,
+  StorageQuotaError,
+  tenantStorageBytes,
+} from "../src/platform/usage.js";
 
 let tenantId: string;
 const userId = `usage-${randomUUID()}`;
@@ -23,15 +36,36 @@ beforeAll(async () => {
 afterEach(async () => {
   delete process.env.USER_LLM_TOKEN_BUDGET;
   delete process.env.MCP_TOKEN_CALL_BUDGET;
+  delete process.env.TENANT_STORAGE_QUOTA_GB;
   await db.delete(usageEvents).where(eq(usageEvents.userId, userId));
   await db.delete(auditEvents).where(eq(auditEvents.actorId, userId));
+  await db.delete(documents).where(eq(documents.tenantId, tenantId));
 });
 
 afterAll(async () => {
+  await db.delete(documents).where(eq(documents.tenantId, tenantId));
   await db.delete(tenants).where(eq(tenants.id, tenantId));
   await db.delete(user).where(eq(user.id, userId));
   await sql.end();
 });
+
+// Insert a document + one version carrying `sizeBytes`. `stored` controls whether
+// the version still holds its bytes (storagePath set) — a tombstoned version has
+// it nulled and must not count toward the tenant's footprint.
+async function seedVersion(sizeBytes: number, stored = true): Promise<void> {
+  const [doc] = await db
+    .insert(documents)
+    .values({ userId, tenantId, title: "q", fileType: "pdf" })
+    .returning();
+  await db.insert(documentVersions).values({
+    documentId: doc!.id,
+    versionNumber: 1,
+    storagePath: stored ? `${tenantId}/${userId}/${doc!.id}.pdf` : null,
+    source: "upload",
+    sizeBytes,
+    fileType: "pdf",
+  });
+}
 
 describe("recordLlmUsage", () => {
   test("appends a usage row and never throws", async () => {
@@ -89,5 +123,36 @@ describe("recordToolCall", () => {
       .from(auditEvents)
       .where(and(eq(auditEvents.eventType, "budget.exceeded"), eq(auditEvents.actorId, userId)));
     expect(flagged.length).toBeGreaterThanOrEqual(1); // 3 > 2
+  });
+});
+
+describe("tenant storage quota", () => {
+  const GB = 1024 * 1024 * 1024;
+
+  test("tenantStorageBytes sums stored versions, ignores tombstoned bytes", async () => {
+    await seedVersion(1000);
+    await seedVersion(500);
+    await seedVersion(9999, false); // tombstoned: storagePath null, must not count
+    expect(await tenantStorageBytes(tenantId)).toBe(1500);
+  });
+
+  test("assertStorageWithinQuota passes under the cap", async () => {
+    process.env.TENANT_STORAGE_QUOTA_GB = "1"; // 1 GB cap
+    await seedVersion(Math.round(0.6 * GB));
+    await assertStorageWithinQuota(tenantId, Math.round(0.4 * GB)); // 0.6 + 0.4 == 1 GB, not over
+  });
+
+  test("assertStorageWithinQuota throws StorageQuotaError over the cap", async () => {
+    process.env.TENANT_STORAGE_QUOTA_GB = "1";
+    await seedVersion(Math.round(0.6 * GB));
+    await expect(assertStorageWithinQuota(tenantId, Math.round(0.5 * GB))).rejects.toBeInstanceOf(
+      StorageQuotaError
+    );
+  });
+
+  test("quota <= 0 disables the check", async () => {
+    process.env.TENANT_STORAGE_QUOTA_GB = "0";
+    await seedVersion(10_000);
+    await assertStorageWithinQuota(tenantId, 10_000); // no throw
   });
 });

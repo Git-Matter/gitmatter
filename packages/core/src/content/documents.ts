@@ -13,6 +13,7 @@ import {
   type Document,
 } from "@workspace/db/schema";
 import { recordAudit } from "../platform/audit.js";
+import { assertStorageWithinQuota } from "../platform/usage.js";
 import { shareCountByArtifact, sharedArtifactIds } from "../platform/shares.js";
 import { type Actor, recordCommit } from "../core/commit.js";
 import { logEvent } from "../core/log.js";
@@ -282,6 +283,7 @@ export async function createGeneratedDocument(
 ): Promise<Document> {
   const bytes = Buffer.from(await generateDocx(input.spec));
   const tenantId = await matterTenant(input.matterId);
+  await assertStorageWithinQuota(tenantId, bytes.length);
   const docId = randomUUID();
   const versionId = randomUUID();
   const storagePath = buildStoragePath({
@@ -351,6 +353,7 @@ export async function uploadDocument(
   // object exists, which fails the doc with "no stored file to extract". So we
   // pre-generate the id, write the object, then insert the row already complete.
   const tenantId = await matterTenant(input.matterId);
+  await assertStorageWithinQuota(tenantId, input.bytes.length);
   const id = randomUUID();
   const versionId = randomUUID();
   const storagePath = buildStoragePath({
@@ -525,6 +528,7 @@ export async function addDocumentVersion(
 ): Promise<Document> {
   const doc = await getDocument(documentId);
   if (!doc) throw new Error("Document not found");
+  await assertStorageWithinQuota(doc.tenantId, input.bytes.length);
   const latest = await latestVersion(documentId);
   const versionNumber = (latest?.versionNumber ?? 0) + 1;
   const storagePath = buildStoragePath({

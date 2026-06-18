@@ -425,6 +425,7 @@ export const api = {
 
   // Tenant invites (admins)
   getTenant: () => req<{ id: string; name: string }>("/api/tenant"),
+  getTenantStorage: () => req<{ used: number; limit: number }>("/api/tenant/storage"),
   listInvites: () => req<TenantInvite[]>("/api/tenant/invites"),
   // Returns the full invite (incl. token) in dev; when a real email provider is
   // configured the server emails the link and returns only an acknowledgement.

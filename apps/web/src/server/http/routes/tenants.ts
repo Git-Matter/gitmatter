@@ -9,6 +9,8 @@ import {
   recordAudit,
   revokeInvite,
   sendInviteEmail,
+  tenantStorageBytes,
+  tenantStorageQuotaBytes,
 } from "@workspace/core";
 import { type AuthEnv } from "../middleware/auth.js";
 import { serverOrigin } from "../lib/origin.js";
@@ -20,6 +22,13 @@ export const tenantsRoute = new Hono<AuthEnv>();
 tenantsRoute.get("/api/tenant", async (c) => {
   const t = await getTenant(c.get("user").tenantId);
   return t ? c.json(t) : c.json({ error: "Not found" }, 404);
+});
+
+// Shared storage usage for the caller's organization (bytes used + the cap).
+// Any member may read it; tenantId comes from the session, never the client.
+tenantsRoute.get("/api/tenant/storage", async (c) => {
+  const tenantId = c.get("user").tenantId;
+  return c.json({ used: await tenantStorageBytes(tenantId), limit: tenantStorageQuotaBytes() });
 });
 
 // Everyone in the caller's organization — backs the settings members list and
