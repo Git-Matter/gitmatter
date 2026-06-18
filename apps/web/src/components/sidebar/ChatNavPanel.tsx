@@ -340,6 +340,7 @@ export function ChatNavPanel({ onNavigate }: { onNavigate?: () => void }) {
             <>
               <Link
                 to="/matters"
+                search={{ new: true }}
                 onClick={onNavigate}
                 title="New matter"
                 aria-label="New matter"
