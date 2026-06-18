@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { type Context, Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import { zValidator } from "@hono/zod-validator";
 import {
@@ -13,6 +13,7 @@ import {
   deleteDocumentVersion,
   docEvents,
   type DocStatusEvent,
+  assertFileTypeMatches,
   DOCX_MIME,
   enqueueExtraction,
   fileTypeFromName,
@@ -57,6 +58,18 @@ const MIME_BY_TYPE: Record<string, string> = {
 export const documentsRoute = new Hono<AuthEnv>();
 
 const MAX_UPLOAD_BYTES = 25 * 1024 * 1024; // 25 MB
+// Multipart wraps the file in boundaries + part headers, so Content-Length runs a
+// little above the raw file size. Allow 1 MB of slack on the early reject so a
+// legitimate ~25 MB file isn't bounced before the exact `file.size` check.
+const MAX_BODY_BYTES = MAX_UPLOAD_BYTES + 1024 * 1024;
+
+// Reject an oversized upload from the Content-Length header BEFORE parsing the
+// body, so the whole payload is never buffered into memory. Coarse outer guard;
+// the precise `file.size > MAX_UPLOAD_BYTES` check still runs after parsing.
+function bodyTooLarge(c: Context): boolean {
+  const len = Number(c.req.header("content-length"));
+  return Number.isFinite(len) && len > MAX_BODY_BYTES;
+}
 
 const documentStatuses = ["pending", "processing", "ready", "failed"] as const;
 const documentSorts = ["title", "fileType", "status", "createdAt"] as const;
@@ -111,6 +124,7 @@ documentsRoute.post("/api/documents", zValidator("json", createDocumentSchema), 
 // Upload a PDF/DOCX: bytes -> storage, row inserted `pending`. Markdown
 // extraction runs in the background worker; the client polls `status`.
 documentsRoute.post("/api/documents/upload", async (c) => {
+  if (bodyTooLarge(c)) return c.json({ error: "file exceeds 25 MB limit" }, 400);
   const body = await c.req.parseBody();
   const file = body.file;
   if (!(file instanceof File)) return c.json({ error: "file is required" }, 400);
@@ -126,6 +140,10 @@ documentsRoute.post("/api/documents/upload", async (c) => {
   if (!matterId) return c.json({ error: "Forbidden" }, 403);
 
   const bytes = Buffer.from(await file.arrayBuffer());
+  // Defense in depth: the extension check above can be spoofed; sniff the magic
+  // bytes and reject when content and extension disagree.
+  const match = assertFileTypeMatches(file.name, bytes);
+  if (!match.ok) return c.json({ error: match.reason }, 400);
   const title = typeof body.title === "string" && body.title.trim() ? body.title.trim() : file.name;
   const folderId = typeof body.folderId === "string" && body.folderId ? body.folderId : null;
   try {
@@ -223,6 +241,7 @@ documentsRoute.post("/api/documents/:id/versions", async (c) => {
   const id = c.req.param("id");
   if (!(await canAccessArtifact(c.get("user").id, "document", id, "editor")))
     return c.json({ error: "Not found" }, 404);
+  if (bodyTooLarge(c)) return c.json({ error: "file exceeds 25 MB limit" }, 400);
   const body = await c.req.parseBody();
   const file = body.file;
   if (!(file instanceof File)) return c.json({ error: "file is required" }, 400);
@@ -230,6 +249,8 @@ documentsRoute.post("/api/documents/:id/versions", async (c) => {
   if (!fileType) return c.json({ error: "only PDF and DOCX/DOC are supported" }, 400);
   if (file.size > MAX_UPLOAD_BYTES) return c.json({ error: "file exceeds 25 MB limit" }, 400);
   const bytes = Buffer.from(await file.arrayBuffer());
+  const match = assertFileTypeMatches(file.name, bytes);
+  if (!match.ok) return c.json({ error: match.reason }, 400);
   try {
     const doc = await addDocumentVersion({ type: "user", userId: c.get("user").id }, id, {
       fileType,
