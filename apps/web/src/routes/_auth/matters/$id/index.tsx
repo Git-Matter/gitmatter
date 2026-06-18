@@ -1,52 +1,29 @@
 import { createFileRoute, Link, useNavigate, useParams } from "@tanstack/react-router";
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  Download,
-  FileText,
-  FolderPlus,
-  MessageSquarePlus,
-  MoreHorizontal,
-  Pencil,
-  Plus,
-  RotateCcw,
-  Search,
-  TableProperties,
-  Trash2,
-  Upload,
-  Users,
-} from "lucide-react";
+import { createColumnHelper } from "@tanstack/react-table";
+import { FolderPlus, MessageSquarePlus, Pencil, Plus, TableProperties, Users } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { DataTable } from "@/components/DataTable";
 import { PageHeader } from "@/components/PageHeader";
 import { PageShell } from "@/components/PageShell";
-import { StateCue } from "@/components/StateCue";
+import { TableSearch } from "@/components/TableSearch";
 import { ToolbarTabs } from "@/components/ToolbarTabs";
-import { VersionChip } from "@/routes/_auth/matters/-components/VersionChip";
 import { PeopleModal } from "@/routes/_auth/matters/-components/PeopleModal";
 import { EditMatterModal } from "@/routes/_auth/matters/-components/EditMatterModal";
 import { AddDocumentsModal } from "@/routes/_auth/matters/-components/AddDocumentsModal";
+import {
+  matterDocumentColumns,
+  type DocRow,
+} from "@/routes/_auth/matters/-components/matterDocumentColumns";
 import { DocumentDrawer } from "@/routes/_auth/documents/-components/DocumentDrawer";
-import { api, type Doc, type Folder } from "@/lib/data/api";
+import { api, type ChatSummary, type Doc, type Folder } from "@/lib/data/api";
 import { useChats } from "@/lib/data/queries";
+import { useDataTable } from "@/lib/hooks/table/useDataTable";
 import { useSession } from "@/lib/auth/auth-client";
 import { useMatters } from "@/lib/context/matters-context";
-import { formatBytes, formatShortDate } from "@/lib/format/format";
+import { formatShortDate } from "@/lib/format/format";
 
 export const Route = createFileRoute("/_auth/matters/$id/")({ component: MatterWorkspace });
 
@@ -100,6 +77,8 @@ function MatterWorkspace() {
 
   return (
     <PageShell
+      mode="fill"
+      bodyClassName="gap-stack"
       header={
         /* mike Image #1: inline "Matters › Name" trail + two action groups —
            a frosted icon pill (search / people / …) and New Chat / New Review. */
@@ -184,10 +163,13 @@ function MatterWorkspace() {
 }
 
 function DocumentsTab({ matterId, canEdit }: { matterId: string; canEdit: boolean }) {
+  // See Documents/Reviews: React Compiler can't track the stable TanStack table's
+  // in-place data changes, so it skips the re-render that fills the table. Opt out.
+  "use no memo";
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
   const [folderId, setFolderId] = useState<string | null>(null);
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [rowSelection, setRowSelection] = useState({});
   const [previewId, setPreviewId] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -270,22 +252,54 @@ function DocumentsTab({ matterId, canEdit }: { matterId: string; canEdit: boolea
   const filtered = docs.filter((d: Doc) => d.title.toLowerCase().includes(search.toLowerCase()));
   const current = folders.find((f) => f.id === folderId) ?? null;
 
-  const totalRows = rootFolders.length + filtered.length;
+  // Folders first, then docs — one combined data-table row model.
+  const rows: DocRow[] = [
+    ...rootFolders.map((folder): DocRow => ({ kind: "folder", id: `folder:${folder.id}`, folder })),
+    ...filtered.map((doc): DocRow => ({ kind: "doc", id: `doc:${doc.id}`, doc })),
+  ];
+
+  const columns = useMemo(
+    () =>
+      matterDocumentColumns({
+        canEdit,
+        onReExtract: (id) => retryExtract.mutate(id),
+        onRename: (doc) => {
+          const name = window.prompt("Rename document", doc.title);
+          if (name?.trim() && name.trim() !== doc.title)
+            renameDoc.mutate({ id: doc.id, title: name.trim() });
+        },
+        onDownload: (id) => {
+          window.location.href = api.documentDownloadUrl(id);
+        },
+        onUploadVersion: (id) => {
+          versionTargetId.current = id;
+          versionInputRef.current?.click();
+        },
+        onDelete: (doc) => {
+          if (window.confirm(`Delete "${doc.title}"? This can be undone within 30 days.`))
+            deleteDoc.mutate(doc.id);
+        },
+      }),
+    [canEdit, retryExtract, renameDoc, deleteDoc]
+  );
+
+  const { table } = useDataTable({
+    mode: "client",
+    columns,
+    data: rows,
+    getRowId: (row) => row.id,
+    enableSorting: false,
+    rowSelection,
+    onRowSelectionChange: setRowSelection,
+  });
+  const selectedCount = table.getSelectedRowModel().rows.length;
 
   return (
-    <div className="flex flex-col gap-stack p-2">
+    <div className="flex min-h-0 flex-1 flex-col gap-stack">
       {/* Table toolbar (shadcn data-table pattern): filter on the left,
           document-table-specific actions on the right. */}
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2 rounded-lg border border-input bg-background px-2.5">
-          <Search className="size-4 text-muted-foreground" />
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Filter documents…"
-            className="h-9 w-64 bg-transparent text-sm outline-none"
-          />
-        </div>
+      <div className="flex shrink-0 items-center justify-between gap-3">
+        <TableSearch value={search} onChange={setSearch} placeholder="Filter documents…" />
         {canEdit && (
           <div className="flex items-center gap-2">
             <Button
@@ -329,7 +343,7 @@ function DocumentsTab({ matterId, canEdit }: { matterId: string; canEdit: boolea
 
       {/* Folder breadcrumb only when inside a subfolder (root needs no chrome). */}
       {current && (
-        <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+        <div className="flex shrink-0 items-center gap-1.5 text-sm text-muted-foreground">
           <button onClick={() => setFolderId(null)} className="hover:text-foreground">
             All documents
           </button>
@@ -352,173 +366,17 @@ function DocumentsTab({ matterId, canEdit }: { matterId: string; canEdit: boolea
         }}
       />
 
-      <div className="overflow-hidden rounded-lg border border-border">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="w-10">
-                <Checkbox
-                  checked={filtered.length > 0 && filtered.every((d) => selected.has(d.id))}
-                  onChange={() =>
-                    setSelected((s) =>
-                      filtered.every((d) => s.has(d.id))
-                        ? new Set()
-                        : new Set(filtered.map((d) => d.id))
-                    )
-                  }
-                  aria-label="Select all"
-                />
-              </TableHead>
-              <TableHead>Name</TableHead>
-              <TableHead>Type</TableHead>
-              <TableHead>Size</TableHead>
-              <TableHead>Version</TableHead>
-              <TableHead>Created</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="w-10" />
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {rootFolders.map((f) => (
-              <TableRow key={f.id} className="cursor-pointer" onClick={() => setFolderId(f.id)}>
-                <TableCell />
-                <TableCell className="font-medium">
-                  <span className="flex items-center gap-2">
-                    <FolderPlus className="size-4 text-bronze" /> {f.name}
-                  </span>
-                </TableCell>
-                <TableCell className="text-muted-foreground">Folder</TableCell>
-                <TableCell className="text-muted-foreground">—</TableCell>
-                <TableCell className="text-muted-foreground">—</TableCell>
-                <TableCell className="text-muted-foreground">
-                  {formatShortDate(f.createdAt)}
-                </TableCell>
-                <TableCell />
-                <TableCell />
-              </TableRow>
-            ))}
-            {filtered.map((d: Doc) => (
-              <TableRow
-                key={d.id}
-                className="cursor-pointer"
-                data-state={selected.has(d.id) ? "selected" : undefined}
-                onClick={() => setPreviewId(d.id)}
-              >
-                <TableCell onClick={(e) => e.stopPropagation()}>
-                  <Checkbox
-                    checked={selected.has(d.id)}
-                    onChange={() =>
-                      setSelected((s) => {
-                        const n = new Set(s);
-                        if (n.has(d.id)) n.delete(d.id);
-                        else n.add(d.id);
-                        return n;
-                      })
-                    }
-                    aria-label={`Select ${d.title}`}
-                  />
-                </TableCell>
-                <TableCell>
-                  <span className="flex items-center gap-2">
-                    <FileText className="size-4 text-destructive" /> {d.title}
-                  </span>
-                </TableCell>
-                <TableCell className="text-muted-foreground uppercase">{d.fileType}</TableCell>
-                <TableCell className="text-muted-foreground">{formatBytes(d.sizeBytes)}</TableCell>
-                <TableCell>
-                  <VersionChip n={1} />
-                </TableCell>
-                <TableCell className="text-muted-foreground">
-                  {formatShortDate(d.createdAt)}
-                </TableCell>
-                <TableCell>
-                  <DocStatusCue status={d.status} />
-                </TableCell>
-                <TableCell onClick={(e) => e.stopPropagation()}>
-                  {canEdit && (
-                    <DropdownMenu>
-                      <DropdownMenuTrigger
-                        render={
-                          <Button
-                            variant="ghost"
-                            size="icon-sm"
-                            title="Document actions"
-                            aria-label="Document actions"
-                          >
-                            <MoreHorizontal className="size-4" />
-                          </Button>
-                        }
-                      />
-                      <DropdownMenuContent align="end" className="min-w-52">
-                        {d.status === "failed" && (
-                          <DropdownMenuItem
-                            className="whitespace-nowrap"
-                            onClick={() => retryExtract.mutate(d.id)}
-                          >
-                            <RotateCcw className="size-4" /> Re-extract
-                          </DropdownMenuItem>
-                        )}
-                        <DropdownMenuItem
-                          className="whitespace-nowrap"
-                          onClick={() => {
-                            const name = window.prompt("Rename document", d.title);
-                            if (name?.trim() && name.trim() !== d.title)
-                              renameDoc.mutate({ id: d.id, title: name.trim() });
-                          }}
-                        >
-                          <Pencil className="size-4" /> Rename document
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          className="whitespace-nowrap"
-                          onClick={() => {
-                            window.location.href = api.documentDownloadUrl(d.id);
-                          }}
-                        >
-                          <Download className="size-4" /> Download
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          className="whitespace-nowrap"
-                          onClick={() => {
-                            versionTargetId.current = d.id;
-                            versionInputRef.current?.click();
-                          }}
-                        >
-                          <Upload className="size-4" /> Upload new version
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          variant="destructive"
-                          className="whitespace-nowrap"
-                          onClick={() => {
-                            if (
-                              window.confirm(
-                                `Delete "${d.title}"? This can be undone within 30 days.`
-                              )
-                            )
-                              deleteDoc.mutate(d.id);
-                          }}
-                        >
-                          <Trash2 className="size-4" /> Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  )}
-                </TableCell>
-              </TableRow>
-            ))}
-            {!rootFolders.length && !filtered.length && (
-              <TableRow>
-                <TableCell colSpan={8} className="py-12 text-center text-muted-foreground">
-                  No documents yet. {canEdit && "Add documents to get started."}
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </div>
+      <DataTable
+        table={table}
+        empty={`No documents yet.${canEdit ? " Add documents to get started." : ""}`}
+        onRowClick={(r) =>
+          r.kind === "folder" ? setFolderId(r.folder.id) : setPreviewId(r.doc.id)
+        }
+      />
 
       {/* Selection footer (shadcn data-table pattern). */}
-      <div className="text-sm text-muted-foreground">
-        {selected.size} of {totalRows} row(s) selected.
+      <div className="shrink-0 text-sm text-muted-foreground">
+        {selectedCount} of {rows.length} row(s) selected.
       </div>
 
       <DocumentDrawer docId={previewId} onClose={() => setPreviewId(null)} />
@@ -526,14 +384,25 @@ function DocumentsTab({ matterId, canEdit }: { matterId: string; canEdit: boolea
   );
 }
 
-function DocStatusCue({ status }: { status: Doc["status"] }) {
-  if (status === "ready") return <span className="text-muted-foreground">Ready</span>;
-  if (status === "failed")
-    return <span className="text-xs font-medium text-destructive">Failed</span>;
-  return <StateCue tone="bronze">{status === "processing" ? "Extracting" : "Queued"}</StateCue>;
-}
+const chatHelper = createColumnHelper<ChatSummary>();
+const chatColumns = [
+  chatHelper.accessor((ch) => ch.title || "Untitled chat", {
+    id: "title",
+    header: "Title",
+    size: 360,
+    cell: (c) => <span className="block truncate font-medium">{c.getValue()}</span>,
+  }),
+  chatHelper.accessor("updatedAt", {
+    id: "updatedAt",
+    header: "Updated",
+    size: 160,
+    cell: (c) => <span className="text-muted-foreground">{formatShortDate(c.getValue())}</span>,
+  }),
+];
 
 function ChatsTab({ matterId }: { matterId: string }) {
+  // See Documents tab: opt out of React Compiler memoization for the DataTable.
+  "use no memo";
   const navigate = useNavigate();
   const { data: chats = [] } = useChats(matterId);
   const [search, setSearch] = useState("");
@@ -544,64 +413,57 @@ function ChatsTab({ matterId }: { matterId: string }) {
     (ch.title || "Untitled chat").toLowerCase().includes(search.toLowerCase())
   );
 
+  const { table } = useDataTable({
+    mode: "client",
+    columns: chatColumns,
+    data: filtered,
+    getRowId: (row) => row.id,
+    defaultSorting: [{ id: "updatedAt", desc: true }],
+  });
+
   return (
-    <div className="flex flex-col gap-stack p-2">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2 rounded-lg border border-input bg-background px-2.5">
-          <Search className="size-4 text-muted-foreground" />
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Filter chats…"
-            className="h-9 w-64 bg-transparent text-sm outline-none"
-          />
-        </div>
+    <div className="flex min-h-0 flex-1 flex-col gap-stack">
+      <div className="flex shrink-0 items-center justify-between gap-3">
+        <TableSearch value={search} onChange={setSearch} placeholder="Filter chats…" />
         <Button size="sm" onClick={startChat}>
           <MessageSquarePlus className="size-4" /> New Chat
         </Button>
       </div>
 
-      <div className="overflow-hidden rounded-lg border border-border">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Title</TableHead>
-              <TableHead className="w-40">Updated</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filtered.map((ch) => (
-              <TableRow
-                key={ch.id}
-                className="cursor-pointer"
-                onClick={() =>
-                  navigate({
-                    to: "/matters/$id/assistant/$chatId",
-                    params: { id: matterId, chatId: ch.id },
-                  })
-                }
-              >
-                <TableCell className="font-medium">{ch.title || "Untitled chat"}</TableCell>
-                <TableCell className="text-muted-foreground">
-                  {formatShortDate(ch.updatedAt)}
-                </TableCell>
-              </TableRow>
-            ))}
-            {!filtered.length && (
-              <TableRow>
-                <TableCell colSpan={2} className="py-12 text-center text-muted-foreground">
-                  No chats yet.
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </div>
+      <DataTable
+        table={table}
+        empty="No chats yet."
+        onRowClick={(ch) =>
+          navigate({
+            to: "/matters/$id/assistant/$chatId",
+            params: { id: matterId, chatId: ch.id },
+          })
+        }
+      />
     </div>
   );
 }
 
+type ReviewRow = { id: string; title: string; documentIds: string[]; createdAt: string };
+const reviewHelper = createColumnHelper<ReviewRow>();
+const reviewColumns = [
+  reviewHelper.accessor((r) => r.title || "Untitled review", {
+    id: "title",
+    header: "Title",
+    size: 360,
+    cell: (c) => <span className="block truncate font-medium">{c.getValue()}</span>,
+  }),
+  reviewHelper.accessor("createdAt", {
+    id: "createdAt",
+    header: "Created",
+    size: 160,
+    cell: (c) => <span className="text-muted-foreground">{formatShortDate(c.getValue())}</span>,
+  }),
+];
+
 function ReviewsTab({ matterId }: { matterId: string }) {
+  // See Documents tab: opt out of React Compiler memoization for the DataTable.
+  "use no memo";
   const navigate = useNavigate();
   const { setCurrent } = useMatters();
   const { data: reviews = [] } = useQuery({
@@ -620,54 +482,28 @@ function ReviewsTab({ matterId }: { matterId: string }) {
     (r.title || "Untitled review").toLowerCase().includes(search.toLowerCase())
   );
 
+  const { table } = useDataTable({
+    mode: "client",
+    columns: reviewColumns,
+    data: filtered,
+    getRowId: (row) => row.id,
+    defaultSorting: [{ id: "createdAt", desc: true }],
+  });
+
   return (
-    <div className="flex flex-col gap-stack p-2">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2 rounded-lg border border-input bg-background px-2.5">
-          <Search className="size-4 text-muted-foreground" />
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Filter reviews…"
-            className="h-9 w-64 bg-transparent text-sm outline-none"
-          />
-        </div>
+    <div className="flex min-h-0 flex-1 flex-col gap-stack">
+      <div className="flex shrink-0 items-center justify-between gap-3">
+        <TableSearch value={search} onChange={setSearch} placeholder="Filter reviews…" />
         <Button size="sm" onClick={newReview}>
           <TableProperties className="size-4" /> New Review
         </Button>
       </div>
 
-      <div className="overflow-hidden rounded-lg border border-border">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Title</TableHead>
-              <TableHead className="w-40">Created</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filtered.map((r) => (
-              <TableRow
-                key={r.id}
-                className="cursor-pointer"
-                onClick={() => navigate({ to: "/reviews/$id", params: { id: r.id } })}
-              >
-                <TableCell className="font-medium">{r.title || "Untitled review"}</TableCell>
-                <TableCell className="text-muted-foreground">
-                  {formatShortDate(r.createdAt)}
-                </TableCell>
-              </TableRow>
-            ))}
-            {!filtered.length && (
-              <TableRow>
-                <TableCell colSpan={2} className="py-12 text-center text-muted-foreground">
-                  No reviews yet.
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </div>
+      <DataTable
+        table={table}
+        empty="No reviews yet."
+        onRowClick={(r) => navigate({ to: "/reviews/$id", params: { id: r.id } })}
+      />
     </div>
   );
 }
