@@ -15,9 +15,7 @@ const config = {
   // routes it to the main app, so this redirect must not exist.
   async redirects() {
     if (process.env.NODE_ENV !== "development") return [];
-    return [
-      { source: "/", destination: "/docs", basePath: false, permanent: false },
-    ];
+    return [{ source: "/", destination: "/docs", basePath: false, permanent: false }];
   },
 };
 

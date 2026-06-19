@@ -1,4 +1,11 @@
-import { AbsoluteFill, Easing, interpolate, spring, useCurrentFrame, useVideoConfig } from "remotion";
+import {
+  AbsoluteFill,
+  Easing,
+  interpolate,
+  spring,
+  useCurrentFrame,
+  useVideoConfig,
+} from "remotion";
 import { fonts } from "./theme";
 
 // Eased 0..1 ramps — the difference between "moves" and "feels edited".
@@ -6,13 +13,13 @@ const eOut = (f: number, a: number, b: number) =>
   interpolate(f, [a, b], [0, 1], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
-    easing: Easing.out(Easing.cubic),
+    easing: Easing.out((t) => Easing.cubic(t)),
   });
 const eIn = (f: number, a: number, b: number) =>
   interpolate(f, [a, b], [0, 1], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
-    easing: Easing.in(Easing.cubic),
+    easing: Easing.in((t) => Easing.cubic(t)),
   });
 
 // Accent palette for the kinetic reel — warmer + louder than the app chrome so
@@ -250,7 +257,7 @@ export const Cam: React.FC<{
   const p = interpolate(frame, [f0, f1], [0, 1], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
-    easing: Easing.inOut(Easing.cubic),
+    easing: Easing.inOut((t) => Easing.cubic(t)),
   });
   const scale = from + (to - from) * p;
   const tx = (0.5 - focus.x) * (scale - 1) * 100;
@@ -272,16 +279,26 @@ export const Cursor: React.FC<{
 }> = ({ path, clicks = [] }) => {
   const frame = useCurrentFrame();
   const fs = path.map((p) => p.f);
-  const x = interpolate(frame, fs, path.map((p) => p.x), {
-    extrapolateLeft: "clamp",
-    extrapolateRight: "clamp",
-    easing: Easing.inOut(Easing.cubic),
-  });
-  const y = interpolate(frame, fs, path.map((p) => p.y), {
-    extrapolateLeft: "clamp",
-    extrapolateRight: "clamp",
-    easing: Easing.inOut(Easing.cubic),
-  });
+  const x = interpolate(
+    frame,
+    fs,
+    path.map((p) => p.x),
+    {
+      extrapolateLeft: "clamp",
+      extrapolateRight: "clamp",
+      easing: Easing.inOut((t) => Easing.cubic(t)),
+    }
+  );
+  const y = interpolate(
+    frame,
+    fs,
+    path.map((p) => p.y),
+    {
+      extrapolateLeft: "clamp",
+      extrapolateRight: "clamp",
+      easing: Easing.inOut((t) => Easing.cubic(t)),
+    }
+  );
   const appear = eOut(frame, fs[0] - 6, fs[0] + 2);
   const press = clicks.reduce((acc, cf) => {
     const d = frame - cf;

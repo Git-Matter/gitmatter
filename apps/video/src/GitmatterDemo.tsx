@@ -10,7 +10,11 @@ import { kc, Cursor, Scan, Vignette, usePulse } from "./kinetic";
 // (Document × question columns), not an abstract chart.
 
 const ease = (f: number, a: number, b: number, c = 0, d = 1) =>
-  interpolate(f, [a, b], [c, d], { extrapolateLeft: "clamp", extrapolateRight: "clamp", easing: Easing.inOut(Easing.cubic) });
+  interpolate(f, [a, b], [c, d], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+    easing: Easing.inOut((t) => Easing.cubic(t)),
+  });
 const lin = (f: number, a: number, b: number, c = 0, d = 1) =>
   interpolate(f, [a, b], [c, d], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
 
@@ -44,16 +48,56 @@ const NDA = (i: number) => `acme-nda-${String(i + 1).padStart(3, "0")}.docx`;
 const RISK = ["Capped at 12-mo fees", "Mutual cap", "Standard mutual", "Capped at fees paid"];
 const rows = Array.from({ length: 100 }, (_, i) => {
   const flagged = FLAGS.includes(i);
-  return { name: NDA(i), flagged, cap: flagged ? "No" : "Yes", law: "Delaware", risk: flagged ? "Unlimited, no-fault indemnity" : RISK[i % 4] };
+  return {
+    name: NDA(i),
+    flagged,
+    cap: flagged ? "No" : "Yes",
+    law: "Delaware",
+    risk: flagged ? "Unlimited, no-fault indemnity" : RISK[i % 4],
+  };
 });
 
 // ---- atoms ----
-const Chip: React.FC<{ children: React.ReactNode; tone?: "muted" | "ink" | "red" }> = ({ children, tone = "muted" }) => {
-  const m = { muted: { bg: kc.panel, fg: kc.muted, bd: kc.line }, ink: { bg: kc.ink, fg: "#fff", bd: kc.ink }, red: { bg: "#fdeaea", fg: kc.red, bd: "#f6c9cb" } }[tone];
-  return <span style={{ fontFamily: fonts.mono, fontSize: 18, padding: "6px 14px", borderRadius: 999, background: m.bg, color: m.fg, border: `1px solid ${m.bd}`, whiteSpace: "nowrap" }}>{children}</span>;
+const Chip: React.FC<{ children: React.ReactNode; tone?: "muted" | "ink" | "red" }> = ({
+  children,
+  tone = "muted",
+}) => {
+  const m = {
+    muted: { bg: kc.panel, fg: kc.muted, bd: kc.line },
+    ink: { bg: kc.ink, fg: "#fff", bd: kc.ink },
+    red: { bg: "#fdeaea", fg: kc.red, bd: "#f6c9cb" },
+  }[tone];
+  return (
+    <span
+      style={{
+        fontFamily: fonts.mono,
+        fontSize: 18,
+        padding: "6px 14px",
+        borderRadius: 999,
+        background: m.bg,
+        color: m.fg,
+        border: `1px solid ${m.bd}`,
+        whiteSpace: "nowrap",
+      }}
+    >
+      {children}
+    </span>
+  );
 };
 const NavItem: React.FC<{ label: string; active?: boolean }> = ({ label, active }) => (
-  <div style={{ fontFamily: fonts.body, fontSize: 22, color: active ? kc.text : kc.muted, fontWeight: active ? 600 : 400, background: active ? kc.panel : "transparent", borderRadius: 10, padding: "12px 16px" }}>{label}</div>
+  <div
+    style={{
+      fontFamily: fonts.body,
+      fontSize: 22,
+      color: active ? kc.text : kc.muted,
+      fontWeight: active ? 600 : 400,
+      background: active ? kc.panel : "transparent",
+      borderRadius: 10,
+      padding: "12px 16px",
+    }}
+  >
+    {label}
+  </div>
 );
 
 // ---- the review table (rows × question columns) ----
@@ -69,9 +113,20 @@ const ReviewTable: React.FC = () => {
   return (
     <div style={{ position: "absolute", left: TBL.x, top: TBL.top }}>
       {/* column header */}
-      <div style={{ display: "grid", gridTemplateColumns: COLS, columnGap: 24, width: TBL.w, height: TBL.head, alignItems: "center" }}>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: COLS,
+          columnGap: 24,
+          width: TBL.w,
+          height: TBL.head,
+          alignItems: "center",
+        }}
+      >
         {["Document", "Indemnity capped?", "Governing law", "Key risk"].map((h) => (
-          <div key={h} style={{ fontFamily: fonts.mono, fontSize: 19, color: kc.muted }}>{h}</div>
+          <div key={h} style={{ fontFamily: fonts.mono, fontSize: 19, color: kc.muted }}>
+            {h}
+          </div>
         ))}
       </div>
       {/* clipped body */}
@@ -80,21 +135,76 @@ const ReviewTable: React.FC = () => {
           {rows.map((r, i) => {
             const isHero = i === HERO;
             return (
-              <div key={i} style={{ display: "grid", gridTemplateColumns: COLS, columnGap: 24, height: TBL.rowH, alignItems: "center", borderBottom: `1px solid ${kc.line}`, opacity: isHero ? 1 : dim }}>
+              <div
+                key={i}
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: COLS,
+                  columnGap: 24,
+                  height: TBL.rowH,
+                  alignItems: "center",
+                  borderBottom: `1px solid ${kc.line}`,
+                  opacity: isHero ? 1 : dim,
+                }}
+              >
                 <div style={{ fontFamily: fonts.body, fontSize: 24, color: kc.text }}>{r.name}</div>
-                <div style={{ display: "flex", alignItems: "center", gap: 10, opacity: valsIn, fontFamily: fonts.body, fontSize: 24, fontWeight: r.flagged ? 700 : 400, color: r.flagged ? kc.red : kc.text }}>
-                  <span style={{ width: 11, height: 11, borderRadius: 99, background: r.flagged ? kc.red : kc.green }} />
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                    opacity: valsIn,
+                    fontFamily: fonts.body,
+                    fontSize: 24,
+                    fontWeight: r.flagged ? 700 : 400,
+                    color: r.flagged ? kc.red : kc.text,
+                  }}
+                >
+                  <span
+                    style={{
+                      width: 11,
+                      height: 11,
+                      borderRadius: 99,
+                      background: r.flagged ? kc.red : kc.green,
+                    }}
+                  />
                   {r.cap}
                 </div>
-                <div style={{ fontFamily: fonts.body, fontSize: 24, color: kc.text, opacity: valsIn }}>{r.law}</div>
-                <div style={{ fontFamily: fonts.body, fontSize: 24, color: kc.text, opacity: valsIn }}>{r.risk}</div>
+                <div
+                  style={{ fontFamily: fonts.body, fontSize: 24, color: kc.text, opacity: valsIn }}
+                >
+                  {r.law}
+                </div>
+                <div
+                  style={{ fontFamily: fonts.body, fontSize: 24, color: kc.text, opacity: valsIn }}
+                >
+                  {r.risk}
+                </div>
               </div>
             );
           })}
         </div>
         {/* fade top/bottom edges of the scroll viewport */}
-        <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 40, background: `linear-gradient(${kc.paper}, rgba(255,255,255,0))` }} />
-        <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 40, background: `linear-gradient(rgba(255,255,255,0), ${kc.paper})` }} />
+        <div
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            height: 40,
+            background: `linear-gradient(${kc.paper}, rgba(255,255,255,0))`,
+          }}
+        />
+        <div
+          style={{
+            position: "absolute",
+            bottom: 0,
+            left: 0,
+            right: 0,
+            height: 40,
+            background: `linear-gradient(rgba(255,255,255,0), ${kc.paper})`,
+          }}
+        />
         {running && <Scan f0={T.fill} f1={T.fill + 60} />}
       </div>
     </div>
@@ -106,9 +216,20 @@ const DocsList: React.FC = () => {
   const f = useCurrentFrame();
   return (
     <div style={{ position: "absolute", left: TBL.x, top: TBL.top }}>
-      <div style={{ display: "grid", gridTemplateColumns: "2.4fr 0.6fr 0.7fr", columnGap: 24, width: TBL.w, height: TBL.head, alignItems: "center" }}>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "2.4fr 0.6fr 0.7fr",
+          columnGap: 24,
+          width: TBL.w,
+          height: TBL.head,
+          alignItems: "center",
+        }}
+      >
         {["Name", "Type", "Status"].map((h) => (
-          <div key={h} style={{ fontFamily: fonts.mono, fontSize: 19, color: kc.muted }}>{h}</div>
+          <div key={h} style={{ fontFamily: fonts.mono, fontSize: 19, color: kc.muted }}>
+            {h}
+          </div>
         ))}
       </div>
       <div style={{ width: TBL.w, height: TBL.vp, overflow: "hidden" }}>
@@ -116,10 +237,24 @@ const DocsList: React.FC = () => {
           const a = ease(f, T.docs + i * 5, T.docs + i * 5 + 12);
           const ready = lin(f, T.docs + 16 + i * 5, T.docs + 28 + i * 5);
           return (
-            <div key={i} style={{ display: "grid", gridTemplateColumns: "2.4fr 0.6fr 0.7fr", columnGap: 24, height: TBL.rowH, alignItems: "center", borderBottom: `1px solid ${kc.line}`, opacity: a, transform: `translateY(${(1 - a) * 12}px)` }}>
+            <div
+              key={i}
+              style={{
+                display: "grid",
+                gridTemplateColumns: "2.4fr 0.6fr 0.7fr",
+                columnGap: 24,
+                height: TBL.rowH,
+                alignItems: "center",
+                borderBottom: `1px solid ${kc.line}`,
+                opacity: a,
+                transform: `translateY(${(1 - a) * 12}px)`,
+              }}
+            >
               <div style={{ fontFamily: fonts.body, fontSize: 24, color: kc.text }}>{r.name}</div>
               <div style={{ fontFamily: fonts.mono, fontSize: 18, color: kc.muted }}>DOCX</div>
-              <div style={{ opacity: ready }}><Chip>● Ready</Chip></div>
+              <div style={{ opacity: ready }}>
+                <Chip>● Ready</Chip>
+              </div>
             </div>
           );
         })}
@@ -135,17 +270,36 @@ const TableHeader: React.FC = () => {
   const ingested = Math.round(lin(f, T.docs, T.docs + 56) * 100);
   const reviewed = Math.round(lin(f, T.fill, T.settle - 10) * 100);
   return (
-    <div style={{ position: "absolute", left: TBL.x, top: TBL.top - 54, display: "flex", alignItems: "center", gap: 14 }}>
+    <div
+      style={{
+        position: "absolute",
+        left: TBL.x,
+        top: TBL.top - 54,
+        display: "flex",
+        alignItems: "center",
+        gap: 14,
+      }}
+    >
       {!onReview ? (
         <>
-          <span style={{ fontFamily: fonts.heading, fontSize: 28, color: kc.text }}>{ingested}</span>
-          <span style={{ fontFamily: fonts.body, fontSize: 23, color: kc.muted }}>of 100 documents{ingested >= 100 ? " · Ready" : " · ingesting…"}</span>
+          <span style={{ fontFamily: fonts.heading, fontSize: 28, color: kc.text }}>
+            {ingested}
+          </span>
+          <span style={{ fontFamily: fonts.body, fontSize: 23, color: kc.muted }}>
+            of 100 documents{ingested >= 100 ? " · Ready" : " · ingesting…"}
+          </span>
         </>
       ) : (
         <>
-          <span style={{ fontFamily: fonts.heading, fontSize: 28, color: kc.text }}>{reviewed}</span>
-          <span style={{ fontFamily: fonts.body, fontSize: 23, color: kc.muted }}>of 100 reviewed</span>
-          <span style={{ opacity: lin(f, T.settle - 24, T.settle - 6), marginLeft: 6 }}><Chip tone="red">● 3 flagged</Chip></span>
+          <span style={{ fontFamily: fonts.heading, fontSize: 28, color: kc.text }}>
+            {reviewed}
+          </span>
+          <span style={{ fontFamily: fonts.body, fontSize: 23, color: kc.muted }}>
+            of 100 reviewed
+          </span>
+          <span style={{ opacity: lin(f, T.settle - 24, T.settle - 6), marginLeft: 6 }}>
+            <Chip tone="red">● 3 flagged</Chip>
+          </span>
         </>
       )}
     </div>
@@ -158,25 +312,93 @@ const AppWindow: React.FC = () => {
   const onReviews = f >= T.tabClick + 2;
   const running = f >= T.runClick + 3;
   return (
-    <div style={{ position: "absolute", left: 80, top: 96, width: 1760, height: 888, background: kc.paper, border: `1px solid ${kc.line}`, borderRadius: 24, boxShadow: "0 50px 120px rgba(0,0,0,0.12)", overflow: "hidden", display: "flex" }}>
-      <div style={{ width: 300, borderRight: `1px solid ${kc.line}`, padding: "30px 22px", display: "flex", flexDirection: "column", gap: 6 }}>
-        <div style={{ fontFamily: fonts.heading, fontWeight: 700, fontSize: 30, color: kc.text, padding: "4px 12px 22px" }}>git<span style={{ color: kc.muted }}>matter</span></div>
-        {["New chat", "Reviews", "Workflows", "Documents", "Clients"].map((n) => <NavItem key={n} label={n} active={onReviews && n === "Reviews"} />)}
+    <div
+      style={{
+        position: "absolute",
+        left: 80,
+        top: 96,
+        width: 1760,
+        height: 888,
+        background: kc.paper,
+        border: `1px solid ${kc.line}`,
+        borderRadius: 24,
+        boxShadow: "0 50px 120px rgba(0,0,0,0.12)",
+        overflow: "hidden",
+        display: "flex",
+      }}
+    >
+      <div
+        style={{
+          width: 300,
+          borderRight: `1px solid ${kc.line}`,
+          padding: "30px 22px",
+          display: "flex",
+          flexDirection: "column",
+          gap: 6,
+        }}
+      >
+        <div
+          style={{
+            fontFamily: fonts.heading,
+            fontWeight: 700,
+            fontSize: 30,
+            color: kc.text,
+            padding: "4px 12px 22px",
+          }}
+        >
+          git<span style={{ color: kc.muted }}>matter</span>
+        </div>
+        {["New chat", "Reviews", "Workflows", "Documents", "Clients"].map((n) => (
+          <NavItem key={n} label={n} active={onReviews && n === "Reviews"} />
+        ))}
         <NavItem label="Matters" active={!onReviews} />
       </div>
       <div style={{ flex: 1, padding: "30px 40px", position: "relative" }}>
         <div style={{ fontFamily: fonts.mono, fontSize: 20, color: kc.muted }}>
-          {onReviews ? "Reviews › " : "Matters › "}<span style={{ color: kc.text }}>Acme Corp — contract review</span>
+          {onReviews ? "Reviews › " : "Matters › "}
+          <span style={{ color: kc.text }}>Acme Corp — contract review</span>
         </div>
-        <div style={{ display: "flex", gap: 30, marginTop: 26, borderBottom: `1px solid ${kc.line}`, paddingBottom: 14 }}>
+        <div
+          style={{
+            display: "flex",
+            gap: 30,
+            marginTop: 26,
+            borderBottom: `1px solid ${kc.line}`,
+            paddingBottom: 14,
+          }}
+        >
           {["Documents", "Reviews"].map((t) => {
             const act = onReviews ? t === "Reviews" : t === "Documents";
-            return <span key={t} style={{ fontFamily: fonts.body, fontSize: 22, color: act ? kc.text : kc.muted, fontWeight: act ? 600 : 400 }}>{t}</span>;
+            return (
+              <span
+                key={t}
+                style={{
+                  fontFamily: fonts.body,
+                  fontSize: 22,
+                  color: act ? kc.text : kc.muted,
+                  fontWeight: act ? 600 : 400,
+                }}
+              >
+                {t}
+              </span>
+            );
           })}
           {onReviews && (
             <span style={{ marginLeft: "auto", display: "flex", gap: 14, alignItems: "center" }}>
               <Chip tone="ink">GPT-5.5</Chip>
-              <span style={{ fontFamily: fonts.body, fontWeight: 600, fontSize: 22, color: "#fff", background: running ? kc.muted : kc.ink, borderRadius: 10, padding: "10px 24px" }}>{running ? "Running…" : "Run"}</span>
+              <span
+                style={{
+                  fontFamily: fonts.body,
+                  fontWeight: 600,
+                  fontSize: 22,
+                  color: "#fff",
+                  background: running ? kc.muted : kc.ink,
+                  borderRadius: 10,
+                  padding: "10px 24px",
+                }}
+              >
+                {running ? "Running…" : "Run"}
+              </span>
             </span>
           )}
         </div>
@@ -197,22 +419,64 @@ const BlamePopover: React.FC = () => {
   const a = ease(f, T.blame, T.blame + 14) * (1 - lin(f, T.pull, T.pull + 16));
   if (a <= 0.001) return null;
   return (
-    <div style={{ position: "absolute", left: 760, top: heroScreenY + 36, width: 470, background: kc.paper, border: `1px solid ${kc.line}`, borderRadius: 14, boxShadow: `0 26px 64px rgba(0,0,0,0.22), 0 0 ${pulse * 26}px rgba(229,72,77,${0.12 + pulse * 0.25})`, padding: "20px 22px", opacity: a, transform: `translateY(${(1 - a) * 12}px)`, display: "flex", flexDirection: "column", gap: 8 }}>
+    <div
+      style={{
+        position: "absolute",
+        left: 760,
+        top: heroScreenY + 36,
+        width: 470,
+        background: kc.paper,
+        border: `1px solid ${kc.line}`,
+        borderRadius: 14,
+        boxShadow: `0 26px 64px rgba(0,0,0,0.22), 0 0 ${pulse * 26}px rgba(229,72,77,${0.12 + pulse * 0.25})`,
+        padding: "20px 22px",
+        opacity: a,
+        transform: `translateY(${(1 - a) * 12}px)`,
+        display: "flex",
+        flexDirection: "column",
+        gap: 8,
+      }}
+    >
       <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-        <span style={{ fontFamily: fonts.body, fontWeight: 600, fontSize: 18, color: kc.text, background: kc.panel, borderRadius: 6, padding: "3px 10px" }}>Jane</span>
+        <span
+          style={{
+            fontFamily: fonts.body,
+            fontWeight: 600,
+            fontSize: 18,
+            color: kc.text,
+            background: kc.panel,
+            borderRadius: 6,
+            padding: "3px 10px",
+          }}
+        >
+          Jane
+        </span>
         <span style={{ fontFamily: fonts.mono, fontSize: 18, color: kc.muted }}>run_cell</span>
       </div>
-      <div style={{ fontFamily: fonts.body, fontSize: 19, color: kc.text, lineHeight: 1.4 }}>Ran “Indemnity capped?” on {NDA(HERO)} with <b>gpt-5.5</b></div>
-      <div style={{ fontFamily: fonts.mono, fontSize: 16, color: kc.muted }}>6/19/2026, 10:49:02 AM</div>
+      <div style={{ fontFamily: fonts.body, fontSize: 19, color: kc.text, lineHeight: 1.4 }}>
+        Ran “Indemnity capped?” on {NDA(HERO)} with <b>gpt-5.5</b>
+      </div>
+      <div style={{ fontFamily: fonts.mono, fontSize: 16, color: kc.muted }}>
+        6/19/2026, 10:49:02 AM
+      </div>
     </div>
   );
 };
 
 // ---- cold open ----
-const Rise: React.FC<{ a: number; b: number; children: React.ReactNode; dy?: number }> = ({ a, b, children, dy = 34 }) => {
+const Rise: React.FC<{ a: number; b: number; children: React.ReactNode; dy?: number }> = ({
+  a,
+  b,
+  children,
+  dy = 34,
+}) => {
   const f = useCurrentFrame();
   const t = ease(f, a, b);
-  return <div style={{ overflow: "hidden", padding: "0 4px" }}><div style={{ transform: `translateY(${(1 - t) * dy}px)`, opacity: t }}>{children}</div></div>;
+  return (
+    <div style={{ overflow: "hidden", padding: "0 4px" }}>
+      <div style={{ transform: `translateY(${(1 - t) * dy}px)`, opacity: t }}>{children}</div>
+    </div>
+  );
 };
 const ColdOpen: React.FC = () => {
   const f = useCurrentFrame();
@@ -222,12 +486,60 @@ const ColdOpen: React.FC = () => {
   const kick = lin(f, 6, 20) * (1 - lin(f, 40, 54));
   const line = ease(f, 60, 88);
   return (
-    <AbsoluteFill style={{ alignItems: "center", justifyContent: "center", opacity: grp, transform: `translateY(${exit * -54}px)` }}>
+    <AbsoluteFill
+      style={{
+        alignItems: "center",
+        justifyContent: "center",
+        opacity: grp,
+        transform: `translateY(${exit * -54}px)`,
+      }}
+    >
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 14 }}>
-        <div style={{ fontFamily: fonts.mono, fontSize: 20, letterSpacing: 6, textTransform: "uppercase", color: kc.muted, opacity: kick, transform: `translateY(${(1 - lin(f, 6, 20)) * -10}px)`, marginBottom: 6 }}>monday · 9:02am</div>
-        <Rise a={24} b={46} dy={46}><div style={{ fontFamily: fonts.heading, fontWeight: 700, fontSize: 84, letterSpacing: -1, color: kc.text }}>100 Acme contracts.</div></Rise>
-        <Rise a={44} b={66} dy={40}><div style={{ fontFamily: fonts.heading, fontSize: 64, color: kc.muted }}>One deadline.</div></Rise>
-        <div style={{ height: 2, width: 560, marginTop: 18, background: kc.line, position: "relative" }}><div style={{ position: "absolute", inset: 0, width: `${line * 100}%`, background: kc.ink }} /></div>
+        <div
+          style={{
+            fontFamily: fonts.mono,
+            fontSize: 20,
+            letterSpacing: 6,
+            textTransform: "uppercase",
+            color: kc.muted,
+            opacity: kick,
+            transform: `translateY(${(1 - lin(f, 6, 20)) * -10}px)`,
+            marginBottom: 6,
+          }}
+        >
+          monday · 9:02am
+        </div>
+        <Rise a={24} b={46} dy={46}>
+          <div
+            style={{
+              fontFamily: fonts.heading,
+              fontWeight: 700,
+              fontSize: 84,
+              letterSpacing: -1,
+              color: kc.text,
+            }}
+          >
+            100 Acme contracts.
+          </div>
+        </Rise>
+        <Rise a={44} b={66} dy={40}>
+          <div style={{ fontFamily: fonts.heading, fontSize: 64, color: kc.muted }}>
+            One deadline.
+          </div>
+        </Rise>
+        <div
+          style={{
+            height: 2,
+            width: 560,
+            marginTop: 18,
+            background: kc.line,
+            position: "relative",
+          }}
+        >
+          <div
+            style={{ position: "absolute", inset: 0, width: `${line * 100}%`, background: kc.ink }}
+          />
+        </div>
       </div>
     </AbsoluteFill>
   );
@@ -237,9 +549,29 @@ const Brand: React.FC = () => {
   const a = ease(f, T.brand, T.brand + 18);
   if (a <= 0.001) return null;
   return (
-    <AbsoluteFill style={{ background: kc.paper, alignItems: "center", justifyContent: "center", opacity: a, gap: 18 }}>
-      <div style={{ fontFamily: fonts.heading, fontWeight: 700, fontSize: 104, letterSpacing: -2, color: kc.text }}>git<span style={{ color: kc.muted }}>matter</span></div>
-      <div style={{ fontFamily: fonts.body, fontSize: 32, color: kc.muted }}>Audited legal AI — at the scale you actually work.</div>
+    <AbsoluteFill
+      style={{
+        background: kc.paper,
+        alignItems: "center",
+        justifyContent: "center",
+        opacity: a,
+        gap: 18,
+      }}
+    >
+      <div
+        style={{
+          fontFamily: fonts.heading,
+          fontWeight: 700,
+          fontSize: 104,
+          letterSpacing: -2,
+          color: kc.text,
+        }}
+      >
+        git<span style={{ color: kc.muted }}>matter</span>
+      </div>
+      <div style={{ fontFamily: fonts.body, fontSize: 32, color: kc.muted }}>
+        Audited legal AI — at the scale you actually work.
+      </div>
     </AbsoluteFill>
   );
 };
@@ -260,7 +592,23 @@ const Caption: React.FC = () => {
       {lines.map((l, i) => {
         const a = lin(f, l.a, l.a + 10) * (1 - lin(f, l.b, l.b + 10));
         if (a <= 0.001) return null;
-        return <div key={i} style={{ position: "absolute", bottom: 0, left: 0, fontFamily: fonts.body, fontSize: 34, color: kc.text, opacity: a, transform: `translateY(${(1 - lin(f, l.a, l.a + 10)) * 10}px)` }}>{l.t}</div>;
+        return (
+          <div
+            key={i}
+            style={{
+              position: "absolute",
+              bottom: 0,
+              left: 0,
+              fontFamily: fonts.body,
+              fontSize: 34,
+              color: kc.text,
+              opacity: a,
+              transform: `translateY(${(1 - lin(f, l.a, l.a + 10)) * 10}px)`,
+            }}
+          >
+            {l.t}
+          </div>
+        );
       })}
     </div>
   );
@@ -269,7 +617,11 @@ const Caption: React.FC = () => {
 // ---- camera ----
 const useCamera = () => {
   const f = useCurrentFrame();
-  const scale = interpolate(f, [T.dive, T.diveEnd, T.pull, T.pull + 30], [1, 1.55, 1.55, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp", easing: Easing.inOut(Easing.cubic) });
+  const scale = interpolate(f, [T.dive, T.diveEnd, T.pull, T.pull + 30], [1, 1.55, 1.55, 1], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+    easing: Easing.inOut((t) => Easing.cubic(t)),
+  });
   const tx = (0.5 - FLAG.x) * (scale - 1) * 100;
   const ty = (0.5 - FLAG.y) * (scale - 1) * 100;
   return `scale(${scale}) translate(${tx}%, ${ty}%)`;
@@ -284,7 +636,12 @@ export const GitmatterDemo: React.FC = () => {
   return (
     <AbsoluteFill style={{ backgroundColor: kc.paper }}>
       <ColdOpen />
-      <AbsoluteFill style={{ opacity: appOp, transform: `scale(${0.965 + appEnter * 0.035}) translateY(${(1 - appEnter) * 30}px)` }}>
+      <AbsoluteFill
+        style={{
+          opacity: appOp,
+          transform: `scale(${0.965 + appEnter * 0.035}) translateY(${(1 - appEnter) * 30}px)`,
+        }}
+      >
         <AbsoluteFill style={{ transform: cam, transformOrigin: "center" }}>
           <AppWindow />
           <BlamePopover />
