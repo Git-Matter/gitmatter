@@ -16,6 +16,7 @@ import { db } from "@workspace/db/client";
 import {
   commits,
   hiddenWorkflows,
+  matterMembers,
   matters,
   user,
   workflowShares,
@@ -40,6 +41,9 @@ export type WorkflowAccess = {
   isOwner: boolean;
   allowEdit: boolean;
   sharedByName: string | null;
+  // People with access besides the owner: matter members (matter sharing cascades
+  // to the workflow) + per-email shares. Drives the "Shared"/"Private" label.
+  shareCount: number;
 };
 
 export type EnrichedWorkflow = Workflow & WorkflowAccess & { hidden: boolean };
@@ -181,6 +185,7 @@ async function enrichWorkflows(
     : [];
   const ownerName = new Map(owners.map((o) => [o.id, o.name || o.email]));
   const hiddenSet = new Set(ctx.hiddenIds);
+  const shareCounts = await workflowShareCounts(rows);
 
   return rows.map((r) => {
     const isOwner = !r.isSystem && r.userId === userId;
@@ -188,8 +193,60 @@ async function enrichWorkflows(
     const allowEdit = r.isSystem ? false : isOwner ? true : (share?.allowEdit ?? false);
     const sharedByName =
       !r.isSystem && !isOwner ? (ownerName.get(r.userId ?? "") ?? "Shared") : null;
-    return { ...r, isOwner, allowEdit, sharedByName, hidden: hiddenSet.has(r.id) };
+    return {
+      ...r,
+      isOwner,
+      allowEdit,
+      sharedByName,
+      shareCount: shareCounts.get(r.id) ?? 0,
+      hidden: hiddenSet.has(r.id),
+    };
   });
+}
+
+/**
+ * People with access to each workflow besides its owner: its matter's members
+ * (excluding the owner, who is always a member) plus its per-email shares. Drives
+ * the "Shared" vs "Private" label, so only the >0 distinction matters. System
+ * workflows have no owner/matter, so they count 0.
+ */
+async function workflowShareCounts(rows: Workflow[]): Promise<Map<string, number>> {
+  const out = new Map<string, number>();
+  const shareable = rows.filter((r) => !r.isSystem);
+  if (!shareable.length) return out;
+
+  const matterIds = [...new Set(shareable.map((r) => r.matterId).filter((x): x is string => !!x))];
+  const memberRows = matterIds.length
+    ? await db
+        .select({ matterId: matterMembers.matterId, userId: matterMembers.userId })
+        .from(matterMembers)
+        .where(inArray(matterMembers.matterId, matterIds))
+    : [];
+  const membersByMatter = new Map<string, string[]>();
+  for (const m of memberRows) {
+    const list = membersByMatter.get(m.matterId) ?? [];
+    list.push(m.userId);
+    membersByMatter.set(m.matterId, list);
+  }
+
+  const ids = shareable.map((r) => r.id);
+  const emailRows = await db
+    .select({ workflowId: workflowShares.workflowId, email: workflowShares.sharedWithEmail })
+    .from(workflowShares)
+    .where(inArray(workflowShares.workflowId, ids));
+  const emailsByWorkflow = new Map<string, string[]>();
+  for (const e of emailRows) {
+    const list = emailsByWorkflow.get(e.workflowId) ?? [];
+    list.push(e.email);
+    emailsByWorkflow.set(e.workflowId, list);
+  }
+
+  for (const r of shareable) {
+    const members = (membersByMatter.get(r.matterId ?? "") ?? []).filter((id) => id !== r.userId);
+    const emails = emailsByWorkflow.get(r.id) ?? [];
+    out.set(r.id, members.length + emails.length);
+  }
+  return out;
 }
 
 // Built-ins + the user's own + workflows shared to their email, each tagged with
@@ -218,9 +275,24 @@ async function resolveWorkflowAccess(
   email?: string
 ): Promise<WorkflowAccess & { canView: boolean; canEdit: boolean }> {
   if (wf.isSystem)
-    return { isOwner: false, allowEdit: false, sharedByName: null, canView: true, canEdit: false };
+    return {
+      isOwner: false,
+      allowEdit: false,
+      sharedByName: null,
+      shareCount: 0,
+      canView: true,
+      canEdit: false,
+    };
+  const shareCount = (await workflowShareCounts([wf])).get(wf.id) ?? 0;
   if (wf.userId === userId)
-    return { isOwner: true, allowEdit: true, sharedByName: null, canView: true, canEdit: true };
+    return {
+      isOwner: true,
+      allowEdit: true,
+      sharedByName: null,
+      shareCount,
+      canView: true,
+      canEdit: true,
+    };
 
   const e = email?.trim().toLowerCase() || null;
   const [matterEdit, share] = await Promise.all([
@@ -244,7 +316,7 @@ async function resolveWorkflowAccess(
       .where(eq(user.id, wf.userId));
     sharedByName = owner?.name || owner?.email || "Shared";
   }
-  return { isOwner: false, allowEdit: canEdit, sharedByName, canView, canEdit };
+  return { isOwner: false, allowEdit: canEdit, sharedByName, shareCount, canView, canEdit };
 }
 
 export type WorkflowListTab = "all" | "builtin" | "custom" | "hidden";
@@ -398,6 +470,7 @@ export async function getWorkflowForViewer(workflowId: string, userId: string, e
       isOwner: access.isOwner,
       allowEdit: access.allowEdit,
       sharedByName: access.sharedByName,
+      shareCount: access.shareCount,
     },
     blame: await blameFor(wf),
     access,

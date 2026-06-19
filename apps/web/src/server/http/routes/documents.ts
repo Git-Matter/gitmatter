@@ -6,6 +6,7 @@ import {
   addArtifactShareByEmail,
   addDocumentVersion,
   canAccessArtifact,
+  canReadDocument,
   createDocument,
   listArtifactShares,
   removeArtifactShare,
@@ -202,8 +203,7 @@ documentsRoute.get("/api/documents/events", (c) => {
 // Download the stored file (e.g. a generated .docx). Viewer access is enough.
 documentsRoute.get("/api/documents/:id/download", async (c) => {
   const id = c.req.param("id");
-  if (!(await canAccessArtifact(c.get("user").id, "document", id)))
-    return c.json({ error: "Not found" }, 404);
+  if (!(await canReadDocument(c.get("user").id, id))) return c.json({ error: "Not found" }, 404);
   const doc = await getDocument(id);
   if (!doc) return c.json({ error: "no stored file" }, 404);
   const storagePath = await activeStoragePath(doc);
@@ -233,8 +233,7 @@ documentsRoute.get("/api/documents/:id/download", async (c) => {
 // Version history for a document (newest first); viewer access is enough.
 documentsRoute.get("/api/documents/:id/versions", async (c) => {
   const id = c.req.param("id");
-  if (!(await canAccessArtifact(c.get("user").id, "document", id)))
-    return c.json({ error: "Not found" }, 404);
+  if (!(await canReadDocument(c.get("user").id, id))) return c.json({ error: "Not found" }, 404);
   return c.json(await listVersions(id));
 });
 
@@ -270,8 +269,7 @@ documentsRoute.post("/api/documents/:id/versions", async (c) => {
 // Download a specific version's stored file. Viewer access is enough.
 documentsRoute.get("/api/documents/:id/versions/:versionId/download", async (c) => {
   const id = c.req.param("id");
-  if (!(await canAccessArtifact(c.get("user").id, "document", id)))
-    return c.json({ error: "Not found" }, 404);
+  if (!(await canReadDocument(c.get("user").id, id))) return c.json({ error: "Not found" }, 404);
   const version = (await listVersions(id)).find((v) => v.id === c.req.param("versionId"));
   if (!version?.storagePath) return c.json({ error: "no stored file" }, 404);
   const bytes = await getObject(version.storagePath);
@@ -317,8 +315,7 @@ documentsRoute.post("/api/documents/:id/retry", async (c) => {
 // Document detail with its tracked edits + per-edit blame (for the redline view).
 documentsRoute.get("/api/documents/:id", async (c) => {
   const id = c.req.param("id");
-  if (!(await canAccessArtifact(c.get("user").id, "document", id)))
-    return c.json({ error: "Not found" }, 404);
+  if (!(await canReadDocument(c.get("user").id, id))) return c.json({ error: "Not found" }, 404);
   const result = await getDocumentDetail(id);
   if (!result) return c.json({ error: "Not found" }, 404);
   return c.json(result);
@@ -421,8 +418,7 @@ documentsRoute.post(
 
 documentsRoute.get("/api/documents/:id/history", async (c) => {
   const id = c.req.param("id");
-  if (!(await canAccessArtifact(c.get("user").id, "document", id)))
-    return c.json({ error: "Not found" }, 404);
+  if (!(await canReadDocument(c.get("user").id, id))) return c.json({ error: "Not found" }, 404);
   return c.json(await listCommits("document", id));
 });
 

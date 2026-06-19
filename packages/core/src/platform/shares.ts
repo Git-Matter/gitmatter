@@ -5,6 +5,7 @@ import {
   type MatterRole,
   artifactShares,
   documents,
+  matterMembers,
   tabularReviews,
   user,
 } from "@workspace/db/schema";
@@ -145,28 +146,76 @@ export async function removeArtifactShare(
 export type ShareSummary = { count: number; names: string[] };
 
 /**
- * For a batch of artifact ids, the explicit shares (NOT counting the owner):
- * how many people it's shared with and their names. The list endpoints add the
- * owner on top to get the total "people with access".
+ * For a batch of artifacts, everyone who can access each one: the owner, the
+ * members of its matter (matter sharing cascades to child items), and anyone it's
+ * directly shared with — deduped by user. `count` is the distinct head count and
+ * `names` the first few (owner first). Drives the "Shared with" cell, so it must
+ * read ≤ 1 (i.e. owner only) as "Private".
  */
-export async function shareCountByArtifact(
+export async function accessSummaryByArtifact(
   artifactType: ShareableType,
-  ids: string[]
+  artifacts: Array<{ id: string; matterId: string | null; ownerId: string | null }>
 ): Promise<Map<string, ShareSummary>> {
   const out = new Map<string, ShareSummary>();
-  if (!ids.length) return out;
-  const rows = await db
-    .select({ artifactId: artifactShares.artifactId, name: user.name })
+  if (!artifacts.length) return out;
+
+  const ids = artifacts.map((a) => a.id);
+  const matterIds = [...new Set(artifacts.map((a) => a.matterId).filter((x): x is string => !!x))];
+  const ownerIds = [...new Set(artifacts.map((a) => a.ownerId).filter((x): x is string => !!x))];
+
+  const shareRows = await db
+    .select({
+      artifactId: artifactShares.artifactId,
+      userId: artifactShares.userId,
+      name: user.name,
+    })
     .from(artifactShares)
     .innerJoin(user, eq(artifactShares.userId, user.id))
     .where(
       and(eq(artifactShares.artifactType, artifactType), inArray(artifactShares.artifactId, ids))
     );
-  for (const r of rows) {
-    const cur = out.get(r.artifactId) ?? { count: 0, names: [] };
-    cur.count += 1;
-    if (cur.names.length < 3) cur.names.push(r.name);
-    out.set(r.artifactId, cur);
+  const sharesByArtifact = new Map<string, Array<{ userId: string; name: string }>>();
+  for (const r of shareRows) {
+    const list = sharesByArtifact.get(r.artifactId) ?? [];
+    list.push({ userId: r.userId, name: r.name });
+    sharesByArtifact.set(r.artifactId, list);
+  }
+
+  const memberRows = matterIds.length
+    ? await db
+        .select({ matterId: matterMembers.matterId, userId: matterMembers.userId, name: user.name })
+        .from(matterMembers)
+        .innerJoin(user, eq(matterMembers.userId, user.id))
+        .where(inArray(matterMembers.matterId, matterIds))
+    : [];
+  const membersByMatter = new Map<string, Array<{ userId: string; name: string }>>();
+  for (const r of memberRows) {
+    const list = membersByMatter.get(r.matterId) ?? [];
+    list.push({ userId: r.userId, name: r.name });
+    membersByMatter.set(r.matterId, list);
+  }
+
+  const ownerNameById = new Map<string, string>();
+  if (ownerIds.length) {
+    const ownerRows = await db
+      .select({ id: user.id, name: user.name })
+      .from(user)
+      .where(inArray(user.id, ownerIds));
+    for (const o of ownerRows) ownerNameById.set(o.id, o.name);
+  }
+
+  for (const a of artifacts) {
+    const seen = new Set<string>();
+    const names: string[] = [];
+    const add = (userId: string | null, name?: string | null) => {
+      if (!userId || seen.has(userId)) return;
+      seen.add(userId);
+      if (name) names.push(name);
+    };
+    add(a.ownerId, a.ownerId ? ownerNameById.get(a.ownerId) : null);
+    for (const m of membersByMatter.get(a.matterId ?? "") ?? []) add(m.userId, m.name);
+    for (const s of sharesByArtifact.get(a.id) ?? []) add(s.userId, s.name);
+    out.set(a.id, { count: seen.size, names: names.slice(0, 3) });
   }
   return out;
 }

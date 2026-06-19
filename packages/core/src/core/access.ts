@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { db } from "@workspace/db/client";
 import {
   type ArtifactType,
@@ -161,4 +161,22 @@ export async function canAccessArtifact(
   }
   if (best < 0) return false;
   return best >= ROLE_RANK[min];
+}
+
+/**
+ * Read access to a document, with review access cascading: a user who can read a
+ * tabular review can also read the documents that review contains, even when the
+ * docs were never shared with them directly. Read-only — editor endpoints keep
+ * gating on `canAccessArtifact("document", …, "editor")`.
+ */
+export async function canReadDocument(userId: string, docId: string): Promise<boolean> {
+  if (await canAccessArtifact(userId, "document", docId)) return true;
+  const reviews = await db
+    .select({ id: tabularReviews.id })
+    .from(tabularReviews)
+    .where(sql`${tabularReviews.documentIds} @> ${JSON.stringify([docId])}::jsonb`);
+  for (const r of reviews) {
+    if (await canAccessArtifact(userId, "tabular_review", r.id)) return true;
+  }
+  return false;
 }

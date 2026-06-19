@@ -64,6 +64,7 @@ export type ReviewDetail = {
     headCommitId: string | null;
   };
   cells: Cell[];
+  documentTitles: Record<string, string>;
 };
 
 export type MatterRole = "owner" | "editor" | "viewer";
@@ -939,6 +940,7 @@ export type WorkflowAccess = {
   isOwner: boolean;
   allowEdit: boolean;
   sharedByName: string | null;
+  shareCount: number;
   canView: boolean;
   canEdit: boolean;
 };
@@ -956,6 +958,7 @@ export type WorkflowDetail = {
     isOwner: boolean;
     allowEdit: boolean;
     sharedByName: string | null;
+    shareCount: number;
     matterId: string | null;
   };
   blame: Record<string, Blame | null>;

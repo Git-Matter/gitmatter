@@ -26,7 +26,7 @@ import {
 } from "@workspace/db/schema";
 import { recordAudit } from "../platform/audit.js";
 import { assertStorageWithinQuota } from "../platform/usage.js";
-import { shareCountByArtifact, sharedArtifactIds } from "../platform/shares.js";
+import { accessSummaryByArtifact, sharedArtifactIds } from "../platform/shares.js";
 import { type Actor, recordCommit } from "../core/commit.js";
 import { logEvent } from "../core/log.js";
 import { extractMarkdown, type SupportedFileType } from "./extract.js";
@@ -221,19 +221,18 @@ export async function listDocumentsPage(userId: string, params: DocumentListPara
     countQuery.where(where),
   ]);
 
-  // Attach "people with access": the owner plus everyone the doc is shared with.
-  const shares = await shareCountByArtifact(
+  // Attach "people with access": owner + matter members + direct shares.
+  const access = await accessSummaryByArtifact(
     "document",
-    rows.map((r) => r.id)
+    rows.map((r) => ({ id: r.id, matterId: r.matterId, ownerId: r.ownerId }))
   );
   const withShares = rows.map(({ ownerId, ...r }) => {
-    const s = shares.get(r.id);
-    const names = [r.ownerName, ...(s?.names ?? [])].filter((n): n is string => !!n).slice(0, 3);
+    const a = access.get(r.id);
     return {
       ...r,
       isOwner: ownerId === userId,
-      shareCount: (s?.count ?? 0) + 1,
-      sharedNames: names,
+      shareCount: a?.count ?? 1,
+      sharedNames: a?.names ?? [],
     };
   });
 

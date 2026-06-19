@@ -32,8 +32,8 @@ import {
   type ReviewDetail,
   type ReviewStreamCell,
 } from "@/lib/data/api";
-import { queryKeys } from "@/lib/data/queries";
 import { useSelectedModel } from "@/lib/hooks/state/useSelectedModel";
+import { DocumentDrawer } from "@/routes/_auth/documents/-components/DocumentDrawer";
 
 export const Route = createFileRoute("/_auth/reviews/$id")({ component: ReviewView });
 
@@ -53,10 +53,6 @@ function ReviewView() {
   const { data: session } = useSession();
   const reviewKey = ["review", id];
   const { data } = useQuery({ queryKey: reviewKey, queryFn: () => api.getReview(id) });
-  const { data: docs = [] } = useQuery({
-    queryKey: queryKeys.documents,
-    queryFn: () => api.listDocuments(),
-  });
   const { data: history = [] } = useQuery({
     queryKey: ["review-history", id],
     queryFn: () => api.history(id),
@@ -67,6 +63,7 @@ function ReviewView() {
   useEffect(() => () => runAllAbort.current?.abort(), []);
   const [model, setModel] = useSelectedModel();
   const [historyCollapsed, setHistoryCollapsed] = useState(false);
+  const [previewId, setPreviewId] = useState<string | null>(null);
   useEffect(() => {
     const saved = localStorage.getItem("reviewHistoryCollapsed");
     if (saved !== null) setHistoryCollapsed(saved === "true");
@@ -91,7 +88,7 @@ function ReviewView() {
 
   const review = data?.review;
   const cells = data?.cells;
-  const docTitle = (docId: string) => docs.find((d) => d.id === docId)?.title ?? docId.slice(0, 8);
+  const docTitle = (docId: string) => data?.documentTitles[docId] ?? docId.slice(0, 8);
   const cellOf = (docId: string, col: number): Cell | undefined =>
     cells?.find((c) => c.documentId === docId && c.columnIndex === col);
 
@@ -167,8 +164,8 @@ function ReviewView() {
   // the table meta so column identity stays stable across runs.
   const tableData = useMemo<ReviewRow[]>(
     () => (review?.documentIds ?? []).map((docId) => ({ docId, title: docTitle(docId) })),
-    // docTitle depends on docs; recompute when either changes.
-    [review, docs] // eslint-disable-line react-hooks/exhaustive-deps
+    // docTitle reads data.documentTitles; recompute when the review payload changes.
+    [data, review] // eslint-disable-line react-hooks/exhaustive-deps
   );
   const columns = useMemo<ColumnDef<ReviewRow>[]>(() => {
     const cols: ColumnDef<ReviewRow>[] = [
@@ -176,7 +173,17 @@ function ReviewView() {
         id: "document",
         header: "Document",
         size: 200,
-        cell: ({ row }) => <span className="font-medium">{row.original.title}</span>,
+        cell: ({ row, table }) => {
+          const meta = table.options.meta as ReviewMeta;
+          return (
+            <button
+              className="text-start font-medium hover:text-bronze hover:underline"
+              onClick={() => meta.preview(row.original.docId)}
+            >
+              {row.original.title}
+            </button>
+          );
+        },
       },
     ];
     for (const col of review?.columnsConfig ?? []) {
@@ -206,7 +213,7 @@ function ReviewView() {
     getRowId: (row) => row.docId,
     enableSorting: false,
     getCoreRowModel: getCoreRowModel(),
-    meta: { run, running, cellOf } satisfies ReviewMeta,
+    meta: { run, running, cellOf, preview: setPreviewId } satisfies ReviewMeta,
   });
 
   if (!data || !review)
@@ -290,6 +297,8 @@ function ReviewView() {
           <CommitHistory commits={history} currentUserId={session?.user.id} />
         </aside>
       )}
+
+      <DocumentDrawer docId={previewId} onClose={() => setPreviewId(null)} />
     </div>
   );
 }
@@ -300,6 +309,7 @@ type ReviewMeta = {
   run: (docId: string, columnIndex: number) => void;
   running: Set<string>;
   cellOf: (docId: string, columnIndex: number) => Cell | undefined;
+  preview: (docId: string) => void;
 };
 
 // One matrix cell: extraction result with a flag dot, citation chips + blame,

@@ -1,6 +1,6 @@
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { Users } from "lucide-react";
-import { api, type WorkflowDetail } from "@/lib/data/api";
+import { type WorkflowDetail } from "@/lib/data/api";
 import { useSession } from "@/lib/auth/auth-client";
 import { WorkflowModal } from "./WorkflowModal";
 
@@ -27,8 +27,6 @@ export function WorkflowDetailsModal({
 }: WorkflowDetailsModalProps) {
   const { data: session } = useSession();
   const [titleDraft, setTitleDraft] = useState("");
-  const [shareCount, setShareCount] = useState<number | null>(null);
-  const [sharesLoading, setSharesLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -36,27 +34,9 @@ export function WorkflowDetailsModal({
   useEffect(() => {
     if (!open || !workflow) return;
     setTitleDraft(workflow.title);
-    setShareCount(null);
     setSaved(false);
     setError(null);
   }, [open, workflow]);
-
-  useEffect(() => {
-    if (!open || !workflow || !canShare) {
-      setSharesLoading(false);
-      return;
-    }
-    let cancelled = false;
-    setSharesLoading(true);
-    api
-      .listWorkflowShares(workflow.id)
-      .then((shares) => !cancelled && setShareCount(shares.length))
-      .catch(() => !cancelled && setShareCount(null))
-      .finally(() => !cancelled && setSharesLoading(false));
-    return () => {
-      cancelled = true;
-    };
-  }, [canShare, open, workflow]);
 
   const trimmedTitle = titleDraft.trim();
   const hasChanges = useMemo(
@@ -71,7 +51,7 @@ export function WorkflowDetailsModal({
     ? "Built-in"
     : workflow.isOwner === false
       ? "Shared with you"
-      : shareCount && shareCount > 0
+      : workflow.shareCount > 0
         ? "Shared"
         : "Private";
   const ownerLabel =
@@ -150,16 +130,7 @@ export function WorkflowDetailsModal({
 
         <div className="divide-y divide-border text-sm">
           <DetailRow label="Type" value={typeLabel} />
-          <DetailRow
-            label="Ownership"
-            value={
-              sharesLoading ? (
-                <span className="inline-block h-4 w-14 animate-pulse rounded bg-muted" />
-              ) : (
-                ownershipLabel
-              )
-            }
-          />
+          <DetailRow label="Ownership" value={ownershipLabel} />
           <DetailRow label="Owner" value={ownerLabel} />
         </div>
       </div>

@@ -14,7 +14,7 @@ import {
   user,
 } from "@workspace/db/schema";
 import { type Actor, recordCommit } from "../core/commit.js";
-import { shareCountByArtifact, sharedArtifactIds } from "../platform/shares.js";
+import { accessSummaryByArtifact, sharedArtifactIds } from "../platform/shares.js";
 import { completeText, DEFAULT_MODEL, providerForModel, resolveLlmKey } from "./provider.js";
 import { buildCellPrompt, buildRowPrompt, normalizeCell } from "./prompts/tabular.js";
 
@@ -680,26 +680,18 @@ export async function listReviewsPage(userId: string, params: ReviewListParams) 
     db.select({ count: count() }).from(tabularReviews).where(where),
   ]);
 
-  // Attach "people with access": owner + everyone the review is shared with.
-  const ownerIds = [...new Set(rows.map((r) => r.userId).filter((x): x is string => !!x))];
-  const ownerRows = ownerIds.length
-    ? await db.select({ id: user.id, name: user.name }).from(user).where(inArray(user.id, ownerIds))
-    : [];
-  const ownerName = new Map(ownerRows.map((o) => [o.id, o.name]));
-  const shares = await shareCountByArtifact(
+  // Attach "people with access": owner + matter members + direct shares.
+  const access = await accessSummaryByArtifact(
     "tabular_review",
-    rows.map((r) => r.id)
+    rows.map((r) => ({ id: r.id, matterId: r.matterId, ownerId: r.userId }))
   );
   const withShares = rows.map((r) => {
-    const s = shares.get(r.id);
-    const names = [ownerName.get(r.userId ?? ""), ...(s?.names ?? [])].filter(
-      (n): n is string => !!n
-    );
+    const a = access.get(r.id);
     return {
       ...r,
       isOwner: r.userId === userId,
-      shareCount: (s?.count ?? 0) + 1,
-      sharedNames: names.slice(0, 3),
+      shareCount: a?.count ?? 1,
+      sharedNames: a?.names ?? [],
     };
   });
 
@@ -727,11 +719,22 @@ export async function getReview(reviewId: string) {
     : [];
   const blameById = new Map(blameRows.map((b) => [b.id, b]));
 
+  // Title comes from the access-gated review payload, not the caller's owner-scoped
+  // document list — collaborators don't own these docs, so a client lookup misses.
+  const docRows = review.documentIds.length
+    ? await db
+        .select({ id: documents.id, title: documents.title })
+        .from(documents)
+        .where(inArray(documents.id, review.documentIds))
+    : [];
+  const documentTitles = Object.fromEntries(docRows.map((d) => [d.id, d.title]));
+
   return {
     review,
     cells: cells.map((c) => ({
       ...c,
       blame: c.lastCommitId ? (blameById.get(c.lastCommitId) ?? null) : null,
     })),
+    documentTitles,
   };
 }
