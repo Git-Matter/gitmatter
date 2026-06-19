@@ -4,6 +4,7 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
+      "env": ["DEPLOYMENT"],
       "outputs": ["dist/**", ".output/**", ".next/**", "!.next/cache/**"]
     },
     "typecheck": {
@@ -15,7 +16,8 @@
     },
     "dev": {
       "cache": false,
-      "persistent": true
+      "persistent": true,
+      "passThroughEnv": ["DEPLOYMENT"]
     }
   }
 }

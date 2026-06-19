@@ -1,4 +1,4 @@
-import { HeadContent, Scripts, createRootRoute } from "@tanstack/react-router";
+import { HeadContent, Scripts, createRootRoute, useRouterState } from "@tanstack/react-router";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Suspense, lazy } from "react";
 import { ThemeProvider } from "next-themes";
@@ -60,6 +60,16 @@ function Shell({ children }: { children: React.ReactNode }) {
   // Server-resolved (see root beforeLoad): known during SSR, so the shell
   // renders real chrome in the server HTML — no blank-screen wait.
   const { session } = Route.useRouteContext();
+
+  // Marketing pages (cloud-only) ship their own full-bleed chrome via
+  // MarketingLayout. They must never get the app sidebar or the centered app
+  // container — not even for a logged-in visitor who lands on "/".
+  const isMarketing = useRouterState({
+    select: (s) => s.matches.some((m) => m.routeId.startsWith("/(marketing)")),
+  });
+  if (isMarketing) {
+    return <div className="min-h-dvh bg-background">{children}</div>;
+  }
 
   // Logged out: bare chrome (no sidebar, no MattersProvider). Access control
   // for protected routes lives in the _auth pathless layout, not here.
