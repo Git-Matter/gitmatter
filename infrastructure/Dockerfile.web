@@ -13,7 +13,6 @@ ARG DEPLOYMENT=local
 COPY package.json bun.lock turbo.json ./
 COPY apps ./apps
 COPY packages ./packages
-COPY services ./services
 RUN bun install --frozen-lockfile
 RUN cd apps/web && DEPLOYMENT=$DEPLOYMENT bun run build
 
