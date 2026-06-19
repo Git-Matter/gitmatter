@@ -6,8 +6,8 @@ function json(value: unknown) {
 }
 
 /**
- * The MCP server gitcounsel exposes to Claude Desktop / CLI / Cowork. Every tool
- * acts as the gitcounsel user the token was minted by, attributed as an agent so
+ * The MCP server gitmatter exposes to Claude Desktop / CLI / Cowork. Every tool
+ * acts as the gitmatter user the token was minted by, attributed as an agent so
  * its mutations land in the same git-style audit log as human actions. The tools
  * come from the shared catalog (server/tools/catalog.ts) — the same definitions
  * the in-app assistant uses, so MCP and chat never drift.
@@ -24,7 +24,7 @@ export function buildMcpServer(account: {
     userId: account.userId,
     agentLabel: `mcp:${account.label}`,
   };
-  const server = new McpServer({ name: "gitcounsel", version: "0.1.0" });
+  const server = new McpServer({ name: "gitmatter", version: "0.1.0" });
   const catalog = buildToolCatalog(actor, {
     jurisdiction: account.jurisdiction,
     defaultMatterLabel: account.label,

@@ -16,7 +16,7 @@ export function AuthShell({
       <div className="flex w-full max-w-sm flex-col gap-section">
         <div className="flex flex-col items-center gap-2 text-center">
           <Link to="/" className="font-heading text-2xl font-semibold tracking-tight">
-            gitcounsel
+            gitmatter
           </Link>
           <h1 className="font-heading text-xl">{title}</h1>
           <p className="text-sm text-muted-foreground">{subtitle}</p>

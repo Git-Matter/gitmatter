@@ -1,5 +1,5 @@
 // CourtListener API client, baked into the backend (no longer a sidecar).
-// Exposed as gitcounsel's own tools — over our MCP server (to Claude/agents) and
+// Exposed as gitmatter's own tools — over our MCP server (to Claude/agents) and
 // inside in-app chat. API-only; needs COURTLISTENER_API_TOKEN.
 
 import { fetchWithTimeout } from "../core/fetch.js";

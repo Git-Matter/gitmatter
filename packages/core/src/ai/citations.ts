@@ -5,7 +5,7 @@
 
 export type Citation = {
   ref: number;
-  // A gitcounsel document artifact the claim is grounded in.
+  // A gitmatter document artifact the claim is grounded in.
   doc_id?: string;
   quotes?: string[];
   // A CourtListener opinion (US case law).
@@ -15,7 +15,7 @@ export type Citation = {
 
 export const CITATIONS_INSTRUCTION = `When your answer relies on a document or a case, cite it. Put inline markers like [1], [2] in your prose, then append ONE block at the very end, on its own line:
 <CITATIONS>[{"ref":1,"doc_id":"<document id>","quotes":["short supporting quote"]}, {"ref":2,"cluster_id":123,"opinion_id":456}]</CITATIONS>
-Use doc_id for gitcounsel documents and cluster_id/opinion_id for case law from search_case_law. Omit the block entirely if you cited nothing. Never mention the block itself.`;
+Use doc_id for gitmatter documents and cluster_id/opinion_id for case law from search_case_law. Omit the block entirely if you cited nothing. Never mention the block itself.`;
 
 // How the assistant should redline documents. Steers propose_document_edit toward
 // minimal, anchored tracked changes instead of whole-paragraph rewrites.

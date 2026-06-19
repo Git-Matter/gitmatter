@@ -15,7 +15,7 @@ type Counter = { count: number; resetAt: number };
 // One store shared by all limiters, kept on a global so a dev HMR reload reuses it
 // (a fresh Map each reload would reset every window). Lazily swept + size-capped so
 // a flood of distinct keys (spoofed IPs, random tokens) can't grow it unbounded.
-const STORE = Symbol.for("gitcounsel.rateLimit");
+const STORE = Symbol.for("gitmatter.rateLimit");
 const g = globalThis as Record<symbol, Map<string, Counter> | undefined>;
 const store: Map<string, Counter> = (g[STORE] ??= new Map());
 const MAX_KEYS = 50_000;

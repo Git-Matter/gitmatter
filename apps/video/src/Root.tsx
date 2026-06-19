@@ -1,13 +1,13 @@
 import "./index.css";
 import { Composition } from "remotion";
-import { GitcounselDemo, DEMO_FRAMES } from "./GitcounselDemo";
+import { GitmatterDemo, DEMO_FRAMES } from "./GitmatterDemo";
 
 export const RemotionRoot: React.FC = () => {
   return (
     <>
       <Composition
-        id="GitcounselDemo"
-        component={GitcounselDemo}
+        id="GitmatterDemo"
+        component={GitmatterDemo}
         durationInFrames={DEMO_FRAMES}
         fps={30}
         width={1920}

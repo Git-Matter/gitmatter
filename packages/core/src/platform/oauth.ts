@@ -44,7 +44,7 @@ type AccessClaims = {
 function getSigningKey(): Buffer {
   const secret = getEnv("OAUTH_TOKEN_SECRET") ?? getEnv("BETTER_AUTH_SECRET");
   if (secret) return createHash("sha256").update(secret).digest();
-  const DEVKEY = Symbol.for("gitcounsel.oauthDevKey");
+  const DEVKEY = Symbol.for("gitmatter.oauthDevKey");
   const g = globalThis as Record<symbol, Buffer | undefined>;
   return (g[DEVKEY] ??= randomBytes(32));
 }

@@ -2,14 +2,14 @@ import { AbsoluteFill } from "remotion";
 import { theme, fonts } from "../theme";
 import { Eyebrow, Rise } from "../components";
 
-// Step two — the agent drives gitcounsel's tools. Compressed to a fast montage:
+// Step two — the agent drives gitmatter's tools. Compressed to a fast montage:
 // a lawyer doesn't buy on watching the plumbing, so the calls fly in quickly and
 // the scene hands its time to the Finding and the Record.
 const steps = [
-  { name: "gitcounsel.open_matter", note: "Acme Corp · Delaware" },
-  { name: "gitcounsel.add_documents", note: "3 NDAs ingested" },
-  { name: "gitcounsel.review_documents", note: "clause-by-clause" },
-  { name: "gitcounsel.flag_clauses", note: "1 issue found" },
+  { name: "gitmatter.open_matter", note: "Acme Corp · Delaware" },
+  { name: "gitmatter.add_documents", note: "3 NDAs ingested" },
+  { name: "gitmatter.review_documents", note: "clause-by-clause" },
+  { name: "gitmatter.flag_clauses", note: "1 issue found" },
 ];
 
 export const Work: React.FC = () => (
@@ -21,7 +21,7 @@ export const Work: React.FC = () => (
     </Rise>
     <Rise at={12}>
       <div style={{ fontFamily: fonts.heading, fontSize: 40, color: theme.text }}>
-        The agent drives gitcounsel's tools.
+        The agent drives gitmatter's tools.
       </div>
     </Rise>
     <div style={{ display: "flex", flexDirection: "column", gap: 16, marginTop: 16 }}>

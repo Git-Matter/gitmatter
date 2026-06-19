@@ -56,8 +56,8 @@ export class BatchWriter<T> {
 
 // Registry so a graceful shutdown can drain every writer. Kept on a global so a
 // dev HMR reload reuses the same set (and doesn't stack exit listeners).
-const REGISTRY = Symbol.for("gitcounsel.batchWriters");
-const FLUSH_HOOKED = Symbol.for("gitcounsel.batchFlushHooked");
+const REGISTRY = Symbol.for("gitmatter.batchWriters");
+const FLUSH_HOOKED = Symbol.for("gitmatter.batchFlushHooked");
 const g = globalThis as Record<symbol, unknown>;
 const writers = (g[REGISTRY] ??= new Set<BatchWriter<unknown>>()) as Set<BatchWriter<unknown>>;
 

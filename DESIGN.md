@@ -1,5 +1,5 @@
 ---
-name: gitcounsel
+name: gitmatter
 description: Audited legal review — calm warm-paper surface where the document is the hero
 colors:
   ink: "oklch(0.17 0.008 90)"
@@ -88,7 +88,7 @@ components:
     padding: "0 0.75rem"
 ---
 
-# Design System: gitcounsel
+# Design System: gitmatter
 
 ## 1. Overview
 
@@ -96,7 +96,7 @@ components:
 
 A calm counsel's office. Warm ivory paper, dark ink, serif headings; the document on the desk gets
 the light. The interface is the room, not the conversation: it holds the work steady and never
-raises its voice. Where Harvey is cream-corporate and Legora is stone-cool, gitcounsel is the more
+raises its voice. Where Harvey is cream-corporate and Legora is stone-cool, gitmatter is the more
 breathable child of both: fewer boxes, wider margins, hierarchy carried by type instead of chrome.
 
 This system explicitly rejects the generic shadcn/SaaS look (default-theme gray, identical card

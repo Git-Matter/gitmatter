@@ -1,18 +1,18 @@
 import Eyebrow from "@/marketing/components/Eyebrow";
 
-// The thesis: gitcounsel builds on mike with connectivity in BOTH directions.
+// The thesis: gitmatter builds on mike with connectivity in BOTH directions.
 // Inbound (MCP): outside agents drive our audited tools. Outbound (SDK): our
 // engine runs on the firm's own key. Two clean columns — no boxes.
 const FLOWS = [
   {
     tag: "Inbound",
     title: "Your agent drives our tools.",
-    body: "Any AI client your firm already uses connects over MCP and drives gitcounsel's review, extraction, and drafting — every action recorded as a commit.",
+    body: "Any AI client your firm already uses connects over MCP and drives gitmatter's review, extraction, and drafting — every action recorded as a commit.",
   },
   {
     tag: "Outbound",
     title: "Our engine runs on your key.",
-    body: "gitcounsel's own features call out to the firm's LLM key — multi-provider, encrypted, zero data retention. Your AI on the front, our audited engine behind.",
+    body: "gitmatter's own features call out to the firm's LLM key — multi-provider, encrypted, zero data retention. Your AI on the front, our audited engine behind.",
   },
 ];
 

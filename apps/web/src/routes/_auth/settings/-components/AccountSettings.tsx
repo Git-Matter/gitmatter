@@ -204,7 +204,7 @@ function AppearanceCard() {
         <CardTitle>Appearance</CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-field">
-        <p className="text-sm text-muted-foreground">Theme used across gitcounsel.</p>
+        <p className="text-sm text-muted-foreground">Theme used across gitmatter.</p>
         <div className="flex flex-wrap gap-1.5">
           {THEMES.map((t) => (
             <Button

@@ -65,7 +65,7 @@ export async function runChecks(config: Config | null): Promise<Check[]> {
     name: "config initialized",
     ok: configured,
     detail: configured ? paths.home : "not initialized",
-    fix: configured ? undefined : "Run: gitcounsel init",
+    fix: configured ? undefined : "Run: gitmatter init",
   });
 
   if (config) {
@@ -76,7 +76,7 @@ export async function runChecks(config: Config | null): Promise<Check[]> {
           name: "external database url",
           ok: false,
           detail: "DATABASE_URL is not a valid postgres URL",
-          fix: "Fix DATABASE_URL via: gitcounsel config set DATABASE_URL=postgres://...",
+          fix: "Fix DATABASE_URL via: gitmatter config set DATABASE_URL=postgres://...",
         });
       } else {
         const reachable = await tcpReachable(target.host, target.port);
@@ -93,7 +93,7 @@ export async function runChecks(config: Config | null): Promise<Check[]> {
       checks.push({
         name: "database",
         ok: true,
-        detail: "bundled Postgres (managed by gitcounsel)",
+        detail: "bundled Postgres (managed by gitmatter)",
       });
     }
 

@@ -12,7 +12,7 @@ let cachedKey: Buffer | null = null;
 function key(): Buffer {
   if (cachedKey) return cachedKey;
   const secret = requireEnv("ENCRYPTION_KEY");
-  cachedKey = scryptSync(secret, "gitcounsel.salt.v1", 32);
+  cachedKey = scryptSync(secret, "gitmatter.salt.v1", 32);
   return cachedKey;
 }
 

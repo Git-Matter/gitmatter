@@ -14,13 +14,13 @@ if (!url) {
 //
 // Pool tuning (postgres.js): cap connections, reclaim idle ones, recycle aged
 // connections, and fail fast when the DB is unreachable. `application_name`
-// makes gitcounsel's connections visible in pg_stat_activity.
+// makes gitmatter's connections visible in pg_stat_activity.
 //
 // Note: behind a transaction-mode pooler (pgBouncer/Hyperdrive) also set
 // `prepare: false` — prepared statements don't survive transaction pooling. On a
 // direct Postgres connection (self-host) the default (prepared) is faster.
 type PgClient = ReturnType<typeof postgres>;
-const POOL = Symbol.for("gitcounsel.pgPool");
+const POOL = Symbol.for("gitmatter.pgPool");
 const g = globalThis as Record<symbol, PgClient | undefined>;
 export const sql: PgClient =
   g[POOL] ??
@@ -29,7 +29,7 @@ export const sql: PgClient =
     idle_timeout: 20,
     max_lifetime: 60 * 30,
     connect_timeout: 10,
-    connection: { application_name: "gitcounsel" },
+    connection: { application_name: "gitmatter" },
   }));
 export const db = drizzle(sql, { schema });
 

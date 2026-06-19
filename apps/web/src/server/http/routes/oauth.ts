@@ -17,7 +17,7 @@ import { clientMeta } from "../lib/request-meta.js";
 
 export const oauthRoute = new Hono<AuthEnv>();
 
-// The single scope covering gitcounsel's MCP tool surface (product features only;
+// The single scope covering gitmatter's MCP tool surface (product features only;
 // never auth/user settings — see the connector allowlist).
 export const MCP_SCOPE = "mcp";
 
@@ -124,7 +124,7 @@ button{font:inherit;padding:.5rem 1rem;border-radius:8px;border:1px solid #ccc;c
 .ok{background:#111;color:#fff;border-color:#111}</style></head>
 <body><div class="card">
 <h2>Connect ${esc(input.clientName)}</h2>
-<p><strong>${esc(input.clientName)}</strong> wants to access your gitcounsel matters and tools
+<p><strong>${esc(input.clientName)}</strong> wants to access your gitmatter matters and tools
 (scope <code>${esc(input.scope)}</code>). It can act on the artifacts you can access; it cannot
 change your account or keys.</p>
 <p style="color:#666">Redirects to <code>${esc(host)}</code></p>

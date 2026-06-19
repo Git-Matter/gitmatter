@@ -51,7 +51,7 @@ export type ToolSpec = {
 };
 
 /**
- * The gitcounsel tool catalog, bound to one acting user. Every tool runs as that
+ * The gitmatter tool catalog, bound to one acting user. Every tool runs as that
  * user (attributed as an agent) and enforces the same per-artifact access checks
  * regardless of whether it's reached over MCP or from the in-app assistant.
  */

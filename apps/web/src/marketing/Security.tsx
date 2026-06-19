@@ -5,7 +5,7 @@ export default function Security() {
   return (
     <LegalPage title="Security">
       <p>
-        This is a <strong>draft</strong> summary of gitcounsel's security posture, pending review
+        This is a <strong>draft</strong> summary of gitmatter's security posture, pending review
         before launch.
       </p>
       <h2>Audit trail</h2>
@@ -22,10 +22,10 @@ export default function Security() {
       <h2>Access &amp; isolation</h2>
       <p>
         Data is scoped per organization (tenant); object-storage keys mirror the tenant boundary.
-        OAuth and MCP access is bound to the issuing user and the gitcounsel resource.
+        OAuth and MCP access is bound to the issuing user and the gitmatter resource.
       </p>
       <h2>Reporting</h2>
-      <p>Report suspected vulnerabilities to your gitcounsel administrator.</p>
+      <p>Report suspected vulnerabilities to your gitmatter administrator.</p>
     </LegalPage>
   );
 }

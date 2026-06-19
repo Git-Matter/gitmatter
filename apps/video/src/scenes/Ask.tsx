@@ -2,7 +2,7 @@ import { AbsoluteFill } from "remotion";
 import { theme, fonts } from "../theme";
 import { Eyebrow, Rise, Typed } from "../components";
 
-// Step one — Jane states the work inside gitcounsel's own assistant. The native
+// Step one — Jane states the work inside gitmatter's own assistant. The native
 // UI is the hero; using an outside client (Claude / ChatGPT over MCP) is a
 // secondary feature, noted as a footnote.
 export const Ask: React.FC = () => (
@@ -20,7 +20,7 @@ export const Ask: React.FC = () => (
     </Rise>
     <Rise at={12}>
       <div style={{ fontFamily: fonts.heading, fontSize: 44, color: theme.text }}>
-        Jane works inside gitcounsel.
+        Jane works inside gitmatter.
       </div>
     </Rise>
     <Rise at={24} style={{ marginTop: 8 }}>

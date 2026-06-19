@@ -50,7 +50,7 @@ export async function revokeMcpToken(userId: string, id: string) {
   void recordAudit({ eventType: "mcp_token.revoke", actorId: userId, target: id });
 }
 
-/** Resolve a bearer token to the gitcounsel user it was minted by. `tokenId` is
+/** Resolve a bearer token to the gitmatter user it was minted by. `tokenId` is
  *  the token's row id, so per-token metering can attribute usage to it. */
 export async function resolveMcpToken(
   token: string
@@ -91,7 +91,7 @@ export type McpAccount = {
 // global so a dev HMR reload keeps the cache. Trade-off: a revoked token keeps
 // working until its entry expires (≤ CACHE_TTL_MS).
 const CACHE_TTL_MS = 60 * 1000;
-const CACHE = Symbol.for("gitcounsel.mcpAccountCache");
+const CACHE = Symbol.for("gitmatter.mcpAccountCache");
 const gCache = globalThis as Record<
   symbol,
   Map<string, { account: McpAccount; expiresAt: number }> | undefined

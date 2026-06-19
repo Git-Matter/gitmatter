@@ -2,8 +2,8 @@ import { randomBytes } from "node:crypto";
 import { homedir, networkInterfaces } from "node:os";
 import { join } from "node:path";
 
-/** Where all deployment state lives. Override with GITCOUNSEL_HOME. */
-export const HOME = process.env.GITCOUNSEL_HOME ?? join(homedir(), ".gitcounsel");
+/** Where all deployment state lives. Override with GITMATTER_HOME. */
+export const HOME = process.env.GITMATTER_HOME ?? join(homedir(), ".gitmatter");
 
 export const paths = {
   home: HOME,
@@ -25,7 +25,7 @@ export interface Config {
   env: Record<string, string>;
 }
 
-const DEFAULT_BUNDLED_DB_URL = "postgres://gitcounsel:gitcounsel@postgres:5432/gitcounsel";
+const DEFAULT_BUNDLED_DB_URL = "postgres://gitmatter:gitmatter@postgres:5432/gitmatter";
 
 /** A long random secret for BETTER_AUTH_SECRET / ENCRYPTION_KEY. */
 export function secret(): string {
@@ -61,9 +61,9 @@ export async function loadConfig(): Promise<Config | null> {
   const env = parseEnv(await file.text());
   const databaseUrl = env.DATABASE_URL ?? "";
   return {
-    domain: env.GITCOUNSEL_DOMAIN ?? "gitcounsel.local",
-    dbMode: env.GITCOUNSEL_DB_MODE === "external" ? "external" : "bundled",
-    tls: env.GITCOUNSEL_TLS === "auto" ? "auto" : "internal",
+    domain: env.GITMATTER_DOMAIN ?? "gitmatter.local",
+    dbMode: env.GITMATTER_DB_MODE === "external" ? "external" : "bundled",
+    tls: env.GITMATTER_TLS === "auto" ? "auto" : "internal",
     databaseUrl: databaseUrl || DEFAULT_BUNDLED_DB_URL,
     env,
   };
@@ -80,9 +80,9 @@ export function buildEnv(opts: {
   const scheme = opts.tls === "auto" || opts.tls === "internal" ? "https" : "http";
   const databaseUrl = opts.dbMode === "bundled" ? DEFAULT_BUNDLED_DB_URL : (opts.databaseUrl ?? "");
   return {
-    GITCOUNSEL_DOMAIN: opts.domain,
-    GITCOUNSEL_DB_MODE: opts.dbMode,
-    GITCOUNSEL_TLS: opts.tls,
+    GITMATTER_DOMAIN: opts.domain,
+    GITMATTER_DB_MODE: opts.dbMode,
+    GITMATTER_TLS: opts.tls,
     DATABASE_URL: databaseUrl,
     BETTER_AUTH_SECRET: secret(),
     BETTER_AUTH_URL: `${scheme}://${opts.domain}`,

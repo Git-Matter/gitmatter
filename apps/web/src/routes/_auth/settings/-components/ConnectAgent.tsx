@@ -47,9 +47,9 @@ export function ConnectAgent() {
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         <p className="text-sm text-muted-foreground">
-          gitcounsel exposes an MCP server at <code className="text-xs">{mcpUrl}</code>. Connect
-          your own AI client - every action it takes is recorded in the same commit history,
-          attributed as an agent. It can drive product features but never your account settings.
+          gitmatter exposes an MCP server at <code className="text-xs">{mcpUrl}</code>. Connect your
+          own AI client - every action it takes is recorded in the same commit history, attributed
+          as an agent. It can drive product features but never your account settings.
         </p>
 
         <AgentClientTabs tab={tab} onChange={setTab} />
@@ -126,17 +126,17 @@ function AgentSetupGuide({ tab, mcpUrl }: { tab: ConnectTab; mcpUrl: string }) {
         <div className="flex flex-col gap-1">
           <p className="font-medium">Claude Code CLI - static token</p>
           <p className="text-muted-foreground">Mint a token below, then run:</p>
-          <CodeBlock>{`claude mcp add --transport http gitcounsel ${mcpUrl} \\\n  --header "Authorization: Bearer <token>"`}</CodeBlock>
+          <CodeBlock>{`claude mcp add --transport http gitmatter ${mcpUrl} \\\n  --header "Authorization: Bearer <token>"`}</CodeBlock>
         </div>
       )}
       {tab === "Codex" && (
         <div className="flex flex-col gap-1">
           <p className="font-medium">Codex CLI - static token</p>
           <p className="text-muted-foreground">
-            Mint a token below, set <code className="text-xs">GITCOUNSEL_TOKEN</code>, then add to{" "}
+            Mint a token below, set <code className="text-xs">GITMATTER_TOKEN</code>, then add to{" "}
             <code className="text-xs">~/.codex/config.toml</code>:
           </p>
-          <CodeBlock>{`[mcp_servers.gitcounsel]\nurl = "${mcpUrl}"\nbearer_token_env_var = "GITCOUNSEL_TOKEN"`}</CodeBlock>
+          <CodeBlock>{`[mcp_servers.gitmatter]\nurl = "${mcpUrl}"\nbearer_token_env_var = "GITMATTER_TOKEN"`}</CodeBlock>
         </div>
       )}
     </div>

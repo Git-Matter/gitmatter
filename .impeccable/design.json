@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
   "generatedAt": "2026-06-12T00:00:00Z",
-  "title": "Design System: gitcounsel",
+  "title": "Design System: gitmatter",
   "extensions": {
     "colorMeta": {
       "ink": {
@@ -173,7 +173,7 @@
   ],
   "narrative": {
     "northStar": "The Quiet Chambers",
-    "overview": "A calm counsel's office. Warm ivory paper, dark ink, serif headings; the document on the desk gets the light. The interface is the room, not the conversation: it holds the work steady and never raises its voice. Where Harvey is cream-corporate and Legora is stone-cool, gitcounsel is the more breathable child of both: fewer boxes, wider margins, hierarchy carried by type instead of chrome.",
+    "overview": "A calm counsel's office. Warm ivory paper, dark ink, serif headings; the document on the desk gets the light. The interface is the room, not the conversation: it holds the work steady and never raises its voice. Where Harvey is cream-corporate and Legora is stone-cool, gitmatter is the more breathable child of both: fewer boxes, wider margins, hierarchy carried by type instead of chrome.",
     "keyCharacteristics": [
       "Warm ivory neutrals tinted toward hue 90; never pure white or black.",
       "Serif (Newsreader) for page identity, sans (Geist) for everything operational.",

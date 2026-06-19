@@ -54,7 +54,7 @@ void seedMcpConnections().catch(() => {});
 // Guarded to run once per process via a global flag, so a dev HMR module reload
 // doesn't re-fire these full-table delete scans. (A real deployment should move
 // this to a scheduled job rather than coupling retention to process boot.)
-const SWEPT = Symbol.for("gitcounsel.retentionSwept");
+const SWEPT = Symbol.for("gitmatter.retentionSwept");
 const g = globalThis as Record<symbol, boolean>;
 if (!g[SWEPT]) {
   g[SWEPT] = true;
@@ -202,7 +202,7 @@ app.route("/", chatRoute);
 app.route("/", tokensRoute);
 
 // Exposed MCP server for Claude Desktop / CLI / Cowork. Authenticated by a
-// gitcounsel access token; a fresh stateless server/transport per request.
+// gitmatter access token; a fresh stateless server/transport per request.
 app.all("/api/mcp", async (c) => {
   const account = await authenticateMcp(c);
   if (!account) {

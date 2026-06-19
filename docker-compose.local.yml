@@ -8,19 +8,19 @@
 # Storage is bring-your-own: the app requires an S3-compatible bucket (Cloudflare
 # R2, AWS S3, MinIO, …) — set the S3_* vars in .env. Docling has no auth, so it is
 # NOT published to the host; it is only reachable on the internal compose network.
-# Override the web image with GITCOUNSEL_IMAGE to pin a version.
+# Override the web image with GITMATTER_IMAGE to pin a version.
 services:
   postgres:
     image: pgvector/pgvector:pg17
     restart: unless-stopped
     environment:
-      POSTGRES_USER: gitcounsel
-      POSTGRES_PASSWORD: gitcounsel
-      POSTGRES_DB: gitcounsel
+      POSTGRES_USER: gitmatter
+      POSTGRES_PASSWORD: gitmatter
+      POSTGRES_DB: gitmatter
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U gitcounsel"]
+      test: ["CMD-SHELL", "pg_isready -U gitmatter"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -45,17 +45,17 @@ services:
   # One-shot schema migration. Runs to completion before web starts; keeps the
   # serving container immutable (no schema mutation at app boot).
   migrate:
-    image: ${GITCOUNSEL_IMAGE:-ghcr.io/peteqian/gitcounsel:latest}
+    image: ${GITMATTER_IMAGE:-ghcr.io/peteqian/gitmatter:latest}
     restart: "no"
     depends_on:
       postgres:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgres://gitcounsel:gitcounsel@postgres:5432/gitcounsel
+      DATABASE_URL: postgres://gitmatter:gitmatter@postgres:5432/gitmatter
     command: ["sh", "-c", "cd /app/packages/db && bun run migrate"]
 
   web:
-    image: ${GITCOUNSEL_IMAGE:-ghcr.io/peteqian/gitcounsel:latest}
+    image: ${GITMATTER_IMAGE:-ghcr.io/peteqian/gitmatter:latest}
     restart: unless-stopped
     depends_on:
       postgres:
@@ -65,7 +65,7 @@ services:
       docling:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgres://gitcounsel:gitcounsel@postgres:5432/gitcounsel
+      DATABASE_URL: postgres://gitmatter:gitmatter@postgres:5432/gitmatter
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?set in .env}
       BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:4280}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set in .env}
@@ -74,7 +74,7 @@ services:
       S3_REGION: ${S3_REGION:-auto}
       S3_ACCESS_KEY: ${S3_ACCESS_KEY:?set in .env}
       S3_SECRET_KEY: ${S3_SECRET_KEY:?set in .env}
-      S3_BUCKET: ${S3_BUCKET:-gitcounsel}
+      S3_BUCKET: ${S3_BUCKET:-gitmatter}
       S3_FORCE_PATH_STYLE: ${S3_FORCE_PATH_STYLE:-true}
       COURTLISTENER_API_TOKEN: ${COURTLISTENER_API_TOKEN:-}
       DOCLING_URL: http://docling:5001/v1/convert/source

@@ -3,7 +3,7 @@ title: Spending controls
 description: Track actions that cost money and set budgets that flag overspending.
 ---
 
-gitcounsel keeps track of the actions that cost money so you can see where the spend goes and get warned when it climbs too high. In short: every paid action is logged, and budgets compare recent usage against the limits you set. Each metered action is written to an append-only `usage_events` table (a log that only ever has rows added, never changed or removed), and budgets are checked by adding up usage over a recent time window.
+gitmatter keeps track of the actions that cost money so you can see where the spend goes and get warned when it climbs too high. In short: every paid action is logged, and budgets compare recent usage against the limits you set. Each metered action is written to an append-only `usage_events` table (a log that only ever has rows added, never changed or removed), and budgets are checked by adding up usage over a recent time window.
 
 <Callout type="warn">
   Budgets are **log-only**. Going over a budget never blocks or rejects an action. It only records
@@ -22,11 +22,11 @@ gitcounsel keeps track of the actions that cost money so you can see where the s
 | CourtListener request | Number of calls       | User            | On `search_case_law` and `verify_citations` |
 | Document extraction   | Number of jobs        | User            | When an upload is queued for extraction     |
 
-LLM ("large language model", the AI behind chat and review) token counts come straight from each AI provider's response. Tokens are the chunks of text the AI reads and writes, and providers bill by token count. If a provider does not report usage, gitcounsel records zero for that call. It never treats missing usage as an error.
+LLM ("large language model", the AI behind chat and review) token counts come straight from each AI provider's response. Tokens are the chunks of text the AI reads and writes, and providers bill by token count. If a provider does not report usage, gitmatter records zero for that call. It never treats missing usage as an error.
 
 ### Per-token attribution
 
-MCP ("Model Context Protocol", the standard that lets AI clients connect to gitcounsel) tool calls are counted against the specific access token that made them. So if you create several tokens (for example one per connected AI client), you can see exactly which token is doing the work and which is driving spend.
+MCP ("Model Context Protocol", the standard that lets AI clients connect to gitmatter) tool calls are counted against the specific access token that made them. So if you create several tokens (for example one per connected AI client), you can see exactly which token is doing the work and which is driving spend.
 
 ## Budget settings
 
@@ -41,7 +41,7 @@ You set budgets with environment variables (named settings you configure where t
 | `COURTLISTENER_CALL_BUDGET_PER_MIN` | off     | Max CourtListener calls per user per minute                         |
 | `EXTRACTION_QUEUE_BUDGET`           | off     | Max extraction jobs per user within the window                      |
 
-When usage crosses a budget, gitcounsel writes a `budget.exceeded` line to the structured logs and a matching `budget.exceeded` row to `audit_events` (the security and activity log). That audit row records the scope, the total used, and the budget that was crossed. The action still goes through.
+When usage crosses a budget, gitmatter writes a `budget.exceeded` line to the structured logs and a matching `budget.exceeded` row to `audit_events` (the security and activity log). That audit row records the scope, the total used, and the budget that was crossed. The action still goes through.
 
 ## Reading the meter
 

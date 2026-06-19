@@ -45,15 +45,15 @@ export function emailEnabled(): boolean {
 export function sendVerificationEmail(to: string, url: string): Promise<void> {
   return emailTransport().send({
     to,
-    subject: "Verify your gitcounsel email",
-    text: `Confirm your email address by opening this link:\n\n${url}\n\nIf you did not create a gitcounsel account, ignore this message.`,
+    subject: "Verify your gitmatter email",
+    text: `Confirm your email address by opening this link:\n\n${url}\n\nIf you did not create a gitmatter account, ignore this message.`,
   });
 }
 
 export function sendPasswordResetEmail(to: string, url: string): Promise<void> {
   return emailTransport().send({
     to,
-    subject: "Reset your gitcounsel password",
+    subject: "Reset your gitmatter password",
     text: `Reset your password by opening this link:\n\n${url}\n\nIf you did not request a reset, ignore this message.`,
   });
 }
@@ -62,7 +62,7 @@ export function sendInviteEmail(to: string, url: string, orgName?: string): Prom
   const org = orgName ? ` to ${orgName}` : "";
   return emailTransport().send({
     to,
-    subject: `You've been invited${org} on gitcounsel`,
+    subject: `You've been invited${org} on gitmatter`,
     text: `You've been invited${org}. Accept the invite by opening this link:\n\n${url}`,
   });
 }

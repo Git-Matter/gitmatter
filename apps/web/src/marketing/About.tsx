@@ -1,6 +1,6 @@
 import { SITE } from "@/marketing/site";
 
-// Cloud-only marketing About page: what gitcounsel is, that it's built in the
+// Cloud-only marketing About page: what gitmatter is, that it's built in the
 // open, and credit to mikeoss — the project it builds on.
 export default function About() {
   return (
@@ -13,7 +13,7 @@ export default function About() {
           An audit spine under AI-assisted legal review.
         </h1>
         <p className="text-lg text-muted-foreground">
-          gitcounsel does contract redline, tabular extraction, document generation, and reusable
+          gitmatter does contract redline, tabular extraction, document generation, and reusable
           workflows — and puts a git-style audit spine underneath. Every change, human or agent, is
           a commit with author, message, field-level diff, and blame, in one history.
         </p>
@@ -22,9 +22,9 @@ export default function About() {
       <section className="flex flex-col gap-stack">
         <h2 className="font-heading text-2xl tracking-tight">Built in the open</h2>
         <p className="text-muted-foreground">
-          gitcounsel is open source and self-hostable. Run the whole stack yourself with Docker,
+          gitmatter is open source and self-hostable. Run the whole stack yourself with Docker,
           bring your own LLM key, and keep zero data retention. Any AI client your firm already uses
-          can drive the same audited tools over MCP — your AI on the front, gitcounsel's audited
+          can drive the same audited tools over MCP — your AI on the front, gitmatter's audited
           engine behind.
         </p>
         <p className="text-muted-foreground">
@@ -44,7 +44,7 @@ export default function About() {
       <section className="flex flex-col gap-stack">
         <h2 className="font-heading text-2xl tracking-tight">Credits</h2>
         <p className="text-muted-foreground">
-          gitcounsel is heavily inspired by{" "}
+          gitmatter is heavily inspired by{" "}
           <a
             href={SITE.mikeoss}
             target="_blank"
@@ -53,7 +53,7 @@ export default function About() {
           >
             mikeoss
           </a>{" "}
-          — the legal-document AI assistant whose review surfaces this project builds on. gitcounsel
+          — the legal-document AI assistant whose review surfaces this project builds on. gitmatter
           adapts mikeoss's contract redline, tabular review, workflows, and chat, and ports several
           of its libraries. On top of that it adds the two things mikeoss does not have: a git-style
           audit spine, and agent connectivity in both directions over MCP. Full credit to mikeoss

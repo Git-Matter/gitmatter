@@ -16,8 +16,8 @@ import { diagnose, runChecks } from "./doctor.ts";
 import { COMPOSE_BASE, COMPOSE_DB, renderCaddyfile } from "./templates.ts";
 
 const C = { cyan: "\x1b[36m", red: "\x1b[31m", green: "\x1b[32m", dim: "\x1b[2m", off: "\x1b[0m" };
-const log = (m: string) => console.log(`${C.cyan}[gitcounsel]${C.off} ${m}`);
-const err = (m: string) => console.error(`${C.red}[gitcounsel]${C.off} ${m}`);
+const log = (m: string) => console.log(`${C.cyan}[gitmatter]${C.off} ${m}`);
+const err = (m: string) => console.error(`${C.red}[gitmatter]${C.off} ${m}`);
 
 /** The `-f base [-f db]` argument list compose needs for this config. */
 function composeFiles(config: Config): string[] {
@@ -42,7 +42,7 @@ function fail(msg: string, json: boolean): never {
 
 async function requireConfig(json: boolean): Promise<Config> {
   const config = await loadConfig();
-  if (!config) fail("Not initialized. Run: gitcounsel init", json);
+  if (!config) fail("Not initialized. Run: gitmatter init", json);
   return config;
 }
 
@@ -55,7 +55,7 @@ function printUrls(config: Config): void {
     log(`LAN fallback (always works): ${C.green}https://${ip}${C.off} ${C.dim}(or http)${C.off}`);
   if (config.tls === "internal") {
     log(
-      `${C.dim}First visit warns until the Caddy root CA is trusted — run \`gitcounsel doctor\` for the step.${C.off}`
+      `${C.dim}First visit warns until the Caddy root CA is trusted — run \`gitmatter doctor\` for the step.${C.off}`
     );
   }
 }
@@ -67,7 +67,7 @@ async function cmdInit(flags: Record<string, unknown>): Promise<void> {
   const existing = await loadConfig();
 
   // Defaults: re-use prior answers when re-initializing, else sane defaults.
-  let domain = (flags.domain as string) ?? existing?.domain ?? "gitcounsel.local";
+  let domain = (flags.domain as string) ?? existing?.domain ?? "gitmatter.local";
   let dbMode: DbMode = (flags["db"] as DbMode) ?? existing?.dbMode ?? "bundled";
   let databaseUrl = (flags["database-url"] as string) ?? existing?.databaseUrl ?? "";
 
@@ -114,7 +114,7 @@ async function cmdInit(flags: Record<string, unknown>): Promise<void> {
   log(`  domain   ${domain}`);
   log(`  database ${dbMode}${dbMode === "external" ? ` (${databaseUrl})` : ""}`);
   log(`  tls      ${tls}`);
-  log(`Next: ${C.green}gitcounsel up${C.off}`);
+  log(`Next: ${C.green}gitmatter up${C.off}`);
 }
 
 // ── up / down / logs / update ────────────────────────────────────────────────
@@ -129,7 +129,7 @@ async function cmdUp(json: boolean): Promise<void> {
 
   log("Starting stack (this pulls images on first run)…");
   const code = await compose(config, ["up", "-d", "--wait"]);
-  if (code !== 0) fail("docker compose failed. Run: gitcounsel logs", json);
+  if (code !== 0) fail("docker compose failed. Run: gitmatter logs", json);
 
   if (json) {
     console.log(
@@ -205,24 +205,24 @@ async function cmdConfig(args: string[], json: boolean): Promise<void> {
     const env = parseEnv(await Bun.file(paths.env).text());
     env[key] = val;
     await Bun.write(paths.env, serializeEnv(env));
-    log(`Set ${key}. Re-run \`gitcounsel up\` to apply.`);
+    log(`Set ${key}. Re-run \`gitmatter up\` to apply.`);
     return;
   }
-  fail("Usage: gitcounsel config get | gitcounsel config set KEY=value", json);
+  fail("Usage: gitmatter config get | gitmatter config set KEY=value", json);
 }
 
 // ── dispatch ─────────────────────────────────────────────────────────────────
 
-const HELP = `gitcounsel — self-host the stack with Docker.
+const HELP = `gitmatter — self-host the stack with Docker.
 
 Usage:
-  gitcounsel init [--domain D] [--db bundled|external] [--database-url URL] [--tls internal|auto] [--yes]
-  gitcounsel up                 Start everything, print the URL
-  gitcounsel down               Stop everything
-  gitcounsel doctor             Diagnose host + config, print fixes
-  gitcounsel logs [service]     Tail logs
-  gitcounsel update             Pull newer images and restart
-  gitcounsel config get|set KEY=value
+  gitmatter init [--domain D] [--db bundled|external] [--database-url URL] [--tls internal|auto] [--yes]
+  gitmatter up                 Start everything, print the URL
+  gitmatter down               Stop everything
+  gitmatter doctor             Diagnose host + config, print fixes
+  gitmatter logs [service]     Tail logs
+  gitmatter update             Pull newer images and restart
+  gitmatter config get|set KEY=value
 
 Global:
   --json   Machine-readable output (for scripts / AI agents)
@@ -269,7 +269,7 @@ async function main(): Promise<void> {
     case "config":
       return cmdConfig(positionals.slice(1), json);
     default:
-      fail(`Unknown command: ${cmd}. Run \`gitcounsel --help\`.`, json);
+      fail(`Unknown command: ${cmd}. Run \`gitmatter --help\`.`, json);
   }
 }
 

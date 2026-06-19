@@ -143,7 +143,7 @@ describe("resolveMcpAccount (one-query resolution)", () => {
 });
 
 describe("OAuth signed access tokens", () => {
-  const AUD2 = "https://gitcounsel.test/api/mcp";
+  const AUD2 = "https://gitmatter.test/api/mcp";
   const challengeFor = (verifier: string) =>
     createHash("sha256").update(verifier).digest("base64url");
 
@@ -199,13 +199,13 @@ describe("OAuth token validation", () => {
       tokenHash: hashToken(token),
       clientId: "connector",
       userId: ownerId,
-      audience: "https://gitcounsel.test/api/mcp",
+      audience: "https://gitmatter.test/api/mcp",
       expiresAt: over.expiresAt ?? new Date(Date.now() + 3_600_000),
       revokedAt: over.revokedAt ?? null,
     });
     return token;
   };
-  const AUD = "https://gitcounsel.test/api/mcp";
+  const AUD = "https://gitmatter.test/api/mcp";
 
   test("rejects expired and revoked tokens, accepts a live one", async () => {
     const live = await mkToken({});

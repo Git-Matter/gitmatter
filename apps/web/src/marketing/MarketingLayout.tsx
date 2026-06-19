@@ -22,7 +22,7 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
   return (
     <div className="flex min-h-dvh flex-col">
       <header className="mx-auto flex w-full max-w-7xl items-center justify-between px-6 py-5">
-        <Link to="/" aria-label="gitcounsel home">
+        <Link to="/" aria-label="gitmatter home">
           <Wordmark />
         </Link>
         <nav className="flex items-center gap-1 text-sm">

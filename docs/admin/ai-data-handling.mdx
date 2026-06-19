@@ -3,7 +3,7 @@ title: AI data handling
 description: What content reaches AI providers, and how to keep them from keeping it.
 ---
 
-Law-firm documents are privileged (legally confidential). This page explains which content leaves gitcounsel, where it goes, and how to set up the strictest privacy posture each AI provider allows, so providers keep as little of your data as possible.
+Law-firm documents are privileged (legally confidential). This page explains which content leaves gitmatter, where it goes, and how to set up the strictest privacy posture each AI provider allows, so providers keep as little of your data as possible.
 
 <Callout type="warn">
   Provider privacy policies change over time. Verify a provider's current policy before relying on
@@ -12,11 +12,11 @@ Law-firm documents are privileged (legally confidential). This page explains whi
 
 ## What gets sent to a provider
 
-When you run a chat turn or a tabular review, gitcounsel sends the relevant prompt and document content to **one** AI provider: the one that serves the model you picked. Nothing goes to providers you did not select. CourtListener legal-research calls go to CourtListener, not to an AI provider.
+When you run a chat turn or a tabular review, gitmatter sends the relevant prompt and document content to **one** AI provider: the one that serves the model you picked. Nothing goes to providers you did not select. CourtListener legal-research calls go to CourtListener, not to an AI provider.
 
 ## Whose key is used
 
-A "key" is the credential that bills and identifies the account talking to an AI provider. For each provider, gitcounsel picks the key in this order: **the user's own key first**, then the server-wide key set in env (the deployment-level setting), and otherwise none. The model picker shows which source is active (`user` or `env`), so it is never ambiguous.
+A "key" is the credential that bills and identifies the account talking to an AI provider. For each provider, gitmatter picks the key in this order: **the user's own key first**, then the server-wide key set in env (the deployment-level setting), and otherwise none. The model picker shows which source is active (`user` or `env`), so it is never ambiguous.
 
 With bring-your-own-key (the firm supplies its own provider key), requests are billed and logged under the firm's own provider account.
 
@@ -31,9 +31,9 @@ This table shows how much each provider keeps your data. "Trains on API data" me
 | **OpenAI**        | No                                                     | 30-day abuse retention                                        | Org-level ZDR requires sales approval.                                                                                                  |
 | **Google Gemini** | No on the **paid** tier (the free tier **does** train) | Paid / Vertex: no training, limited abuse logging             | Per-project ZDR request (requires approval). Reject free-tier keys.                                                                     |
 
-## What gitcounsel sends today
+## What gitmatter sends today
 
-gitcounsel sets these privacy flags (settings that tell the provider not to keep your data) by default:
+gitmatter sets these privacy flags (settings that tell the provider not to keep your data) by default:
 
 - **OpenAI** — `store: false` (the provider does not save the response on its servers), and reasoning is sent encrypted and never persisted (never kept).
 - **OpenRouter** — `provider.dataCollection: "deny"` (route only to endpoints that do not retain or collect prompt data).

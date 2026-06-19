@@ -1,9 +1,9 @@
 ---
 title: Self-hosting
-description: Run gitcounsel on your own machine or with the full Docker stack.
+description: Run gitmatter on your own machine or with the full Docker stack.
 ---
 
-This guide covers running gitcounsel on your own infrastructure: what you need, which settings are required, how to run it for local development, and how to bring up the full set of services with Docker.
+This guide covers running gitmatter on your own infrastructure: what you need, which settings are required, how to run it for local development, and how to bring up the full set of services with Docker.
 
 ## Prerequisites
 
@@ -24,7 +24,7 @@ Settings are read from environment variables. Copy `.env.example` to `.env` and 
 
 <Callout type="warn">
   Object storage is **required**. Set up an R2 bucket or any S3-compatible endpoint. There is no
-  local-filesystem fallback (gitcounsel will not store files on the server's own disk instead).
+  local-filesystem fallback (gitmatter will not store files on the server's own disk instead).
 </Callout>
 
 ### LLM provider keys
@@ -71,7 +71,7 @@ docker compose up --build
 
 This runs three services:
 
-- **web** — the gitcounsel app.
+- **web** — the gitmatter app.
 - **postgres** — Postgres with pgvector (the database, with the extension used for AI search).
 - **docling** — the document-extraction service (it pulls text out of uploaded files), reachable on the internal network only so the outside world cannot call it.
 

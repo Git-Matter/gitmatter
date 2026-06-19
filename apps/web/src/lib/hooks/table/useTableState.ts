@@ -18,7 +18,7 @@ export function useTableState(
   key: string,
   opts: { defaultSorting: SortingState; defaultPageSize?: number }
 ) {
-  const storeKey = `gitcounsel.table.${key}`;
+  const storeKey = `gitmatter.table.${key}`;
   const [sorting, setSorting] = useState<SortingState>(opts.defaultSorting);
   const [pagination, setPagination] = useState<PaginationState>({
     pageIndex: 0,

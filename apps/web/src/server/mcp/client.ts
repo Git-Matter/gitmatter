@@ -47,7 +47,7 @@ async function connect(
     new URL(url),
     headers ? { requestInit: { headers } } : undefined
   );
-  const client = new Client({ name: "gitcounsel", version: "0.1.0" });
+  const client = new Client({ name: "gitmatter", version: "0.1.0" });
   await client.connect(transport, { timeout: MCP_REQUEST_TIMEOUT_MS });
   const { tools } = await client.listTools(undefined, { timeout: MCP_REQUEST_TIMEOUT_MS });
   return {

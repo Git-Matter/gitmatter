@@ -2,7 +2,7 @@ import { AbsoluteFill } from "remotion";
 import { theme, fonts } from "../theme";
 import { Eyebrow, Rise } from "../components";
 
-// Step three — the payoff of the review. gitcounsel surfaces the one clause that
+// Step three — the payoff of the review. gitmatter surfaces the one clause that
 // needs a human, in context inside the document.
 export const Finding: React.FC = () => (
   <AbsoluteFill
@@ -13,7 +13,7 @@ export const Finding: React.FC = () => (
     </Rise>
     <Rise at={12}>
       <div style={{ fontFamily: fonts.heading, fontSize: 40, color: theme.text }}>
-        gitcounsel surfaces what needs a human.
+        gitmatter surfaces what needs a human.
       </div>
     </Rise>
     <Rise at={26} style={{ marginTop: 12 }}>
@@ -61,7 +61,7 @@ export const Finding: React.FC = () => (
     <Rise at={110} style={{ marginTop: 8 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
         <span style={{ fontFamily: fonts.body, fontSize: 26, color: theme.text }}>
-          gitcounsel surfaces it. <span style={{ color: theme.muted }}>Jane decides:</span>
+          gitmatter surfaces it. <span style={{ color: theme.muted }}>Jane decides:</span>
         </span>
         <span
           style={{

@@ -13,7 +13,7 @@ export type AuthenticatedMcp = {
   jurisdiction: string | null;
 };
 
-/** Resolve the gitcounsel account behind an `Authorization: Bearer <token>`
+/** Resolve the gitmatter account behind an `Authorization: Bearer <token>`
  *  header. Returns tenant + jurisdiction inline: a static token resolves them in
  *  one joined query; a signed OAuth token carries them in its claims. */
 export async function authenticateMcp(c: Context): Promise<AuthenticatedMcp | null> {

@@ -19,8 +19,8 @@ export const userApiKeys = pgTable(
   (t) => [unique("user_api_key_unique").on(t.userId, t.provider)]
 );
 
-// Bearer tokens that let Claude Desktop / CLI / Cowork drive gitcounsel via the
-// exposed MCP server. The token maps to a gitcounsel user; only the hash is stored.
+// Bearer tokens that let Claude Desktop / CLI / Cowork drive gitmatter via the
+// exposed MCP server. The token maps to a gitmatter user; only the hash is stored.
 export const mcpAccessTokens = pgTable("mcp_access_tokens", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: text("user_id")
@@ -33,7 +33,7 @@ export const mcpAccessTokens = pgTable("mcp_access_tokens", {
   revokedAt: timestamp("revoked_at"),
 });
 
-// External MCP servers gitcounsel consumes (e.g. CourtListener).
+// External MCP servers gitmatter consumes (e.g. CourtListener).
 export const mcpConnections = pgTable("mcp_connections", {
   id: uuid("id").primaryKey().defaultRandom(),
   // null = system/global connection (shared by all users).

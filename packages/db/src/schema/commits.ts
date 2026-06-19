@@ -17,7 +17,7 @@ export const commits = pgTable(
     seq: integer("seq").notNull(),
     parentCommitId: uuid("parent_commit_id"),
     actorType: text("actor_type").$type<ActorType>().notNull(),
-    // Always the gitcounsel user. For agent commits, the user the MCP token maps to.
+    // Always the gitmatter user. For agent commits, the user the MCP token maps to.
     actorId: text("actor_id").references(() => user.id, { onDelete: "set null" }),
     agentLabel: text("agent_label"),
     op: text("op").notNull(),

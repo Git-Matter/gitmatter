@@ -1,9 +1,9 @@
 ---
 title: Security
-description: The audit trail, encrypted secrets, and agent limits behind gitcounsel.
+description: The audit trail, encrypted secrets, and agent limits behind gitmatter.
 ---
 
-gitcounsel is built for firms that are skeptical of AI and need to prove what happened. This page summarizes its security and compliance posture. Each point is backed by the behavior described elsewhere in these docs.
+gitmatter is built for firms that are skeptical of AI and need to prove what happened. This page summarizes its security and compliance posture. Each point is backed by the behavior described elsewhere in these docs.
 
 ## Audited by design
 
@@ -15,7 +15,7 @@ User secrets (LLM keys and MCP credentials) are encrypted with AES-256-GCM, a st
 
 ## Bring your own key, with zero data retention
 
-gitcounsel's own features (chat and review) run on the firm's own LLM key across multiple providers (Claude / Gemini / OpenAI / OpenRouter). A user's key overrides any server-wide key, so requests bill and log under the firm's own provider account. The defaults are set for the strictest privacy posture each provider allows, so providers keep as little of your data as possible. See [AI data handling](/admin/ai-data-handling) for the per-provider detail and how to enable true zero data retention (the provider keeps and trains on nothing).
+gitmatter's own features (chat and review) run on the firm's own LLM key across multiple providers (Claude / Gemini / OpenAI / OpenRouter). A user's key overrides any server-wide key, so requests bill and log under the firm's own provider account. The defaults are set for the strictest privacy posture each provider allows, so providers keep as little of your data as possible. See [AI data handling](/admin/ai-data-handling) for the per-provider detail and how to enable true zero data retention (the provider keeps and trains on nothing).
 
 ## SSRF guards on consumed MCP servers
 
@@ -23,7 +23,7 @@ The in-app chat can act as an MCP client and connect to external MCP servers tha
 
 ## Agents stay inside their lane
 
-When an AI agent connects over MCP, it acts as your gitcounsel account, and everything it does lands in the same commit log, marked as done by an agent. An agent can drive product features (reviews, contracts, workflows, documents, document generation, search, and audit), but it can **never** touch authentication or user settings such as keys, tokens, or account details.
+When an AI agent connects over MCP, it acts as your gitmatter account, and everything it does lands in the same commit log, marked as done by an agent. An agent can drive product features (reviews, contracts, workflows, documents, document generation, search, and audit), but it can **never** touch authentication or user settings such as keys, tokens, or account details.
 
 ## Where the data lives
 

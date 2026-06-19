@@ -17,18 +17,18 @@ jobs:
       postgres:
         image: pgvector/pgvector:pg17
         env:
-          POSTGRES_USER: gitcounsel
-          POSTGRES_PASSWORD: gitcounsel
-          POSTGRES_DB: gitcounsel
+          POSTGRES_USER: gitmatter
+          POSTGRES_PASSWORD: gitmatter
+          POSTGRES_DB: gitmatter
         ports:
           - "5432:5432"
         options: >-
-          --health-cmd "pg_isready -U gitcounsel"
+          --health-cmd "pg_isready -U gitmatter"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
     env:
-      DATABASE_URL: postgres://gitcounsel:gitcounsel@localhost:5432/gitcounsel
+      DATABASE_URL: postgres://gitmatter:gitmatter@localhost:5432/gitmatter
     steps:
       - uses: actions/checkout@v4
 

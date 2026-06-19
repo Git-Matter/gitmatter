@@ -40,7 +40,7 @@ export const PROVIDERS: ToolProvider[] = [
     id: "courtlistener",
     name: "CourtListener",
     jurisdictions: ["US"], // federal -> also serves US-* sub-jurisdictions
-    // Baked into the gitcounsel backend (not a consumed sidecar). Exposed as our
+    // Baked into the gitmatter backend (not a consumed sidecar). Exposed as our
     // own tools over our MCP server and in chat; gated to US jurisdictions.
     transport: "internal",
     authType: "none",
@@ -54,7 +54,7 @@ export const PROVIDERS: ToolProvider[] = [
     id: "docling",
     name: "Docling",
     jurisdictions: ["*"], // document extraction is jurisdiction-agnostic
-    // Called directly by the gitcounsel backend over its REST API (docling-serve),
+    // Called directly by the gitmatter backend over its REST API (docling-serve),
     // not connected as a consumed MCP server.
     transport: "internal",
     authType: "none",

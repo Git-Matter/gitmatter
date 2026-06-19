@@ -6,7 +6,7 @@ const POINTS = [
   {
     n: "01",
     title: "Bring your own agent",
-    body: "Connect the AI client your firm already uses over MCP. It drives gitcounsel's tools; every action is recorded.",
+    body: "Connect the AI client your firm already uses over MCP. It drives gitmatter's tools; every action is recorded.",
   },
   {
     n: "02",

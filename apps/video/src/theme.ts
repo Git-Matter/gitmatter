@@ -1,4 +1,4 @@
-// Shared palette + type stacks for the gitcounsel showcase. Mirrors the
+// Shared palette + type stacks for the gitmatter showcase. Mirrors the
 // marketing "Quiet Chambers" look: deep ink ground, bronze accent, muted text.
 export const theme = {
   ink: "#ffffff",

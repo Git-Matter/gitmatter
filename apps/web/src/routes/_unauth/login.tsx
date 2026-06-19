@@ -37,7 +37,7 @@ function Login() {
   }
 
   return (
-    <AuthShell title="Welcome back" subtitle="Log in to your gitcounsel workspace.">
+    <AuthShell title="Welcome back" subtitle="Log in to your gitmatter workspace.">
       <Card>
         <CardContent className="pt-6">
           <form onSubmit={submit} className="flex flex-col gap-stack">

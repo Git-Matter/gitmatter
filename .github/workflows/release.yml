@@ -5,7 +5,7 @@ name: Release
 # public (local) and cloud images to GHCR, then deploys the production VPS via its
 # redeploy webhook.
 #
-# The CLI/self-host compose pulls ghcr.io/<owner>/gitcounsel — pin to a version tag
+# The CLI/self-host compose pulls ghcr.io/<owner>/gitmatter — pin to a version tag
 # in production.
 on:
   push:

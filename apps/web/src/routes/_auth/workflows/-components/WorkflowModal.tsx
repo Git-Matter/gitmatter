@@ -56,7 +56,7 @@ function actionButton(action: ModalAction, fallback: "primary" | "secondary" | "
 }
 
 // Faithful re-creation of mike's shared Modal (breadcrumb header, scrolling body,
-// footer with secondary/status/cancel/primary actions) on gitcounsel's Dialog.
+// footer with secondary/status/cancel/primary actions) on gitmatter's Dialog.
 export function WorkflowModal({
   open,
   onClose,

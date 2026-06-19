@@ -5,7 +5,7 @@ export default function Privacy() {
   return (
     <LegalPage title="Privacy Policy">
       <p>
-        This is a <strong>draft</strong> summary of how gitcounsel handles your data. It is not yet
+        This is a <strong>draft</strong> summary of how gitmatter handles your data. It is not yet
         legal advice and must be reviewed by counsel before any production launch.
       </p>
       <h2>What we store</h2>
@@ -16,7 +16,7 @@ export default function Privacy() {
       </p>
       <h2>AI providers</h2>
       <p>
-        gitcounsel sends document and prompt content to the AI provider you select (Anthropic,
+        gitmatter sends document and prompt content to the AI provider you select (Anthropic,
         OpenAI, Google, or OpenRouter). With bring-your-own-key, requests go out under your own
         provider account. We request zero-data-retention handling where the provider supports it.
         See the data-handling documentation for the per-provider posture.
@@ -28,7 +28,7 @@ export default function Privacy() {
         deleting your account removes your records.
       </p>
       <h2>Contact</h2>
-      <p>For privacy questions, contact your gitcounsel administrator.</p>
+      <p>For privacy questions, contact your gitmatter administrator.</p>
     </LegalPage>
   );
 }

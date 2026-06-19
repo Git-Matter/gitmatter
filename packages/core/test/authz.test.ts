@@ -20,7 +20,7 @@ let docA: string;
 let clientBId: string;
 
 const oauthToken = `gco_${randomUUID()}`;
-const AUDIENCE = "https://gitcounsel.test/api/mcp";
+const AUDIENCE = "https://gitmatter.test/api/mcp";
 
 beforeAll(async () => {
   const [ta] = await db.insert(tenants).values({ name: "Tenant A" }).returning();

@@ -3,7 +3,7 @@ import type { ReasoningEffort } from "../../data/api";
 
 // Remembers the user's model choice across chat and review runs. Empty string
 // means "no choice yet" — callers send `model || undefined` so the server picks.
-const STORAGE_KEY = "gitcounsel.model";
+const STORAGE_KEY = "gitmatter.model";
 
 export function useSelectedModel() {
   // Start empty so SSR and first client render agree; hydrate from localStorage
@@ -27,7 +27,7 @@ export function useSelectedModel() {
 }
 
 // Remembers the thinking level. null = "Instant" (no extended thinking).
-const REASONING_KEY = "gitcounsel.reasoning";
+const REASONING_KEY = "gitmatter.reasoning";
 const REASONING_VALUES: ReasoningEffort[] = ["low", "medium", "high"];
 
 export function useSelectedReasoning() {

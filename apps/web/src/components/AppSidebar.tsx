@@ -162,7 +162,7 @@ function SidebarPanel({ session, open, mode, onNavigate, onToggle }: SidebarPane
             <span className="grid size-6 place-items-center rounded-md bg-primary font-serif text-sm font-medium text-primary-foreground">
               g
             </span>
-            <span className="font-serif text-2xl font-light tracking-tight">gitcounsel</span>
+            <span className="font-serif text-2xl font-light tracking-tight">gitmatter</span>
           </Link>
         )}
         <SidebarToggle open={open} onToggle={onToggle} />

@@ -1,7 +1,7 @@
 import { jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { user } from "./auth.js";
 
-// OAuth 2.1 authorization-server tables. gitcounsel co-hosts the AS with the
+// OAuth 2.1 authorization-server tables. gitmatter co-hosts the AS with the
 // resource server (the MCP endpoint) and reuses better-auth for the login/consent
 // step. Tokens are opaque and stored hashed, like the static mcp_access_tokens.
 

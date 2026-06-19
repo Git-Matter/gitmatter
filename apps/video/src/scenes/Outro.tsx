@@ -24,7 +24,7 @@ export const Outro: React.FC = () => (
     </Rise>
     <Rise at={28}>
       <div style={{ fontFamily: fonts.mono, fontSize: 20, color: theme.bronze, letterSpacing: 1 }}>
-        github.com/your-org/gitcounsel
+        github.com/your-org/gitmatter
       </div>
     </Rise>
   </AbsoluteFill>

@@ -631,7 +631,7 @@ export const api = {
       body: JSON.stringify(d),
     }),
 
-  // Chat (consumes the shared gitcounsel tool catalog + external MCP tools)
+  // Chat (consumes the shared gitmatter tool catalog + external MCP tools)
   sendChat: (
     message: string,
     opts?: {

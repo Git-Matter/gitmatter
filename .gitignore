@@ -26,7 +26,7 @@ todos.json
 # local plans
 .plans
 
-# gitcounsel CLI build artifacts
+# gitmatter CLI build artifacts
 cli/dist/
 
 # test artifacts

@@ -5,12 +5,12 @@ export default function Terms() {
   return (
     <LegalPage title="Terms of Service">
       <p>
-        This is a <strong>draft</strong> outline of the terms governing use of gitcounsel. It is not
+        This is a <strong>draft</strong> outline of the terms governing use of gitmatter. It is not
         yet binding and must be reviewed by counsel before any production launch.
       </p>
       <h2>Not legal advice</h2>
       <p>
-        gitcounsel is software for organizing and AI-assisting legal work. AI-generated text,
+        gitmatter is software for organizing and AI-assisting legal work. AI-generated text,
         redlines, and document drafts are starting points, not legal advice, and are not a
         substitute for review by a qualified lawyer. You are responsible for verifying all output.
       </p>
@@ -21,7 +21,7 @@ export default function Terms() {
       </p>
       <h2>Acceptable use</h2>
       <p>
-        Do not use gitcounsel for unlawful purposes or to upload content you are not authorized to
+        Do not use gitmatter for unlawful purposes or to upload content you are not authorized to
         process.
       </p>
       <h2>Availability</h2>

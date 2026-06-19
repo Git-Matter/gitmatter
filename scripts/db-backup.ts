@@ -7,7 +7,7 @@ const url = process.env.DATABASE_URL;
 if (!url) throw new Error("DATABASE_URL not set");
 
 const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-const out = process.argv[2] ?? `gitcounsel-${stamp}.dump`;
+const out = process.argv[2] ?? `gitmatter-${stamp}.dump`;
 
 // -Fc = custom format (compressed, restorable with pg_restore). --no-owner keeps
 // the dump portable across roles.

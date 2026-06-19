@@ -8,7 +8,7 @@ import { Record } from "./scenes/Record";
 import { Outro } from "./scenes/Outro";
 
 // One continuous story: Jane runs a single NDA-review matter for Acme, start to
-// finish, ending on gitcounsel's core idea — every step is on the record.
+// finish, ending on gitmatter's core idea — every step is on the record.
 const scenes = [
   { c: Title, d: 90 },
   { c: Ask, d: 165 },
@@ -20,7 +20,7 @@ const scenes = [
 
 export const DEMO_FRAMES = scenes.reduce((n, s) => n + s.d, 0);
 
-export const GitcounselDemo: React.FC = () => {
+export const GitmatterDemo: React.FC = () => {
   let from = 0;
   return (
     <AbsoluteFill style={{ backgroundColor: theme.ink }}>

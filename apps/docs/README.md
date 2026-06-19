@@ -1,6 +1,6 @@
 # docs
 
-The gitcounsel documentation site — a standalone **Next.js + Fumadocs** app, built
+The gitmatter documentation site — a standalone **Next.js + Fumadocs** app, built
 with its own toolchain (independent of the `apps/web` vite-plus build) and served
 under `/docs`.
 

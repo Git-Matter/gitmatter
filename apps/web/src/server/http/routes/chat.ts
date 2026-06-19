@@ -168,7 +168,7 @@ async function runAssistant(
   // Resolved once for usage metering across the tool loop's completions.
   const tenantId = await getUserTenant(user.id);
 
-  // Shared gitcounsel tools — the same catalog the MCP server exposes.
+  // Shared gitmatter tools — the same catalog the MCP server exposes.
   const actor: Actor = { type: "agent", userId: user.id, agentLabel: "chat" };
   const catalog = buildToolCatalog(actor, { jurisdiction, defaultMatterLabel: user.name });
   const internal = new Map(catalog.map((t) => [t.name, t.handler]));
