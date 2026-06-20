@@ -1,0 +1,21 @@
+# Serves the standalone Next.js docs app (apps/docs) under /docs. Mirrors the web
+# image: `next build` runs on CI *before* this image is built, producing a
+# self-contained `apps/docs/.next/standalone` bundle (server.js + traced
+# node_modules + the repo-root docs/ content copied in by the app's postbuild).
+# This image only packages that bundle and runs it — no install, no build here.
+#
+# The build context is the standalone dir itself (set in CI), so the repo-root
+# .dockerignore (which strips **/node_modules) does NOT apply and the traced
+# node_modules the server needs is preserved.
+FROM node:22-slim
+WORKDIR /app
+# The standalone bundle: apps/docs/server.js, node_modules/, and docs/ (content).
+COPY . .
+# Next standalone server.js honors PORT and HOSTNAME. Bind all interfaces so the
+# reverse proxy can reach it.
+ENV NODE_ENV=production PORT=4285 HOSTNAME=0.0.0.0
+EXPOSE 4285
+# server.js' cwd must be the app dir: source.config resolves content at ../../docs
+# (-> /app/docs), which the postbuild placed at the standalone root.
+WORKDIR /app/apps/docs
+CMD ["node", "server.js"]
