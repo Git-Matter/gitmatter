@@ -20,25 +20,19 @@ jobs:
         with:
           authkey: ${{ secrets.TS_AUTHKEY }}
 
-      - name: Inspect dokploy project
+      - name: Inspect dokploy applications
         env:
           DOKPLOY_URL: ${{ secrets.STAGING_DOKPLOY_URL }}
           DOKPLOY_API_KEY: ${{ secrets.STAGING_DOKPLOY_API_KEY }}
         run: |
           set -euo pipefail
-          P=$(curl -fsSL "$DOKPLOY_URL/api/project.all" -H "x-api-key: $DOKPLOY_API_KEY")
-          echo "::group::top-level keys"
-          echo "$P" | jq -r 'if type=="array" then "array len="+(length|tostring) else (keys|join(",")) end'
-          echo "::endgroup::"
-          echo "::group::applications (non-secret fields)"
-          # Try the environment-nested shape, then a flat shape. Print only ids,
-          # names, image refs, and booleans for whether creds are set.
-          echo "$P" | jq -r '
-            [ .. | objects | select(has("applicationId")) ]
-            | map({name, appName, applicationId, environmentId, serverId,
-                   sourceType, dockerImage, registryUrl,
-                   hasUser:(.username!=null and .username!=""),
-                   hasPass:(.password!=null and .password!="")})
-            | .[] | "\(.name)\tapp=\(.appName)\tid=\(.applicationId)\tenv=\(.environmentId)\tsrv=\(.serverId)\tsrc=\(.sourceType)\timg=\(.dockerImage)\treg=\(.registryUrl)\tuser?=\(.hasUser)\tpass?=\(.hasPass)"
-          '
-          echo "::endgroup::"
+          one() { curl -fsSL "$DOKPLOY_URL/api/application.one?applicationId=$1" -H "x-api-key: $DOKPLOY_API_KEY"; }
+          dom() { curl -fsSL "$DOKPLOY_URL/api/domain.byApplicationId?applicationId=$1" -H "x-api-key: $DOKPLOY_API_KEY"; }
+          for id in C2-GkWV2esi_sOdrg0nGJ FOI6NznOTFVqT-e4-1N9S kv_-YBkv-sJR8o5kYpK2U; do
+            A=$(one "$id")
+            echo "::group::app $id"
+            echo "$A" | jq -r '"name=\(.name)\tappName=\(.appName)\tenv=\(.environmentId)\tsrv=\(.serverId)\tsourceType=\(.sourceType)\timg=\(.dockerImage)\treg=\(.registryUrl)\tuser?=\(.username!=null and .username!="")\tpass?=\(.password!=null and .password!="")\tport=\(.ports)"'
+            echo "-- domains --"
+            dom "$id" | jq -r '.[]? | "host=\(.host)\tpath=\(.path)\tport=\(.port)\thttps=\(.https)\tcert=\(.certificateType)\tstrip=\(.stripPath)\tdomainType=\(.domainType)"'
+            echo "::endgroup::"
+          done
