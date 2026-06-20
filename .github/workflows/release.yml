@@ -77,7 +77,12 @@ jobs:
       - name: Build web (${{ matrix.deployment }})
         env:
           DEPLOYMENT: ${{ matrix.deployment }}
+          # Dummy build-only values: vp build forces NODE_ENV=production, so the
+          # prerender server boots the real auth/db modules. DATABASE_URL only
+          # satisfies the db client's import guard (public pages never query it);
+          # BETTER_AUTH_SECRET only clears better-auth's default-secret check.
           DATABASE_URL: postgres://build:build@127.0.0.1:5432/build
+          BETTER_AUTH_SECRET: build-only-not-a-real-secret-000000
         run: cd apps/web && bun run build
 
       - name: Log in to GHCR
