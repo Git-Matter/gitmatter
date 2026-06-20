@@ -42,6 +42,7 @@
     "@tiptap/pm": "^3.26.1",
     "@tiptap/react": "^3.26.1",
     "@tiptap/starter-kit": "^3.26.1",
+    "@vercel/og": "^0.11.1",
     "@workspace/contracts": "workspace:*",
     "@workspace/core": "workspace:*",
     "@workspace/db": "workspace:*",

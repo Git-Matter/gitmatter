@@ -20,6 +20,7 @@ import { documentsRoute } from "./routes/documents.js";
 import { keysRoute } from "./routes/keys.js";
 import { mattersRoute } from "./routes/matters.js";
 import { oauthRoute } from "./routes/oauth.js";
+import { ogRoute } from "./routes/og.js";
 import { tabularRoute } from "./routes/tabular.js";
 import { tenantsRoute } from "./routes/tenants.js";
 import { tokensRoute } from "./routes/tokens.js";
@@ -164,6 +165,16 @@ app.use(
     key: tokenOrIpKey,
   })
 );
+// Public OG image renderer is CPU-heavy (font + raster), so cap per-IP bursts.
+app.use(
+  "/api/og",
+  rateLimit({
+    name: "og",
+    limit: getEnvNumber("OG_RATE_LIMIT", 60),
+    windowMs: 60_000,
+    key: ipKey,
+  })
+);
 
 // better-auth owns /api/auth/* (sign-up, sign-in, session, etc.). We wrap it to
 // record the two security events better-auth has no DB hook for: a failed
@@ -206,12 +217,14 @@ app.use("/api/*", (c, next) => {
     p.startsWith("/api/health") ||
     p.startsWith("/api/auth/") ||
     p === "/api/mcp" ||
+    p === "/api/og" ||
     p.startsWith("/api/oauth/")
   )
     return next();
   return requireUser(c, next);
 });
 
+app.route("/", ogRoute);
 app.route("/", keysRoute);
 app.route("/", mattersRoute);
 app.route("/", tenantsRoute);

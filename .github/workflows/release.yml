@@ -116,6 +116,8 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            SENTRY_RELEASE=${{ needs.version.outputs.version }}
           # Separate cache scope per flavor so the two builds don't clobber each
           # other's layers.
           cache-from: type=gha,scope=${{ matrix.deployment }}

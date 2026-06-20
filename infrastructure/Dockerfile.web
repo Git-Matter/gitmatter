@@ -24,7 +24,10 @@ COPY packages ./packages
 # --ignore-scripts: the root `prepare` (vp config) sets up local git hooks and
 # needs git, which the bun base image lacks. Hook setup is dev-only.
 RUN bun install --frozen-lockfile --ignore-scripts
-ENV NODE_ENV=production PORT=4280
+# Sentry release tag, passed per build by CI (CalVer for prod, commit sha for
+# staging). Empty in a bare `docker build` — Sentry simply omits the release.
+ARG SENTRY_RELEASE=""
+ENV NODE_ENV=production PORT=4280 SENTRY_RELEASE=$SENTRY_RELEASE
 EXPOSE 4280
 # Apply schema migrations, then serve the prebuilt output. `&&` so a failed
 # migration aborts startup instead of serving against a half-migrated DB.

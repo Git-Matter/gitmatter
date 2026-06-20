@@ -56,6 +56,20 @@ export function initSentry(): void {
   setErrorReporter((msg, fields) => {
     Sentry.captureMessage(msg, { level: "error", extra: fields });
   });
+
+  // Flush buffered events on shutdown so a final error isn't lost when Dokploy
+  // sends SIGTERM on redeploy. close() drains the queue (≤2s), then exit. Guard
+  // against double-registration under dev HMR.
+  const REGISTERED = Symbol.for("gitmatter.sentryShutdown");
+  const g = globalThis as Record<symbol, boolean>;
+  if (!g[REGISTERED]) {
+    g[REGISTERED] = true;
+    for (const signal of ["SIGTERM", "SIGINT"] as const) {
+      process.once(signal, () => {
+        void Sentry.close(2000).then(() => process.exit(0));
+      });
+    }
+  }
 }
 
 export { Sentry };
