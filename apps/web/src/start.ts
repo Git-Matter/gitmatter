@@ -7,15 +7,23 @@ import { createCsrfMiddleware, createMiddleware, createStart } from "@tanstack/r
 // 'unsafe-inline' because TanStack Start injects inline hydration scripts and
 // we have no nonce pipeline yet. Dev additionally needs 'unsafe-eval' and a
 // websocket connect-src for Vite HMR. Tighten to nonce-based CSP later.
+// Cloudflare Turnstile loads its script and runs the widget in an iframe from
+// this origin, and posts challenge results back to it — so it must be allowed
+// in script-src, frame-src, and connect-src.
+const TURNSTILE_ORIGIN = "https://challenges.cloudflare.com";
+
 function buildCsp(): string {
   const dev = process.env.NODE_ENV !== "production";
-  const scriptSrc = dev ? "'self' 'unsafe-inline' 'unsafe-eval'" : "'self' 'unsafe-inline'";
-  const connectSrc = dev ? "'self' ws: wss:" : "'self'";
+  const scriptSrc = dev
+    ? `'self' 'unsafe-inline' 'unsafe-eval' ${TURNSTILE_ORIGIN}`
+    : `'self' 'unsafe-inline' ${TURNSTILE_ORIGIN}`;
+  const connectSrc = dev ? `'self' ws: wss: ${TURNSTILE_ORIGIN}` : `'self' ${TURNSTILE_ORIGIN}`;
   return [
     "default-src 'self'",
     "base-uri 'self'",
     "object-src 'none'",
     "frame-ancestors 'self'",
+    `frame-src 'self' ${TURNSTILE_ORIGIN}`,
     "form-action 'self'",
     "img-src 'self' data: blob:",
     "font-src 'self' data:",
