@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "gitmatter": {
+      "type": "http",
+      "url": "https://gitmatter.com/api/mcp"
+    }
+  }
+}

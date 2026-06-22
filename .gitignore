@@ -35,3 +35,5 @@ test-results/
 
 # MCP server config (contains API keys)
 .mcp.json
+# …except the shipped agent-plugin MCP configs (no secrets — public OAuth URL)
+!plugins/*/.mcp.json

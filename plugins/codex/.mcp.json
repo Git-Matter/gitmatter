@@ -1,0 +1,8 @@
+{
+  "mcp_servers": {
+    "gitmatter": {
+      "type": "streamable-http",
+      "url": "https://gitmatter.com/api/mcp"
+    }
+  }
+}
