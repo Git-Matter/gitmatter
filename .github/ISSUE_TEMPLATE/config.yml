@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions and support
+    url: https://github.com/peteqian/gitmatter/discussions
+    about: Ask setup questions, troubleshoot local development, or discuss ideas before filing an issue.

@@ -1,0 +1,89 @@
+name: Bug report
+description: Report a reproducible bug in gitmatter.
+title: "bug: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug. For setup questions or general troubleshooting, use GitHub Discussions instead.
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What went wrong?
+      placeholder: A document review commit is created without the expected author.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What did you expect to happen?
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: What happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: List the smallest set of steps needed to reproduce the bug.
+      placeholder: |
+        1. Start the app with `bun run dev`.
+        2. Open a matter.
+        3. Run a tabular review.
+        4. Open history.
+    validations:
+      required: true
+  - type: checkboxes
+    id: impact
+    attributes:
+      label: Impact area
+      description: Check every area that may be affected.
+      options:
+        - label: Audit history, commits, diffs, or blame
+        - label: Document upload, extraction, generation, or redline
+        - label: Authentication or permissions
+        - label: Encrypted keys or secrets
+        - label: LLM provider calls or streaming
+        - label: MCP tools or agent connection
+        - label: Database schema or migrations
+        - label: Docs only
+  - type: checkboxes
+    id: services
+    attributes:
+      label: Local services
+      description: If this was found locally, tell us which services were running.
+      options:
+        - label: Docker was running
+        - label: Postgres was running
+        - label: Object storage was configured
+        - label: Migrations were applied
+        - label: Not applicable
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or screenshots
+      description: Add relevant logs, screenshots, or error messages. Remove secrets and document contents.
+      render: shell
+  - type: textarea
+    id: validation
+    attributes:
+      label: Checks run
+      description: List any checks you ran, or explain why they could not run.
+      placeholder: |
+        vp check
+        vp run typecheck
+        vp test
+  - type: textarea
+    id: extra
+    attributes:
+      label: Additional context
+      description: Anything else that may help us understand the bug.

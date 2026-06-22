@@ -1,0 +1,69 @@
+name: Feature request
+description: Propose a concrete change to gitmatter.
+title: "feat: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For early ideas or support questions, use GitHub Discussions first. Issues work best once the request is concrete.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What user problem should this solve?
+      placeholder: Lawyers need to compare audit history across all documents in a matter.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What should gitmatter do differently?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: What simpler or existing alternatives did you consider?
+  - type: checkboxes
+    id: impact
+    attributes:
+      label: Impact area
+      description: Check every area that may be affected.
+      options:
+        - label: Audit history, commits, diffs, or blame
+        - label: Database schema
+        - label: Document generation or extraction
+        - label: LLM provider behavior
+        - label: MCP tools or agent connection
+        - label: Authentication or permissions
+        - label: Encrypted key storage
+        - label: Shared package boundaries
+        - label: UI only
+        - label: Docs only
+  - type: dropdown
+    id: size
+    attributes:
+      label: Change size
+      description: How large does this change seem?
+      options:
+        - Small change
+        - Medium change
+        - Large design change
+        - Not sure
+    validations:
+      required: true
+  - type: textarea
+    id: risks
+    attributes:
+      label: Risks
+      description: What could this break or make harder to maintain?
+  - type: textarea
+    id: validation
+    attributes:
+      label: Validation plan
+      description: How should this be tested or reviewed?
+      placeholder: Unit tests for commit attribution, plus manual history/blame check in a matter.
