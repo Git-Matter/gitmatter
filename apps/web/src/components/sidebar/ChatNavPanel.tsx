@@ -1,15 +1,34 @@
 import { useEffect, useRef, useState } from "react";
 import {
   Link,
+  useNavigate,
   useRouterState,
   type RegisteredRouter,
   type RouterState,
 } from "@tanstack/react-router";
-import { ChevronDown, Folder, MoreHorizontal, Pin, PinOff, Plus, SquarePen } from "lucide-react";
+import {
+  ChevronDown,
+  Folder,
+  MoreHorizontal,
+  Pin,
+  PinOff,
+  Plus,
+  SquarePen,
+  Trash2,
+} from "lucide-react";
 import { cn } from "@/lib/util/utils";
-import { useAllChats, useSetChatPin } from "@/lib/data/queries";
+import { useAllChats, useDeleteChat, useSetChatPin } from "@/lib/data/queries";
 import { useMatters } from "@/lib/context/matters-context";
 import type { ChatSummary } from "@/lib/data/api";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -129,7 +148,26 @@ function ChatRow({
   onNavigate?: () => void;
 }) {
   const pin = useSetChatPin();
+  const del = useDeleteChat();
+  const navigate = useNavigate();
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const title = chat.title ?? "Untitled";
+
+  function onDelete() {
+    del.mutate(chat.id, {
+      onSuccess: () => {
+        setConfirmOpen(false);
+        // Leaving the deleted chat's page: matter chats fall back to the matter's
+        // assistant landing, global chats to the global assistant.
+        if (active)
+          void navigate(
+            chat.matterId
+              ? { to: "/matters/$id/assistant", params: { id: chat.matterId } }
+              : { to: "/assistant" }
+          );
+      },
+    });
+  }
 
   return (
     <div className={cn(itemCls(active), indent && "ps-8")}>
@@ -161,9 +199,32 @@ function ChatRow({
               {chat.pinned ? <PinOff className="size-4" /> : <Pin className="size-4" />}
               {chat.pinned ? "Unpin" : "Pin"}
             </DropdownMenuItem>
+            <DropdownMenuItem variant="destructive" onClick={() => setConfirmOpen(true)}>
+              <Trash2 className="size-4" />
+              Delete
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+
+      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete conversation?</DialogTitle>
+            <DialogDescription>
+              “{title}” and all its messages will be permanently deleted. This can’t be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={onDelete} disabled={del.isPending}>
+              {del.isPending ? "Deleting…" : "Delete"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

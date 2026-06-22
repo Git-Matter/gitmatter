@@ -2,8 +2,8 @@
 import { parseArgs } from "node:util";
 import { $ } from "bun";
 
-// Local dev launcher: brings up docker deps (Postgres + docling sidecar),
-// applies the DB schema, then runs the app. `bun run dev` calls this.
+// Local dev launcher: brings up docker deps (Postgres), applies the DB schema,
+// then runs the app. `bun run dev` calls this.
 //
 // Flags:
 //   --skip-deps      don't touch docker (deps already running)
@@ -37,14 +37,8 @@ if (!flags["skip-deps"]) {
     console.error("\x1b[31m[dev]\x1b[0m Docker is not running. Start Docker and retry.");
     process.exit(1);
   }
-  // --wait blocks until Postgres is healthy (it has a healthcheck). docling
-  // has no healthcheck; it is "running" immediately but loads its models on
-  // first boot before it answers.
-  await step(
-    "starting deps (postgres + docling)",
-    () =>
-      $`docker compose up -d --wait postgres docling`
-  );
+  // --wait blocks until Postgres is healthy (it has a healthcheck).
+  await step("starting deps (postgres)", () => $`docker compose up -d --wait postgres`);
 } else {
   log("skipping deps (--skip-deps)");
 }

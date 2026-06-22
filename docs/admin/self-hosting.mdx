@@ -42,7 +42,7 @@ A user's own key always **overrides** the server key. Pick the model per chat me
 
 ## Local development
 
-`bun run dev` starts the supporting services (Postgres and the Docling sidecar, a helper service that extracts text from documents) in Docker, applies the database schema, then runs the app:
+`bun run dev` starts the supporting services (Postgres) in Docker, applies the database schema, then runs the app. Text extraction from uploaded documents runs in-process — there is no separate extraction service:
 
 ```bash
 bun install
@@ -70,10 +70,9 @@ cp .env.example .env   # fill BETTER_AUTH_SECRET, ENCRYPTION_KEY, S3_*
 docker compose up -d
 ```
 
-This pulls the prebuilt web image and runs three services:
+This pulls the prebuilt web image and runs two services:
 
-- **web** — the gitmatter app. It applies the database schema on startup, then serves.
+- **web** — the gitmatter app. It applies the database schema on startup, then serves. Document text extraction runs in-process (no separate service).
 - **postgres** — Postgres with pgvector (the database, with the extension used for AI search).
-- **docling** — the document-extraction service (it pulls text out of uploaded files), bound to localhost only so the outside world cannot call it.
 
 Pin a version with `GITMATTER_IMAGE` (e.g. `ghcr.io/peteqian/gitmatter:v1.2.3`); the default is `:latest`.

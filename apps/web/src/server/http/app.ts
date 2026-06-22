@@ -96,8 +96,8 @@ app.onError((err, c) => {
 // Liveness: is the process up? Cheap, no dependencies — for restart probes.
 app.get("/api/health", (c) => c.json({ ok: true }));
 
-// Readiness: can we actually serve? (DB required → 503 on failure; docling
-// reported but not required.) See lib/health.ts.
+// Readiness: can we actually serve? (DB required → 503 on failure.) See
+// lib/health.ts.
 app.get("/api/health/ready", async (c) => {
   const report = await checkReadiness();
   return c.json(report, report.ok ? 200 : 503);

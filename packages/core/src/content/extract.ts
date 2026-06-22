@@ -1,8 +1,7 @@
 import * as mammoth from "mammoth";
 import JSZip from "jszip";
 import { XMLParser } from "fast-xml-parser";
-import { fetchWithTimeout } from "../core/fetch.js";
-import { getEnv } from "../core/config.js";
+import { extractText, getDocumentProxy } from "unpdf";
 
 // mammoth ships markdown conversion at runtime but omits it from its type defs.
 const convertToMarkdown = (
@@ -13,11 +12,15 @@ const convertToMarkdown = (
 
 // File-type helpers. Lawyers upload PDF + DOCX; we normalize to markdown for
 // LLM context (tabular reviews, chat). DOCX is extracted in-process via mammoth;
-// PDF is sent to the docling-serve sidecar (mammoth can't read PDF).
+// PDF is parsed by pdf.js (via unpdf) in a worker thread — text-layer only, no
+// OCR, so scanned PDFs come back empty (surfaced as a passive warning upstream).
 
 export type SupportedFileType = "pdf" | "docx" | "doc";
 
-export type ExtractResult = { markdown: string; pageCount: number | null };
+export type ExtractResult = {
+  markdown: string;
+  pageCount: number | null;
+};
 
 export function fileTypeFromName(name: string): SupportedFileType | null {
   const ext = name.toLowerCase().split(".").pop();
@@ -26,7 +29,7 @@ export function fileTypeFromName(name: string): SupportedFileType | null {
 }
 
 // Magic-byte prefixes for the formats we accept. Sniffing the bytes stops a
-// renamed file (e.g. a .txt or .exe renamed to .pdf) from reaching docling/
+// renamed file (e.g. a .txt or .exe renamed to .pdf) from reaching pdf.js/
 // mammoth on the strength of its extension alone.
 const PDF_MAGIC = Buffer.from("%PDF-", "ascii"); // 25 50 44 46 2D
 const ZIP_MAGIC = Buffer.from([0x50, 0x4b, 0x03, 0x04]); // PK\x03\x04 — OOXML (.docx) is a zip
@@ -76,7 +79,7 @@ export async function extractMarkdown(
     const { value } = await convertToMarkdown({ buffer: bytes });
     return { markdown: value, pageCount: await docxPageCount(bytes) };
   }
-  return extractPdfViaDocling(bytes);
+  return extractPdfText(bytes);
 }
 
 /**
@@ -97,31 +100,23 @@ async function docxPageCount(bytes: Buffer): Promise<number | null> {
   }
 }
 
-async function extractPdfViaDocling(bytes: Buffer): Promise<ExtractResult> {
-  const url = getEnv("DOCLING_URL") || "http://localhost:5001/v1/convert/source";
-  const res = await fetchWithTimeout(url, {
-    method: "POST",
-    headers: { "content-type": "application/json", accept: "application/json" },
-    body: JSON.stringify({
-      // Ask for json too so we can read the page map for a reliable page count.
-      options: { to_formats: ["md", "json"] },
-      // docling-serve v1 uses `sources` with a `kind` discriminator (the legacy
-      // `file_sources` key returns 422 on current builds).
-      sources: [{ kind: "file", base64_string: bytes.toString("base64"), filename: "doc.pdf" }],
-    }),
-    // PDF conversion (incl. OCR) can be slow; allow a generous window.
-    timeoutMs: 120_000,
-  });
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new Error(
-      `docling-serve responded ${res.status} ${res.statusText}${body ? `: ${body.slice(0, 500)}` : ""}`
-    );
-  }
-  const data = (await res.json()) as {
-    document?: { md_content?: string; json_content?: { pages?: Record<string, unknown> } };
-  };
-  const pages = data.document?.json_content?.pages;
-  const pageCount = pages ? Object.keys(pages).length || null : null;
-  return { markdown: data.document?.md_content ?? "", pageCount };
+/**
+ * Extract page-anchored text from a PDF via pdf.js (unpdf). Text-layer only — no
+ * OCR — so a scanned PDF yields empty markdown (surfaced as a passive warning
+ * upstream). Each page is prefixed with a `[Page N]` marker so the model and
+ * downstream citations can attribute by page.
+ *
+ * NOTE: pdf.js parsing is CPU-bound and runs on the main thread, so a very large
+ * PDF can briefly stall the event loop. Extraction is already serialized per user
+ * in a background queue, so this is acceptable at current scale; moving it to a
+ * worker thread needs build-config work (the server bundle doesn't emit workers).
+ */
+async function extractPdfText(bytes: Buffer): Promise<ExtractResult> {
+  const pdf = await getDocumentProxy(new Uint8Array(bytes));
+  const { totalPages, text } = await extractText(pdf); // per-page array
+  const markdown = text
+    .map((pageText, i) => `[Page ${i + 1}]\n\n${pageText.trim()}`)
+    .join("\n\n")
+    .trim();
+  return { markdown, pageCount: totalPages || null };
 }

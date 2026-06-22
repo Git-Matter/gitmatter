@@ -9,7 +9,7 @@ import Eyebrow from "@/marketing/components/Eyebrow";
 // four benefits in one glance. No jargon.
 const POINTS = [
   { k: "Set up in minutes", v: "no IT project" },
-  { k: "Use the AI you trust", v: "your own account" },
+  { k: "Use the AI you trust", v: "your agent, your key" },
   { k: "Every change recorded", v: "who, what, when" },
   { k: "Your work stays private", v: "never used to train AI" },
 ];

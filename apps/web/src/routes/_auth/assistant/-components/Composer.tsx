@@ -17,6 +17,8 @@ export function Composer({
   attachments,
   onAdd,
   onRemove,
+  onUpload,
+  hasProcessing,
   busy,
   onSend,
   onStop,
@@ -31,6 +33,8 @@ export function Composer({
   attachments: ChatAttachment[];
   onAdd: (a: ChatAttachment) => void;
   onRemove: (a: ChatAttachment) => void;
+  onUpload: (file: File) => void;
+  hasProcessing: boolean;
   busy: boolean;
   onSend: () => void;
   onStop?: () => void;
@@ -57,7 +61,12 @@ export function Composer({
           <ModelPicker value={model} onChange={setModel} />
           <ReasoningPicker model={model} value={reasoning} onChange={setReasoning} />
           <span className="mx-1 h-4 w-px shrink-0 bg-border" />
-          <AttachControls attachments={attachments} onAdd={onAdd} matterId={matterId} />
+          <AttachControls
+            attachments={attachments}
+            onAdd={onAdd}
+            onUpload={onUpload}
+            matterId={matterId}
+          />
         </div>
         {busy && onStop ? (
           <Button
@@ -73,8 +82,8 @@ export function Composer({
           <Button
             size="icon"
             onClick={onSend}
-            disabled={busy || !input.trim()}
-            title="Send"
+            disabled={busy || !input.trim() || hasProcessing}
+            title={hasProcessing ? "Waiting for documents to finish processing" : "Send"}
             aria-label="Send"
             className="shrink-0 rounded-full"
           >

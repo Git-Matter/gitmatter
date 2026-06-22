@@ -62,6 +62,11 @@ async function deleteObjectAudited(storagePath: string): Promise<void> {
   }
 }
 
+/** List filter: exclude staged (uncommitted chat) uploads from every library view. */
+function notStaged() {
+  return eq(documents.staged, false);
+}
+
 export const DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
 export type DocumentListSort =
@@ -95,6 +100,7 @@ const documentListFields = {
   fileType: documents.fileType,
   status: documents.status,
   extractionError: documents.extractionError,
+  ocrSuggested: documents.ocrSuggested,
   sizeBytes: documents.sizeBytes,
   folderId: documents.folderId,
   currentVersionId: documents.currentVersionId,
@@ -115,7 +121,7 @@ export function listDocuments(userId: string) {
   return db
     .select(documentListFields)
     .from(documents)
-    .where(and(eq(documents.userId, userId), isNull(documents.deletedAt)))
+    .where(and(eq(documents.userId, userId), isNull(documents.deletedAt), notStaged()))
     .orderBy(desc(documents.createdAt));
 }
 
@@ -133,7 +139,14 @@ export function listMatterDocuments(matterId: string, folderId?: string | null) 
     .select(documentListFields)
     .from(matterDocuments)
     .innerJoin(documents, eq(documents.id, matterDocuments.documentId))
-    .where(and(eq(matterDocuments.matterId, matterId), folderCond, isNull(documents.deletedAt)))
+    .where(
+      and(
+        eq(matterDocuments.matterId, matterId),
+        folderCond,
+        isNull(documents.deletedAt),
+        notStaged()
+      )
+    )
     .orderBy(desc(documents.createdAt));
 }
 
@@ -185,6 +198,7 @@ export async function listDocumentsPage(userId: string, params: DocumentListPara
   const where = and(
     byMatter ? eq(matterDocuments.matterId, params.matterId!) : scopeCond,
     isNull(documents.deletedAt),
+    notStaged(),
     folderCond,
     params.status === "processing"
       ? inArray(documents.status, ["pending", "processing"])
@@ -361,8 +375,7 @@ export async function createGeneratedDocument(
  * Upload a PDF/DOCX: persist the raw bytes to object storage and insert a
  * `pending` row, then return immediately. The caller kicks extraction via the
  * per-user queue (`enqueueExtraction`); markdown extraction (DOCX via mammoth,
- * PDF via the docling sidecar) records a system-authored commit when it
- * completes.
+ * PDF via pdf.js) records a system-authored commit when it completes.
  */
 export async function uploadDocument(
   userId: string,
@@ -370,15 +383,25 @@ export async function uploadDocument(
     title: string;
     fileType: SupportedFileType;
     bytes: Buffer;
-    matterId: string;
+    // Null = unfiled: a library document that belongs to no matter. The tenant
+    // can't be derived from a matter then, so the caller must pass tenantId.
+    matterId: string | null;
+    tenantId?: string;
     folderId?: string | null;
+    // Chat-composer upload: insert hidden from the library until the user commits
+    // it (sends the message) or discards it (removes the chip). See commitStagedDocuments
+    // / discardStagedDocument. Defaults to a normal, immediately-visible upload.
+    staged?: boolean;
   }
 ) {
   // Store the file BEFORE the row is visible to the extraction worker.
   // Inserting as `pending` first lets a worker claim it in the gap before the
   // object exists, which fails the doc with "no stored file to extract". So we
   // pre-generate the id, write the object, then insert the row already complete.
-  const tenantId = await matterTenant(input.matterId);
+  const tenantId = input.matterId ? await matterTenant(input.matterId) : input.tenantId;
+  if (!tenantId) throw new Error("uploadDocument: tenantId is required when matterId is null");
+  // Folders live inside a matter; an unfiled document can't sit in one.
+  const folderId = input.matterId ? (input.folderId ?? null) : null;
   await assertStorageWithinQuota(tenantId, input.bytes.length);
   const id = randomUUID();
   const versionId = randomUUID();
@@ -396,12 +419,13 @@ export async function uploadDocument(
       userId,
       tenantId,
       matterId: input.matterId,
-      folderId: input.folderId ?? null,
+      folderId,
       title: input.title,
       fileType: input.fileType,
       sizeBytes: input.bytes.length,
       currentVersionId: versionId,
       status: "pending",
+      staged: input.staged ?? false,
     })
     .returning();
   await db.insert(documentVersions).values({
@@ -414,12 +438,14 @@ export async function uploadDocument(
     fileType: input.fileType,
   });
   // Self-link to the origin matter so it lists there (source of truth for which
-  // matters a doc appears in).
-  await db.insert(matterDocuments).values({
-    matterId: input.matterId,
-    documentId: id,
-    folderId: input.folderId ?? null,
-  });
+  // matters a doc appears in). Unfiled documents have no matter, so no link.
+  if (input.matterId) {
+    await db.insert(matterDocuments).values({
+      matterId: input.matterId,
+      documentId: id,
+      folderId,
+    });
+  }
   return row;
 }
 
@@ -492,6 +518,21 @@ export async function deleteDocument(actor: Actor, id: string) {
 }
 
 const RETENTION_DAYS = 30;
+// How long a staged chat upload may sit uncommitted before the orphan sweep
+// reclaims it (user closed the tab without sending or removing it).
+const STAGED_ABANDON_HOURS = 24;
+
+/** Free a document's S3 bytes (every version) then hard-delete the row (cascades). */
+async function hardDelete(id: string): Promise<void> {
+  const versions = await db
+    .select({ storagePath: documentVersions.storagePath })
+    .from(documentVersions)
+    .where(eq(documentVersions.documentId, id));
+  for (const v of versions) {
+    if (v.storagePath) await deleteObjectAudited(v.storagePath);
+  }
+  await db.delete(documents).where(eq(documents.id, id));
+}
 
 /**
  * Hard-delete documents whose soft-delete is older than the retention window:
@@ -508,17 +549,63 @@ export async function purgeExpiredDocuments(): Promise<number> {
         sql`${documents.deletedAt} < now() - interval '${sql.raw(String(RETENTION_DAYS))} days'`
       )
     );
-  for (const { id } of expired) {
-    const versions = await db
-      .select({ storagePath: documentVersions.storagePath })
-      .from(documentVersions)
-      .where(eq(documentVersions.documentId, id));
-    for (const v of versions) {
-      if (v.storagePath) await deleteObjectAudited(v.storagePath);
-    }
-    await db.delete(documents).where(eq(documents.id, id));
-  }
+  for (const { id } of expired) await hardDelete(id);
   return expired.length;
+}
+
+/**
+ * Commit staged chat uploads into the library (flip off the staged flag). Called
+ * when the user sends a chat turn carrying these attachments. Scoped to the user's
+ * own staged rows, so it can't touch another user's or an already-committed doc.
+ */
+export async function commitStagedDocuments(userId: string, ids: string[]): Promise<void> {
+  if (!ids.length) return;
+  await db
+    .update(documents)
+    .set({ staged: false })
+    .where(
+      and(inArray(documents.id, ids), eq(documents.userId, userId), eq(documents.staged, true))
+    );
+}
+
+/**
+ * Discard a staged chat upload: free its S3 bytes and hard-delete the row. Guarded
+ * to staged rows only, so it can never hard-delete a committed library document
+ * (those take the soft-delete path). No-op when the id isn't a staged doc. Records
+ * an audit entry for attribution (staged rows aren't on the commit spine yet).
+ */
+export async function discardStagedDocument(actor: Actor, id: string): Promise<void> {
+  const [doc] = await db
+    .select({ id: documents.id, title: documents.title })
+    .from(documents)
+    .where(and(eq(documents.id, id), eq(documents.staged, true)));
+  if (!doc) return;
+  await hardDelete(id);
+  void recordAudit({
+    eventType: "document.discard_staged",
+    actorId: actor.userId,
+    target: id,
+    metadata: { title: doc.title },
+  });
+}
+
+/**
+ * Backstop for staged uploads the user neither sent nor removed (e.g. closed the
+ * tab): hard-delete staged rows older than the abandon window, freeing S3 bytes.
+ * Idempotent; safe to call opportunistically.
+ */
+export async function purgeAbandonedStaged(): Promise<number> {
+  const abandoned = await db
+    .select({ id: documents.id })
+    .from(documents)
+    .where(
+      and(
+        eq(documents.staged, true),
+        sql`${documents.createdAt} < now() - interval '${sql.raw(String(STAGED_ABANDON_HOURS))} hours'`
+      )
+    );
+  for (const { id } of abandoned) await hardDelete(id);
+  return abandoned.length;
 }
 
 /** Rename a document, recording the change on the audit spine. */
@@ -685,6 +772,16 @@ export async function retryDocument(id: string) {
  * `processing` -> `ready`/`failed` and emits each transition. On failure the
  * row is marked `failed` for the manual retry button (no auto-requeue).
  */
+// A PDF text-layer extraction with very little text per page is usually a
+// scanned/image-only PDF (we don't OCR) or a broken text layer. ~40 chars/page
+// is roughly a line of text; below that there's effectively nothing to read, so
+// the UI shows a passive "little text — may be scanned" warning.
+function looksThinForOcr(markdown: string, pageCount: number | null): boolean {
+  const chars = markdown.trim().length;
+  if (pageCount && pageCount > 0) return chars / pageCount < 40;
+  return chars < 40;
+}
+
 export async function processDocument(doc: Document): Promise<void> {
   // Flip to `processing` first: drives the UI badge and leaves a recoverable
   // (stale) row if the server dies mid-extract. Emit every transition so the
@@ -725,6 +822,9 @@ export async function processDocument(doc: Document): Promise<void> {
   try {
     const bytes = Buffer.from(await getObject(storagePath));
     const { markdown, pageCount } = await extractMarkdown(bytes, doc.fileType as SupportedFileType);
+    // Warn (passively) when a PDF came back too thin to be a real text layer —
+    // likely a scan. DOCX always carries its text, so never flag it.
+    const ocrSuggested = doc.fileType === "pdf" && looksThinForOcr(markdown, pageCount);
 
     await recordCommit({
       artifactType: "document",
@@ -736,13 +836,26 @@ export async function processDocument(doc: Document): Promise<void> {
       apply: async ({ tx }) => {
         await tx
           .update(documents)
-          .set({ markdown, pageCount, status: "ready", extractionError: null, claimedAt: null })
+          .set({
+            markdown,
+            pageCount,
+            status: "ready",
+            extractionError: null,
+            claimedAt: null,
+            ocrSuggested,
+          })
           .where(eq(documents.id, doc.id));
         return { changes: [{ path: "markdown", before: null, after: markdown }] };
       },
     });
     logEvent("info", "extract.ready", { documentId: doc.id, pageCount: pageCount ?? null });
-    emitDocStatus({ userId: doc.userId, id: doc.id, status: "ready", extractionError: null });
+    emitDocStatus({
+      userId: doc.userId,
+      id: doc.id,
+      status: "ready",
+      extractionError: null,
+      ocrSuggested,
+    });
   } catch (err) {
     await fail(err instanceof Error ? err.message : "extraction failed", err);
   }

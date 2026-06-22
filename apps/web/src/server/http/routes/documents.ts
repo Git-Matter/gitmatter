@@ -12,6 +12,8 @@ import {
   removeArtifactShare,
   deleteDocument,
   deleteDocumentVersion,
+  discardStagedDocument,
+  purgeAbandonedStaged,
   docEvents,
   type DocStatusEvent,
   assertFileTypeMatches,
@@ -39,7 +41,7 @@ import {
   uploadDocument,
 } from "@workspace/core";
 import { type AuthEnv } from "../middleware/auth.js";
-import { resolveCreateMatter } from "../lib/matter.js";
+import { resolveCreateMatter, resolveUploadMatter } from "../lib/matter.js";
 import { parsePageQuery } from "../lib/page-query.js";
 import { clientMeta } from "../lib/request-meta.js";
 import {
@@ -114,8 +116,8 @@ documentsRoute.get("/api/documents", async (c) => {
   return c.json(await listDocuments(c.get("user").id));
 });
 
-// MVP: create a document from pasted text/markdown. File upload + docling
-// extraction lands in a later phase.
+// MVP: create a document from pasted text/markdown. File upload + extraction
+// lands in a later phase.
 documentsRoute.post("/api/documents", zValidator("json", createDocumentSchema), async (c) => {
   const user = c.get("user");
   const body = c.req.valid("json");
@@ -143,11 +145,12 @@ documentsRoute.post("/api/documents/upload", async (c) => {
   if (file.size > MAX_UPLOAD_BYTES) return c.json({ error: "file exceeds 25 MB limit" }, 400);
 
   const user = c.get("user");
-  const matterId = await resolveCreateMatter(
+  const resolved = await resolveUploadMatter(
     user,
     typeof body.matterId === "string" ? body.matterId : undefined
   );
-  if (!matterId) return c.json({ error: "Forbidden" }, 403);
+  if (!resolved.ok) return c.json({ error: "Forbidden" }, 403);
+  const matterId = resolved.matterId; // null = unfiled
 
   const bytes = Buffer.from(await file.arrayBuffer());
   // Defense in depth: the extension check above can be spoofed; sniff the magic
@@ -156,9 +159,22 @@ documentsRoute.post("/api/documents/upload", async (c) => {
   if (!match.ok) return c.json({ error: match.reason }, 400);
   const title = typeof body.title === "string" && body.title.trim() ? body.title.trim() : file.name;
   const folderId = typeof body.folderId === "string" && body.folderId ? body.folderId : null;
+  // Chat-composer uploads are staged: hidden from the library until the user sends
+  // the turn (commit) or removes the chip (discard).
+  const staged = body.staged === "true";
   try {
-    const doc = await uploadDocument(user.id, { title, fileType, bytes, matterId, folderId });
+    const doc = await uploadDocument(user.id, {
+      title,
+      fileType,
+      bytes,
+      matterId,
+      folderId,
+      tenantId: user.tenantId,
+      staged,
+    });
     enqueueExtraction(doc); // extract in-process, serialized per user
+    // Opportunistic backstop: reclaim staged uploads abandoned past the window.
+    void purgeAbandonedStaged().catch(() => {});
     void recordAudit({
       eventType: "document.upload",
       actorId: user.id,
@@ -436,6 +452,18 @@ documentsRoute.delete("/api/documents/:id", async (c) => {
   if (!(await canAccessArtifact(user.id, "document", id, "owner")))
     return c.json({ error: "Not found" }, 404);
   await deleteDocument({ type: "user", userId: user.id }, id);
+  return c.body(null, 204);
+});
+
+// Discard a staged chat upload: hard-delete the row + free its S3 bytes. Only
+// staged docs (the core guards this) — committed library docs use the soft delete
+// above. Used when the user removes an upload chip before sending.
+documentsRoute.delete("/api/documents/:id/staged", async (c) => {
+  const id = c.req.param("id");
+  const user = c.get("user");
+  if (!(await canAccessArtifact(user.id, "document", id, "owner")))
+    return c.json({ error: "Not found" }, 404);
+  await discardStagedDocument({ type: "user", userId: user.id }, id);
   return c.body(null, 204);
 });
 

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   Briefcase,
@@ -6,19 +6,30 @@ import {
   ChevronLeft,
   ChevronRight,
   FileText,
+  Loader2,
+  Paperclip,
   Plus,
   Search,
   Table2,
   Users,
   X,
 } from "lucide-react";
-import { api, type ChatAttachment } from "@/lib/data/api";
+import { api, type ChatAttachment, type DocStatus } from "@/lib/data/api";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/util/utils";
 
 type Kind = ChatAttachment["kind"];
-type Option = { id: string; label: string; sub?: string };
+type Option = { id: string; label: string; sub?: string; fileType?: string; status?: DocStatus };
+
+// Carry file type + status into document attachments (for the upload card's
+// icon/sublabel/spinner); other kinds are plain references.
+function optionToAttachment(kind: Kind, opt: Option): ChatAttachment {
+  return kind === "document"
+    ? { kind, id: opt.id, label: opt.label, fileType: opt.fileType, status: opt.status }
+    : { kind, id: opt.id, label: opt.label };
+}
 
 // Icon + loader per attachable entity. Loaders map each list endpoint to a
 // uniform {id,label,sub} so the picker stays generic.
@@ -35,7 +46,13 @@ const SOURCES: Array<{
     // In a matter workspace, scope to that matter's documents; otherwise list all.
     load: (matterId?: string) =>
       (matterId ? api.listMatterDocuments(matterId) : api.listDocuments()).then((ds) =>
-        ds.map((d) => ({ id: d.id, label: d.title, sub: d.status }))
+        ds.map((d) => ({
+          id: d.id,
+          label: d.title,
+          sub: d.status,
+          fileType: d.fileType,
+          status: d.status,
+        }))
       ),
   },
   {
@@ -75,42 +92,98 @@ const KIND_ICON: Record<Kind, typeof FileText> = {
   review: Table2,
 };
 
+// Backend accepts these only (see documents upload route); images are rejected.
+const UPLOAD_ACCEPT = ".pdf,.docx,.doc";
+
 /**
- * Attach controls for the composer. When there's room, every source gets its own
- * quiet icon button; on narrow widths they collapse behind a single "+" menu.
+ * Local-file picker for the composer. Hands the chosen file to `onUpload`, which
+ * adds the chip and drives it through storage + extraction (see useChatSession);
+ * the per-file spinner now lives on the chip, not this button.
+ */
+function useDocumentUpload(onUpload: (file: File) => void) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  function onChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-picking the same file
+    if (file) onUpload(file);
+  }
+
+  return {
+    pick: () => fileInputRef.current?.click(),
+    input: (
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept={UPLOAD_ACCEPT}
+        className="hidden"
+        onChange={onChange}
+      />
+    ),
+  };
+}
+
+/**
+ * Attach controls for the composer. When there's room, file upload and every
+ * source get their own quiet icon button (with a tooltip); on narrow widths they
+ * collapse behind a single labeled "+" menu.
  */
 export function AttachControls({
   attachments,
   onAdd,
+  onUpload,
   matterId,
 }: {
   attachments: ChatAttachment[];
   onAdd: (a: ChatAttachment) => void;
+  onUpload: (file: File) => void;
   matterId?: string;
 }) {
+  const upload = useDocumentUpload(onUpload);
   return (
     <>
-      {/* Wide: each source inline. */}
+      {/* Wide: upload + each source inline. */}
       <div className="hidden items-center gap-0.5 @sm/composer:flex">
+        {upload.input}
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <button
+                type="button"
+                aria-label="Upload a file"
+                onClick={upload.pick}
+                className="flex h-8 shrink-0 items-center rounded-md px-2 text-muted-foreground transition-colors outline-none hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
+              >
+                <Paperclip className="size-4 shrink-0" />
+              </button>
+            }
+          />
+          <TooltipContent>Upload a file</TooltipContent>
+        </Tooltip>
         {SOURCES.map((s) => (
           <AttachSourceButton
             key={s.kind}
             source={s}
             matterId={matterId}
             selectedIds={new Set(attachments.filter((a) => a.kind === s.kind).map((a) => a.id))}
-            onPick={(opt) => onAdd({ kind: s.kind, id: opt.id, label: opt.label })}
+            onPick={(opt) => onAdd(optionToAttachment(s.kind, opt))}
           />
         ))}
       </div>
-      {/* Narrow: collapsed behind "+". */}
+      {/* Narrow: collapsed behind a labeled "+". */}
       <div className="@sm/composer:hidden">
-        <AttachMenu attachments={attachments} onAdd={onAdd} matterId={matterId} />
+        <AttachMenu
+          attachments={attachments}
+          onAdd={onAdd}
+          onUpload={onUpload}
+          matterId={matterId}
+        />
       </div>
     </>
   );
 }
 
-/** One source as a standalone icon button + its searchable popover. */
+/** One source as a standalone icon button (with tooltip) + its searchable popover. */
 function AttachSourceButton({
   source,
   selectedIds,
@@ -126,16 +199,22 @@ function AttachSourceButton({
   const Icon = source.icon;
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger
-        title={source.label}
-        aria-label={source.label}
-        className="relative flex h-8 shrink-0 items-center rounded-md px-2 text-muted-foreground transition-colors outline-none hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
-      >
-        <Icon className="size-4 shrink-0" />
-        {selectedIds.size > 0 && (
-          <span className="absolute top-1 right-0.5 size-1.5 rounded-full bg-primary" />
-        )}
-      </PopoverTrigger>
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <PopoverTrigger
+              aria-label={source.label}
+              className="relative flex h-8 shrink-0 items-center rounded-md px-2 text-muted-foreground transition-colors outline-none hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
+            >
+              <Icon className="size-4 shrink-0" />
+              {selectedIds.size > 0 && (
+                <span className="absolute top-1 right-0.5 size-1.5 rounded-full bg-primary" />
+              )}
+            </PopoverTrigger>
+          }
+        />
+        <TooltipContent>{source.label}</TooltipContent>
+      </Tooltip>
       <PopoverContent align="start" className="w-72 gap-0 overflow-hidden p-0">
         <SourceList
           source={source}
@@ -152,22 +231,28 @@ function AttachSourceButton({
 }
 
 /**
- * Single "+" button that holds every attach source. Opens to a short source menu
- * (Documents / Matters / …); picking one drills into that source's searchable
- * list. Used on narrow widths where the per-source buttons don't fit.
+ * Single "+" button that holds file upload and every attach source. Opens to a
+ * short labeled menu (Upload a file / Documents / Matters / …); picking a source
+ * drills into its searchable list.
  */
 export function AttachMenu({
   attachments,
   onAdd,
+  onUpload,
   matterId,
 }: {
   attachments: ChatAttachment[];
   onAdd: (a: ChatAttachment) => void;
+  onUpload: (file: File) => void;
   matterId?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState<Kind | null>(null);
   const source = active ? SOURCES.find((s) => s.kind === active) : undefined;
+  const upload = useDocumentUpload((file) => {
+    onUpload(file);
+    onOpenChange(false);
+  });
 
   // Drop back to the source menu whenever the popover closes.
   function onOpenChange(next: boolean) {
@@ -177,12 +262,19 @@ export function AttachMenu({
 
   return (
     <Popover open={open} onOpenChange={onOpenChange}>
-      <PopoverTrigger
-        title="Attach context"
-        className="flex h-8 shrink-0 items-center gap-1.5 rounded-md px-2 text-sm whitespace-nowrap text-muted-foreground transition-colors outline-none hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
-      >
-        <Plus className="size-4 shrink-0" />
-      </PopoverTrigger>
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <PopoverTrigger
+              aria-label="Attach files and context"
+              className="flex h-8 shrink-0 items-center gap-1.5 rounded-md px-2 text-sm whitespace-nowrap text-muted-foreground transition-colors outline-none hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
+            >
+              <Plus className="size-4 shrink-0" />
+            </PopoverTrigger>
+          }
+        />
+        <TooltipContent>Attach files and context</TooltipContent>
+      </Tooltip>
       <PopoverContent align="start" className="w-72 gap-0 overflow-hidden p-0">
         {source ? (
           <SourceList
@@ -193,12 +285,22 @@ export function AttachMenu({
             }
             onBack={() => setActive(null)}
             onPick={(opt) => {
-              onAdd({ kind: source.kind, id: opt.id, label: opt.label });
+              onAdd(optionToAttachment(source.kind, opt));
               onOpenChange(false);
             }}
           />
         ) : (
           <div className="p-1">
+            {upload.input}
+            <button
+              type="button"
+              onClick={upload.pick}
+              className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-muted"
+            >
+              <Paperclip className="size-4 shrink-0 text-muted-foreground" />
+              <span className="flex-1">Upload a file</span>
+            </button>
+            <div className="my-1 h-px bg-border" />
             {SOURCES.map((s) => {
               const Icon = s.icon;
               const count = attachments.filter((a) => a.kind === s.kind).length;
@@ -223,6 +325,73 @@ export function AttachMenu({
   );
 }
 
+// Tint the document card's icon tile by file type (matches the file's brand cue).
+function fileTypeTile(fileType?: string): string {
+  if (fileType === "pdf") return "bg-red-500";
+  if (fileType === "docx" || fileType === "doc") return "bg-blue-500";
+  return "bg-muted-foreground";
+}
+
+/** A removable card for an uploaded/attached document, with a live extraction spinner. */
+function DocumentChip({ a, onRemove }: { a: ChatAttachment; onRemove: () => void }) {
+  const processing = a.status === "pending" || a.status === "processing";
+  const failed = a.status === "failed";
+  // Thin extraction (likely a scan): show a passive warning instead of the type.
+  const lowText = a.status === "ready" && a.ocrSuggested;
+  const sublabel =
+    a.status === "pending"
+      ? "Uploading…"
+      : a.status === "processing"
+        ? "Extracting…"
+        : failed
+          ? "Failed"
+          : (a.fileType?.toUpperCase() ?? "Document");
+  return (
+    <div className="inline-flex max-w-full items-center gap-2.5 rounded-xl border border-border bg-card py-2 ps-2 pe-2.5">
+      <div
+        className={cn(
+          "flex size-9 shrink-0 items-center justify-center rounded-lg text-white",
+          fileTypeTile(a.fileType)
+        )}
+      >
+        {processing ? <Loader2 className="size-4 animate-spin" /> : <FileText className="size-4" />}
+      </div>
+      <div className="min-w-0">
+        <div className="max-w-[180px] truncate text-sm leading-tight font-medium">{a.label}</div>
+        {lowText ? (
+          <Tooltip>
+            <TooltipTrigger
+              render={<div className="cursor-default text-xs text-bronze">Little text found</div>}
+            />
+            <TooltipContent>
+              This PDF may be scanned — little text could be extracted
+            </TooltipContent>
+          </Tooltip>
+        ) : failed && a.extractionError ? (
+          <Tooltip>
+            <TooltipTrigger
+              render={<div className="cursor-default text-xs text-destructive">{sublabel}</div>}
+            />
+            <TooltipContent>{a.extractionError}</TooltipContent>
+          </Tooltip>
+        ) : (
+          <div className={cn("text-xs", failed ? "text-destructive" : "text-muted-foreground")}>
+            {sublabel}
+          </div>
+        )}
+      </div>
+      <button
+        type="button"
+        onClick={onRemove}
+        className="-me-0.5 rounded p-0.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+        aria-label={`Remove ${a.label}`}
+      >
+        <X className="size-4" />
+      </button>
+    </div>
+  );
+}
+
 /** Chips above the input, one per attached item, each removable. */
 export function AttachChips({
   attachments,
@@ -235,6 +404,11 @@ export function AttachChips({
   return (
     <div className="flex flex-wrap gap-1.5 px-4 pt-3">
       {attachments.map((a) => {
+        // Documents render as a rich card (file icon + extraction state); other
+        // kinds stay compact reference pills.
+        if (a.kind === "document") {
+          return <DocumentChip key={`${a.kind}:${a.id}`} a={a} onRemove={() => onRemove(a)} />;
+        }
         const Icon = KIND_ICON[a.kind];
         return (
           <span

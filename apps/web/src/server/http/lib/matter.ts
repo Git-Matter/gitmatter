@@ -15,3 +15,22 @@ export async function resolveCreateMatter(
   }
   return ensureDefaultMatter(user.id, user.name, user.tenantId);
 }
+
+/**
+ * Resolve the matter for an uploaded file. An explicit matterId still requires
+ * editor access; when none is given the document is created UNFILED (no matter)
+ * rather than dumped into the default "General" matter. `{ ok: false }` means an
+ * explicit matter was forbidden, so the route can answer 403 — distinct from the
+ * legitimate unfiled case where `matterId` is null.
+ */
+export async function resolveUploadMatter(
+  user: AuthedUser,
+  matterId?: string
+): Promise<{ ok: true; matterId: string | null } | { ok: false }> {
+  if (matterId) {
+    return (await hasMatterAccess(user.id, matterId, "editor"))
+      ? { ok: true, matterId }
+      : { ok: false };
+  }
+  return { ok: true, matterId: null };
+}

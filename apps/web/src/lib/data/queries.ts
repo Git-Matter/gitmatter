@@ -54,6 +54,18 @@ export function useSetChatPin() {
   });
 }
 
+// Delete a chat. Invalidates every chat list so the sidebar (all), the global
+// list, and the matter-scoped list all drop the row.
+export function useDeleteChat() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.deleteChat(id),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["chats"] });
+    },
+  });
+}
+
 // Document + client lists, shared by their routes and the sidebar's recent
 // panels. Same cache entry as the route loaders/components.
 export function useDocuments() {

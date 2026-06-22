@@ -164,6 +164,14 @@ export type ChatAttachment = {
   kind: "document" | "matter" | "client" | "review";
   id: string;
   label: string;
+  // Document-only. Drive the upload card's icon/sublabel and the live extraction
+  // spinner; undefined for non-document attachments (and treated as ready).
+  fileType?: string;
+  status?: DocStatus;
+  extractionError?: string | null;
+  // Document-only: PDF extracted too thin to be a real text layer (likely a
+  // scan). Drives a passive "little text — may be scanned" note on the card.
+  ocrSuggested?: boolean;
 };
 
 // Thinking effort for reasoning-capable models. Undefined = "Instant" (off).
@@ -184,6 +192,7 @@ export type Doc = {
   fileType: string;
   status: DocStatus;
   extractionError: string | null;
+  ocrSuggested: boolean;
   sizeBytes: number | null;
   folderId: string | null;
   currentVersionId: string | null;
@@ -485,12 +494,19 @@ export const api = {
     matterId?: string;
     folderId?: string | null;
   }) => req<Doc>("/api/documents", { method: "POST", body: JSON.stringify(d) }),
-  uploadDocument: (file: File, title?: string, matterId?: string, folderId?: string | null) => {
+  uploadDocument: (
+    file: File,
+    title?: string,
+    matterId?: string,
+    folderId?: string | null,
+    opts?: { staged?: boolean }
+  ) => {
     const f = new FormData();
     f.append("file", file);
     if (title) f.append("title", title);
     if (matterId) f.append("matterId", matterId);
     if (folderId) f.append("folderId", folderId);
+    if (opts?.staged) f.append("staged", "true");
     return upload<Doc>("/api/documents/upload", f);
   },
   linkDocumentsToMatter: (matterId: string, documentIds: string[]) =>
@@ -500,6 +516,10 @@ export const api = {
     }),
   retryDocument: (id: string) => req<Doc>(`/api/documents/${id}/retry`, { method: "POST" }),
   deleteDocument: (id: string) => req<null>(`/api/documents/${id}`, { method: "DELETE" }),
+  // Discard a staged chat upload (hard delete row + S3). For removing an upload
+  // chip before the turn is sent; committed library docs use deleteDocument.
+  discardStagedDocument: (id: string) =>
+    req<null>(`/api/documents/${id}/staged`, { method: "DELETE" }),
   listReviews: () =>
     req<Array<{ id: string; title: string; documentIds: string[]; createdAt: string }>>(
       "/api/tabular/reviews"
@@ -673,6 +693,7 @@ export const api = {
       method: "PATCH",
       body: JSON.stringify({ pinned }),
     }),
+  deleteChat: (id: string) => req<{ ok: true }>(`/api/chats/${id}`, { method: "DELETE" }),
   getChat: (id: string) => req<ChatDetail>(`/api/chats/${id}`),
   documentDownloadUrl: (id: string) => `/api/documents/${id}/download`,
 };

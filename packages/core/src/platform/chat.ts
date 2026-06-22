@@ -14,6 +14,10 @@ type TurnContent = {
   text: string;
   toolCalls?: Array<{ tool: string; input: unknown }>;
   edits?: ChatEdit[];
+  // Documents attached to this user turn. Stored so the attachment stays "sticky"
+  // to the conversation — every later turn re-lists these so the model keeps
+  // reading them, instead of the context vanishing after the turn it was sent on.
+  attachmentDocIds?: string[];
 };
 
 /**
@@ -30,6 +34,7 @@ export async function persistChat(
     toolCalls: Array<{ tool: string; input: unknown }>;
     citations?: Citation[];
     edits?: ChatEdit[];
+    attachmentDocIds?: string[];
   },
   chatId?: string,
   matterId?: string
@@ -71,7 +76,10 @@ export async function persistChat(
         actorType: "user",
         actorId: userId,
         role: "user",
-        content: { text: turn.message },
+        content: {
+          text: turn.message,
+          ...(turn.attachmentDocIds?.length ? { attachmentDocIds: turn.attachmentDocIds } : {}),
+        },
       },
       {
         chatId: id,
@@ -152,12 +160,18 @@ export async function setChatPinned(
     .where(and(eq(chats.id, chatId), eq(chats.userId, userId)));
 }
 
+/** Delete a conversation and its messages (cascade) — scoped to its owner. */
+export async function deleteChat(userId: string, chatId: string): Promise<void> {
+  await db.delete(chats).where(and(eq(chats.id, chatId), eq(chats.userId, userId)));
+}
+
 export type ChatTurn = {
   role: "user" | "assistant";
   text: string;
   toolCalls?: Array<{ tool: string; input: unknown }>;
   edits?: ChatEdit[];
   citations?: Citation[];
+  attachmentDocIds?: string[];
 };
 
 /** Load one conversation (ordered turns) — scoped to its owner. */
@@ -191,6 +205,7 @@ export async function getChat(
       toolCalls: content.toolCalls,
       edits: content.edits,
       citations: annotations?.citations,
+      attachmentDocIds: content.attachmentDocIds,
     };
   });
   return { id: chat.id, title: chat.title, matterId: chat.matterId, turns };

@@ -50,17 +50,6 @@ export const PROVIDERS: ToolProvider[] = [
       { name: "verify_citations", summary: "Verify/normalize reporter citations." },
     ],
   },
-  {
-    id: "docling",
-    name: "Docling",
-    jurisdictions: ["*"], // document extraction is jurisdiction-agnostic
-    // Called directly by the gitmatter backend over its REST API (docling-serve),
-    // not connected as a consumed MCP server.
-    transport: "internal",
-    authType: "none",
-    capabilities: ["doc_extract"],
-    tools: [{ name: "convert_to_markdown", summary: "Convert a document to markdown." }],
-  },
 ];
 
 /** Does a provider pattern cover a target jurisdiction? "US" covers "US-NY"; "*" covers all. */

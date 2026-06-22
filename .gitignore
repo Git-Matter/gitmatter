@@ -31,3 +31,6 @@ apps/video/build/
 
 # test artifacts
 test-results/
+
+# MCP server config (contains API keys)
+.mcp.json

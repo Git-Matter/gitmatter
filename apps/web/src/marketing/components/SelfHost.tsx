@@ -11,10 +11,6 @@ const POINTS = [
     body: "Set it up on your own computer or server in minutes. Nothing locked to one company's cloud.",
   },
   {
-    title: "Use your own AI account",
-    body: "Connect the AI account your firm already pays for. Stored safely, only used for your work.",
-  },
-  {
     title: "Your documents stay private",
     body: "Your files are never kept or used to train anyone's model. Every step is on the record.",
   },
@@ -28,7 +24,7 @@ export default function SelfHost() {
         <h2 className="mt-stack max-w-[16ch] font-heading text-4xl tracking-tight text-balance">
           Set it up your way.
         </h2>
-        <div className="mt-12 grid gap-10 sm:grid-cols-3 md:gap-16">
+        <div className="mt-12 grid gap-10 sm:grid-cols-2 md:gap-16">
           {POINTS.map((p) => (
             <div key={p.title} className="flex flex-col gap-1 border-t border-border pt-4">
               <h3 className="font-heading text-lg tracking-tight">{p.title}</h3>

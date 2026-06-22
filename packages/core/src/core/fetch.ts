@@ -1,5 +1,5 @@
-// Shared fetch with a hard timeout. External calls (CourtListener, docling,
-// model catalogs) must not hang the request that triggered them.
+// Shared fetch with a hard timeout. External calls (CourtListener, model
+// catalogs) must not hang the request that triggered them.
 
 export interface TimeoutFetchInit extends RequestInit {
   /** Abort after this many ms. Default 30s. */

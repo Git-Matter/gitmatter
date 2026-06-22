@@ -11,6 +11,10 @@ export type DocStatusEvent = {
   id: string;
   status: DocumentStatus;
   extractionError: string | null;
+  // Present on the terminal `ready` event: true when a PDF extracted too thin to
+  // be a real text layer (likely scanned). The UI shows a passive warning.
+  // Omitted on other transitions.
+  ocrSuggested?: boolean;
 };
 
 // One emitter, every open SSE connection adds a listener — lift the default cap.

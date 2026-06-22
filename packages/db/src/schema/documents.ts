@@ -1,5 +1,6 @@
 import {
   type AnyPgColumn,
+  boolean,
   index,
   integer,
   pgTable,
@@ -13,8 +14,8 @@ import { user } from "./auth.js";
 import { matters } from "./matters.js";
 import { tenants } from "./tenants.js";
 
-// Uploaded source documents. `markdown` holds the extracted text (via the
-// docling sidecar or a local extractor) used as LLM context. Extraction
+// Uploaded source documents. `markdown` holds the extracted text (PDF via
+// pdf.js, DOCX via mammoth) used as LLM context. Extraction
 // runs as a background job: an upload lands `pending`, the worker claims it
 // (`processing`), then sets `ready` (markdown populated) or `failed` (error +
 // attempts bumped). Pasted-text documents are born `ready`.
@@ -68,10 +69,14 @@ export const documents = pgTable(
     markdown: text("markdown"),
     sizeBytes: integer("size_bytes"),
     // Page count of the active file when extraction can determine it (PDF via
-    // docling, DOCX via docProps/app.xml). Null when unknown.
+    // pdf.js, DOCX via docProps/app.xml). Null when unknown.
     pageCount: integer("page_count"),
     status: text("status").$type<DocumentStatus>().notNull().default("ready"),
     extractionError: text("extraction_error"),
+    // Set when a PDF extracted too thin to be a real text layer (likely a scan;
+    // we don't OCR). The UI shows a passive "little text — may be scanned"
+    // warning. See processDocument.
+    ocrSuggested: boolean("ocr_suggested").notNull().default(false),
     attempts: integer("attempts").notNull().default(0),
     claimedAt: timestamp("claimed_at"),
     // Bytes live on document_versions (mirrors contracts/contractVersions); this
@@ -81,6 +86,12 @@ export const documents = pgTable(
     // background extraction is recorded as a system-authored commit.
     headCommitId: uuid("head_commit_id"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
+    // Staged: an upload made from the chat composer that the user has NOT yet
+    // committed to the library. The row + bytes exist so we can extract and feed
+    // the file to the model, but it's hidden from every library/matter list until
+    // the user presses Enter (commit) or removes the chip (hard discard). An
+    // orphan sweep purges staged rows older than the abandon window.
+    staged: boolean("staged").notNull().default(false),
     // Soft-delete: set on delete, hidden from lists. A purge job hard-deletes
     // (and frees S3 bytes) after the retention window (30 days).
     deletedAt: timestamp("deleted_at"),

@@ -76,6 +76,20 @@ export function useChatSession({
   const streamAbort = useRef<AbortController | null>(null);
   useEffect(() => () => streamAbort.current?.abort(), []);
 
+  // Ids of staged uploads made in this composer that the user has NOT yet sent.
+  // Sending commits them (server-side) and clears them here; removing a chip or
+  // unmounting discards them (hard delete + S3). Picked library docs aren't here,
+  // so removing them only unlinks.
+  const stagedIds = useRef<Set<string>>(new Set());
+  // Best-effort cleanup of uploads abandoned without sending (covered server-side
+  // by the abandon sweep too). Read the ref at unmount, not at mount.
+  useEffect(
+    () => () => {
+      for (const id of stagedIds.current) void api.discardStagedDocument(id).catch(() => {});
+    },
+    []
+  );
+
   // Abort the in-flight stream (the finally block clears busy + the ref).
   const stop = () => streamAbort.current?.abort();
 
@@ -83,16 +97,86 @@ export function useChatSession({
     setAttachments((prev) =>
       prev.some((p) => p.kind === a.kind && p.id === a.id) ? prev : [...prev, a]
     );
-  const removeAttachment = (a: ChatAttachment) =>
+  const removeAttachment = (a: ChatAttachment) => {
+    // A staged upload (made in this composer, not yet sent) is hard-discarded; a
+    // picked library doc is just unlinked from the message.
+    if (a.kind === "document" && stagedIds.current.has(a.id)) {
+      stagedIds.current.delete(a.id);
+      void api.discardStagedDocument(a.id).catch(() => {});
+    }
     setAttachments((prev) => prev.filter((p) => !(p.kind === a.kind && p.id === a.id)));
+  };
+
+  // Upload a local file from the composer. Show the chip immediately (covers the
+  // R2-write window), swap to the real document once stored, then let the SSE
+  // stream below drive it through extraction to ready/failed.
+  async function uploadFile(file: File) {
+    const tempId = `upload:${crypto.randomUUID()}`;
+    const fileType = file.name.split(".").pop()?.toLowerCase();
+    addAttachment({ kind: "document", id: tempId, label: file.name, fileType, status: "pending" });
+    try {
+      // Staged: held for context but kept out of the library until the turn is sent.
+      const doc = await api.uploadDocument(file, file.name, matterId, null, { staged: true });
+      stagedIds.current.add(doc.id);
+      setAttachments((prev) =>
+        prev.map((p) =>
+          p.kind === "document" && p.id === tempId
+            ? {
+                kind: "document",
+                id: doc.id,
+                label: doc.title,
+                fileType: doc.fileType,
+                status: doc.status,
+              }
+            : p
+        )
+      );
+    } catch (error) {
+      setAttachments((prev) => prev.filter((p) => !(p.kind === "document" && p.id === tempId)));
+      toast.error(error instanceof Error ? error.message : "Upload failed");
+    }
+  }
+
+  // Extraction runs in-process; one SSE stream pushes status changes
+  // (pending -> processing -> ready/failed). Patch the matching document chip.
+  useEffect(() => {
+    const es = new EventSource("/api/documents/events");
+    es.addEventListener("status", (e) => {
+      const { id, status, extractionError, ocrSuggested } = JSON.parse(
+        (e as MessageEvent).data
+      ) as {
+        id: string;
+        status: ChatAttachment["status"];
+        extractionError: string | null;
+        ocrSuggested?: boolean;
+      };
+      setAttachments((prev) =>
+        prev.map((p) =>
+          p.kind === "document" && p.id === id
+            ? { ...p, status, extractionError, ocrSuggested: ocrSuggested ?? false }
+            : p
+        )
+      );
+    });
+    return () => es.close();
+  }, []);
+
+  // Any attached document still being stored or extracted. Used to block send
+  // until the model can actually read every attached document.
+  const hasProcessingAttachment = attachments.some(
+    (a) => a.kind === "document" && (a.status === "pending" || a.status === "processing")
+  );
 
   async function send() {
     const message = input.trim();
-    if (!message || busy) return;
+    if (!message || busy || hasProcessingAttachment) return;
     setInput("");
     setBusy(true);
     const sent = attachments;
     setAttachments([]);
+    // The server commits these staged uploads into the library on receiving the
+    // turn, so stop tracking them here — they're no longer ours to discard.
+    for (const a of sent) if (a.kind === "document") stagedIds.current.delete(a.id);
     // Append the user turn plus an empty assistant turn that fills in as it streams.
     setTurns((t) => [...t, { role: "user", text: message }, { role: "assistant", text: "" }]);
 
@@ -237,6 +321,8 @@ export function useChatSession({
     setAttachments,
     addAttachment,
     removeAttachment,
+    uploadFile,
+    hasProcessingAttachment,
     busy,
     chatId,
     send,

@@ -5,9 +5,13 @@ import { z } from "zod";
 import {
   type Actor,
   buildToolCatalog,
+  canAccessArtifact,
   CITATIONS_INSTRUCTION,
+  deleteChat,
   type ChatEdit,
   REDLINE_INSTRUCTION,
+  commitStagedDocuments,
+  getDocument,
   getEditsByRef,
   type ChatMessage,
   DEFAULT_MODEL,
@@ -58,6 +62,9 @@ function toJsonSchema(shape: z.ZodRawShape): Record<string, unknown> {
   return js;
 }
 
+// Real document ids are uuids; client temp upload ids (`upload:<uuid>`) are not.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 // Labels for the attachment reference line, by attachment kind.
 const ATTACH_LABELS: Record<string, string> = {
   document: "Document",
@@ -66,17 +73,39 @@ const ATTACH_LABELS: Record<string, string> = {
   review: "Review",
 };
 
-// Prepend a note listing what the user attached, so the model knows to read those
-// artifacts via the catalog tools (fetch / get_review / list_matters / …).
+// Prepend a reference line for the NON-document attachments (matter/client/review)
+// the user added this turn, so the model knows to read them with the catalog tools.
+// Documents are handled separately and stickily by attachmentsContextBlock.
 function withAttachments(
   message: string,
   attachments: { kind: string; id: string; label: string }[]
 ) {
-  if (!attachments.length) return message;
-  const lines = attachments.map(
-    (a) => `- ${ATTACH_LABELS[a.kind] ?? a.kind}: ${a.label} (id: ${a.id})`
-  );
-  return `[The user attached the following for context. Read them with the available tools (fetch, get_document, get_review, list_matter_documents, list_matters, list_clients) as needed:\n${lines.join("\n")}]\n\n${message}`;
+  const refs = attachments
+    .filter((a) => a.kind !== "document")
+    .map((a) => `- ${ATTACH_LABELS[a.kind] ?? a.kind}: ${a.label} (id: ${a.id})`);
+  if (!refs.length) return message;
+  return `[The user attached the following for context. Read them with the available tools (get_review, list_matter_documents, list_matters, list_clients) as needed:\n${refs.join("\n")}]\n\n${message}`;
+}
+
+// Attached documents stay "sticky" to a conversation: this block re-lists them in
+// the system prompt on EVERY turn (not just the turn they were sent on), with the
+// key instruction — borrowed from mike — that the model does NOT retain document
+// content between turns and must re-read on demand. Without this, a follow-up like
+// "what's on page 5?" arrives with no document in context, so the model guesses or
+// reads the wrong file. The page-marker note keeps page-specific answers honest:
+// extracted text carries sequential [Page N] markers, so the model can only answer
+// per-page questions from the matching block. Returns "" when nothing's attached.
+async function attachmentsContextBlock(userId: string, docIds: string[]): Promise<string> {
+  const lines: string[] = [];
+  for (const id of docIds) {
+    if (!(await canAccessArtifact(userId, "document", id))) continue;
+    const doc = await getDocument(id);
+    if (!doc) continue;
+    const pages = doc.pageCount ? `, ${doc.pageCount} pages` : "";
+    lines.push(`- "${doc.title}" (id: ${id}${pages})`);
+  }
+  if (!lines.length) return "";
+  return `\n\n[Attached documents] The user attached these documents to THIS conversation; treat them as the primary context:\n${lines.join("\n")}\nYou do NOT retain document content between turns. At the START of every response that involves a document's content, call get_document with its id (even if you read it earlier in this conversation) — otherwise you will use stale or hallucinated text. The returned markdown marks pages as sequential [Page N] markers; answer page-specific questions ONLY from the matching [Page N] block and cite pages by that marker. If a page isn't present, say so rather than guessing. Answer from these attached documents; do not list or search other matters or documents unless the user explicitly asks for them.`;
 }
 
 // A matter-scoped chat carries its matter as ambient context: the matter name
@@ -209,15 +238,41 @@ async function runAssistant(
         ? { role: "user", content: turn.text }
         : { role: "assistant", content: turn.text }
     );
-  messages.push({ role: "user", content: withAttachments(body.message, body.attachments ?? []) });
+  const attachments = body.attachments ?? [];
+  // Documents attached this turn. Resolve to real, owned doc ids before anything
+  // persists them: the client id is briefly a temp id (`upload:<uuid>`) until the
+  // real one swaps in, so drop anything that doesn't resolve to an accessible row.
+  // This keeps the sticky `attachmentDocIds` clean for every future turn — the model
+  // is never handed a bogus id it could chase to the wrong (or no) document.
+  // Shape guard first: a temp id (`upload:<uuid>`) isn't a uuid, and querying a
+  // uuid column with it would throw rather than miss.
+  const rawTurnDocIds = attachments
+    .filter((a) => a.kind === "document")
+    .map((a) => a.id)
+    .filter((id) => UUID_RE.test(id));
+  const turnDocIds = (
+    await Promise.all(
+      rawTurnDocIds.map(async (id) =>
+        (await canAccessArtifact(user.id, "document", id)) && (await getDocument(id)) ? id : null
+      )
+    )
+  ).filter((id): id is string => id !== null);
+  // Sending the turn commits any staged chat uploads it carries into the library.
+  if (turnDocIds.length) await commitStagedDocuments(user.id, turnDocIds);
+  // Sticky attachments: this turn's docs plus every doc attached on a prior turn, so
+  // the model keeps seeing them for the whole conversation (deduped).
+  const priorDocIds = (prior?.turns ?? []).flatMap((t) => t.attachmentDocIds ?? []);
+  const attachedDocIds = [...new Set([...priorDocIds, ...turnDocIds])];
+  messages.push({ role: "user", content: withAttachments(body.message, attachments) });
 
   // Matter scope: from the request (new chat) or the chat row (continuation).
   // Inject the matter's document index into the system prompt once per request.
   const matterId = body.matterId ?? prior?.matterId ?? undefined;
   const base = `${CITATIONS_INSTRUCTION}\n\n${REDLINE_INSTRUCTION}`;
-  const system = matterId
-    ? base + (await matterContextBlock(user.id, matterId, body.activeDocumentId))
-    : base;
+  const system =
+    (matterId
+      ? base + (await matterContextBlock(user.id, matterId, body.activeDocumentId))
+      : base) + (await attachmentsContextBlock(user.id, attachedDocIds));
   const toolCalls: Array<{ tool: string; input: unknown }> = [];
   let finalText = "";
 
@@ -326,7 +381,14 @@ async function runAssistant(
   const edits = await getEditsByRef(editRefs);
   const chatId = await persistChat(
     user.id,
-    { message: body.message, finalText: displayText, toolCalls, citations, edits },
+    {
+      message: body.message,
+      finalText: displayText,
+      toolCalls,
+      citations,
+      edits,
+      attachmentDocIds: turnDocIds.length ? turnDocIds : undefined,
+    },
     body.chatId,
     body.matterId
   );
@@ -388,6 +450,12 @@ chatRoute.get("/api/chats", async (c) => {
 // Pin/unpin a conversation so it floats to the sidebar's Pinned section.
 chatRoute.patch("/api/chats/:id/pin", zValidator("json", pinSchema), async (c) => {
   await setChatPinned(c.get("user").id, c.req.param("id"), c.req.valid("json").pinned);
+  return c.json({ ok: true });
+});
+
+// Delete a conversation (and its messages via cascade) — scoped to its owner.
+chatRoute.delete("/api/chats/:id", async (c) => {
+  await deleteChat(c.get("user").id, c.req.param("id"));
   return c.json({ ok: true });
 });
 

@@ -3,9 +3,9 @@ import { recordExtraction } from "../platform/usage.js";
 import { processDocument } from "./documents.js";
 
 // Per-user extraction queue. Runs one extraction at a time per user: extra
-// uploads chain behind the user's current job instead of hitting the docling
-// sidecar all at once. In-memory (single web instance), so the chain is lost on
-// restart — a doc left `processing` is recovered via the manual retry button.
+// uploads chain behind the user's current job instead of parsing several PDFs at
+// once. In-memory (single web instance), so the chain is lost on restart — a doc
+// left `processing` is recovered via the manual retry button.
 
 const chains = new Map<string, Promise<void>>();
 

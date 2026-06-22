@@ -75,7 +75,22 @@ export function documentColumns(handlers: {
     columnHelper.accessor("status", {
       header: "Status",
       size: 110,
-      cell: (c) => <DocumentStatusBadge status={c.getValue()} />,
+      cell: (c) => {
+        const doc = c.row.original;
+        return (
+          <div className="flex items-center gap-1.5">
+            <DocumentStatusBadge status={c.getValue()} />
+            {doc.status === "ready" && doc.ocrSuggested && (
+              <span
+                className="text-xs text-bronze"
+                title="This PDF may be scanned — little text could be extracted"
+              >
+                Low text
+              </span>
+            )}
+          </div>
+        );
+      },
     }),
     columnHelper.accessor("createdAt", {
       header: "Added",

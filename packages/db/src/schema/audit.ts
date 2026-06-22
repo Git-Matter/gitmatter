@@ -21,6 +21,7 @@ export type AuditEventType =
   | "invite.accept"
   | "document.upload"
   | "document.download"
+  | "document.discard_staged"
   | "storage.delete_failed"
   | "tenant.export"
   | "budget.exceeded";

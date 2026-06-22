@@ -43,6 +43,20 @@
       "when": 1781811517867,
       "tag": "0005_past_junta",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1782114545861,
+      "tag": "0006_misty_wendigo",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1782117779928,
+      "tag": "0007_same_midnight",
+      "breakpoints": true
     }
   ]
 }

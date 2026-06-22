@@ -99,6 +99,8 @@ export function AssistantView({ loaded }: { loaded: ChatDetail | null }) {
       attachments={s.attachments}
       onAdd={s.addAttachment}
       onRemove={s.removeAttachment}
+      onUpload={s.uploadFile}
+      hasProcessing={s.hasProcessingAttachment}
       busy={s.busy}
       onSend={s.send}
       onStop={s.stop}
