@@ -39,11 +39,9 @@ export default function Hero() {
             <Play />
             Run the demo
           </Button>
-          <a href={SITE.docs}>
-            <Button size="lg" variant="outline">
-              Set it up
-            </Button>
-          </a>
+          <Button size="lg" variant="outline" render={<a href={SITE.docs} />}>
+            Set it up
+          </Button>
         </div>
       </div>
 
