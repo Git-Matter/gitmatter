@@ -1,4 +1,3 @@
-import { useEffect } from "react";
 import { Link } from "@tanstack/react-router";
 import { GitBranch } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -6,19 +5,9 @@ import { SITE } from "@/marketing/site";
 import Wordmark from "@/marketing/components/Wordmark";
 
 // Shared chrome for the cloud-only marketing site: top nav + footer around the
-// page outlet. Cloud-only — bundled solely when DEPLOYMENT=cloud.
+// page outlet. Cloud-only — bundled solely when DEPLOYMENT=cloud. The site is
+// pinned to light via forcedTheme in __root (pre-paint, no flash).
 export default function MarketingLayout({ children }: { children: React.ReactNode }) {
-  // The marketing site is always warm-paper editorial — pin it to light even if
-  // the visitor's product theme is dark. Restore their theme on the way out.
-  useEffect(() => {
-    const root = document.documentElement;
-    const wasDark = root.classList.contains("dark");
-    root.classList.remove("dark");
-    return () => {
-      if (wasDark) root.classList.add("dark");
-    };
-  }, []);
-
   return (
     <div className="flex min-h-dvh flex-col">
       <header className="mx-auto flex w-full max-w-7xl items-center justify-between px-6 py-5">

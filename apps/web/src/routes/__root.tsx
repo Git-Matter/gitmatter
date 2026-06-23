@@ -1,4 +1,4 @@
-import { HeadContent, Scripts, createRootRoute } from "@tanstack/react-router";
+import { HeadContent, Scripts, createRootRoute, useRouterState } from "@tanstack/react-router";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Suspense, lazy } from "react";
 import { ThemeProvider } from "next-themes";
@@ -58,6 +58,13 @@ function Shell({ children }: { children: React.ReactNode }) {
 }
 
 function RootDocument({ children }: { children: React.ReactNode }) {
+  // The marketing site is always light (warm-paper editorial). Force it at the
+  // root provider so next-themes' pre-paint script emits light — no dark flash
+  // for visitors whose product theme is dark. Detected from the matched route
+  // group, not the pathname, so it stays correct on client navigation.
+  const isMarketing = useRouterState({
+    select: (s) => s.matches.some((m) => m.routeId.includes("(marketing)")),
+  });
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
@@ -70,6 +77,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
             defaultTheme="system"
             enableSystem
             disableTransitionOnChange
+            forcedTheme={isMarketing ? "light" : undefined}
           >
             <TooltipProvider>
               <Shell>{children}</Shell>

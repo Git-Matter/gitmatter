@@ -1,11 +1,10 @@
-import { useRef } from "react";
-import { Play } from "lucide-react";
+import { Link } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import { SITE } from "@/marketing/site";
 import Eyebrow from "@/marketing/components/Eyebrow";
 
 // Centered editorial hero built around transparency: the tagline, the demo
-// video as proof, and two plain actions — run the demo, or set it up. Below it,
+// video as proof, and two plain actions — test it out, or set it up. Below it,
 // four benefits in one glance. No jargon.
 const POINTS = [
   { k: "Set up in minutes", v: "no IT project" },
@@ -15,15 +14,6 @@ const POINTS = [
 ];
 
 export default function Hero() {
-  const videoRef = useRef<HTMLVideoElement>(null);
-
-  const runDemo = () => {
-    const v = videoRef.current;
-    if (!v) return;
-    v.scrollIntoView({ behavior: "smooth", block: "center" });
-    void v.play();
-  };
-
   return (
     <section className="mx-auto max-w-5xl px-6 pt-28 pb-28 text-center sm:pt-36">
       <div className="flex flex-col items-center gap-7">
@@ -35,22 +25,18 @@ export default function Hero() {
           Download, install, and run.
         </p>
         <div className="mt-2 flex flex-wrap items-center justify-center gap-3">
-          <Button size="lg" onClick={runDemo}>
-            <Play />
-            Run the demo
+          <Button size="lg" render={<Link to="/login" />}>
+            Test it out
           </Button>
-          <a href={SITE.docs}>
-            <Button size="lg" variant="outline">
-              Set it up
-            </Button>
-          </a>
+          <Button size="lg" variant="outline" render={<a href={SITE.docs} />}>
+            Set it up
+          </Button>
         </div>
       </div>
 
-      {/* Demo video — the proof. Poster + controls; "Run the demo" plays it. */}
+      {/* Demo video — the proof. Poster + controls for the visitor to play. */}
       <div className="mt-section overflow-hidden rounded-xl border border-border bg-card shadow-xs">
         <video
-          ref={videoRef}
           className="aspect-video w-full"
           poster="/demo-poster.png"
           controls
