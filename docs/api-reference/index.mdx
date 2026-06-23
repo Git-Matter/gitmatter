@@ -4,11 +4,11 @@ description: Technical reference for the gitmatter MCP tools, REST API, and auth
 ---
 
 This section is for **developers and integrators** building on top of gitmatter.
-Unlike the rest of the docs, it is technical: it documents the exact tool surface,
-HTTP endpoints, and authentication flows rather than how to use the product day to day.
+It documents the exact tool surface, HTTP endpoints, and authentication flows — not
+day-to-day product use.
 
-gitmatter has two programmatic surfaces, both backed by the same access checks and
-git-style audit spine:
+gitmatter exposes two programmatic surfaces. Both enforce the same access checks and
+write through the same git-style audit spine:
 
 - An **MCP server** at `/api/mcp`, exposing a catalog of tools to AI agents (Claude,
   ChatGPT, and other MCP clients) and to the in-app assistant.

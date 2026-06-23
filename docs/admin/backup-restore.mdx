@@ -21,7 +21,7 @@ bun scripts/db-backup.ts /backups/x.dump # explicit path
 
 This produces a single compressed backup file (`pg_dump -Fc`, Postgres's custom dump format). It needs the `postgresql-client` package (which provides the `pg_dump` tool) and `DATABASE_URL` set in `.env`.
 
-Schedule backups off-host (run them automatically with cron, CI, or your managed-Postgres provider's automated backups) and keep the backup files somewhere other than the database server, so a server failure does not take your backups with it. For managed Postgres (Neon, Supabase, RDS, Crunchy), also use the provider's point-in-time recovery (rewind the database to any moment) in addition to these dumps.
+Schedule backups off-host (run them automatically with cron, CI, or your managed-Postgres provider's automated backups), and keep the backup files somewhere other than the database server, so a server failure does not take your backups with it. For managed Postgres (Neon, Supabase, RDS, Crunchy), also use the provider's point-in-time recovery (rewind the database to any moment) on top of these dumps.
 
 ### Restore
 

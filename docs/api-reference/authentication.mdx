@@ -13,14 +13,14 @@ Authorization: Bearer <token>
 - **Static MCP tokens** — long-lived secrets you mint yourself. Simplest for
   command-line tools and scripts.
 - **OAuth 2.1** — for clients (ChatGPT, the native Claude connectors) that log the
-  user in and walk an approval screen. No token to paste.
+  user in and walk an approval screen. Nothing to paste.
 
-Whichever you use, the caller acts as **your** gitmatter account, and every mutation
-is recorded as an agent in your history.
+With either credential, the caller acts as **your** gitmatter account, and every
+mutation is recorded as an agent in your history.
 
 ## Static MCP tokens
 
-A token is minted by `POST /api/mcp-tokens` (or via **Settings → Connect** in the app).
+Mint a token with `POST /api/mcp-tokens` (or via **Settings → Connect** in the app).
 Tokens carry the `gc_` prefix.
 
 The plaintext token is returned **once**, at mint time, and never again — only its
@@ -47,8 +47,8 @@ claude mcp add --transport http gitmatter https://<host>/api/mcp \
 ## OAuth 2.1
 
 gitmatter is both an OAuth 2.1 **resource server** and **authorization server** at the
-same origin. Clients that support OAuth discover the endpoints automatically and never
-need a pasted token.
+same origin. Clients that support OAuth discover the endpoints automatically; no token
+is pasted.
 
 ### Discovery
 

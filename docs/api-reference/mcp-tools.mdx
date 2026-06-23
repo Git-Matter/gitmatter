@@ -5,10 +5,10 @@ description: Reference for every tool in the gitmatter MCP / assistant catalog.
 
 The gitmatter MCP server at `/api/mcp` and the in-app assistant share one tool
 catalog. Every tool runs as the acting user (attributed as an agent in history) and
-enforces the same per-artifact access checks regardless of how it is reached.
+enforces the same per-artifact access checks, regardless of how it is reached.
 
 The catalog has **26 tools**. The last two — case-law search and citation
-verification — are jurisdiction-gated and only appear when the user's jurisdiction
+verification — are jurisdiction-gated: they appear only when the user's jurisdiction
 includes a US legal-research provider (CourtListener).
 
 <Callout type="info">
@@ -20,7 +20,7 @@ is a commit attributed to an actor (a user, or an agent with a label such as
 
 ## Audit / blame
 
-These cover "who changed what, exactly, and with what" across any artifact.
+These answer "who changed what, exactly, and with what" for any artifact.
 
 | Tool          | Purpose                                                                         | Key inputs                                       |
 | ------------- | ------------------------------------------------------------------------------- | ------------------------------------------------ |
@@ -84,7 +84,7 @@ required.
 
 ## Search / fetch
 
-These follow the ChatGPT company-knowledge schema.
+These two tools follow the ChatGPT company-knowledge schema.
 
 | Tool     | Purpose                                                                     | Key inputs |
 | -------- | --------------------------------------------------------------------------- | ---------- |
@@ -96,7 +96,7 @@ These follow the ChatGPT company-knowledge schema.
 
 ## Legal research
 
-Jurisdiction-gated — only present when the user's jurisdiction includes CourtListener
+Jurisdiction-gated — present only when the user's jurisdiction includes CourtListener
 (US case law).
 
 | Tool               | Purpose                                                                        | Key inputs                                                 |

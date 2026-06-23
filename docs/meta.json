@@ -1,11 +1,3 @@
 {
-  "pages": [
-    "index",
-    "getting-started",
-    "user-manual",
-    "user-guide",
-    "ai-agents",
-    "api-reference",
-    "admin"
-  ]
+  "pages": ["index", "get-started", "install", "user-guide", "ai-agents", "api-reference", "admin"]
 }

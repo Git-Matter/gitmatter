@@ -12,11 +12,11 @@ Law-firm documents are privileged (legally confidential). This page explains whi
 
 ## What gets sent to a provider
 
-When you run a chat turn or a tabular review, gitmatter sends the relevant prompt and document content to **one** AI provider: the one that serves the model you picked. Nothing goes to providers you did not select. CourtListener legal-research calls go to CourtListener, not to an AI provider.
+When you run a chat turn or a tabular review, gitmatter sends the prompt and document content to **one** AI provider only: the one that serves the model you picked. Nothing goes to providers you did not select. CourtListener legal-research calls go to CourtListener, not to an AI provider.
 
 ## Whose key is used
 
-A "key" is the credential that bills and identifies the account talking to an AI provider. For each provider, gitmatter picks the key in this order: **the user's own key first**, then the server-wide key set in env (the deployment-level setting), and otherwise none. The model picker shows which source is active (`user` or `env`), so it is never ambiguous.
+A "key" is the credential that bills and identifies the account talking to an AI provider. For each provider, gitmatter picks the key in this order: **the user's own key first**, then the server-wide key set in env (the deployment-level setting), and otherwise none. The model picker shows which source is active (`user` or `env`), so it is never in doubt.
 
 With bring-your-own-key (the firm supplies its own provider key), requests are billed and logged under the firm's own provider account.
 

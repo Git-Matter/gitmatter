@@ -3,7 +3,7 @@ title: Data retention
 description: How long each kind of data is kept, and how automatic cleanups work.
 ---
 
-gitmatter removes old data on a rolling basis. In short: every kind of data has a time limit, and once data is past its limit it gets deleted. There is no separate scheduler or cron job. These cleanups ("purges") run every time the app starts up. A deployment that stays up keeps sweeping over time, and one that restarts sweeps on startup. Each retention window (how long data is kept) is set with an environment variable, measured in days. Setting a window to `0` turns that purge off, which means the data is kept forever.
+gitmatter removes old data on a rolling basis. In short: every kind of data has a time limit, and once data is past its limit it gets deleted. There is no separate scheduler or cron job. These cleanups ("purges") run every time the app starts up. A deployment that stays up keeps sweeping over time; one that restarts sweeps on startup. Each retention window (how long data is kept) is set with an environment variable, measured in days. Setting a window to `0` turns that purge off, so the data is kept forever.
 
 ## Retention windows
 

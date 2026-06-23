@@ -3,16 +3,16 @@ title: Overview
 description: Connect the AI assistant you already use and let it do your gitmatter work — on the record.
 ---
 
-gitmatter is built to be run by an AI assistant you already use. You connect a
-tool like **Claude Desktop**, **Claude web/CLI**, or **ChatGPT** to gitmatter one
-time. After that, you ask it in plain language — _"review these NDAs"_ — and it does
-the work for you inside gitmatter. You stay in the AI tool you like; gitmatter does
-the legal work behind the scenes and keeps a full record of it.
+gitmatter is built to be driven by an AI assistant you already use. You connect a
+tool like **Claude Desktop**, **Claude web/CLI**, or **ChatGPT** to gitmatter once.
+After that, you ask in plain language — _"review these NDAs"_ — and the assistant does
+the work inside gitmatter. You stay in the AI tool you like. gitmatter does the legal
+work behind the scenes and keeps a full record of it.
 
-Here is the important part: **anything the AI assistant does is recorded just like
-work done by a person.** It is logged under the assistant's name, in the same history
-as everyone else's work. Connecting an assistant does not create a hidden back door
-that skips this record.
+Here is the important part: **anything the assistant does is recorded just like work
+done by a person.** It is logged under the assistant's name, in the same history as
+everyone else's work. Connecting an assistant is not a hidden back door that skips
+this record.
 
 <Cards>
   <Card
@@ -34,8 +34,8 @@ that skips this record.
 
 ## How it connects (in plain words)
 
-AI tools and other software talk to each other using a shared standard called **MCP**
-(Model Context Protocol) — think of it as a common language that lets your AI tool
-plug into outside services. gitmatter speaks this language. To connect, you simply
-point your AI tool at gitmatter's connection and sign in. The next page walks you
-through it.
+AI tools connect to outside services using a shared standard called **MCP**
+(Model Context Protocol). Think of it as a common language that lets your AI tool plug
+into other services. gitmatter speaks this language at `/api/mcp`. To connect, you
+point your AI tool at gitmatter's address and sign in. The next page walks you through
+it.

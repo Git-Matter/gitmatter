@@ -1,0 +1,104 @@
+---
+title: Docker quickstart
+description: Run gitmatter with Docker and the prebuilt image.
+---
+
+The fastest way to run gitmatter is the Docker stack. It pulls the prebuilt image — no
+clone, and no build from source. This page gets you from nothing to a running app.
+
+## Before you start
+
+You need two things ready:
+
+- **[Docker](https://www.docker.com/products/docker-desktop/)** — the only software you
+  must install. It runs both the app and the database. Open the Docker application and
+  make sure it is running first (on Docker Desktop, the whale icon should say "running").
+- **S3-compatible object storage** for documents — Cloudflare R2 (recommended), AWS S3,
+  or MinIO. gitmatter stores uploaded files here; there is no local-disk option. Set up
+  R2 with Cloudflare's own guides:
+  [create a bucket](https://developers.cloudflare.com/r2/buckets/create-buckets/) and
+  [create an API token](https://developers.cloudflare.com/r2/api/tokens/), then map the
+  values in [Self-hosting](/admin/self-hosting#cloudflare-r2).
+
+## Step 1 — Save the compose file
+
+Save the file below as `docker-compose.yml`. Then change every value marked
+`# CHANGE THIS`:
+
+- **`BETTER_AUTH_SECRET`** — generate one with `npx auth@latest secret` (see the
+  [Better Auth docs](https://www.better-auth.com/docs/installation#set-environment-variables)).
+- **`ENCRYPTION_KEY`** — any high-entropy string works. Generate one with
+  `openssl rand -base64 32`.
+- **`S3_*`** — the values from your R2 (or other S3) bucket.
+
+```yaml
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: gitmatter
+      POSTGRES_PASSWORD: gitmatter
+      POSTGRES_DB: gitmatter
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gitmatter"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  web:
+    # Pin a version by replacing :latest, e.g. :v2026.06.22
+    image: ghcr.io/peteqian/gitmatter:latest
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://gitmatter:gitmatter@postgres:5432/gitmatter
+      BETTER_AUTH_URL: http://localhost:4280
+      BETTER_AUTH_SECRET: paste-a-generated-secret # CHANGE THIS
+      ENCRYPTION_KEY: paste-another-generated-secret # CHANGE THIS
+      # S3-compatible object storage (required — no local fallback)
+      S3_ENDPOINT: https://<account>.r2.cloudflarestorage.com # CHANGE THIS
+      S3_ACCESS_KEY: your-access-key # CHANGE THIS
+      S3_SECRET_KEY: your-secret-key # CHANGE THIS
+      S3_BUCKET: gitmatter # CHANGE THIS if your bucket differs
+      S3_REGION: auto
+      S3_FORCE_PATH_STYLE: "true"
+      PORT: "4280"
+    ports:
+      - "4280:4280"
+
+volumes:
+  pgdata:
+```
+
+## Step 2 — Start it
+
+```bash
+docker compose up -d
+```
+
+Then open `http://localhost:4280`.
+
+That is the whole quickstart. For file-storage setup, every setting, and running from
+source, see [Self-hosting](/admin/self-hosting).
+
+## If something goes wrong
+
+**`Cannot connect to the Docker daemon`** — Docker is not running. Open Docker Desktop
+(or start the daemon), wait until it reports "running", then run `docker compose up -d`
+again.
+
+**The web container keeps restarting** — a required value is missing. Check the logs with
+`docker compose logs web`. The app refuses to start until `BETTER_AUTH_SECRET`,
+`ENCRYPTION_KEY`, and the `S3_*` values are all set.
+
+## Next steps
+
+- [Get started](/get-started) — show your colleagues how to use the app.
+- [Self-hosting](/admin/self-hosting) — the full production install.
+- [AI &amp; agents](/ai-agents) — connect an assistant over MCP.
+- [Admin](/admin) — run and secure it for your firm.

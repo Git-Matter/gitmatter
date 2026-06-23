@@ -5,7 +5,26 @@ description: Run gitmatter on your own machine or with the full Docker stack.
 
 This guide covers running gitmatter on your own infrastructure: what you need, which settings are required, how to bring up the Docker stack, and how to run the app for local development.
 
-You should be familiar command line interface (CLI) on a terminal on your system. Below are commands that you (or your agent) can use to set you up with a local instance of gitmatter.
+You should be familiar with the command line (the text-based terminal on your system). Below are the commands that you (or your agent) can run to set up a local instance of gitmatter.
+
+## Prerequisites
+
+Before anything else, you need **Docker**. It runs the app and database for you, and
+it is the only thing you must install to run gitmatter. Everything below assumes it is
+already in place.
+
+- **Docker.** Install [Docker Desktop](https://www.docker.com/products/docker-desktop/)
+  (Mac/Windows) or Docker Engine (Linux).
+- **S3-compatible object storage** for documents — Cloudflare R2, AWS S3, or MinIO.
+  There is no local-disk fallback.
+- **Two secret strings.** Generate them with `openssl`:
+
+```bash
+openssl rand -base64 32
+openssl rand -base64 32
+```
+
+Use one value for `BETTER_AUTH_SECRET` and the other for `ENCRYPTION_KEY`.
 
 ## Docker quickstart
 
@@ -34,7 +53,7 @@ Object storage is still required. Docker runs the app and database, but uploaded
 documents must live in S3-compatible storage such as Cloudflare R2, AWS S3, or
 MinIO.
 
-I highly recommend using [Cloudflare R2](https://www.cloudflare.com/products/r2/) otherwise any other S3 Storage that is compatible with "@aws-sdk/client-s3".
+We recommend [Cloudflare R2](https://www.cloudflare.com/products/r2/), but any S3-compatible storage that works with `@aws-sdk/client-s3` is fine.
 
 The default image is `ghcr.io/peteqian/gitmatter:latest`. Pin a production version
 with `GITMATTER_IMAGE`, for example:
@@ -42,19 +61,6 @@ with `GITMATTER_IMAGE`, for example:
 ```bash
 GITMATTER_IMAGE=ghcr.io/peteqian/gitmatter:v2026.06.22
 ```
-
-## Before you start
-
-- Install Docker.
-- Create S3-compatible object storage for documents.
-- Generate two secret strings:
-
-```bash
-openssl rand -base64 32
-openssl rand -base64 32
-```
-
-Use one value for `BETTER_AUTH_SECRET` and the other for `ENCRYPTION_KEY`.
 
 ## Configuration
 
@@ -104,6 +110,8 @@ OPENROUTER_API_KEY=...
 ```
 
 A user's own key always **overrides** the server key. Pick the model per chat message or per review run. OpenRouter is the zero-data-retention default (the provider that, by default, keeps and trains on nothing).
+
+For the full per-provider privacy detail, see [AI data handling](/admin/ai-data-handling).
 
 ## Local development
 
