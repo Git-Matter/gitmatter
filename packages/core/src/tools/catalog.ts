@@ -33,10 +33,17 @@ import {
   listMattersForUser,
   listWorkflows,
   recordCourtListenerCall,
+  resolveCourtListenerKey,
   searchCaseLaw,
   updateWorkflow,
   verifyCitations,
 } from "../platform/index.js";
+
+// Returned when a US-jurisdiction user invokes a CourtListener tool without a key
+// (their own in Settings → Legal research, or the server-env fallback).
+const NO_CL_KEY = {
+  error: "No CourtListener API key. Add one in Settings → Legal research.",
+} as const;
 
 // One tool definition both consumers share: the MCP server (server.ts) wraps the
 // handler's return in MCP content blocks; the chat loop (chat.ts) JSON-stringifies
@@ -638,9 +645,11 @@ export function buildToolCatalog(
           limit: z.number().optional(),
         },
         handler: async (args) => {
+          const token = await resolveCourtListenerKey(actor.userId);
+          if (!token) return NO_CL_KEY;
           void recordCourtListenerCall({ userId: actor.userId });
           try {
-            return await searchCaseLaw(args as { query: string });
+            return await searchCaseLaw(token, args as { query: string });
           } catch (e) {
             return { error: e instanceof Error ? e.message : "failed" };
           }
@@ -652,9 +661,11 @@ export function buildToolCatalog(
           "Verify/normalize US reporter citations (e.g. '467 U.S. 837') against CourtListener.",
         schema: { citations: z.array(z.string()) },
         handler: async ({ citations }) => {
+          const token = await resolveCourtListenerKey(actor.userId);
+          if (!token) return NO_CL_KEY;
           void recordCourtListenerCall({ userId: actor.userId });
           try {
-            return await verifyCitations(citations as string[]);
+            return await verifyCitations(token, citations as string[]);
           } catch (e) {
             return { error: e instanceof Error ? e.message : "failed" };
           }

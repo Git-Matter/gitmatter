@@ -331,6 +331,10 @@ export const api = {
     req<{ ok: true }>("/api/keys", { method: "PUT", body: JSON.stringify({ provider, key }) }),
   deleteKey: (provider: LlmProvider) =>
     req<{ ok: true }>(`/api/keys?provider=${provider}`, { method: "DELETE" }),
+  getCourtListenerKey: () => req<{ hasUserKey: boolean }>("/api/keys/courtlistener"),
+  setCourtListenerKey: (key: string) =>
+    req<{ ok: true }>("/api/keys/courtlistener", { method: "PUT", body: JSON.stringify({ key }) }),
+  deleteCourtListenerKey: () => req<{ ok: true }>("/api/keys/courtlistener", { method: "DELETE" }),
   listModels: () => req<ProviderCatalog[]>("/api/models"),
   searchOpenRouterModels: (q: string) =>
     req<OpenRouterModel[]>(`/api/models/openrouter?q=${encodeURIComponent(q)}`),

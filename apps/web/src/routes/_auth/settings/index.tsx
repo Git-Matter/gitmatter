@@ -6,6 +6,7 @@ import { AccountSettings } from "./-components/AccountSettings";
 import { JurisdictionCard, ProviderKeys } from "./-components/AiSettings";
 import { ConnectAgent } from "./-components/ConnectAgent";
 import { DataPrivacyCard } from "./-components/DataPrivacyCard";
+import { LegalResearchCard } from "./-components/LegalResearchCard";
 import { OrganizationCard } from "./-components/OrganizationCard";
 
 export const Route = createFileRoute("/_auth/settings/")({ component: Settings });
@@ -32,6 +33,7 @@ function Settings() {
         <TabsContent value="ai" className="flex flex-col gap-section">
           <JurisdictionCard />
           <ProviderKeys />
+          <LegalResearchCard />
         </TabsContent>
         <TabsContent value="agents">
           <ConnectAgent />

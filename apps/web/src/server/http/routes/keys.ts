@@ -14,7 +14,12 @@ import {
 } from "@workspace/core";
 import { type AuthEnv } from "../middleware/auth.js";
 import { clientMeta } from "../lib/request-meta.js";
-import { apiKeySchema, providerEnum, settingsSchema } from "../schemas/keys.js";
+import {
+  apiKeySchema,
+  courtListenerKeySchema,
+  providerEnum,
+  settingsSchema,
+} from "../schemas/keys.js";
 
 export const keysRoute = new Hono<AuthEnv>();
 
@@ -86,6 +91,36 @@ keysRoute.delete("/api/keys", async (c) => {
     eventType: "apikey.delete",
     actorId: userId,
     target: provider,
+    ...clientMeta(c),
+  });
+  return c.json({ ok: true });
+});
+
+// CourtListener (US case-law research) — a non-LLM bring-your-own key, kept on its
+// own route so it stays out of the LLM provider list (model catalog, key status).
+keysRoute.get("/api/keys/courtlistener", async (c) => {
+  return c.json({ hasUserKey: await hasUserApiKey(c.get("user").id, "courtlistener") });
+});
+
+keysRoute.put("/api/keys/courtlistener", zValidator("json", courtListenerKeySchema), async (c) => {
+  const userId = c.get("user").id;
+  await saveUserApiKey(userId, c.req.valid("json").key, "courtlistener");
+  void recordAudit({
+    eventType: "apikey.create",
+    actorId: userId,
+    target: "courtlistener",
+    ...clientMeta(c),
+  });
+  return c.json({ ok: true });
+});
+
+keysRoute.delete("/api/keys/courtlistener", async (c) => {
+  const userId = c.get("user").id;
+  await deleteUserApiKey(userId, "courtlistener");
+  void recordAudit({
+    eventType: "apikey.delete",
+    actorId: userId,
+    target: "courtlistener",
     ...clientMeta(c),
   });
   return c.json({ ok: true });
