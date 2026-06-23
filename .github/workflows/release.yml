@@ -179,20 +179,18 @@ jobs:
         with:
           authkey: ${{ secrets.TS_AUTHKEY }}
 
+      # Dokploy per-app deploy webhook over the tailnet origin (token in the URL,
+      # no api-key). dokploy.gitmatter.com is Cloudflare-fronted and 403s the
+      # runner, so we hit the origin directly via Tailscale.
       - name: Trigger production redeploy
         env:
-          DOKPLOY_URL: ${{ secrets.PROD_DOKPLOY_URL }}
-          DOKPLOY_API_KEY: ${{ secrets.PROD_DOKPLOY_API_KEY }}
-          APP_ID: ${{ secrets.PROD_DOKPLOY_APP_ID }}
+          WEBHOOK: ${{ secrets.PROD_DOKPLOY_WEB_WEBHOOK }}
         run: |
-          if [ -z "$DOKPLOY_URL" ]; then
-            echo "PROD_DOKPLOY_URL unset — skipping deploy."
+          if [ -z "$WEBHOOK" ]; then
+            echo "PROD_DOKPLOY_WEB_WEBHOOK unset — skipping deploy."
             exit 0
           fi
-          curl -fsSL -X POST "$DOKPLOY_URL/api/application.deploy" \
-            -H "x-api-key: $DOKPLOY_API_KEY" \
-            -H "Content-Type: application/json" \
-            -d "{\"applicationId\":\"$APP_ID\"}"
+          curl -fsSL -X POST "$WEBHOOK"
 
   deploy-prod-docs:
     needs: build-docs
@@ -205,15 +203,10 @@ jobs:
 
       - name: Trigger production docs redeploy
         env:
-          DOKPLOY_URL: ${{ secrets.PROD_DOKPLOY_URL }}
-          DOKPLOY_API_KEY: ${{ secrets.PROD_DOKPLOY_API_KEY }}
-          APP_ID: ${{ secrets.PROD_DOKPLOY_DOCS_APP_ID }}
+          WEBHOOK: ${{ secrets.PROD_DOKPLOY_DOCS_WEBHOOK }}
         run: |
-          if [ -z "$APP_ID" ]; then
-            echo "PROD_DOKPLOY_DOCS_APP_ID unset — docs image pushed, skipping redeploy."
+          if [ -z "$WEBHOOK" ]; then
+            echo "PROD_DOKPLOY_DOCS_WEBHOOK unset — docs image pushed, skipping redeploy."
             exit 0
           fi
-          curl -fsSL -X POST "$DOKPLOY_URL/api/application.deploy" \
-            -H "x-api-key: $DOKPLOY_API_KEY" \
-            -H "Content-Type: application/json" \
-            -d "{\"applicationId\":\"$APP_ID\"}"
+          curl -fsSL -X POST "$WEBHOOK"
