@@ -27,6 +27,7 @@ Save the file below as `docker-compose.yml`. Then change every value marked
 
 - **`BETTER_AUTH_SECRET`** — generate one with `npx auth@latest secret` (see the
   [Better Auth docs](https://www.better-auth.com/docs/installation#set-environment-variables)).
+  Set `BETTER_AUTH_URL` to the public app origin when you deploy beyond localhost.
 - **`ENCRYPTION_KEY`** — any high-entropy string works. Generate one with
   `openssl rand -base64 32`.
 - **`S3_*`** — the values from your R2 (or other S3) bucket.
@@ -59,6 +60,12 @@ services:
       DATABASE_URL: postgres://gitmatter:gitmatter@postgres:5432/gitmatter
       BETTER_AUTH_URL: http://localhost:4280
       BETTER_AUTH_SECRET: paste-a-generated-secret # CHANGE THIS
+      # Optional: extra trusted origins and auth rate-limit overrides.
+      BETTER_AUTH_TRUSTED_ORIGINS:
+      AUTH_RATE_LIMIT:
+      AUTH_SIGN_IN_RATE_LIMIT:
+      AUTH_SIGN_UP_RATE_LIMIT:
+      AUTH_PASSWORD_RATE_LIMIT:
       ENCRYPTION_KEY: paste-another-generated-secret # CHANGE THIS
       # S3-compatible object storage (required — no local fallback)
       S3_ENDPOINT: https://<account>.r2.cloudflarestorage.com # CHANGE THIS

@@ -1,6 +1,7 @@
 import { betterAuth } from "better-auth";
 import { APIError } from "better-auth/api";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { passkey as passkeyPlugin } from "@better-auth/passkey";
 import { captcha } from "better-auth/plugins";
 import { tanstackStartCookies } from "better-auth/tanstack-start";
 import {
@@ -13,17 +14,22 @@ import {
   sendVerificationEmail,
 } from "@workspace/core";
 import { db } from "@workspace/db/client";
-import { account, session, user, verification } from "@workspace/db/schema";
+import { account, passkey, session, user, verification } from "@workspace/db/schema";
+import { authRateLimitFromEnv, trustedOriginsFromEnv } from "./auth-options.js";
+
+const trustedOrigins = trustedOriginsFromEnv(getEnv);
 
 export const auth = betterAuth({
   // Optional: when unset, better-auth infers the origin from the request, so the
   // app works on any (random) dev port without reconfiguration.
   ...(getEnv("BETTER_AUTH_URL") ? { baseURL: getEnv("BETTER_AUTH_URL") } : {}),
+  ...(trustedOrigins ? { trustedOrigins } : {}),
   secret: getEnv("BETTER_AUTH_SECRET"),
+  rateLimit: authRateLimitFromEnv(getEnv),
   database: drizzleAdapter(db, {
     provider: "pg",
     // Auth tables live in the `auth` Postgres schema; pass them explicitly.
-    schema: { user, session, account, verification },
+    schema: { user, session, account, verification, passkey },
   }),
   emailAndPassword: {
     enabled: true,
@@ -35,6 +41,13 @@ export const auth = betterAuth({
     sendResetPassword: async ({ user: u, url }) => {
       await sendPasswordResetEmail(u.email, url);
     },
+    onPasswordReset: async ({ user: u }) => {
+      void recordAudit({
+        eventType: "auth.password_reset",
+        actorId: u.id,
+        target: u.email,
+      });
+    },
   },
   emailVerification: {
     sendOnSignUp: true,
@@ -44,11 +57,10 @@ export const auth = betterAuth({
     },
   },
   user: {
-    // Self-service account changes. changeEmail applies immediately. deleteUser
-    // is gated behind an emailed confirmation link once a real provider is wired
-    // (matches requireEmailVerification above); in dev (console transport) it
-    // runs immediately so local accounts stay disposable.
-    changeEmail: { enabled: true },
+    // Self-service account changes. Email changes verify through the new address
+    // when a real provider is wired; local dev has no inbox, so it updates
+    // immediately. Delete uses the same provider split below.
+    changeEmail: { enabled: true, updateEmailWithoutVerification: !emailEnabled() },
     deleteUser: {
       enabled: true,
       ...(emailEnabled()
@@ -112,6 +124,9 @@ export const auth = betterAuth({
           }),
         ]
       : []),
+    passkeyPlugin({
+      rpName: "gitmatter",
+    }),
     // Ensures Set-Cookie survives TanStack Start server-fn responses.
     tanstackStartCookies(),
   ],

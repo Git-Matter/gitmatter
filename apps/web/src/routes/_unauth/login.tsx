@@ -23,6 +23,7 @@ function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
+  const [passkeyBusy, setPasskeyBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   // Bumped to force a fresh Turnstile challenge after a failed attempt — tokens
@@ -50,6 +51,15 @@ function Login() {
     window.location.href = next && next.startsWith("/") ? next : "/assistant";
   }
 
+  async function signInWithPasskey() {
+    setError(null);
+    setPasskeyBusy(true);
+    const { error: signInError } = await signIn.passkey();
+    setPasskeyBusy(false);
+    if (signInError) return setError(signInError.message ?? "Passkey sign in failed");
+    window.location.href = next && next.startsWith("/") ? next : "/assistant";
+  }
+
   return (
     <AuthShell title="Welcome back" subtitle="Log in to your gitmatter workspace.">
       <Card>
@@ -67,7 +77,15 @@ function Login() {
               />
             </div>
             <div className="flex flex-col gap-field">
-              <Label htmlFor="password">Password</Label>
+              <div className="flex items-center justify-between gap-3">
+                <Label htmlFor="password">Password</Label>
+                <Link
+                  to="/forgot-password"
+                  className="text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground"
+                >
+                  Forgot password?
+                </Link>
+              </div>
               <Input
                 id="password"
                 type="password"
@@ -81,10 +99,19 @@ function Login() {
             <FormError>{error}</FormError>
             <Button
               type="submit"
-              disabled={busy || (turnstileEnabled && !captchaToken)}
+              disabled={busy || passkeyBusy || (turnstileEnabled && !captchaToken)}
               className="w-full"
             >
               {busy ? "Signing in…" : "Log in"}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={busy || passkeyBusy}
+              className="w-full"
+              onClick={signInWithPasskey}
+            >
+              {passkeyBusy ? "Checking..." : "Sign in with passkey"}
             </Button>
           </form>
         </CardContent>

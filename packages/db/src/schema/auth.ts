@@ -1,4 +1,4 @@
-import { boolean, index, pgSchema, text, timestamp } from "drizzle-orm/pg-core";
+import { boolean, index, integer, pgSchema, text, timestamp } from "drizzle-orm/pg-core";
 
 // better-auth core tables live in a dedicated `auth` Postgres schema, isolated
 // from the application tables in `public`. Column/table names match
@@ -64,3 +64,26 @@ export const verification = authSchema.table("verification", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
+
+export const passkey = authSchema.table(
+  "passkey",
+  {
+    id: text("id").primaryKey(),
+    name: text("name"),
+    publicKey: text("public_key").notNull(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    credentialID: text("credential_id").notNull(),
+    counter: integer("counter").notNull(),
+    deviceType: text("device_type").notNull(),
+    backedUp: boolean("backed_up").notNull(),
+    transports: text("transports"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    aaguid: text("aaguid"),
+  },
+  (t) => [
+    index("passkey_user_id_idx").on(t.userId),
+    index("passkey_credential_id_idx").on(t.credentialID),
+  ]
+);
