@@ -27,6 +27,7 @@ export const auth = betterAuth({
   }),
   emailAndPassword: {
     enabled: true,
+    disableSignUp: getEnv("ALLOW_SIGNUPS") === "false",
     // Require a verified email before sign-in only once a real provider is
     // configured. In dev (console transport) this stays off so local accounts
     // remain usable without clicking a logged link.
