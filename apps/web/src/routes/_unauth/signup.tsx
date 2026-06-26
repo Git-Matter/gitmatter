@@ -4,7 +4,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
-import { signUp } from "../../lib/auth/auth-client";
+import { authClient, signUp } from "../../lib/auth/auth-client";
 import { AuthShell } from "./-components/AuthShell";
 import { Turnstile, turnstileEnabled } from "./-components/Turnstile";
 import { FormError } from "../../components/form/FormError";
@@ -66,12 +66,13 @@ function Signup() {
       setCaptchaKey((k) => k + 1);
       return setError(signUpError.message ?? "Sign up failed");
     }
-    if (import.meta.env.VITE_EMAIL_ENABLED) {
-      const params = new URLSearchParams({ email: trimmedEmail, sent: "1", next: "/assistant" });
-      window.location.href = `/verify-email?${params}`;
+    const { data: session } = await authClient.getSession();
+    if (session) {
+      window.location.href = "/assistant";
       return;
     }
-    window.location.href = "/assistant";
+    const params = new URLSearchParams({ email: trimmedEmail, sent: "1", next: "/assistant" });
+    window.location.href = `/verify-email?${params}`;
   }
 
   return (

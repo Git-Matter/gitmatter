@@ -353,24 +353,18 @@ function AppearanceCard() {
   );
 }
 
-// When a real email provider is wired, deletion is confirmed via an emailed link
-// (see auth.ts sendDeleteAccountVerification) rather than removing the account
-// immediately.
-const EMAIL_ENABLED = import.meta.env.VITE_EMAIL_ENABLED;
-
 function DangerZoneCard() {
   const [open, setOpen] = useState(false);
   const [password, setPassword] = useState("");
 
   const remove = useMutation({
     mutationFn: async () => {
-      const { error } = await deleteUser(
-        EMAIL_ENABLED ? { password, callbackURL: "/signup" } : { password }
-      );
+      const { error } = await deleteUser({ password, callbackURL: "/signup" });
       if (error) throw new Error(error.message ?? "Failed to delete account");
     },
-    onSuccess: () => {
-      if (EMAIL_ENABLED) {
+    onSuccess: async () => {
+      const { data: session } = await authClient.getSession();
+      if (session) {
         setOpen(false);
         toast.success("Check your email to confirm account deletion.");
         return;

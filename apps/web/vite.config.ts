@@ -60,12 +60,6 @@ const config = defineConfig({
     // Public Turnstile site key, baked in as a build constant (safe to expose).
     // Empty when unset, which disables the widget client-side.
     "import.meta.env.VITE_TURNSTILE_SITE_KEY": JSON.stringify(process.env.TURNSTILE_SITE_KEY ?? ""),
-    // Whether a real email provider is wired (EMAIL_PROVIDER set). Mirrors the
-    // server's emailEnabled(): when true, account deletion needs an emailed
-    // confirmation link instead of deleting immediately.
-    "import.meta.env.VITE_EMAIL_ENABLED": JSON.stringify(
-      Boolean(process.env.EMAIL_PROVIDER?.trim())
-    ),
   },
   // Vite DevTools (build-mode analysis: module graph, bundle, tree-shaking).
   // Off by default — it serves an interactive UI and blocks the build. Opt in
