@@ -1,6 +1,7 @@
 import { ExternalLink, FileText } from "lucide-react";
+import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
-import { cn } from "@/lib/util/utils";
+import { cn, getHostname } from "@/lib/util/utils";
 import type { SourceCard as SourceCardData } from "@/lib/data/api";
 
 const CARD_CLASS =
@@ -8,6 +9,27 @@ const CARD_CLASS =
 
 function isExternal(card: SourceCardData) {
   return !card.docId && !!card.url && /^https?:/.test(card.url);
+}
+
+/** Favicon from the source's own host (no third-party service); letter monogram on failure. */
+function SourceIcon({ card, host }: { card: SourceCardData; host: string | null }) {
+  const [failed, setFailed] = useState(false);
+  const letter = (card.source || host || card.title || "?").charAt(0).toUpperCase();
+  if (host && !failed) {
+    return (
+      <img
+        src={`https://${host}/favicon.ico`}
+        alt=""
+        onError={() => setFailed(true)}
+        className="size-4 shrink-0 rounded-sm object-contain"
+      />
+    );
+  }
+  return (
+    <span className="flex size-4 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-medium text-muted-foreground">
+      {letter}
+    </span>
+  );
 }
 
 function SourceCardRow({
@@ -19,6 +41,8 @@ function SourceCardRow({
 }) {
   const external = isExternal(card);
   const internal = !external && (!!card.docId || !!card.url);
+  const host = getHostname(card.url);
+  const publisher = card.source ?? host;
   const body = (
     <>
       <div className="flex items-start gap-2">
@@ -32,9 +56,10 @@ function SourceCardRow({
         ) : null}
       </div>
       {card.snippet && <p className="line-clamp-2 text-xs text-muted-foreground">{card.snippet}</p>}
-      {(card.source || card.page != null) && (
+      {(publisher || card.page != null) && (
         <div className="flex items-center gap-1.5 text-xs text-muted-foreground/80">
-          {card.source && <span className="truncate">{card.source}</span>}
+          <SourceIcon card={card} host={host} />
+          {publisher && <span className="truncate">{publisher}</span>}
           {card.page != null && <span>· p.{card.page}</span>}
         </div>
       )}
@@ -65,24 +90,27 @@ function SourceCardRow({
   return <div className={cn(CARD_CLASS, "cursor-default")}>{body}</div>;
 }
 
-/** Perplexity-style result list for one tool step: count-badged header + cards. */
+/** Result list for one tool step: optional count-badged header + cards. The Grok-style
+ *  trace puts the count on the step row, so the header is omitted there (no `label`). */
 export function SourceList({
   label,
   cards,
   onOpenSource,
 }: {
-  label: string;
+  label?: string;
   cards: SourceCardData[];
   onOpenSource?: (card: SourceCardData) => void;
 }) {
   return (
     <div className="space-y-2">
-      <div className="flex items-center gap-2 text-xs font-medium tracking-wide text-muted-foreground uppercase">
-        <span>{label}</span>
-        <Badge variant="secondary" className="rounded-full px-1.5 py-0 text-xs">
-          {cards.length}
-        </Badge>
-      </div>
+      {label && (
+        <div className="flex items-center gap-2 text-xs font-medium tracking-wide text-muted-foreground uppercase">
+          <span>{label}</span>
+          <Badge variant="secondary" className="rounded-full px-1.5 py-0 text-xs">
+            {cards.length}
+          </Badge>
+        </div>
+      )}
       <div className="flex flex-col gap-2">
         {cards.map((card, i) => (
           <SourceCardRow

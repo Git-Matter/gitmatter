@@ -27,6 +27,25 @@ export function trustedOriginsFromEnv(getEnv: Env): string[] | undefined {
   return origins.size ? [...origins] : undefined;
 }
 
+export function allowedEmailDomainsFromEnv(getEnv: Env): string[] | undefined {
+  const domains = new Set<string>();
+
+  for (const part of (getEnv("AUTH_ALLOWED_EMAIL_DOMAINS") ?? "").split(",")) {
+    const domain = part.trim().toLowerCase().replace(/^@+/, "");
+    if (domain) domains.add(domain);
+  }
+
+  return domains.size ? [...domains] : undefined;
+}
+
+export function emailAllowed(email: string | undefined, domains: string[] | undefined): boolean {
+  if (!domains) return true;
+  const trimmed = email?.trim().toLowerCase() ?? "";
+  const at = trimmed.lastIndexOf("@");
+  const domain = at > 0 && at < trimmed.length - 1 ? trimmed.slice(at + 1) : "";
+  return domain ? domains.includes(domain) : false;
+}
+
 function limitFromEnv(getEnv: Env, name: string): number | null {
   const raw = getEnv(name);
   if (raw === undefined || raw.trim() === "") return null;

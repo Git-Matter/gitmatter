@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import type { CarouselApi } from "@/components/ui/carousel";
 import { Carousel, CarouselContent, CarouselItem } from "@/components/ui/carousel";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
-import { cn } from "@/lib/util/utils";
+import { cn, getHostname } from "@/lib/util/utils";
 import { ArrowLeftIcon, ArrowRightIcon } from "lucide-react";
 import type { ComponentProps } from "react";
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
@@ -23,31 +23,35 @@ export const InlineCitationText = ({ className, ...props }: InlineCitationTextPr
 
 export type InlineCitationCardProps = ComponentProps<typeof HoverCard>;
 
-export const InlineCitationCard = (props: InlineCitationCardProps) => (
-  <HoverCard closeDelay={0} openDelay={0} {...props} />
-);
+export const InlineCitationCard = (props: InlineCitationCardProps) => <HoverCard {...props} />;
 
 export type InlineCitationCardTriggerProps = ComponentProps<typeof Badge> & {
   sources: string[];
+  // When given, the badge becomes an anchor that opens the source in a new tab.
+  href?: string;
 };
 
 export const InlineCitationCardTrigger = ({
   sources,
+  href,
   className,
   ...props
-}: InlineCitationCardTriggerProps) => (
-  <HoverCardTrigger
-    render={<Badge className={cn("ms-1 rounded-full", className)} variant="secondary" {...props} />}
-  >
-    {sources[0] ? (
-      <>
-        {new URL(sources[0]).hostname} {sources.length > 1 && `+${sources.length - 1}`}
-      </>
-    ) : (
-      "unknown"
-    )}
-  </HoverCardTrigger>
-);
+}: InlineCitationCardTriggerProps) => {
+  const host = getHostname(sources[0]);
+  const badge = (
+    <Badge
+      className={cn("ms-1 rounded-full", className)}
+      variant="secondary"
+      render={href ? <a href={href} target="_blank" rel="noreferrer" /> : undefined}
+      {...props}
+    />
+  );
+  return (
+    <HoverCardTrigger render={badge}>
+      {host ?? "source"} {sources.length > 1 && `+${sources.length - 1}`}
+    </HoverCardTrigger>
+  );
+};
 
 export type InlineCitationCardBodyProps = ComponentProps<"div">;
 

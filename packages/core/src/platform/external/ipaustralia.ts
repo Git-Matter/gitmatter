@@ -1,22 +1,6 @@
-// IP Australia search APIs, baked into the backend (like CourtListener). Exposed
-// as gitmatter's own tools — over our MCP server (to Claude/agents) and in-app
-// chat — gated to the AU jurisdiction. Two read-only products: Australian Patent
-// Search and Australian Trade Mark Search.
-//
-// Auth differs from CourtListener: IP Australia uses OAuth 2.0 client_credentials.
-// We exchange a client_id/secret pair for a short-lived bearer token at a shared
-// token endpoint, cache it per client_id until just before expiry, then send it as
-// `Authorization: Bearer`. Credentials are server-env only (one Anypoint app per
-// product) — there is no per-user bring-your-own-key here.
+import { getEnv } from "../../core/config.js";
+import { fetchWithTimeout } from "../../core/fetch.js";
 
-import { getEnv } from "../core/config.js";
-import { fetchWithTimeout } from "../core/fetch.js";
-
-// Every URL piece is plain-concatenated, so each ends with a trailing slash and the
-// endpoint paths below never start with one. Base ends with `/public/`, e.g.
-// `https://test.api.ipaustralia.gov.au/public/` (sandbox) or
-// `https://production.api.ipaustralia.gov.au/public/` (prod). Product paths are
-// overridable via env (fragments like `australian-patent-search-api/v1/`).
 const DEFAULT_API_BASE_URL = "https://test.api.ipaustralia.gov.au/public/";
 const DEFAULT_PATENT_PATH = "australian-patent-search-api/v1/";
 const DEFAULT_TRADE_MARK_PATH = "australian-trade-mark-search-api/v1/";
@@ -87,9 +71,15 @@ async function getAccessToken({ clientId, clientSecret }: Creds): Promise<string
     const detail = await res.text().catch(() => "");
     throw new Error(`IP Australia token error (${res.status}): ${detail.slice(0, 200)}`);
   }
-  const data = (await res.json()) as { access_token: string; expires_in?: number };
+  const data = (await res.json()) as {
+    access_token: string;
+    expires_in?: number;
+  };
   const ttlMs = (data.expires_in ?? 3600) * 1000;
-  tokenCache.set(cacheKey, { token: data.access_token, expiresAt: Date.now() + ttlMs - 60_000 });
+  tokenCache.set(cacheKey, {
+    token: data.access_token,
+    expiresAt: Date.now() + ttlMs - 60_000,
+  });
   return data.access_token;
 }
 
@@ -208,7 +198,11 @@ export async function searchTrademarks(args: {
     "search/quick",
     { method: "POST", body: JSON.stringify(body) }
   );
-  return { query: args.query, count: data.count ?? 0, trademarkIds: data.trademarkIds ?? [] };
+  return {
+    query: args.query,
+    count: data.count ?? 0,
+    trademarkIds: data.trademarkIds ?? [],
+  };
 }
 
 export async function searchTrademarksAdvanced(args: {
@@ -221,13 +215,19 @@ export async function searchTrademarksAdvanced(args: {
   const body: Record<string, unknown> = { rows: args.rows };
   if (args.changedSinceDate) body.changedSinceDate = args.changedSinceDate;
   if (args.sort) body.sort = args.sort;
-  const data = await iaFetch<{ count?: number; trademarkIds?: string[]; request?: unknown }>(
-    trademarkBase(),
-    creds,
-    "search/advanced",
-    { method: "POST", body: JSON.stringify(body) }
-  );
-  return { count: data.count ?? 0, trademarkIds: data.trademarkIds ?? [], request: data.request };
+  const data = await iaFetch<{
+    count?: number;
+    trademarkIds?: string[];
+    request?: unknown;
+  }>(trademarkBase(), creds, "search/advanced", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+  return {
+    count: data.count ?? 0,
+    trademarkIds: data.trademarkIds ?? [],
+    request: data.request,
+  };
 }
 
 export async function pageTrademarksAdvanced(args: {
@@ -246,13 +246,19 @@ export async function pageTrademarksAdvanced(args: {
   };
   if (args.changedSinceDate) body.changedSinceDate = args.changedSinceDate;
   if (args.sort) body.sort = args.sort;
-  const data = await iaFetch<{ count?: number; trademarks?: unknown[]; request?: unknown }>(
-    trademarkBase(),
-    creds,
-    "page/advanced",
-    { method: "POST", body: JSON.stringify(body) }
-  );
-  return { count: data.count ?? 0, trademarks: data.trademarks ?? [], request: data.request };
+  const data = await iaFetch<{
+    count?: number;
+    trademarks?: unknown[];
+    request?: unknown;
+  }>(trademarkBase(), creds, "page/advanced", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+  return {
+    count: data.count ?? 0,
+    trademarks: data.trademarks ?? [],
+    request: data.request,
+  };
 }
 
 export async function getTrademark(id: string) {

@@ -4,9 +4,9 @@
 // CourtListener token in Settings → Legal research), with an optional shared
 // server-env fallback (COURTLISTENER_API_TOKEN) for self-hosted instances.
 
-import { fetchWithTimeout } from "../core/fetch.js";
-import { getEnv } from "../core/config.js";
-import { getUserApiKey } from "../core/keys.js";
+import { fetchWithTimeout } from "../../core/fetch.js";
+import { getEnv } from "../../core/config.js";
+import { getUserApiKey } from "../../core/keys.js";
 
 const BASE = "https://www.courtlistener.com/api/rest/v4";
 
