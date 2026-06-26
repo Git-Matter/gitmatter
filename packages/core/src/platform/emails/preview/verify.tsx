@@ -2,8 +2,12 @@
 // with sample props so the React Email dev server can render it.
 import { VerifyEmail } from "../templates.js";
 
-const SAMPLE_URL = "https://app.gitmatter.com/api/auth/verify-email?token=preview-token";
+const url = new URL(
+  "/api/auth/verify-email",
+  process.env.BETTER_AUTH_URL ?? "http://localhost:4280"
+);
+url.searchParams.set("token", "preview-token");
 
 export default function VerifyPreview() {
-  return <VerifyEmail url={SAMPLE_URL} />;
+  return <VerifyEmail url={url.toString()} />;
 }

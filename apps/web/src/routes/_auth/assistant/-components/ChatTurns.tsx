@@ -2,7 +2,7 @@ import { FileDown, FileText } from "lucide-react";
 import { Message, MessageContent, MessageResponse } from "@/components/ai-elements/message";
 import { Source, Sources, SourcesContent, SourcesTrigger } from "@/components/ai-elements/sources";
 import { Shimmer } from "@/components/ai-elements/shimmer";
-import { api, type Citation } from "../../../../lib/data/api";
+import { api, type Citation, type SourceCard } from "../../../../lib/data/api";
 import { ChatEditCards } from "./ChatEditCards";
 import { StepsTimeline } from "./StepsTimeline";
 import { type Turn } from "./useChatSession";
@@ -28,10 +28,12 @@ export function ChatTurns({
   turns,
   busy,
   onOpenDocument,
+  onOpenSource,
 }: {
   turns: Turn[];
   busy: boolean;
   onOpenDocument?: (docId: string, title: string) => void;
+  onOpenSource?: (card: SourceCard) => void;
 }) {
   return (
     <>
@@ -49,7 +51,9 @@ export function ChatTurns({
               {busy && i === turns.length - 1 && !t.text && !(t.steps && t.steps.length) && (
                 <Shimmer duration={1}>Thinking…</Shimmer>
               )}
-              {t.steps && t.steps.length > 0 && <StepsTimeline steps={t.steps} />}
+              {t.steps && t.steps.length > 0 && (
+                <StepsTimeline steps={t.steps} onOpenSource={onOpenSource} />
+              )}
               {t.text && <MessageResponse>{t.text}</MessageResponse>}
               {t.edits && t.edits.length > 0 && <ChatEditCards edits={t.edits} />}
               {t.citations && t.citations.length > 0 && (

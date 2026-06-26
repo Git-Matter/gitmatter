@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { type ProviderId, resolveJurisdiction } from "@workspace/registry";
 import {
   api,
   type ChatAttachment,
   type ChatDetail,
   type ChatEdit,
+  type ChatTraceEvent,
   type Citation,
 } from "../../../../lib/data/api";
 import {
@@ -14,12 +16,9 @@ import {
 } from "../../../../lib/hooks/state/useSelectedModel";
 import { queryKeys } from "../../../../lib/data/queries";
 
-// One entry in the assistant's execution timeline, in arrival order. Reasoning
-// blocks and tool calls interleave exactly as the model emitted them, so the UI
-// can render a "Completed in N steps" timeline instead of two separate buckets.
-export type Step =
-  | { kind: "reasoning"; text: string; ms?: number; streaming?: boolean; start?: number }
-  | { kind: "tool"; name: string; input?: unknown; done: boolean };
+// One product-facing event in the assistant's execution timeline. The server
+// sends curated activity events instead of exposing raw model scratch work.
+export type Step = ChatTraceEvent;
 
 export type Turn = {
   role: "user" | "assistant";
@@ -55,17 +54,38 @@ export function useChatSession({
     (loaded?.turns ?? []).map((t) => ({
       role: t.role,
       text: t.text,
-      // Resumed turns: only tool calls are persisted (reasoning isn't), so the
-      // timeline replays as tool steps.
-      steps: t.toolCalls?.map(
-        (tc): Step => ({ kind: "tool", name: tc.tool, input: tc.input, done: true })
-      ),
+      // New chats persist trace events. Older saved chats only have tool calls,
+      // so keep a fallback timeline for those rows.
+      steps:
+        t.trace ??
+        t.toolCalls?.map(
+          (tc, index): Step => ({
+            id: `${t.role}-${index}-${tc.tool}`,
+            kind: "tool_call",
+            status: "done",
+            label: "Ran tool",
+            summary: tc.tool.replace(/_/g, " "),
+            detail: { tool: tc.tool, input: tc.input },
+          })
+        ),
       edits: t.edits,
       citations: t.citations,
     }))
   );
   const [tools, setTools] = useState<string[]>([]);
   const [jurisdiction, setJurisdiction] = useState<string>("");
+  const [jurisdictionOverride, setJurisdictionOverrideState] = useState("");
+  const [sourceIds, setSourceIds] = useState<ProviderId[] | null>(null);
+  const { data: settings } = useQuery({
+    queryKey: ["settings"],
+    queryFn: () => api.getSettings(),
+  });
+  const effectiveJurisdiction = resolveJurisdiction(jurisdictionOverride, settings?.jurisdiction);
+
+  function setJurisdictionOverride(next: string) {
+    setJurisdictionOverrideState(next);
+    setSourceIds(null);
+  }
   const [model, setModel] = useSelectedModel();
   const [reasoning, setReasoning] = useSelectedReasoning();
   const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
@@ -190,26 +210,13 @@ export function useChatSession({
       });
 
     let acc = "";
-    // Ordered execution timeline; reasoning and tool steps interleave as emitted.
     const steps: Step[] = [];
     const pushSteps = () => patchLast({ steps: [...steps] });
-    // Close out the trailing reasoning step (if still streaming) and stamp its
-    // duration — called when a tool starts or the first answer token arrives.
-    const finishReasoning = () => {
-      const last = steps[steps.length - 1];
-      if (last?.kind === "reasoning" && last.streaming) {
-        last.streaming = false;
-        if (last.start) last.ms = Date.now() - last.start;
-      }
-    };
-    const markToolsDone = () => {
-      let changed = false;
-      for (const s of steps)
-        if (s.kind === "tool" && !s.done) {
-          s.done = true;
-          changed = true;
-        }
-      if (changed) pushSteps();
+    const upsertTrace = (event: ChatTraceEvent) => {
+      const index = steps.findIndex((s) => s.id === event.id);
+      if (index >= 0) steps[index] = event;
+      else steps.push(event);
+      pushSteps();
     };
 
     const controller = new AbortController();
@@ -219,6 +226,8 @@ export function useChatSession({
         message,
         {
           model: model || undefined,
+          jurisdiction: jurisdictionOverride || undefined,
+          sourceIds: sourceIds ?? undefined,
           attachments: sent.length ? sent : undefined,
           reasoning: reasoning ?? undefined,
           chatId,
@@ -228,33 +237,17 @@ export function useChatSession({
           activeDocumentId,
         },
         {
-          onReasoning: (delta) => {
-            // Append to the open reasoning step, or start a new one (a tool or
-            // answer token since the last reasoning closed the previous block).
-            const last = steps[steps.length - 1];
-            if (last?.kind === "reasoning" && last.streaming) last.text += delta;
-            else steps.push({ kind: "reasoning", text: delta, streaming: true, start: Date.now() });
-            pushSteps();
-          },
+          onReasoning: () => {},
+          onTrace: upsertTrace,
           onText: (delta) => {
-            // First answer token ends the thinking phase and any running tools.
-            finishReasoning();
-            markToolsDone();
             acc += delta;
             patchLast({ text: acc, steps: [...steps] });
           },
-          onTool: (name, input) => {
-            finishReasoning();
-            for (const s of steps) if (s.kind === "tool") s.done = true;
-            steps.push({ kind: "tool", name, input, done: false });
-            pushSteps();
-          },
+          onTool: () => {},
           onDone: (r) => {
-            finishReasoning();
-            markToolsDone();
             patchLast({
               text: r.text || acc,
-              steps: [...steps],
+              steps: r.trace.length ? r.trace : [...steps],
               documents: r.documents,
               edits: r.edits,
               citations: r.citations,
@@ -275,6 +268,7 @@ export function useChatSession({
                     role: "assistant",
                     text: r.text || acc,
                     toolCalls: r.toolCalls,
+                    trace: r.trace,
                     edits: r.edits,
                     citations: r.citations,
                   },
@@ -313,6 +307,11 @@ export function useChatSession({
     turns,
     tools,
     jurisdiction,
+    jurisdictionOverride,
+    effectiveJurisdiction,
+    setJurisdictionOverride,
+    sourceIds,
+    setSourceIds,
     model,
     setModel,
     reasoning,

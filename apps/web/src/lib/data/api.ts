@@ -12,6 +12,7 @@ import type {
   ProviderCatalog,
   ProviderKeyStatus,
 } from "@workspace/contracts";
+import type { ProviderId } from "@workspace/registry";
 
 export type Blame = {
   id: string;
@@ -183,6 +184,19 @@ export type Citation = {
   quotes?: string[];
   cluster_id?: number;
   opinion_id?: number;
+};
+
+// One normalized result row in a tool step's "Sources" list, captured server-side
+// (see sourceCards() in server/http/routes/chat.ts) and stored on the trace event's
+// `detail.sources`. `docId` marks an in-app artifact (open in the viewer); an http
+// `url` marks an external source (open in a new tab).
+export type SourceCard = {
+  title: string;
+  snippet?: string;
+  source?: string;
+  url?: string;
+  docId?: string;
+  page?: number;
 };
 
 export type DocStatus = "pending" | "processing" | "ready" | "failed";
@@ -673,6 +687,8 @@ export const api = {
     message: string,
     opts?: {
       model?: string;
+      jurisdiction?: string;
+      sourceIds?: ProviderId[];
       attachments?: ChatAttachment[];
       reasoning?: ReasoningEffort;
     }
@@ -714,6 +730,8 @@ export const api = {
 
 export type ChatSendOpts = {
   model?: string;
+  jurisdiction?: string;
+  sourceIds?: ProviderId[];
   attachments?: ChatAttachment[];
   reasoning?: ReasoningEffort;
   chatId?: string;
@@ -738,11 +756,35 @@ export type ChatResult = {
   chatId: string;
   text: string;
   toolCalls: Array<{ tool: string; input: unknown }>;
+  trace: ChatTraceEvent[];
   tools: string[];
   jurisdiction: string;
   documents: Array<{ id: string; title: string; download: string }>;
   edits: ChatEdit[];
   citations: Citation[];
+};
+
+export type ChatTraceKind =
+  | "thinking_process"
+  | "assess_query"
+  | "review_file"
+  | "search_terms"
+  | "tool_call"
+  | "draft_answer"
+  | "error";
+
+export type ChatTraceStatus = "running" | "done" | "error";
+
+export type ChatTraceEvent = {
+  id: string;
+  kind: ChatTraceKind;
+  status: ChatTraceStatus;
+  label: string;
+  summary?: string;
+  detail?: Record<string, unknown>;
+  startedAt?: string;
+  endedAt?: string;
+  durationMs?: number;
 };
 
 export type ChatSummary = {
@@ -756,6 +798,7 @@ export type ChatTurn = {
   role: "user" | "assistant";
   text: string;
   toolCalls?: Array<{ tool: string; input: unknown }>;
+  trace?: ChatTraceEvent[];
   edits?: ChatEdit[];
   citations?: Citation[];
 };
@@ -764,6 +807,7 @@ export type ChatDetail = { id: string; title: string | null; turns: ChatTurn[] }
 export type ChatStreamHandlers = {
   onText?: (delta: string) => void;
   onReasoning?: (delta: string) => void;
+  onTrace?: (event: ChatTraceEvent) => void;
   onTool?: (name: string, input?: unknown) => void;
   onDone?: (result: ChatResult) => void;
   onError?: (message: string) => void;
@@ -882,6 +926,7 @@ async function streamChat(
     const value = data ? (JSON.parse(data) as unknown) : null;
     if (event === "text") handlers.onText?.(value as string);
     else if (event === "reasoning") handlers.onReasoning?.(value as string);
+    else if (event === "trace") handlers.onTrace?.(value as ChatTraceEvent);
     else if (event === "tool") {
       const v = value as { name: string; input?: unknown };
       handlers.onTool?.(v.name, v.input);

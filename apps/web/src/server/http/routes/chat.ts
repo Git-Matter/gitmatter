@@ -9,6 +9,8 @@ import {
   CITATIONS_INSTRUCTION,
   deleteChat,
   type ChatEdit,
+  type ChatTraceEvent,
+  type ChatTraceKind,
   REDLINE_INSTRUCTION,
   commitStagedDocuments,
   getDocument,
@@ -139,6 +141,7 @@ type ChatBody = z.infer<typeof chatSchema>;
 type RunHandlers = {
   onText?: (delta: string) => void;
   onReasoning?: (delta: string) => void;
+  onTrace?: (event: ChatTraceEvent) => void;
   onTool?: (name: string, input: unknown) => void;
 };
 
@@ -146,12 +149,219 @@ type ChatResult = {
   chatId: string;
   text: string;
   toolCalls: Array<{ tool: string; input: unknown }>;
+  trace: ChatTraceEvent[];
   tools: string[];
   jurisdiction: string;
   documents: Array<{ id: string; title: string; download: string }>;
   edits: ChatEdit[];
   citations: ReturnType<typeof parseCitations>["citations"];
 };
+
+function nowIso() {
+  return new Date().toISOString();
+}
+
+function traceId() {
+  return crypto.randomUUID();
+}
+
+function startTrace(
+  trace: ChatTraceEvent[],
+  handlers: RunHandlers,
+  event: {
+    kind: ChatTraceKind;
+    label: string;
+    summary?: string;
+    detail?: Record<string, unknown>;
+  }
+) {
+  const item: ChatTraceEvent = {
+    id: traceId(),
+    status: "running",
+    startedAt: nowIso(),
+    ...event,
+  };
+  trace.push(item);
+  handlers.onTrace?.(item);
+  return item;
+}
+
+function finishTrace(
+  trace: ChatTraceEvent[],
+  handlers: RunHandlers,
+  item: ChatTraceEvent,
+  patch: Partial<Pick<ChatTraceEvent, "status" | "summary" | "detail">> = {}
+) {
+  const endedAt = nowIso();
+  const started = item.startedAt ? new Date(item.startedAt).getTime() : Date.now();
+  const next: ChatTraceEvent = {
+    ...item,
+    ...patch,
+    status: patch.status ?? "done",
+    endedAt,
+    durationMs: Math.max(0, Date.now() - started),
+  };
+  const index = trace.findIndex((e) => e.id === item.id);
+  if (index >= 0) trace[index] = next;
+  handlers.onTrace?.(next);
+  return next;
+}
+
+function updateTrace(
+  trace: ChatTraceEvent[],
+  handlers: RunHandlers,
+  item: ChatTraceEvent,
+  patch: Partial<Pick<ChatTraceEvent, "summary" | "detail">>
+) {
+  const next: ChatTraceEvent = { ...item, ...patch };
+  const index = trace.findIndex((e) => e.id === item.id);
+  if (index >= 0) trace[index] = next;
+  handlers.onTrace?.(next);
+  return next;
+}
+
+function fileSummary(label: string, pageCount?: number | null) {
+  return pageCount ? `${label} (${pageCount} pages)` : label;
+}
+
+function resultLabel(value: unknown): string | null {
+  if (typeof value === "string" || typeof value === "number") return String(value);
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const item = value as Record<string, unknown>;
+  for (const key of ["title", "name", "label", "source", "url", "number", "id"]) {
+    const raw = item[key];
+    if (typeof raw === "string" && raw.trim()) return raw.trim();
+    if (typeof raw === "number") return String(raw);
+  }
+  return null;
+}
+
+// Flatten a tool result into its list of items, looking under the common
+// container keys the tools use ("results", "sources", "trademarks", …).
+function collectResults(output: unknown): unknown[] {
+  if (Array.isArray(output)) return output;
+  if (output && typeof output === "object") {
+    const object = output as Record<string, unknown>;
+    const values: unknown[] = [];
+    for (const key of [
+      "sources",
+      "results",
+      "items",
+      "documents",
+      "rows",
+      "trademarks",
+      "opinions",
+    ]) {
+      const raw = object[key];
+      if (Array.isArray(raw)) values.push(...raw);
+    }
+    return values;
+  }
+  return [];
+}
+
+function resultLabels(output: unknown): string[] {
+  return [
+    ...new Set(
+      collectResults(output)
+        .map(resultLabel)
+        .filter((label): label is string => !!label)
+    ),
+  ].slice(0, 6);
+}
+
+// One normalized result row for the activity drawer's "Sources" cards. Shape
+// mirrors `SourceCard` on the web side (apps/web/src/lib/data/api.ts).
+function pickStr(item: Record<string, unknown>, keys: string[]): string | undefined {
+  for (const key of keys) {
+    const raw = item[key];
+    if (typeof raw === "string" && raw.trim()) return raw.trim();
+    if (typeof raw === "number") return String(raw);
+  }
+  return undefined;
+}
+
+function domainOf(url: string): string | undefined {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return undefined;
+  }
+}
+
+// Richer per-result capture so the drawer can render Perplexity-style cards.
+// Bounded (count + snippet length) to keep the persisted trace small. Returns
+// undefined when the output has no list-like results.
+function sourceCards(output: unknown) {
+  const items = collectResults(output).filter(
+    (v): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v)
+  );
+  const cards = items
+    .slice(0, 20)
+    .map((item) => {
+      const title = pickStr(item, [
+        "title",
+        "caseName",
+        "words",
+        "inventionTitle",
+        "name",
+        "label",
+        "number",
+        "id",
+      ]);
+      if (!title) return null;
+      const rawSnippet = pickStr(item, [
+        "snippet",
+        "text",
+        "summary",
+        "reasoning",
+        "statusDetail",
+        "description",
+      ]);
+      const snippet = rawSnippet
+        ? rawSnippet.length > 300
+          ? `${rawSnippet.slice(0, 300)}...`
+          : rawSnippet
+        : undefined;
+      const url = pickStr(item, ["absoluteUrl", "url"]);
+      const idVal = pickStr(item, ["id"]);
+      // Internal artifact id: `document:{uuid}` / `review:{uuid}`, or a /documents|/reviews path.
+      let docId: string | undefined;
+      const idMatch = idVal?.match(/^(?:document|review):(.+)$/);
+      if (idMatch) docId = idMatch[1];
+      else if (url && /^\/(documents|reviews)\//.test(url))
+        docId = url.split("/").pop() || undefined;
+      const metadata = item.metadata;
+      const source =
+        pickStr(item, ["source", "court", "statusGroup"]) ??
+        (metadata && typeof metadata === "object"
+          ? pickStr(metadata as Record<string, unknown>, ["type"])
+          : undefined) ??
+        (url && /^https?:/.test(url) ? domainOf(url) : undefined);
+      const page = typeof item.page === "number" ? item.page : undefined;
+      return { title, snippet, source, url, docId, page };
+    })
+    .filter((card): card is NonNullable<typeof card> => card !== null);
+  return cards.length ? cards : undefined;
+}
+
+function outputSummary(output: unknown): Record<string, unknown> {
+  if (typeof output === "string")
+    return {
+      resultType: "string",
+      length: output.length,
+      preview: output.length > 240 ? `${output.slice(0, 240)}...` : output,
+    };
+  if (!output || typeof output !== "object") return { result: output };
+  if (Array.isArray(output))
+    return { resultType: "array", count: output.length, results: resultLabels(output) };
+  const entries = Object.entries(output as Record<string, unknown>);
+  return {
+    resultType: "object",
+    keys: entries.map(([key]) => key).slice(0, 12),
+    results: resultLabels(output),
+  };
+}
 
 /**
  * Run the assistant's tool loop once and return the final payload. Streams token
@@ -163,6 +373,13 @@ async function runAssistant(
   body: ChatBody,
   handlers: RunHandlers
 ): Promise<ChatResult> {
+  const trace: ChatTraceEvent[] = [];
+  const assess = startTrace(trace, handlers, {
+    kind: "assess_query",
+    label: "Assessing query",
+    summary: body.message,
+  });
+
   // Model picks the provider; the key is the user's own, else the server's.
   const model = body.model ?? DEFAULT_MODEL;
   const provider = providerForModel(model);
@@ -184,7 +401,11 @@ async function runAssistant(
 
   // Shared gitmatter tools — the same catalog the MCP server exposes.
   const actor: Actor = { type: "agent", userId: user.id, agentLabel: "chat" };
-  const catalog = buildToolCatalog(actor, { jurisdiction, defaultMatterLabel: user.name });
+  const catalog = buildToolCatalog(actor, {
+    jurisdiction,
+    defaultMatterLabel: user.name,
+    sourceIds: body.sourceIds,
+  });
   const internal = new Map(catalog.map((t) => [t.name, t.handler]));
   const tools: ToolDef[] = catalog.map((t) => ({
     name: t.name,
@@ -228,6 +449,22 @@ async function runAssistant(
   ).filter((id): id is string => id !== null);
   // Sending the turn commits any staged chat uploads it carries into the library.
   if (turnDocIds.length) await commitStagedDocuments(user.id, turnDocIds);
+  for (const id of turnDocIds) {
+    const doc = await getDocument(id);
+    if (!doc) continue;
+    const fileTrace = startTrace(trace, handlers, {
+      kind: "review_file",
+      label: "Reviewing attached file",
+      summary: fileSummary(doc.title, doc.pageCount),
+      detail: {
+        documentId: doc.id,
+        title: doc.title,
+        fileType: doc.fileType,
+        pageCount: doc.pageCount,
+      },
+    });
+    finishTrace(trace, handlers, fileTrace);
+  }
   // Sticky attachments: this turn's docs plus every doc attached on a prior turn, so
   // the model keeps seeing them for the whole conversation (deduped).
   const priorDocIds = (prior?.turns ?? []).flatMap((t) => t.attachmentDocIds ?? []);
@@ -242,10 +479,26 @@ async function runAssistant(
     (matterId
       ? base + (await matterContextBlock(user.id, matterId, body.activeDocumentId))
       : base) + (await attachmentsContextBlock(user.id, attachedDocIds));
+  finishTrace(trace, handlers, assess, {
+    detail: {
+      model,
+      provider,
+      jurisdiction,
+      attachmentCount: attachedDocIds.length,
+      matterId: matterId ?? null,
+    },
+  });
   const toolCalls: Array<{ tool: string; input: unknown }> = [];
   let finalText = "";
+  let thinking: ChatTraceEvent | null = null;
+  let thinkingText = "";
 
   for (let i = 0; i < 8; i++) {
+    const draft = startTrace(trace, handlers, {
+      kind: "draft_answer",
+      label: i === 0 ? "Drafting answer" : "Continuing answer",
+      detail: { pass: i + 1 },
+    });
     const res = await streamComplete(
       client,
       {
@@ -258,9 +511,44 @@ async function runAssistant(
         cache: true,
         cacheKey: `chat:${user.id}`,
       },
-      { onText: handlers.onText, onReasoning: handlers.onReasoning }
+      {
+        onText: handlers.onText,
+        onReasoning: (delta) => {
+          thinkingText += delta;
+          if (thinking) {
+            thinking = updateTrace(trace, handlers, thinking, {
+              summary: thinkingText,
+              detail: { text: thinkingText },
+            });
+          } else {
+            thinking = startTrace(trace, handlers, {
+              kind: "thinking_process",
+              label: "Thinking process",
+              summary: thinkingText,
+              detail: { text: thinkingText },
+            });
+          }
+          handlers.onReasoning?.(delta);
+        },
+      }
     );
+    const activeThinking = thinking as ChatTraceEvent | null;
+    if (activeThinking?.status === "running") {
+      finishTrace(trace, handlers, activeThinking, {
+        summary: thinkingText,
+        detail: { text: thinkingText },
+      });
+      thinking = null;
+      thinkingText = "";
+    }
     finalText = res.text;
+    finishTrace(trace, handlers, draft, {
+      summary:
+        res.stop === "tool_use" && res.toolCalls.length
+          ? `Prepared ${res.toolCalls.length} tool call${res.toolCalls.length > 1 ? "s" : ""}`
+          : "Prepared final response",
+      detail: { pass: i + 1, stop: res.stop, toolCallCount: res.toolCalls.length },
+    });
     // Meter this completion's token spend (log-only; never blocks the turn).
     if (res.usage)
       void recordLlmUsage({
@@ -281,6 +569,12 @@ async function runAssistant(
 
     for (const tc of res.toolCalls) {
       toolCalls.push({ tool: tc.name, input: tc.input });
+      const toolTrace = startTrace(trace, handlers, {
+        kind: "tool_call",
+        label: "Running tool",
+        summary: tc.name.replace(/_/g, " "),
+        detail: { tool: tc.name, input: tc.input },
+      });
       handlers.onTool?.(tc.name, tc.input);
       try {
         const internalFn = internal.get(tc.name);
@@ -311,6 +605,16 @@ async function runAssistant(
               for (const changeId of changeIds) editRefs.push({ documentId, changeId });
           }
           messages.push({ role: "tool", toolCallId: tc.id, content: JSON.stringify(out) });
+          const cards = sourceCards(out);
+          finishTrace(trace, handlers, toolTrace, {
+            summary: tc.name.replace(/_/g, " "),
+            detail: {
+              tool: tc.name,
+              input: tc.input,
+              output: outputSummary(out),
+              ...(cards ? { sources: cards } : {}),
+            },
+          });
           continue;
         }
         // Not an internal catalog tool — nothing else is exposed.
@@ -320,12 +624,23 @@ async function runAssistant(
           content: "Unknown tool",
           isError: true,
         });
+        finishTrace(trace, handlers, toolTrace, {
+          status: "error",
+          summary: "Unknown tool",
+          detail: { tool: tc.name, input: tc.input, error: "Unknown tool" },
+        });
       } catch (e) {
+        const message = e instanceof Error ? e.message : "tool failed";
         messages.push({
           role: "tool",
           toolCallId: tc.id,
-          content: e instanceof Error ? e.message : "tool failed",
+          content: message,
           isError: true,
+        });
+        finishTrace(trace, handlers, toolTrace, {
+          status: "error",
+          summary: message,
+          detail: { tool: tc.name, input: tc.input, error: message },
         });
       }
     }
@@ -340,6 +655,7 @@ async function runAssistant(
       message: body.message,
       finalText: displayText,
       toolCalls,
+      trace,
       citations,
       edits,
       attachmentDocIds: turnDocIds.length ? turnDocIds : undefined,
@@ -352,6 +668,7 @@ async function runAssistant(
     chatId,
     text: displayText,
     toolCalls,
+    trace,
     tools: tools.map((t) => t.name),
     jurisdiction,
     documents: generated,
@@ -382,6 +699,7 @@ chatRoute.post("/api/chat/stream", zValidator("json", chatSchema), async (c) => 
         onText: (delta) => void stream.writeSSE({ event: "text", data: JSON.stringify(delta) }),
         onReasoning: (delta) =>
           void stream.writeSSE({ event: "reasoning", data: JSON.stringify(delta) }),
+        onTrace: (event) => void stream.writeSSE({ event: "trace", data: JSON.stringify(event) }),
         onTool: (name, input) =>
           void stream.writeSSE({ event: "tool", data: JSON.stringify({ name, input }) }),
       });

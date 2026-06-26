@@ -13,10 +13,12 @@ import {
 } from "@/components/ai-elements/conversation";
 import { Composer } from "../../assistant/-components/Composer";
 import { ChatTurns } from "../../assistant/-components/ChatTurns";
+import { ActivityPanel } from "../../assistant/-components/ActivityPanel";
+import { ActivityPanelProvider } from "../../assistant/-components/activity-context";
 import { useChatSession } from "../../assistant/-components/useChatSession";
 import { MatterFileExplorer } from "./MatterFileExplorer";
 import { DocViewerTabs } from "./DocViewerTabs";
-import { api, type ChatDetail, type Doc } from "../../../../lib/data/api";
+import { api, type ChatDetail, type Doc, type SourceCard } from "../../../../lib/data/api";
 import { useSession } from "../../../../lib/auth/auth-client";
 import {
   closeDocTab,
@@ -108,6 +110,12 @@ export function MatterChatWorkspace({
     useStore(viewerStore, (st: ViewerState) => st[matterId]) ?? EMPTY_VIEW;
   const openDoc = (docId: string, title: string) => openDocTab(matterId, docId, title);
   const closeTab = (docId: string) => closeDocTab(matterId, docId);
+  // Activity-drawer source cards: in-app artifacts open as a viewer tab; external
+  // sources (web/court/IP links) open in a new tab.
+  const openSource = (card: SourceCard) => {
+    if (card.docId) openDocTab(matterId, card.docId, card.title);
+    else if (card.url && /^https?:/.test(card.url)) window.open(card.url, "_blank", "noreferrer");
+  };
 
   const s = useChatSession({
     loaded,
@@ -163,6 +171,11 @@ export function MatterChatWorkspace({
       setInput={s.setInput}
       model={s.model}
       setModel={s.setModel}
+      jurisdiction={s.jurisdictionOverride}
+      effectiveJurisdiction={s.effectiveJurisdiction}
+      setJurisdiction={s.setJurisdictionOverride}
+      sourceIds={s.sourceIds}
+      setSourceIds={s.setSourceIds}
       reasoning={s.reasoning}
       setReasoning={s.setReasoning}
       attachments={s.attachments}
@@ -177,118 +190,128 @@ export function MatterChatWorkspace({
   );
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-stack">
-      <div className="shrink-0">
-        <PageHeader
-          breadcrumbs={[
-            { label: "Matters", to: "/matters" },
-            { label: matter?.name ?? "…", to: "/matters/$id", params: { id: matterId } },
-            { label: chatTitle },
-          ]}
-          actions={[
-            <Button
-              key="new"
-              variant="outline"
-              size="sm"
-              onClick={() =>
-                void navigate({ to: "/matters/$id/assistant", params: { id: matterId } })
-              }
-            >
-              <MessageSquarePlus className="size-4" /> New chat
-            </Button>,
-          ]}
-        />
-      </div>
-
-      <div className="flex min-h-0 flex-1 overflow-hidden rounded-lg border border-border">
-        {/* LEFT — Explorer */}
-        {explorerCollapsed ? (
-          <div className="flex shrink-0 flex-col border-e border-border">
-            <div className="flex h-10 items-center justify-center px-1">
+    <ActivityPanelProvider>
+      <div className="flex h-full min-h-0 flex-col gap-stack">
+        <div className="shrink-0">
+          <PageHeader
+            breadcrumbs={[
+              { label: "Matters", to: "/matters" },
+              { label: matter?.name ?? "…", to: "/matters/$id", params: { id: matterId } },
+              { label: chatTitle },
+            ]}
+            actions={[
               <Button
-                variant="ghost"
-                size="icon-sm"
-                tooltip="Expand explorer"
-                onClick={() => setExplorerCollapsed(false)}
+                key="new"
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  void navigate({ to: "/matters/$id/assistant", params: { id: matterId } })
+                }
               >
-                <ChevronRight className="size-3.5" />
-              </Button>
-            </div>
-          </div>
-        ) : (
-          <>
-            <div style={{ width: explorerWidth }} className="shrink-0 border-e border-border">
-              <MatterFileExplorer
-                matterId={matterId}
-                canEdit={canEdit}
-                selectedDocId={activeTabId}
-                onOpenDoc={(d: Doc) => openDoc(d.id, d.title)}
-                onCollapse={() => setExplorerCollapsed(true)}
-              />
-            </div>
-            <Divider onDrag={(dx) => setExplorerWidth((w) => Math.max(EXPLORER_MIN, w + dx))} />
-          </>
-        )}
+                <MessageSquarePlus className="size-4" /> New chat
+              </Button>,
+            ]}
+          />
+        </div>
 
-        {/* CENTER — Document viewer */}
-        <DocViewerTabs
-          tabs={tabs}
-          activeId={activeTabId}
-          onSwitch={(docId) => setActiveDocTab(matterId, docId)}
-          onClose={closeTab}
-        />
-
-        {/* RIGHT — Assistant (collapsible like the Explorer) */}
-        {chatCollapsed ? (
-          <div className="flex shrink-0 flex-col border-s border-border">
-            <div className="flex h-10 items-center justify-center px-1">
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                tooltip="Expand assistant"
-                onClick={() => setChatCollapsed(false)}
-              >
-                <ChevronLeft className="size-3.5" />
-              </Button>
-            </div>
-          </div>
-        ) : (
-          <>
-            <Divider onDrag={(dx) => setChatWidth((w) => Math.max(CHAT_MIN, w - dx))} />
-            <div style={{ width: chatWidth }} className="flex shrink-0 flex-col">
-              <div className="flex h-10 shrink-0 items-center justify-between border-b border-border px-4">
-                <span className="text-xs text-muted-foreground">Matter Assistant</span>
+        <div className="flex min-h-0 flex-1 overflow-hidden rounded-lg border border-border">
+          {/* LEFT — Explorer */}
+          {explorerCollapsed ? (
+            <div className="flex shrink-0 flex-col border-e border-border">
+              <div className="flex h-10 items-center justify-center px-1">
                 <Button
                   variant="ghost"
                   size="icon-sm"
-                  tooltip="Collapse assistant"
-                  onClick={() => setChatCollapsed(true)}
+                  tooltip="Expand explorer"
+                  onClick={() => setExplorerCollapsed(false)}
                 >
                   <ChevronRight className="size-3.5" />
                 </Button>
               </div>
-              {s.turns.length === 0 ? (
-                <div className="flex flex-1 flex-col items-center justify-center px-4">
-                  <h1 className="flex items-center gap-2.5 font-heading text-2xl font-light tracking-tight">
-                    <span className="grid size-7 place-items-center rounded-md bg-primary text-primary-foreground">
-                      <BrandMark className="size-5" />
-                    </span>
-                    Hi, {firstName}
-                  </h1>
-                </div>
-              ) : (
-                <Conversation className="min-h-0 flex-1">
-                  <ConversationContent className="gap-6 px-4">
-                    <ChatTurns turns={s.turns} busy={s.busy} onOpenDocument={openDoc} />
-                  </ConversationContent>
-                  <ConversationScrollButton />
-                </Conversation>
-              )}
-              <div className="shrink-0 px-4 pb-4">{composer}</div>
             </div>
-          </>
-        )}
+          ) : (
+            <>
+              <div style={{ width: explorerWidth }} className="shrink-0 border-e border-border">
+                <MatterFileExplorer
+                  matterId={matterId}
+                  canEdit={canEdit}
+                  selectedDocId={activeTabId}
+                  onOpenDoc={(d: Doc) => openDoc(d.id, d.title)}
+                  onCollapse={() => setExplorerCollapsed(true)}
+                />
+              </div>
+              <Divider onDrag={(dx) => setExplorerWidth((w) => Math.max(EXPLORER_MIN, w + dx))} />
+            </>
+          )}
+
+          {/* CENTER — Document viewer */}
+          <DocViewerTabs
+            tabs={tabs}
+            activeId={activeTabId}
+            onSwitch={(docId) => setActiveDocTab(matterId, docId)}
+            onClose={closeTab}
+          />
+
+          {/* RIGHT — Assistant (collapsible like the Explorer) */}
+          {chatCollapsed ? (
+            <div className="flex shrink-0 flex-col border-s border-border">
+              <div className="flex h-10 items-center justify-center px-1">
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  tooltip="Expand assistant"
+                  onClick={() => setChatCollapsed(false)}
+                >
+                  <ChevronLeft className="size-3.5" />
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <>
+              <Divider onDrag={(dx) => setChatWidth((w) => Math.max(CHAT_MIN, w - dx))} />
+              <div style={{ width: chatWidth }} className="flex shrink-0 flex-col">
+                <div className="flex h-10 shrink-0 items-center justify-between border-b border-border px-4">
+                  <span className="text-xs text-muted-foreground">Matter Assistant</span>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    tooltip="Collapse assistant"
+                    onClick={() => setChatCollapsed(true)}
+                  >
+                    <ChevronRight className="size-3.5" />
+                  </Button>
+                </div>
+                {s.turns.length === 0 ? (
+                  <div className="flex flex-1 flex-col items-center justify-center px-4">
+                    <h1 className="flex items-center gap-2.5 font-heading text-2xl font-light tracking-tight">
+                      <span className="grid size-7 place-items-center rounded-md bg-primary text-primary-foreground">
+                        <BrandMark className="size-5" />
+                      </span>
+                      Hi, {firstName}
+                    </h1>
+                  </div>
+                ) : (
+                  <Conversation className="min-h-0 flex-1">
+                    <ConversationContent className="gap-6 px-4">
+                      <ChatTurns
+                        turns={s.turns}
+                        busy={s.busy}
+                        onOpenDocument={openDoc}
+                        onOpenSource={openSource}
+                      />
+                    </ConversationContent>
+                    <ConversationScrollButton />
+                  </Conversation>
+                )}
+                <div className="shrink-0 px-4 pb-4">{composer}</div>
+              </div>
+            </>
+          )}
+
+          {/* FAR RIGHT — Activity panel (pushes the panes when open) */}
+          <ActivityPanel />
+        </div>
       </div>
-    </div>
+    </ActivityPanelProvider>
   );
 }

@@ -33,4 +33,16 @@ describe("tool catalog <-> registry reconciliation", () => {
       }
     }
   });
+
+  test("sourceIds narrows research tools", () => {
+    const built = new Set(
+      buildToolCatalog(actor, {
+        jurisdiction: "US",
+        defaultMatterLabel: "Default",
+        sourceIds: [],
+      }).map((t) => t.name)
+    );
+    expect(built.has("search_case_law")).toBe(false);
+    expect(built.has("verify_citations")).toBe(false);
+  });
 });

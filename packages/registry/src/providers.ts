@@ -4,9 +4,12 @@
 // edit here plus its handlers in core's catalog.ts.
 
 import { type Jurisdiction, jurisdictionMatches } from "./jurisdiction.js";
-import { TOOL, type ToolMeta } from "./tools.js";
+import { TOOL, TOOL_META, type ToolMeta } from "./tools.js";
 
-export type ProviderId = "courtlistener" | "ipaustralia";
+export const SOURCE_IDS = ["courtlistener", "ipaustralia"] as const;
+
+export type ProviderId = (typeof SOURCE_IDS)[number];
+export type SourceId = ProviderId;
 
 export type ToolProvider = {
   id: ProviderId;
@@ -23,10 +26,7 @@ export const PROVIDERS: ToolProvider[] = [
     jurisdictions: ["US"], // federal -> also serves US-* sub-jurisdictions
     // Baked into the gitmatter backend (not a consumed sidecar). Exposed as our
     // own tools over our MCP server and in chat; gated to US jurisdictions.
-    tools: [
-      { name: TOOL.searchCaseLaw, summary: "Search US case law opinions." },
-      { name: TOOL.verifyCitations, summary: "Verify/normalize reporter citations." },
-    ],
+    tools: [TOOL_META[TOOL.searchCaseLaw], TOOL_META[TOOL.verifyCitations]],
   },
   {
     id: "ipaustralia",
@@ -35,22 +35,24 @@ export const PROVIDERS: ToolProvider[] = [
     // Baked into the gitmatter backend (like CourtListener). Read-only patent and
     // trade mark search over our MCP server and in chat; gated to AU.
     tools: [
-      { name: TOOL.searchTrademarks, summary: "Search Australian trade marks." },
-      { name: TOOL.getTrademark, summary: "Get an Australian trade mark by number." },
-      { name: TOOL.searchPatents, summary: "Search Australian patents." },
-      { name: TOOL.getPatent, summary: "Get an Australian patent by application number." },
+      TOOL_META[TOOL.searchTrademarks],
+      TOOL_META[TOOL.getTrademark],
+      TOOL_META[TOOL.searchTrademarksAdvanced],
+      TOOL_META[TOOL.pageTrademarksAdvanced],
+      TOOL_META[TOOL.searchPatents],
+      TOOL_META[TOOL.getPatent],
     ],
   },
 ];
 
-export function providersFor(jurisdiction: Jurisdiction): ToolProvider[] {
+export function sourcesFor(jurisdiction: Jurisdiction): ToolProvider[] {
   return PROVIDERS.filter((p) =>
     p.jurisdictions.some((pat) => jurisdictionMatches(pat, jurisdiction))
   );
 }
 
+export const providersFor = sourcesFor;
+
 export function toolsFor(jurisdiction: Jurisdiction): Array<ToolMeta & { providerId: ProviderId }> {
-  return providersFor(jurisdiction).flatMap((p) =>
-    p.tools.map((t) => ({ ...t, providerId: p.id }))
-  );
+  return sourcesFor(jurisdiction).flatMap((p) => p.tools.map((t) => ({ ...t, providerId: p.id })));
 }

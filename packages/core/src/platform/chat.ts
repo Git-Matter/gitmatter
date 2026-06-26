@@ -13,11 +13,35 @@ async function userTenant(userId: string): Promise<string> {
 type TurnContent = {
   text: string;
   toolCalls?: Array<{ tool: string; input: unknown }>;
+  trace?: ChatTraceEvent[];
   edits?: ChatEdit[];
   // Documents attached to this user turn. Stored so the attachment stays "sticky"
   // to the conversation — every later turn re-lists these so the model keeps
   // reading them, instead of the context vanishing after the turn it was sent on.
   attachmentDocIds?: string[];
+};
+
+export type ChatTraceKind =
+  | "thinking_process"
+  | "assess_query"
+  | "review_file"
+  | "search_terms"
+  | "tool_call"
+  | "draft_answer"
+  | "error";
+
+export type ChatTraceStatus = "running" | "done" | "error";
+
+export type ChatTraceEvent = {
+  id: string;
+  kind: ChatTraceKind;
+  status: ChatTraceStatus;
+  label: string;
+  summary?: string;
+  detail?: Record<string, unknown>;
+  startedAt?: string;
+  endedAt?: string;
+  durationMs?: number;
 };
 
 /**
@@ -32,6 +56,7 @@ export async function persistChat(
     message: string;
     finalText: string;
     toolCalls: Array<{ tool: string; input: unknown }>;
+    trace?: ChatTraceEvent[];
     citations?: Citation[];
     edits?: ChatEdit[];
     attachmentDocIds?: string[];
@@ -89,6 +114,7 @@ export async function persistChat(
         content: {
           text: turn.finalText,
           toolCalls: turn.toolCalls,
+          ...(turn.trace?.length ? { trace: turn.trace } : {}),
           ...(turn.edits?.length ? { edits: turn.edits } : {}),
         },
         annotations: turn.citations?.length ? { citations: turn.citations } : null,
@@ -169,6 +195,7 @@ export type ChatTurn = {
   role: "user" | "assistant";
   text: string;
   toolCalls?: Array<{ tool: string; input: unknown }>;
+  trace?: ChatTraceEvent[];
   edits?: ChatEdit[];
   citations?: Citation[];
   attachmentDocIds?: string[];
@@ -203,6 +230,7 @@ export async function getChat(
       role: m.role,
       text: content.text,
       toolCalls: content.toolCalls,
+      trace: content.trace,
       edits: content.edits,
       citations: annotations?.citations,
       attachmentDocIds: content.attachmentDocIds,

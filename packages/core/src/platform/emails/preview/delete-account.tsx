@@ -1,7 +1,11 @@
 import { DeleteAccountEmail } from "../templates.js";
 
-const SAMPLE_URL = "https://app.gitmatter.com/api/auth/delete-user/callback?token=preview-token";
+const url = new URL(
+  "/api/auth/delete-user/callback",
+  process.env.BETTER_AUTH_URL ?? "http://localhost:4280"
+);
+url.searchParams.set("token", "preview-token");
 
 export default function DeleteAccountPreview() {
-  return <DeleteAccountEmail url={SAMPLE_URL} />;
+  return <DeleteAccountEmail url={url.toString()} />;
 }

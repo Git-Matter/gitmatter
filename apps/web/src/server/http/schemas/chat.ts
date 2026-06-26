@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { SOURCE_IDS } from "@workspace/registry";
 
 export const attachmentSchema = z.object({
   kind: z.enum(["document", "matter", "client", "review"]),
@@ -9,6 +10,7 @@ export const attachmentSchema = z.object({
 export const chatSchema = z.object({
   message: z.string().trim().min(1),
   jurisdiction: z.string().optional(),
+  sourceIds: z.array(z.enum(SOURCE_IDS)).optional(),
   model: z.string().optional(),
   attachments: z.array(attachmentSchema).optional(),
   reasoning: z.enum(["low", "medium", "high"]).optional(),

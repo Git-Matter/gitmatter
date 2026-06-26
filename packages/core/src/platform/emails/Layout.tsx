@@ -193,7 +193,7 @@ const linkWell: React.CSSProperties = {
 const linkText: React.CSSProperties = {
   fontFamily: fonts.sans,
   fontSize: "12px",
-  color: palette.bronze,
+  color: palette.link,
   wordBreak: "break-all",
   textDecoration: "none",
 };

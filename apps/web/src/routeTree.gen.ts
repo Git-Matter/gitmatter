@@ -14,8 +14,11 @@ import { Route as AuthRouteRouteImport } from './routes/_auth/route'
 import { Route as marketingRouteRouteImport } from './routes/(marketing)/route'
 import { Route as marketingIndexRouteImport } from './routes/(marketing)/index'
 import { Route as ApiSplatRouteImport } from './routes/api/$'
+import { Route as UnauthVerifyEmailRouteImport } from './routes/_unauth/verify-email'
 import { Route as UnauthSignupRouteImport } from './routes/_unauth/signup'
+import { Route as UnauthResetPasswordRouteImport } from './routes/_unauth/reset-password'
 import { Route as UnauthLoginRouteImport } from './routes/_unauth/login'
+import { Route as UnauthForgotPasswordRouteImport } from './routes/_unauth/forgot-password'
 import { Route as DotwellKnownSplatRouteImport } from './routes/[.]well-known/$'
 import { Route as marketingUseCasesRouteImport } from './routes/(marketing)/use-cases'
 import { Route as marketingTermsRouteImport } from './routes/(marketing)/terms'
@@ -66,14 +69,29 @@ const ApiSplatRoute = ApiSplatRouteImport.update({
   path: '/api/$',
   getParentRoute: () => rootRouteImport,
 } as any)
+const UnauthVerifyEmailRoute = UnauthVerifyEmailRouteImport.update({
+  id: '/verify-email',
+  path: '/verify-email',
+  getParentRoute: () => UnauthRouteRoute,
+} as any)
 const UnauthSignupRoute = UnauthSignupRouteImport.update({
   id: '/signup',
   path: '/signup',
   getParentRoute: () => UnauthRouteRoute,
 } as any)
+const UnauthResetPasswordRoute = UnauthResetPasswordRouteImport.update({
+  id: '/reset-password',
+  path: '/reset-password',
+  getParentRoute: () => UnauthRouteRoute,
+} as any)
 const UnauthLoginRoute = UnauthLoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => UnauthRouteRoute,
+} as any)
+const UnauthForgotPasswordRoute = UnauthForgotPasswordRouteImport.update({
+  id: '/forgot-password',
+  path: '/forgot-password',
   getParentRoute: () => UnauthRouteRoute,
 } as any)
 const DotwellKnownSplatRoute = DotwellKnownSplatRouteImport.update({
@@ -226,8 +244,11 @@ export interface FileRoutesByFullPath {
   '/terms': typeof marketingTermsRoute
   '/use-cases': typeof marketingUseCasesRoute
   '/.well-known/$': typeof DotwellKnownSplatRoute
+  '/forgot-password': typeof UnauthForgotPasswordRoute
   '/login': typeof UnauthLoginRoute
+  '/reset-password': typeof UnauthResetPasswordRoute
   '/signup': typeof UnauthSignupRoute
+  '/verify-email': typeof UnauthVerifyEmailRoute
   '/api/$': typeof ApiSplatRoute
   '/compare/gitlaw': typeof marketingCompareGitlawRoute
   '/compare/harvey': typeof marketingCompareHarveyRoute
@@ -259,8 +280,11 @@ export interface FileRoutesByTo {
   '/terms': typeof marketingTermsRoute
   '/use-cases': typeof marketingUseCasesRoute
   '/.well-known/$': typeof DotwellKnownSplatRoute
+  '/forgot-password': typeof UnauthForgotPasswordRoute
   '/login': typeof UnauthLoginRoute
+  '/reset-password': typeof UnauthResetPasswordRoute
   '/signup': typeof UnauthSignupRoute
+  '/verify-email': typeof UnauthVerifyEmailRoute
   '/api/$': typeof ApiSplatRoute
   '/compare/gitlaw': typeof marketingCompareGitlawRoute
   '/compare/harvey': typeof marketingCompareHarveyRoute
@@ -295,8 +319,11 @@ export interface FileRoutesById {
   '/(marketing)/terms': typeof marketingTermsRoute
   '/(marketing)/use-cases': typeof marketingUseCasesRoute
   '/.well-known/$': typeof DotwellKnownSplatRoute
+  '/_unauth/forgot-password': typeof UnauthForgotPasswordRoute
   '/_unauth/login': typeof UnauthLoginRoute
+  '/_unauth/reset-password': typeof UnauthResetPasswordRoute
   '/_unauth/signup': typeof UnauthSignupRoute
+  '/_unauth/verify-email': typeof UnauthVerifyEmailRoute
   '/api/$': typeof ApiSplatRoute
   '/(marketing)/': typeof marketingIndexRoute
   '/(marketing)/compare/gitlaw': typeof marketingCompareGitlawRoute
@@ -331,8 +358,11 @@ export interface FileRouteTypes {
     | '/terms'
     | '/use-cases'
     | '/.well-known/$'
+    | '/forgot-password'
     | '/login'
+    | '/reset-password'
     | '/signup'
+    | '/verify-email'
     | '/api/$'
     | '/compare/gitlaw'
     | '/compare/harvey'
@@ -364,8 +394,11 @@ export interface FileRouteTypes {
     | '/terms'
     | '/use-cases'
     | '/.well-known/$'
+    | '/forgot-password'
     | '/login'
+    | '/reset-password'
     | '/signup'
+    | '/verify-email'
     | '/api/$'
     | '/compare/gitlaw'
     | '/compare/harvey'
@@ -399,8 +432,11 @@ export interface FileRouteTypes {
     | '/(marketing)/terms'
     | '/(marketing)/use-cases'
     | '/.well-known/$'
+    | '/_unauth/forgot-password'
     | '/_unauth/login'
+    | '/_unauth/reset-password'
     | '/_unauth/signup'
+    | '/_unauth/verify-email'
     | '/api/$'
     | '/(marketing)/'
     | '/(marketing)/compare/gitlaw'
@@ -471,6 +507,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_unauth/verify-email': {
+      id: '/_unauth/verify-email'
+      path: '/verify-email'
+      fullPath: '/verify-email'
+      preLoaderRoute: typeof UnauthVerifyEmailRouteImport
+      parentRoute: typeof UnauthRouteRoute
+    }
     '/_unauth/signup': {
       id: '/_unauth/signup'
       path: '/signup'
@@ -478,11 +521,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof UnauthSignupRouteImport
       parentRoute: typeof UnauthRouteRoute
     }
+    '/_unauth/reset-password': {
+      id: '/_unauth/reset-password'
+      path: '/reset-password'
+      fullPath: '/reset-password'
+      preLoaderRoute: typeof UnauthResetPasswordRouteImport
+      parentRoute: typeof UnauthRouteRoute
+    }
     '/_unauth/login': {
       id: '/_unauth/login'
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof UnauthLoginRouteImport
+      parentRoute: typeof UnauthRouteRoute
+    }
+    '/_unauth/forgot-password': {
+      id: '/_unauth/forgot-password'
+      path: '/forgot-password'
+      fullPath: '/forgot-password'
+      preLoaderRoute: typeof UnauthForgotPasswordRouteImport
       parentRoute: typeof UnauthRouteRoute
     }
     '/.well-known/$': {
@@ -752,13 +809,19 @@ const AuthRouteRouteWithChildren = AuthRouteRoute._addFileChildren(
 )
 
 interface UnauthRouteRouteChildren {
+  UnauthForgotPasswordRoute: typeof UnauthForgotPasswordRoute
   UnauthLoginRoute: typeof UnauthLoginRoute
+  UnauthResetPasswordRoute: typeof UnauthResetPasswordRoute
   UnauthSignupRoute: typeof UnauthSignupRoute
+  UnauthVerifyEmailRoute: typeof UnauthVerifyEmailRoute
 }
 
 const UnauthRouteRouteChildren: UnauthRouteRouteChildren = {
+  UnauthForgotPasswordRoute: UnauthForgotPasswordRoute,
   UnauthLoginRoute: UnauthLoginRoute,
+  UnauthResetPasswordRoute: UnauthResetPasswordRoute,
   UnauthSignupRoute: UnauthSignupRoute,
+  UnauthVerifyEmailRoute: UnauthVerifyEmailRoute,
 }
 
 const UnauthRouteRouteWithChildren = UnauthRouteRoute._addFileChildren(

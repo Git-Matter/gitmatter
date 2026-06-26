@@ -9,6 +9,7 @@ export type AuditEventType =
   | "auth.login"
   | "auth.logout"
   | "auth.failed"
+  | "auth.password_reset"
   | "apikey.create"
   | "apikey.delete"
   | "mcp_token.mint"

@@ -1,11 +1,12 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "@tanstack/react-router";
 import { useTheme } from "next-themes";
 import { useMutation } from "@tanstack/react-query";
-import { AlertTriangleIcon } from "lucide-react";
+import { AlertTriangleIcon, KeyRoundIcon } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   Dialog,
   DialogContent,
@@ -15,7 +16,13 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { changeEmail, changePassword, deleteUser, updateUser } from "@/lib/auth/auth-client";
+import {
+  authClient,
+  changePassword,
+  deleteUser,
+  updateUser,
+  useListPasskeys,
+} from "@/lib/auth/auth-client";
 import type { ServerSession } from "@/lib/auth/session";
 
 type Session = NonNullable<ServerSession>;
@@ -23,23 +30,24 @@ type Session = NonNullable<ServerSession>;
 export function AccountSettings({ session }: { session: Session }) {
   return (
     <>
-      <ProfileCard session={session} />
-      <EmailCard session={session} />
-      <PasswordCard />
+      <AccountCard session={session} />
+      <PasskeysCard />
       <AppearanceCard />
       <DangerZoneCard />
     </>
   );
 }
 
-function ProfileCard({ session }: { session: Session }) {
+function AccountCard({ session }: { session: Session }) {
   const router = useRouter();
   const [name, setName] = useState(session.user.name ?? "");
-  const [image, setImage] = useState(session.user.image ?? "");
+  const [current, setCurrent] = useState("");
+  const [next, setNext] = useState("");
+  const initials = initialsFor(session.user.name ?? session.user.email);
 
-  const save = useMutation({
+  const saveProfile = useMutation({
     mutationFn: async () => {
-      const { error } = await updateUser({ name: name.trim(), image: image.trim() || undefined });
+      const { error } = await updateUser({ name: name.trim() });
       if (error) throw new Error(error.message ?? "Failed to update profile");
     },
     onSuccess: async () => {
@@ -49,94 +57,7 @@ function ProfileCard({ session }: { session: Session }) {
     onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
   });
 
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Profile</CardTitle>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-field">
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="profile-name">Display name</Label>
-          <Input
-            id="profile-name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Jane Doe"
-          />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="profile-image">Avatar URL</Label>
-          <Input
-            id="profile-image"
-            type="url"
-            value={image}
-            onChange={(e) => setImage(e.target.value)}
-            placeholder="https://..."
-          />
-        </div>
-        <Button
-          className="self-start"
-          onClick={() => save.mutate()}
-          disabled={save.isPending || !name.trim()}
-        >
-          {save.isPending ? "Saving..." : "Save profile"}
-        </Button>
-      </CardContent>
-    </Card>
-  );
-}
-
-function EmailCard({ session }: { session: Session }) {
-  const router = useRouter();
-  const [email, setEmail] = useState("");
-
-  const save = useMutation({
-    mutationFn: async () => {
-      const { error } = await changeEmail({ newEmail: email.trim() });
-      if (error) throw new Error(error.message ?? "Failed to change email");
-    },
-    onSuccess: async () => {
-      setEmail("");
-      await router.invalidate();
-      toast.success("Email updated");
-    },
-    onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
-  });
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Email</CardTitle>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-field">
-        <p className="text-sm text-muted-foreground">
-          Current: <span className="font-medium text-foreground">{session.user.email}</span>
-        </p>
-        <div className="flex items-end gap-2">
-          <div className="flex flex-1 flex-col gap-1.5">
-            <Label htmlFor="new-email">New email</Label>
-            <Input
-              id="new-email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@firm.com"
-            />
-          </div>
-          <Button onClick={() => save.mutate()} disabled={save.isPending || !email.trim()}>
-            {save.isPending ? "Saving..." : "Update"}
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function PasswordCard() {
-  const [current, setCurrent] = useState("");
-  const [next, setNext] = useState("");
-
-  const save = useMutation({
+  const savePassword = useMutation({
     mutationFn: async () => {
       const { error } = await changePassword({
         currentPassword: current,
@@ -155,35 +76,240 @@ function PasswordCard() {
 
   return (
     <Card>
+      <CardHeader className="flex flex-row items-center justify-between gap-3">
+        <CardTitle>Account</CardTitle>
+        <Button
+          size="sm"
+          onClick={() => saveProfile.mutate()}
+          disabled={saveProfile.isPending || !name.trim()}
+        >
+          {saveProfile.isPending ? "Saving..." : "Save"}
+        </Button>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-5">
+        <div className="grid gap-4 sm:grid-cols-[5rem_1fr] sm:items-start">
+          <Avatar className="size-16 text-base" aria-hidden="true">
+            <AvatarFallback>{initials}</AvatarFallback>
+          </Avatar>
+
+          <div className="flex min-w-0 flex-col gap-3">
+            <div className="grid gap-1.5 sm:grid-cols-[5rem_1fr] sm:items-center sm:gap-4">
+              <Label htmlFor="profile-name">Name</Label>
+              <Input
+                id="profile-name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Jane Doe"
+              />
+            </div>
+
+            <div className="grid gap-1.5 sm:grid-cols-[5rem_1fr] sm:items-center sm:gap-4">
+              <Label>Email</Label>
+              <p className="min-w-0 truncate text-sm font-medium text-foreground">
+                {session.user.email}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-3 border-t pt-5">
+          <p className="text-sm font-medium text-foreground">Password</p>
+          <div className="grid gap-1.5 sm:grid-cols-[9rem_1fr] sm:items-center sm:gap-4">
+            <Label htmlFor="current-password">Current password</Label>
+            <Input
+              id="current-password"
+              type="password"
+              value={current}
+              onChange={(e) => setCurrent(e.target.value)}
+            />
+          </div>
+          <div className="grid gap-1.5 sm:grid-cols-[9rem_1fr] sm:items-center sm:gap-4">
+            <Label htmlFor="new-password">New password</Label>
+            <div className="flex gap-2">
+              <Input
+                id="new-password"
+                type="password"
+                value={next}
+                onChange={(e) => setNext(e.target.value)}
+              />
+              <Button
+                onClick={() => savePassword.mutate()}
+                disabled={savePassword.isPending || !current || !next}
+              >
+                {savePassword.isPending ? "Saving..." : "Change"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function initialsFor(value: string): string {
+  const parts = value.trim().split(/\s+|@/).filter(Boolean);
+  return parts
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("");
+}
+
+function PasskeysCard() {
+  const passkeys = useListPasskeys();
+  const [name, setName] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState("");
+
+  const add = useMutation({
+    mutationFn: async () => {
+      const { error } = await authClient.passkey.addPasskey({ name: name.trim() || undefined });
+      if (error) throw new Error(error.message ?? "Failed to add passkey");
+    },
+    onSuccess: async () => {
+      setName("");
+      await passkeys.refetch();
+      toast.success("Passkey added");
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
+  });
+
+  const rename = useMutation({
+    mutationFn: async ({ id, nextName }: { id: string; nextName: string }) => {
+      const { error } = await authClient.passkey.updatePasskey({ id, name: nextName });
+      if (error) throw new Error(error.message ?? "Failed to rename passkey");
+    },
+    onSuccess: async () => {
+      setEditingId(null);
+      setEditingName("");
+      await passkeys.refetch();
+      toast.success("Passkey renamed");
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
+  });
+
+  const remove = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await authClient.passkey.deletePasskey({ id });
+      if (error) throw new Error(error.message ?? "Failed to remove passkey");
+    },
+    onSuccess: async () => {
+      await passkeys.refetch();
+      toast.success("Passkey removed");
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
+  });
+
+  const rows = passkeys.data ?? [];
+  const busy = add.isPending || rename.isPending || remove.isPending;
+
+  return (
+    <Card>
       <CardHeader>
-        <CardTitle>Password</CardTitle>
+        <div className="flex items-center gap-2">
+          <KeyRoundIcon className="size-4 text-muted-foreground" aria-hidden="true" />
+          <CardTitle>Passkeys</CardTitle>
+        </div>
       </CardHeader>
       <CardContent className="flex flex-col gap-field">
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="current-password">Current password</Label>
-          <Input
-            id="current-password"
-            type="password"
-            value={current}
-            onChange={(e) => setCurrent(e.target.value)}
-          />
+        <p className="text-sm text-muted-foreground">
+          Use a device passkey to log in without typing your password.
+        </p>
+        <div className="flex items-end gap-2">
+          <div className="flex flex-1 flex-col gap-1.5">
+            <Label htmlFor="passkey-name">Name</Label>
+            <Input
+              id="passkey-name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="MacBook Touch ID"
+            />
+          </div>
+          <Button onClick={() => add.mutate()} disabled={busy}>
+            {add.isPending ? "Adding..." : "Add"}
+          </Button>
         </div>
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="new-password">New password</Label>
-          <Input
-            id="new-password"
-            type="password"
-            value={next}
-            onChange={(e) => setNext(e.target.value)}
-          />
-        </div>
-        <Button
-          className="self-start"
-          onClick={() => save.mutate()}
-          disabled={save.isPending || !current || !next}
-        >
-          {save.isPending ? "Saving..." : "Change password"}
-        </Button>
+        {passkeys.isPending ? (
+          <p className="text-sm text-muted-foreground">Loading passkeys...</p>
+        ) : passkeys.error ? (
+          <p className="text-sm text-destructive">Could not load passkeys.</p>
+        ) : rows.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No passkeys added yet.</p>
+        ) : (
+          <div className="flex flex-col divide-y rounded-md border">
+            {rows.map((passkey) => {
+              const label = passkey.name?.trim() || "Passkey";
+              const isEditing = editingId === passkey.id;
+              return (
+                <div
+                  key={passkey.id}
+                  className="flex flex-col gap-3 p-3 sm:flex-row sm:items-center"
+                >
+                  <div className="min-w-0 flex-1">
+                    {isEditing ? (
+                      <Input
+                        value={editingName}
+                        onChange={(e) => setEditingName(e.target.value)}
+                        autoFocus
+                      />
+                    ) : (
+                      <>
+                        <p className="truncate text-sm font-medium">{label}</p>
+                        <p className="text-xs text-muted-foreground">
+                          Added {new Date(passkey.createdAt).toLocaleDateString()}
+                        </p>
+                      </>
+                    )}
+                  </div>
+                  {isEditing ? (
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        onClick={() =>
+                          rename.mutate({ id: passkey.id, nextName: editingName.trim() })
+                        }
+                        disabled={busy || !editingName.trim()}
+                      >
+                        Save
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => {
+                          setEditingId(null);
+                          setEditingName("");
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setEditingId(passkey.id);
+                          setEditingName(label);
+                        }}
+                        disabled={busy}
+                      >
+                        Rename
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => remove.mutate(passkey.id)}
+                        disabled={busy}
+                      >
+                        Remove
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
       </CardContent>
     </Card>
   );
@@ -197,6 +323,11 @@ const THEMES = [
 
 function AppearanceCard() {
   const { theme, setTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   return (
     <Card>
@@ -210,7 +341,7 @@ function AppearanceCard() {
             <Button
               key={t.value}
               size="sm"
-              variant={theme === t.value ? "default" : "outline"}
+              variant={mounted && theme === t.value ? "default" : "outline"}
               onClick={() => setTheme(t.value)}
             >
               {t.label}
@@ -222,24 +353,18 @@ function AppearanceCard() {
   );
 }
 
-// When a real email provider is wired, deletion is confirmed via an emailed link
-// (see auth.ts sendDeleteAccountVerification) rather than removing the account
-// immediately.
-const EMAIL_CONFIRMATION = import.meta.env.VITE_EMAIL_ENABLED;
-
 function DangerZoneCard() {
   const [open, setOpen] = useState(false);
   const [password, setPassword] = useState("");
 
   const remove = useMutation({
     mutationFn: async () => {
-      const { error } = await deleteUser(
-        EMAIL_CONFIRMATION ? { password, callbackURL: "/signup" } : { password }
-      );
+      const { error } = await deleteUser({ password, callbackURL: "/signup" });
       if (error) throw new Error(error.message ?? "Failed to delete account");
     },
-    onSuccess: () => {
-      if (EMAIL_CONFIRMATION) {
+    onSuccess: async () => {
+      const { data: session } = await authClient.getSession();
+      if (session) {
         setOpen(false);
         toast.success("Check your email to confirm account deletion.");
         return;

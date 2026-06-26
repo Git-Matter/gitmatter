@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Scale } from "lucide-react";
 import { toast } from "sonner";
-import { JURISDICTIONS, toolsFor } from "@workspace/registry";
+import { JURISDICTIONS, sourcesFor } from "@workspace/registry";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -35,7 +36,8 @@ export function JurisdictionCard() {
   }
 
   const effective = saved || "US";
-  const tools = toolsFor(effective);
+  const sources = sourcesFor(effective);
+  const toolCount = sources.reduce((total, source) => total + source.tools.length, 0);
 
   return (
     <Card>
@@ -58,14 +60,50 @@ export function JurisdictionCard() {
             </option>
           ))}
         </select>
-        <div className="flex flex-wrap items-center gap-1.5 text-sm">
-          <span className="text-muted-foreground">Tools for {effective}:</span>
-          {tools.map((tool) => (
-            <Badge key={tool.name} variant="outline" className="font-mono text-xs">
-              {tool.name}
-            </Badge>
-          ))}
-          {!tools.length && <span className="text-muted-foreground">none</span>}
+        <div className="rounded-lg border border-border/70 bg-muted/40 p-3">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-medium text-muted-foreground">Available tools</p>
+              <p className="text-sm font-medium">Tools for {effective}</p>
+            </div>
+            <Badge variant={toolCount ? "secondary" : "outline"}>{toolCount || "No"} tools</Badge>
+          </div>
+
+          {sources.length ? (
+            <div className="mt-3 divide-y divide-border/70">
+              {sources.map((source) => (
+                <section key={source.id} className="py-3 first:pt-0 last:pb-0">
+                  <div className="flex items-center gap-2">
+                    <span className="size-1.5 rounded-full bg-bronze" />
+                    <p className="text-sm font-medium">{source.name}</p>
+                    <span className="text-xs text-muted-foreground">
+                      {source.tools.length} {source.tools.length === 1 ? "tool" : "tools"}
+                    </span>
+                  </div>
+                  <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                    {source.tools.map((tool) => (
+                      <div
+                        key={tool.name}
+                        className="flex min-w-0 gap-2 rounded-md border border-border/60 bg-card/70 p-2.5"
+                      >
+                        <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-background text-muted-foreground">
+                          <Scale className="size-3.5" aria-hidden="true" />
+                        </span>
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium">{tool.label}</p>
+                          <p className="text-xs leading-5 text-muted-foreground">{tool.summary}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-3 text-sm text-muted-foreground">
+              No legal research tools are available for this jurisdiction yet.
+            </p>
+          )}
         </div>
       </CardContent>
     </Card>

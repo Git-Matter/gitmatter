@@ -10,7 +10,7 @@ const MUTED = "#6B6F76";
 const BRONZE = "#7C5B3B";
 
 // Render a 1200x630 share banner for a marketing page: a small wordmark, an
-// uppercase bronze eyebrow, the page title in the serif heading face, and the
+// uppercase bronze eyebrow, the page title in the heading face, and the
 // domain along the bottom. Returns a PNG Response straight from @vercel/og.
 export async function renderOgImage(opts: { title: string; eyebrow?: string }): Promise<Response> {
   const fonts = await loadOgFonts();
@@ -24,10 +24,10 @@ export async function renderOgImage(opts: { title: string; eyebrow?: string }): 
         justifyContent: "space-between",
         backgroundColor: IVORY,
         padding: "80px",
-        fontFamily: "Geist",
+        fontFamily: "Inter",
       }}
     >
-      <div style={{ display: "flex", fontFamily: "Newsreader", fontSize: 34, color: INK }}>
+      <div style={{ display: "flex", fontFamily: "Geist", fontSize: 34, color: INK }}>
         gitmatter
       </div>
 
@@ -50,7 +50,7 @@ export async function renderOgImage(opts: { title: string; eyebrow?: string }): 
         <div
           style={{
             display: "flex",
-            fontFamily: "Newsreader",
+            fontFamily: "Geist",
             fontSize: 72,
             lineHeight: 1.05,
             color: INK,

@@ -1,19 +1,9 @@
 // Brand fonts for the OG image renderer, fetched once from the @fontsource CDN
 // and cached for the life of the process. satori (inside @vercel/og) accepts
-// woff; we load the two faces the marketing site uses — Newsreader (serif
-// headings) and Geist (sans labels) — at the weights the banner draws with.
+// woff; we load the two faces the marketing site uses — Geist headings and
+// Inter body/labels — at the weights the banner draws with.
 const BASE = "https://unpkg.com";
 const FONT_FILES = [
-  {
-    name: "Newsreader",
-    weight: 500 as const,
-    file: "@fontsource/newsreader@5/files/newsreader-latin-500-normal.woff",
-  },
-  {
-    name: "Newsreader",
-    weight: 600 as const,
-    file: "@fontsource/newsreader@5/files/newsreader-latin-600-normal.woff",
-  },
   {
     name: "Geist",
     weight: 500 as const,
@@ -23,6 +13,16 @@ const FONT_FILES = [
     name: "Geist",
     weight: 600 as const,
     file: "@fontsource/geist-sans@5/files/geist-sans-latin-600-normal.woff",
+  },
+  {
+    name: "Inter",
+    weight: 500 as const,
+    file: "@fontsource/inter@5/files/inter-latin-500-normal.woff",
+  },
+  {
+    name: "Inter",
+    weight: 600 as const,
+    file: "@fontsource/inter@5/files/inter-latin-600-normal.woff",
   },
 ];
 

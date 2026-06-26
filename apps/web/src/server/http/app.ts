@@ -3,6 +3,7 @@ import { cors } from "hono/cors";
 import { StreamableHTTPTransport } from "@hono/mcp";
 import { auth } from "./lib/auth.js";
 import {
+  getEnv,
   getEnvNumber,
   logEvent,
   probeEnvProviders,
@@ -99,6 +100,10 @@ app.get("/api/health", (c) => c.json({ ok: true }));
 app.get("/api/health/ready", async (c) => {
   const report = await checkReadiness();
   return c.json(report, report.ok ? 200 : 503);
+});
+
+app.get("/api/config/signup", (c) => {
+  return c.json({ open: getEnv("ALLOW_SIGNUPS") !== "false" });
 });
 
 // Allow cross-origin browser requests to the OAuth discovery docs, token/register
@@ -213,6 +218,7 @@ app.use("/api/*", (c, next) => {
   // authorization-server endpoints (which do their own per-endpoint auth).
   if (
     p.startsWith("/api/health") ||
+    p === "/api/config/signup" ||
     p.startsWith("/api/auth/") ||
     p === "/api/mcp" ||
     p === "/api/og" ||

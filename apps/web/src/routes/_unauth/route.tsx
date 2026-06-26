@@ -1,4 +1,4 @@
-import { Navigate, Outlet, createFileRoute } from "@tanstack/react-router";
+import { Navigate, Outlet, createFileRoute, useLocation } from "@tanstack/react-router";
 import { useSession } from "../../lib/auth/auth-client";
 
 // Guest-only layout for login/signup. These pages are prerendered to static
@@ -11,7 +11,9 @@ export const Route = createFileRoute("/_unauth")({
 
 function UnauthLayout() {
   const { data: session } = useSession();
-  if (session) {
+  const location = useLocation();
+  const isVerificationStep = location.pathname === "/verify-email";
+  if (session && !isVerificationStep) {
     return <Navigate to="/assistant" />;
   }
   return (

@@ -7,7 +7,7 @@ import {
   VerifyEmail,
 } from "../src/platform/emails/templates.js";
 
-const URL = "https://app.gitmatter.com/api/auth/verify?token=abc123";
+const URL = "https://gitmatter.com/api/auth/verify-email?token=abc123";
 
 const cases = [
   {

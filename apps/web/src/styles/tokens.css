@@ -3,7 +3,7 @@
    globals.css; anything original lives here so the two never tangle. */
 
 @theme inline {
-  /* Editorial serif heading face (font-heading utility). */
+  /* Geist heading face (font-heading utility). */
   --font-heading: var(--font-serif);
 
   /* Subtle error surface (bg-destructive-surface, border-destructive-border).
@@ -76,7 +76,7 @@
   background-color: color-mix(in oklab, var(--card) 92%, var(--muted) 8%);
 }
 
-/* Large serif title input used in the New-* modals. */
+/* Large title input used in the New-* modals. */
 @utility serif-input {
   font-family: var(--font-heading);
   font-size: 1.5rem;

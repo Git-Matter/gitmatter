@@ -9,6 +9,8 @@ import {
 } from "@/components/ai-elements/conversation";
 import { Composer } from "./-components/Composer";
 import { ChatTurns } from "./-components/ChatTurns";
+import { ActivityPanel } from "./-components/ActivityPanel";
+import { ActivityPanelProvider } from "./-components/activity-context";
 import { useChatSession } from "./-components/useChatSession";
 import { type ChatAttachment, type ChatDetail } from "@/lib/data/api";
 import { useSession } from "@/lib/auth/auth-client";
@@ -94,6 +96,11 @@ export function AssistantView({ loaded }: { loaded: ChatDetail | null }) {
       setInput={s.setInput}
       model={s.model}
       setModel={s.setModel}
+      jurisdiction={s.jurisdictionOverride}
+      effectiveJurisdiction={s.effectiveJurisdiction}
+      setJurisdiction={s.setJurisdictionOverride}
+      sourceIds={s.sourceIds}
+      setSourceIds={s.setSourceIds}
       reasoning={s.reasoning}
       setReasoning={s.setReasoning}
       attachments={s.attachments}
@@ -125,25 +132,34 @@ export function AssistantView({ loaded }: { loaded: ChatDetail | null }) {
   }
 
   return (
-    <div className="mx-auto flex h-full min-h-0 w-full max-w-3xl flex-col">
-      <Conversation className="min-h-0 flex-1">
-        <ConversationContent className="gap-6 px-0">
-          {(s.jurisdiction || s.tools.length > 0) && (
-            <div className="flex items-center gap-2">
-              {s.jurisdiction && <Badge variant="outline">{s.jurisdiction}</Badge>}
-              {s.tools.length > 0 && <Badge variant="secondary">{s.tools.length} MCP tools</Badge>}
+    <ActivityPanelProvider>
+      <div className="flex h-full min-h-0">
+        <div className="min-w-0 flex-1 overflow-hidden">
+          <div className="mx-auto flex h-full min-h-0 w-full max-w-3xl flex-col">
+            <Conversation className="min-h-0 flex-1">
+              <ConversationContent className="gap-6 px-0">
+                {(s.jurisdiction || s.tools.length > 0) && (
+                  <div className="flex items-center gap-2">
+                    {s.jurisdiction && <Badge variant="outline">{s.jurisdiction}</Badge>}
+                    {s.tools.length > 0 && (
+                      <Badge variant="secondary">{s.tools.length} MCP tools</Badge>
+                    )}
+                  </div>
+                )}
+                <ChatTurns turns={s.turns} busy={s.busy} />
+              </ConversationContent>
+              <ConversationScrollButton />
+            </Conversation>
+            <div className="flex shrink-0 flex-col gap-2 pt-2">
+              {composer}
+              <p className="text-center text-xs text-muted-foreground">
+                AI can make mistakes. Answers are not legal advice.
+              </p>
             </div>
-          )}
-          <ChatTurns turns={s.turns} busy={s.busy} />
-        </ConversationContent>
-        <ConversationScrollButton />
-      </Conversation>
-      <div className="flex shrink-0 flex-col gap-2 pt-2">
-        {composer}
-        <p className="text-center text-xs text-muted-foreground">
-          AI can make mistakes. Answers are not legal advice.
-        </p>
+          </div>
+        </div>
+        <ActivityPanel />
       </div>
-    </div>
+    </ActivityPanelProvider>
   );
 }

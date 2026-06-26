@@ -41,6 +41,11 @@ services:
       DATABASE_URL: postgres://gitmatter:gitmatter@postgres:5432/gitmatter
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?set in .env}
       BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:4280}
+      BETTER_AUTH_TRUSTED_ORIGINS: ${BETTER_AUTH_TRUSTED_ORIGINS:-}
+      AUTH_RATE_LIMIT: ${AUTH_RATE_LIMIT:-}
+      AUTH_SIGN_IN_RATE_LIMIT: ${AUTH_SIGN_IN_RATE_LIMIT:-}
+      AUTH_SIGN_UP_RATE_LIMIT: ${AUTH_SIGN_UP_RATE_LIMIT:-}
+      AUTH_PASSWORD_RATE_LIMIT: ${AUTH_PASSWORD_RATE_LIMIT:-}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set in .env}
       # S3-compatible object storage (required — no local fallback).
       S3_ENDPOINT: ${S3_ENDPOINT:?set in .env}
