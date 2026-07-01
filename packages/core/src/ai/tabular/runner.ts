@@ -8,6 +8,7 @@ import {
   tabularReviews,
 } from "@workspace/db/schema";
 import { type Actor, recordCommit } from "../../core/commit.js";
+import { recordLlmUsage } from "../../platform/usage.js";
 import {
   DEFAULT_MODEL,
   providerForModel,
@@ -15,6 +16,21 @@ import {
   resolveRunModel,
 } from "../provider/index.js";
 import { coerceCitations, coerceFlag, queryCell, queryRow } from "./extract.js";
+
+/** Meter one extraction completion against the review's user/tenant/matter —
+ *  tabular runs bill to the matter the review is filed under. Fire-and-forget. */
+function meterFor(
+  actor: Actor,
+  review: { tenantId: string | null; matterId: string | null }
+): (u: { provider: string; model: string; inputTokens: number; outputTokens: number }) => void {
+  return (u) =>
+    void recordLlmUsage({
+      userId: actor.userId,
+      tenantId: review.tenantId,
+      matterId: review.matterId,
+      ...u,
+    });
+}
 
 // The run-and-commit engine: extract cell values (via extract.ts) and persist
 // each one as a commit on the audit spine. Single-cell (runCell), agent-written
@@ -126,6 +142,7 @@ export async function runCell(
     format: col.format,
     tags: col.tags,
     apiKey: key,
+    onUsage: meterFor(actor, review),
   });
 
   return commitCell(actor, {
@@ -216,6 +233,7 @@ export async function runDocument(
     documentText: doc.markdown ?? "",
     columns: review.columnsConfig,
     apiKey: key,
+    onUsage: meterFor(actor, review),
   });
 
   return recordCommit({
@@ -347,6 +365,7 @@ export async function runReviewStreaming(
           apiKey: key,
           cache: true,
           cacheKey,
+          onUsage: meterFor(actor, review),
         });
         await commitCell(actor, {
           reviewId: params.reviewId,

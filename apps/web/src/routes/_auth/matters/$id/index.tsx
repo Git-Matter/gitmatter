@@ -42,7 +42,7 @@ import { formatShortDate } from "@/lib/format/format";
 
 export const Route = createFileRoute("/_auth/matters/$id/")({ component: MatterWorkspace });
 
-type Tab = "documents" | "chats" | "reviews";
+type Tab = "documents" | "chats" | "reviews" | "usage";
 
 function MatterWorkspace() {
   const { id } = useParams({ from: "/_auth/matters/$id/" });
@@ -171,6 +171,7 @@ function MatterWorkspace() {
           { id: "documents" as const, label: "Documents" },
           { id: "chats" as const, label: "Assistant Chats" },
           { id: "reviews" as const, label: "Tabular Reviews" },
+          { id: "usage" as const, label: "Usage" },
         ]}
         active={tab}
         onChange={setTab}
@@ -179,6 +180,7 @@ function MatterWorkspace() {
       {tab === "documents" && <DocumentsTab matterId={id} canEdit={myRole !== "viewer"} />}
       {tab === "chats" && <ChatsTab matterId={id} />}
       {tab === "reviews" && <ReviewsTab matterId={id} />}
+      {tab === "usage" && <UsageTab matterId={id} />}
 
       <PeopleModal
         matterId={id}
@@ -469,6 +471,85 @@ function DocumentsTab({ matterId, canEdit }: { matterId: string; canEdit: boolea
       </div>
 
       <DocumentDrawer docId={previewId} onClose={() => setPreviewId(null)} />
+    </div>
+  );
+}
+
+function UsageTab({ matterId }: { matterId: string }) {
+  const { data: usage } = useQuery({
+    queryKey: ["matter-usage", matterId],
+    queryFn: () => api.getMatterUsage(matterId),
+  });
+  if (!usage) return null;
+
+  const fmt = (n: number) => n.toLocaleString();
+  const cost = (c: number | null) => (c === null ? "—" : `$${c.toFixed(2)}`);
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col gap-stack overflow-y-auto">
+      <div className="flex shrink-0 items-center justify-between gap-3">
+        <p className="text-sm text-muted-foreground">
+          AI spend attributable to this matter — {fmt(usage.totals.llmCalls)} completions,{" "}
+          {fmt(usage.totals.inputTokens + usage.totals.outputTokens)} tokens, est.{" "}
+          {cost(usage.totals.costUsd)}, {fmt(usage.totals.toolCalls)} agent tool calls. Costs are
+          estimates from list prices; unpriced models show tokens only.
+        </p>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => {
+            window.location.href = api.matterUsageExportUrl(matterId);
+          }}
+        >
+          Export CSV
+        </Button>
+      </div>
+
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b text-left text-muted-foreground">
+            <th className="py-1.5 font-medium">Model</th>
+            <th className="py-1.5 font-medium">Provider</th>
+            <th className="py-1.5 text-right font-medium">Calls</th>
+            <th className="py-1.5 text-right font-medium">Input tokens</th>
+            <th className="py-1.5 text-right font-medium">Output tokens</th>
+            <th className="py-1.5 text-right font-medium">Est. cost</th>
+          </tr>
+        </thead>
+        <tbody>
+          {usage.llm.map((r, i) => (
+            <tr key={i} className="border-b">
+              <td className="py-1.5 font-medium">{r.model ?? "unknown"}</td>
+              <td className="py-1.5 text-muted-foreground">{r.provider ?? "—"}</td>
+              <td className="py-1.5 text-right">{fmt(r.calls)}</td>
+              <td className="py-1.5 text-right">{fmt(r.inputTokens)}</td>
+              <td className="py-1.5 text-right">{fmt(r.outputTokens)}</td>
+              <td className="py-1.5 text-right">{cost(r.costUsd)}</td>
+            </tr>
+          ))}
+          {!usage.llm.length && (
+            <tr>
+              <td colSpan={6} className="py-3 text-muted-foreground">
+                No AI usage recorded for this matter yet.
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+
+      {usage.tools.length > 0 && (
+        <div className="flex flex-col gap-1.5">
+          <p className="text-sm font-medium">Agent tool calls</p>
+          <ul className="text-sm text-muted-foreground">
+            {usage.tools.map((t, i) => (
+              <li key={i} className="flex justify-between border-b py-1">
+                <span>{t.tool ?? "unknown"}</span>
+                <span>{fmt(t.calls)}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }

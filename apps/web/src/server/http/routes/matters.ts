@@ -27,6 +27,7 @@ import {
   listMattersForUser,
   listMattersPage,
   listPracticeAreas,
+  matterUsageSummary,
   listMembers,
   removeClientMember,
   removeMember,
@@ -216,6 +217,34 @@ mattersRoute.get("/api/matters/:id", async (c) => {
   if (!(await hasMatterAccess(c.get("user").id, id))) return c.json({ error: "Not found" }, 404);
   const matter = await getMatter(id);
   return matter ? c.json(matter) : c.json({ error: "Not found" }, 404);
+});
+
+// Per-matter LLM/tool usage, aggregated for billing the spend to the matter as
+// a client disbursement. CSV format for pasting into a billing system.
+mattersRoute.get("/api/matters/:id/usage", async (c) => {
+  const id = c.req.param("id");
+  if (!(await hasMatterAccess(c.get("user").id, id))) return c.json({ error: "Not found" }, 404);
+  const summary = await matterUsageSummary(id);
+  if (c.req.query("format") !== "csv") return c.json(summary);
+  const rows: Array<Array<string | number | null>> = [
+    ["kind", "provider", "model_or_tool", "calls", "input_tokens", "output_tokens", "est_cost_usd"],
+    ...summary.llm.map((r) => [
+      "llm",
+      r.provider,
+      r.model,
+      r.calls,
+      r.inputTokens,
+      r.outputTokens,
+      r.costUsd === null ? null : r.costUsd.toFixed(4),
+    ]),
+    ...summary.tools.map((r) => ["tool", null, r.tool, r.calls, null, null, null]),
+  ];
+  return new Response(rowsToCsv(rows), {
+    headers: {
+      "Content-Type": "text/csv; charset=utf-8",
+      "Content-Disposition": `attachment; filename="matter-usage.csv"`,
+    },
+  });
 });
 
 // Export the matter's full audit trail (read-only, no commit). Any member can

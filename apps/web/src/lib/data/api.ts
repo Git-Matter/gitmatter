@@ -105,6 +105,26 @@ export type Matter = {
 
 // listMattersForUser joins matter + client + the caller's role, plus the owner's
 // name and how many people have access (for the Projects-style list).
+// Per-matter LLM/tool spend, aggregated server-side (matterUsageSummary).
+export type MatterUsageSummary = {
+  llm: Array<{
+    provider: string | null;
+    model: string | null;
+    calls: number;
+    inputTokens: number;
+    outputTokens: number;
+    costUsd: number | null;
+  }>;
+  tools: Array<{ tool: string | null; calls: number }>;
+  totals: {
+    llmCalls: number;
+    inputTokens: number;
+    outputTokens: number;
+    costUsd: number | null;
+    toolCalls: number;
+  };
+};
+
 export type MatterListItem = {
   matter: Matter;
   client: Client;
@@ -578,6 +598,8 @@ export const api = {
     `/api/tabular/reviews/${id}/export?format=${format}`,
   matterAuditExportUrl: (id: string, format: "csv" | "docx") =>
     `/api/matters/${id}/audit-export?format=${format}`,
+  getMatterUsage: (id: string) => req<MatterUsageSummary>(`/api/matters/${id}/usage`),
+  matterUsageExportUrl: (id: string) => `/api/matters/${id}/usage?format=csv`,
   listTokens: () =>
     req<
       Array<{

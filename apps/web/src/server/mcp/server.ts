@@ -38,10 +38,12 @@ export function buildMcpServer(account: {
       { description: tool.description, inputSchema: tool.schema },
       async (input: Record<string, unknown>) => {
         // Meter the call against the token's budget (log-only; never blocks).
+        // Matter attribution is best-effort from the tool's own argument.
         void recordToolCall({
           tokenId: account.tokenId,
           userId: account.userId,
           tenantId: account.tenantId,
+          matterId: typeof input.matterId === "string" ? input.matterId : null,
           tool: tool.name,
         });
         return json(await tool.handler(input));

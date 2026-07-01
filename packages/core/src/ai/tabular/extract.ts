@@ -94,6 +94,7 @@ export async function queryCell(params: {
   // routes OpenAI to the same prompt cache for that document.
   cache?: boolean;
   cacheKey?: string;
+  onUsage?: Parameters<typeof completeText>[0]["onUsage"];
 }): Promise<CellResult> {
   const { system, user } = buildCellPrompt(params);
   const raw = await completeText({
@@ -107,6 +108,7 @@ export async function queryCell(params: {
     jsonSchema: CELL_SCHEMA as unknown as Record<string, unknown>,
     cache: params.cache,
     cacheKey: params.cacheKey,
+    onUsage: params.onUsage,
   });
   try {
     const parsed = JSON.parse(stripJsonFence(raw)) as {
@@ -151,6 +153,7 @@ export async function queryRow(params: {
   documentText: string;
   columns: TabularColumn[];
   apiKey?: string | null;
+  onUsage?: Parameters<typeof completeText>[0]["onUsage"];
 }): Promise<Map<number, CellResult>> {
   const { system, user } = buildRowPrompt(params);
   const raw = await completeText({
@@ -161,6 +164,7 @@ export async function queryRow(params: {
     apiKey: params.apiKey,
     temperature: 0,
     jsonSchema: ROW_SCHEMA as unknown as Record<string, unknown>,
+    onUsage: params.onUsage,
   });
   const out = new Map<number, CellResult>();
   let cells: Array<Record<string, unknown>> = [];

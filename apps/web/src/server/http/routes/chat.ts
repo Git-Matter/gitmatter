@@ -866,6 +866,7 @@ async function runAssistant(
       void recordLlmUsage({
         userId: user.id,
         tenantId,
+        matterId: matterId ?? null,
         provider,
         model,
         inputTokens: res.usage.inputTokens,
