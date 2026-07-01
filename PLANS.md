@@ -10,7 +10,9 @@ Shared architectural facts these plans rely on:
 - MCP tokens (`mcp_access_tokens`, `gc_` static / `gco_` OAuth) resolve to a single user; agent actions commit as `actorType: "agent"` with `agentLabel: "mcp:<label>"`.
 - Metering exists: `usage_events` (tokens + tool calls), `audit_events` (security log). Email exists (Resend via `packages/core/src/platform/email.ts`); webhooks do not.
 
-Suggested build order: 5 → 3 → 11 → 7 → 4 → 12 → 8 → 9 → 2 → 6 → 10 → 1 (roughly ascending risk; 5 unblocks enterprise, 1 is the deepest schema change).
+Suggested build order: 5 → 3 → 11 → 7 → 4 → 12 → 8+9 → 2 → 6 → 10 → 1 (roughly ascending risk; 5 unblocks enterprise, 1 is the deepest schema change).
+
+Status (2026-07-01): 5 (scoped tokens) and 3 (audit export) shipped; 11 (per-matter metering) schema landed, threading + report pending. 8+9 (clause library + playbooks) unified and prioritized next by user request — see the section for lawyer use cases and the Harvey-inspired authoring model.
 
 ---
 
@@ -181,48 +183,95 @@ Suggested build order: 5 → 3 → 11 → 7 → 4 → 12 → 8 → 9 → 2 → 6
 
 ---
 
-## 8. Clause library
+## 8 + 9. Clause Library + Playbooks (unified)
 
-**Goal.** Firm's approved clauses, versioned in the spine; redline engine suggests from the library before raw LLM drafting. Big trust win.
+**Goal.** The firm's institutional knowledge as two linked, audited artifacts: a **clause library** ("what language do we use?") and **playbooks** ("how do we review/negotiate?"). Playbook rules reference library clauses as fallbacks; review runs a playbook and flags deviations; one click proposes the conforming redline. The feature legal buyers ask for by name (Harvey, Spellbook, Ironclad all ship a version). gitmatter's edge: both artifacts live on the audit spine (field-level blame on every rule/clause edit) and are readable by any connected agent over MCP — not a black box inside one vendor's UI.
 
-**Design.**
+### Lawyer use cases
 
-- New artifact type `clause`. Table `clauses`: `id`, `tenantId`, `matterId` nullable (null = firm-wide), `title`, `body` (markdown), `category`, `jurisdiction`, `tags` jsonb, `status` (`approved|draft|deprecated`), `createdBy`, `headCommitId`, `fieldCommits` jsonb (blame map, same pattern as workflows), timestamps. Register in `HEAD_TABLE` in `commit.ts` so `recordCommit` head-pointer update works; add to `ArtifactType` union and `canAccessArtifact` (firm-wide clauses: any tenant member reads, tenant admin writes; matter-scoped: matter roles).
-- Retrieval into redline: extend the redline/chat system prompt path — when `propose_document_edit` or assistant drafting runs in a matter, fetch top-K clauses matching category/jurisdiction (simple keyword + jurisdiction filter v1 via `jurisdictionMatches` from `packages/registry`; FTS ranking arrives with Plan 10) and inject as context: "Prefer these approved clauses; cite clause id when used." Record used clause ids in the commit `summary` for traceability.
-- Tools: `list_clauses`, `get_clause`, `write_clause` (admin/editor gated), `suggest_clauses` (given doc text + category).
+Clause library:
 
-**Steps.**
+1. **Approved house language** — standard governing-law/indemnity/confidentiality/LoL clauses; drafting (chat, `generate_docx`, agents) pulls from the library instead of improvising. Consistency across associates and agents.
+2. **Fallback ladders** — ordered concession positions per clause type (cap at 12 months' fees → 24 months → uncapped for IP/confidentiality carve-outs only). The negotiator knows the next retreat position without asking a partner.
+3. **Jurisdiction variants** — same clause, per-jurisdiction versions (GDPR Art-28 vs CCPA; AU vs US non-compete); `jurisdictionMatches` in `packages/registry` already models the filter.
+4. **Risk-rated alternatives** — clauses tagged acceptable/negotiable/escalate with commentary on _when_; juniors learn the why, agents cite it in reasoning.
+5. **Client overlays** — client-scoped clauses override firm defaults ("client X never accepts arbitration").
+6. **Precedent recall** — entries link back to source matters ("what did we agree last time").
+7. **Versioned + attributed** — clause edits are commits with blame; knowledge management and malpractice defense in one.
 
-1. Schema + `ArtifactType`/`HEAD_TABLE`/access wiring + migrate.
-2. Core `content/clauses.ts`: CRUD through `recordCommit` (copy the workflow.ts fieldCommits pattern).
-3. Prompt injection in redline + chat paths; commit summary stamps clause usage.
-4. Tools + UI (library page under `_auth/`, clause picker in document viewer).
-5. Verify: clause edit produces blame; redline commit summary references injected clause; deprecated clauses excluded from suggestion.
+Playbooks:
 
-**Touched.** `packages/db/src/schema/clauses.ts` (new), `packages/core/src/core/{commit,access}.ts` (registration), `packages/core/src/content/clauses.ts` (new), redline prompt path in `content/documents.ts` + `ai/prompts/`, tools, new route.
+1. **Review checklists per document type** — NDA/MSA/DPA/lease: required, prohibited, preferred terms → deviation report on inbound paper.
+2. **Auto-redline with fallback** — rule violated → tracked change substituting the library fallback; human accepts/rejects.
+3. **Deviation severity + citation** — verdict with quoted offending language (existing cell `flag` + `citations` shape).
+4. **Escalation rules** — what an associate may concede vs partner sign-off; ties into approval gates (Plan 2).
+5. **Intake triage** — red-count on inbound paper decides staffing effort.
+6. **In-house counsel mode** — review under the _client's_ playbook; playbooks are shareable artifacts (workflow sharing exists).
+7. **Regulatory checklists** — e.g. GDPR Art 28(3) mandatory clauses; missing = red.
+8. **Due-diligence sweeps** — playbook over a data room (change-of-control, assignment, exclusivity, MFN) → one review grid.
 
----
+### Authoring model (Harvey-inspired)
 
-## 9. Playbooks
+The unit lawyers think in is one self-contained rule per clause type:
 
-**Goal.** Firm negotiation rules ("never accept unlimited liability") as a reusable config; review runs the playbook and flags deviations. The feature legal buyers ask for by name.
+| Field               | Example (limitation of liability)                          |
+| ------------------- | ---------------------------------------------------------- |
+| clauseType          | Limitation of liability                                    |
+| standardPosition    | "Cap at 12 months' fees paid; mutual."                     |
+| fallbacks (ordered) | 1. 24 months' fees 2. Uncapped for confidentiality/IP only |
+| unacceptable        | "Uncapped liability for us; any cap on their indemnity"    |
+| guidance            | Why, when to escalate, who approves deviations             |
 
-**Design — extend workflows, don't add a new artifact.** `workflows` already has `type: "assistant" | "tabular"`, `steps`, `promptMd`, commit-spine blame, sharing, and system seeding.
+Review verdict per rule is three-way — **acceptable / needs review / unacceptable** — mapping 1:1 onto the existing tabular flags (green/yellow/red), with reasoning + quoted language per cell. Keep playbooks one contract type each, ≤ a few hundred rules.
 
-- Add `type: "playbook"`. New jsonb column `rules`: `Array<{ id, title, rule (markdown), severity (red|yellow), fallback?: string | { clauseId } }>` — fallback can reference a Plan-8 clause.
-- Execution reuses the **tabular runner**: running a playbook against N documents = a generated tabular review where each rule becomes a column (`columnsConfig` derived from `rules`; the existing `flag: green/grey/yellow/red` cell schema is exactly a compliance verdict). One new function `runPlaybook(playbookId, documentIds, matterId)` in `ai/tabular/` that materializes the review with `workflowId` set (column already exists) and calls `runReviewStreaming`. Zero new execution engine.
-- Per-rule prompt template in `ai/prompts/tabular.ts`: rule text + "does the document comply; if not quote the offending language and suggest the fallback."
-- Deviation report: the review page already renders flags; add a playbook summary header (X red / Y yellow) and per-cell fallback suggestion → "propose redline" button chaining into `propose_document_edit`.
-- Tools: `run_playbook`; `write_workflow` extended to accept rules. Seed 1–2 system playbooks (NDA, liability) via existing `seedBuiltinWorkflows`.
+Lawyers do not fill in blank forms. Four authoring flows, in priority order:
 
-**Steps.**
+1. **Conversational** — "help me make an NDA playbook"; the assistant proposes rules, asks clarifying questions (side of table, risk tolerance), lawyer edits. Driven by `write_workflow` in the existing chat tool loop.
+2. **From standard paper** — upload the firm's template; one extraction pass drafts rules from what the template says. Optional extra negotiated examples are mined for _fallbacks_ (concessions actually accepted before).
+3. **Convert an existing guide** — most firms have a Word/PDF negotiation guide; document extraction → structured rules.
+4. **From template** — seeded system playbooks (NDA, MSA) customized via the rules editor. The manual editor is the secondary UX, not the primary one.
 
-1. Schema: `workflows.rules` jsonb + type enum value. Migrate.
-2. Core: `runPlaybook` + prompt; wire fallback → redline handoff.
-3. Tools + UI (playbook editor = rules list editor on the workflow page; results = existing review page + summary header).
-4. Verify: seeded NDA playbook against fixture doc produces expected red flags with citations; blame on rule edits works (fieldCommits path `field/rules/<id>`).
+### Design
 
-**Touched.** `packages/db/src/schema/workflow.ts`, `packages/core/src/platform/workflow.ts`, `packages/core/src/ai/tabular/` + `ai/prompts/tabular.ts`, tools, workflows + reviews UI.
+Library — new artifact type `clause`:
+
+- Table `clauses`: `id`, `tenantId`, `matterId` nullable (null = firm-wide), `clientId` nullable (client overlay), `title`, `body` (markdown), `category`, `jurisdiction`, `riskRating` (`acceptable|negotiable|escalate`), `guidance`, `tags` jsonb, `status` (`approved|draft|deprecated`), `sourceMatterId` nullable (precedent link), `createdBy`, `headCommitId`, `fieldCommits` jsonb, timestamps. Register in `HEAD_TABLE` (`commit.ts`), `ArtifactType`, and `canAccessArtifact` (firm-wide: tenant members read, tenant admin writes; matter-scoped: matter roles).
+- Fallback ladders = ordered sibling clauses linked by `parentClauseId` + `fallbackRank` (rank 0 = standard position), so each variant is individually versioned and blamed.
+- Retrieval into drafting: when `propose_document_edit` or assistant drafting runs, fetch top-K clauses by category/jurisdiction (keyword + `jurisdictionMatches` v1; FTS ranking with Plan 10) and inject: "Prefer these approved clauses; cite clause id." Used clause ids recorded in commit `summary`.
+- Tools: `list_clauses`, `get_clause`, `write_clause`, `suggest_clauses`.
+
+Playbooks — extend workflows (`type: "playbook"`), no new artifact:
+
+- New jsonb column `rules`: `Array<{ id, clauseType, standardPosition, fallbacks: Array<string | { clauseId }>, unacceptable?, guidance?, severity (red|yellow) }>`.
+- Execution reuses the **tabular runner**: `runPlaybook(playbookId, documentIds, matterId)` materializes a tabular review (rules → columns, `workflowId` already exists on reviews) and calls `runReviewStreaming`. Existing green/grey/yellow/red cell flag = the verdict. Zero new engine.
+- Per-rule prompt in `ai/prompts/tabular.ts`: standard position + fallbacks + unacceptable → "verdict, quote the offending language, name which position (standard/fallback-N) the clause matches."
+- Review page: playbook summary header (X unacceptable / Y needs-review), per-cell "propose redline" chaining into `propose_document_edit` with the standard position (or chosen fallback) as replacement text.
+- Generators (authoring flows 2–3): `generatePlaybookRules(documentId)` — one structured-output pass over an extracted document producing draft `rules`; exposed in UI ("Create from document") and as a `draft_playbook` tool for the conversational flow.
+- Tools: `run_playbook`, `draft_playbook`; `write_workflow` accepts `rules`. Seed NDA + liability system playbooks via `seedBuiltinWorkflows`.
+
+### Steps
+
+Phase 1 — library:
+
+1. `clauses` schema + `ArtifactType`/`HEAD_TABLE`/access wiring + migrate.
+2. `content/clauses.ts` CRUD through `recordCommit` (workflow.ts fieldCommits pattern), fallback-ladder queries.
+3. MCP tools + library page under `_auth/`; clause picker in document viewer.
+4. Verify: clause edit produces blame; ladder ordering stable; deprecated excluded from suggestion.
+
+Phase 2 — playbooks:
+
+1. `workflows.rules` + type value; migrate.
+2. `runPlaybook` + rule prompt; `generatePlaybookRules`; seed system playbooks.
+3. Tools + UI (rules editor on workflow page; "create from document"; review page summary header).
+4. Verify: seeded NDA playbook on fixture doc yields expected red flags with citations; rule-edit blame (`field/rules/<id>`).
+
+Phase 3 — closing the loop:
+
+1. Clause injection into redline/chat prompts + commit-summary traceability.
+2. Per-cell "propose redline with fallback" handoff.
+3. Escalation tie-in once Plan 2 (approval gates) exists.
+
+**Touched.** `packages/db/src/schema/{clauses (new),workflow}.ts`, `packages/core/src/core/{commit,access}.ts`, `packages/core/src/content/clauses.ts` (new), `packages/core/src/ai/tabular/` + `ai/prompts/tabular.ts`, `packages/core/src/tools/`, redline prompt path in `content/documents.ts`, new library route + workflow/review UI.
 
 ---
 
@@ -303,5 +352,5 @@ Suggested build order: 5 → 3 → 11 → 7 → 4 → 12 → 8 → 9 → 2 → 6
 
 - **Every mutating feature goes through `recordCommit`** — no plan above writes an artifact table directly. That is the product's core invariant.
 - **Migrations**: each plan that touches schema runs `vp run --filter=@workspace/db generate` and checks the generated SQL in.
-- **Dependencies between plans**: 6 depends on 2 (approvalPolicy); 9 benefits from 8 (clause fallbacks) and reuses tabular; 10 indexes 8's clauses; 8 and 5 are independent quick-startable.
+- **Dependencies between plans**: 6 depends on 2 (approvalPolicy); 8+9 phase 3 (escalation) ties into 2; 10 indexes 8+9's clauses; 8+9 and 5 are independent quick-startable.
 - **Validation baseline for all**: `vp check`, `vp run typecheck`, `vp test` green; new core logic gets unit tests next to the module it lives in.
