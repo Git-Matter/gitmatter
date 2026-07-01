@@ -264,6 +264,7 @@ app.all("/api/mcp", async (c) => {
     tokenId: account.tokenId,
     tenantId: account.tenantId,
     jurisdiction,
+    scope: account.scope,
   });
   const transport = new StreamableHTTPTransport({ sessionIdGenerator: undefined });
   await server.connect(transport);

@@ -19,7 +19,7 @@ const artifactType = z.enum(ARTIFACT_TYPES);
 type ArtifactKind = (typeof ARTIFACT_TYPES)[number];
 
 export function buildAuditTools({ actor }: { actor: Actor }): ToolSpec[] {
-  const canRead = (kind: ArtifactKind, id: string) => canAccessArtifact(actor.userId, kind, id);
+  const canRead = (kind: ArtifactKind, id: string) => canAccessArtifact(actor, kind, id);
   return [
     {
       name: "history",

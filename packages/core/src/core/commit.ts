@@ -3,6 +3,7 @@ import { and, asc, desc, eq, getTableColumns, isNotNull, lte, sql } from "drizzl
 import { db, type Tx } from "@workspace/db/client";
 import {
   type ArtifactType,
+  type MatterRole,
   commits,
   documents,
   fieldChanges,
@@ -11,9 +12,19 @@ import {
   workflows,
 } from "@workspace/db/schema";
 
+// Least-privilege restriction carried by a scoped MCP token. Null members mean
+// "no restriction on that axis"; an absent scope means the agent has the full
+// power of its user (pre-scope tokens, in-app assistant).
+export type TokenScope = {
+  /** Matters the token may touch, or null for all the user's matters. */
+  matterIds: string[] | null;
+  /** Cap on the token's effective role, or null for no cap. */
+  maxRole: MatterRole | null;
+};
+
 export type Actor =
   | { type: "user"; userId: string }
-  | { type: "agent"; userId: string; agentLabel: string };
+  | { type: "agent"; userId: string; agentLabel: string; scope?: TokenScope };
 
 export type FieldChange = { path: string; before: unknown; after: unknown };
 

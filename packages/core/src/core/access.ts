@@ -1,4 +1,4 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@workspace/db/client";
 import {
   type ArtifactType,
@@ -13,12 +13,41 @@ import {
   user,
   workflows,
 } from "@workspace/db/schema";
+import type { Actor, TokenScope } from "./commit.js";
 
 // Re-export so consumers can name the role type without reaching into the db pkg.
 export type { MatterRole } from "@workspace/db/schema";
 
 // Ordered so a higher role satisfies a lower requirement.
 const ROLE_RANK: Record<MatterRole, number> = { viewer: 0, editor: 1, owner: 2 };
+
+/**
+ * Who a guard is checking: a bare userId (human routes, internals — never
+ * scoped) or an Actor (tool layer). A scoped agent actor is clamped: matters
+ * outside its scope are invisible, and its effective role is capped at
+ * `maxRole` — even on artifacts the underlying user owns outright.
+ */
+export type AccessSubject = string | Actor;
+
+function subjectUserId(subject: AccessSubject): string {
+  return typeof subject === "string" ? subject : subject.userId;
+}
+
+function subjectScope(subject: AccessSubject): TokenScope | null {
+  if (typeof subject === "string" || subject.type !== "agent") return null;
+  return subject.scope ?? null;
+}
+
+/** True when the scope permits touching the given matter. A matter-scoped token
+ *  cannot touch artifacts with no matter (null matterId). */
+export function scopeAllowsMatter(scope: TokenScope | null, matterId: string | null): boolean {
+  if (!scope?.matterIds) return true;
+  return matterId !== null && scope.matterIds.includes(matterId);
+}
+
+function clampRank(scope: TokenScope | null, rank: number): number {
+  return scope?.maxRole ? Math.min(rank, ROLE_RANK[scope.maxRole]) : rank;
+}
 
 /** The tenant a user belongs to, or null if unassigned. */
 export async function getUserTenant(userId: string): Promise<string | null> {
@@ -97,26 +126,39 @@ async function clientRole(userId: string, clientId: string): Promise<MatterRole 
   return row.role;
 }
 
-/** True if the user is a member of the client with at least `min` role. */
+/** True if the subject is a member of the client with at least `min` role. A
+ *  matter-scoped agent reaches a client only through one of its allowed matters. */
 export async function hasClientAccess(
-  userId: string,
+  subject: AccessSubject,
   clientId: string,
   min: MatterRole = "viewer"
 ): Promise<boolean> {
+  const userId = subjectUserId(subject);
+  const scope = subjectScope(subject);
   const role = await clientRole(userId, clientId);
   if (!role) return false;
-  return ROLE_RANK[role] >= ROLE_RANK[min];
+  if (scope?.matterIds) {
+    const [allowed] = await db
+      .select({ id: matters.id })
+      .from(matters)
+      .where(and(eq(matters.clientId, clientId), inArray(matters.id, scope.matterIds)))
+      .limit(1);
+    if (!allowed) return false;
+  }
+  return clampRank(scope, ROLE_RANK[role]) >= ROLE_RANK[min];
 }
 
-/** True if the user is a member of the matter with at least `min` role. */
+/** True if the subject is a member of the matter with at least `min` role. */
 export async function hasMatterAccess(
-  userId: string,
+  subject: AccessSubject,
   matterId: string,
   min: MatterRole = "viewer"
 ): Promise<boolean> {
-  const role = await matterRole(userId, matterId);
+  const scope = subjectScope(subject);
+  if (!scopeAllowsMatter(scope, matterId)) return false;
+  const role = await matterRole(subjectUserId(subject), matterId);
   if (!role) return false;
-  return ROLE_RANK[role] >= ROLE_RANK[min];
+  return clampRank(scope, ROLE_RANK[role]) >= ROLE_RANK[min];
 }
 
 /**
@@ -132,11 +174,13 @@ export async function hasMatterAccess(
  * this guard; the route layer permits them via the `isSystem` flag.
  */
 export async function canAccessArtifact(
-  userId: string,
+  subject: AccessSubject,
   artifactType: ArtifactType,
   artifactId: string,
   min: MatterRole = "viewer"
 ): Promise<boolean> {
+  const userId = subjectUserId(subject);
+  const scope = subjectScope(subject);
   const table = MATTER_TABLE[artifactType];
   if (!table) throw new Error(`canAccessArtifact: unsupported artifact type "${artifactType}"`);
   const [row] = await db
@@ -145,22 +189,25 @@ export async function canAccessArtifact(
     .where(eq(table.id, artifactId));
   if (!row) return false;
 
-  // The intrinsic owner always has full access (covers the not-yet-backfilled
-  // null-matterId case too).
-  if (row.ownerId === userId) return true;
+  // A matter-scoped token cannot touch artifacts outside its matters — including
+  // artifacts the underlying user owns, and artifacts with no matter yet.
+  if (!scopeAllowsMatter(scope, row.matterId)) return false;
+
+  // The intrinsic owner has full access (covers the not-yet-backfilled
+  // null-matterId case too), subject to the scope's role cap.
+  let best = row.ownerId === userId ? ROLE_RANK.owner : -1;
 
   // Effective role = the higher of matter membership and a direct artifact share.
-  let best = -1;
-  if (row.matterId) {
+  if (best < ROLE_RANK.owner && row.matterId) {
     const mRole = await matterRole(userId, row.matterId);
     if (mRole) best = Math.max(best, ROLE_RANK[mRole]);
   }
-  if (row.tenantId) {
+  if (best < ROLE_RANK.owner && row.tenantId) {
     const sRole = await artifactShareRole(userId, artifactType, artifactId, row.tenantId);
     if (sRole) best = Math.max(best, ROLE_RANK[sRole]);
   }
   if (best < 0) return false;
-  return best >= ROLE_RANK[min];
+  return clampRank(scope, best) >= ROLE_RANK[min];
 }
 
 /**
@@ -169,14 +216,14 @@ export async function canAccessArtifact(
  * docs were never shared with them directly. Read-only — editor endpoints keep
  * gating on `canAccessArtifact("document", …, "editor")`.
  */
-export async function canReadDocument(userId: string, docId: string): Promise<boolean> {
-  if (await canAccessArtifact(userId, "document", docId)) return true;
+export async function canReadDocument(subject: AccessSubject, docId: string): Promise<boolean> {
+  if (await canAccessArtifact(subject, "document", docId)) return true;
   const reviews = await db
     .select({ id: tabularReviews.id })
     .from(tabularReviews)
     .where(sql`${tabularReviews.documentIds} @> ${JSON.stringify([docId])}::jsonb`);
   for (const r of reviews) {
-    if (await canAccessArtifact(userId, "tabular_review", r.id)) return true;
+    if (await canAccessArtifact(subject, "tabular_review", r.id)) return true;
   }
   return false;
 }

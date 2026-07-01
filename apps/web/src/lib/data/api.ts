@@ -581,13 +581,18 @@ export const api = {
       Array<{
         id: string;
         label: string;
+        allowedMatterIds: string[] | null;
+        maxRole: MatterRole | null;
         createdAt: string;
         lastUsedAt: string | null;
         revokedAt: string | null;
       }>
     >("/api/mcp-tokens"),
-  mintToken: (label: string) =>
-    req<{ token: string }>("/api/mcp-tokens", { method: "POST", body: JSON.stringify({ label }) }),
+  mintToken: (label: string, scope?: { allowedMatterIds?: string[]; maxRole?: MatterRole }) =>
+    req<{ token: string }>("/api/mcp-tokens", {
+      method: "POST",
+      body: JSON.stringify({ label, ...scope }),
+    }),
   revokeToken: (id: string) => req<null>(`/api/mcp-tokens/${id}`, { method: "DELETE" }),
 
   // Account settings

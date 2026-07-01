@@ -1,7 +1,8 @@
 import { createHash, randomBytes } from "node:crypto";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { db } from "@workspace/db/client";
-import { mcpAccessTokens, user, userSettings } from "@workspace/db/schema";
+import { type MatterRole, mcpAccessTokens, user, userSettings } from "@workspace/db/schema";
+import type { TokenScope } from "../core/commit.js";
 import { recordAudit } from "./audit.js";
 
 // Emit at most one mcp_token.use audit event per token per this window. Also
@@ -12,18 +13,25 @@ export function hashToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }
 
-/** Mint a token. The plaintext is returned once; only its hash is stored. */
-export async function mintMcpToken(userId: string, label: string): Promise<string> {
+/** Mint a token. The plaintext is returned once; only its hash is stored.
+ *  An omitted/empty scope mints an unscoped token (full power of the user). */
+export async function mintMcpToken(
+  userId: string,
+  label: string,
+  scope?: { allowedMatterIds?: string[] | null; maxRole?: MatterRole | null }
+): Promise<string> {
   const token = `gc_${randomBytes(32).toString("hex")}`;
+  const allowedMatterIds = scope?.allowedMatterIds?.length ? scope.allowedMatterIds : null;
+  const maxRole = scope?.maxRole ?? null;
   const [row] = await db
     .insert(mcpAccessTokens)
-    .values({ userId, label, tokenHash: hashToken(token) })
+    .values({ userId, label, tokenHash: hashToken(token), allowedMatterIds, maxRole })
     .returning({ id: mcpAccessTokens.id });
   void recordAudit({
     eventType: "mcp_token.mint",
     actorId: userId,
     target: row?.id,
-    metadata: { label },
+    metadata: { label, matterCount: allowedMatterIds?.length ?? null, maxRole },
   });
   return token;
 }
@@ -33,6 +41,8 @@ export async function listMcpTokens(userId: string) {
     .select({
       id: mcpAccessTokens.id,
       label: mcpAccessTokens.label,
+      allowedMatterIds: mcpAccessTokens.allowedMatterIds,
+      maxRole: mcpAccessTokens.maxRole,
       createdAt: mcpAccessTokens.createdAt,
       lastUsedAt: mcpAccessTokens.lastUsedAt,
       revokedAt: mcpAccessTokens.revokedAt,
@@ -84,6 +94,8 @@ export type McpAccount = {
   label: string;
   tenantId: string | null;
   jurisdiction: string | null;
+  /** Least-privilege restriction minted into the token; null = unscoped. */
+  scope: TokenScope | null;
 };
 
 // Short-lived cache of resolved accounts, keyed by token hash. A connected client
@@ -116,6 +128,8 @@ export async function resolveMcpAccount(token: string): Promise<McpAccount | nul
       tokenId: mcpAccessTokens.id,
       userId: mcpAccessTokens.userId,
       label: mcpAccessTokens.label,
+      allowedMatterIds: mcpAccessTokens.allowedMatterIds,
+      maxRole: mcpAccessTokens.maxRole,
       lastUsedAt: mcpAccessTokens.lastUsedAt,
       tenantId: user.tenantId,
       jurisdiction: userSettings.jurisdiction,
@@ -132,6 +146,10 @@ export async function resolveMcpAccount(token: string): Promise<McpAccount | nul
     label: row.label,
     tenantId: row.tenantId,
     jurisdiction: row.jurisdiction,
+    scope:
+      row.allowedMatterIds || row.maxRole
+        ? { matterIds: row.allowedMatterIds ?? null, maxRole: row.maxRole ?? null }
+        : null,
   };
   accountCache.set(hash, { account, expiresAt: now + CACHE_TTL_MS });
 

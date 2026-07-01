@@ -1,5 +1,5 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { type Actor, buildToolCatalog, recordToolCall } from "@workspace/core";
+import { type Actor, type TokenScope, buildToolCatalog, recordToolCall } from "@workspace/core";
 
 function json(value: unknown) {
   return { content: [{ type: "text" as const, text: JSON.stringify(value, null, 2) }] };
@@ -18,11 +18,13 @@ export function buildMcpServer(account: {
   jurisdiction: string;
   tokenId?: string;
   tenantId?: string | null;
+  scope?: TokenScope | null;
 }) {
   const actor: Actor = {
     type: "agent",
     userId: account.userId,
     agentLabel: `mcp:${account.label}`,
+    ...(account.scope ? { scope: account.scope } : {}),
   };
   const server = new McpServer({ name: "gitmatter", version: "0.1.0" });
   const catalog = buildToolCatalog(actor, {

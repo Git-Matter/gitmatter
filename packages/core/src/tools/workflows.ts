@@ -28,7 +28,7 @@ export function buildWorkflowTools({ actor, resolveMatter }: ToolContext): ToolS
         if (!result) return { error: "Not found" };
         if (
           !result.workflow.isSystem &&
-          !(await canAccessArtifact(actor.userId, "workflow", workflowId as string))
+          !(await canAccessArtifact(actor, "workflow", workflowId as string))
         )
           return { error: "Not found" };
         return result;
@@ -50,7 +50,7 @@ export function buildWorkflowTools({ actor, resolveMatter }: ToolContext): ToolS
           if (
             !existing ||
             existing.workflow.isSystem ||
-            !(await canAccessArtifact(actor.userId, "workflow", workflowId as string, "editor"))
+            !(await canAccessArtifact(actor, "workflow", workflowId as string, "editor"))
           )
             return { error: "Not found" };
           await updateWorkflow(actor, workflowId as string, {

@@ -97,6 +97,7 @@ export type DocumentListParams = {
 
 const documentListFields = {
   id: documents.id,
+  matterId: documents.matterId,
   title: documents.title,
   fileType: documents.fileType,
   status: documents.status,

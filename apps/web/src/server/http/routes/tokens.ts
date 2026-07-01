@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
-import { listMcpTokens, mintMcpToken, revokeMcpToken } from "@workspace/core";
+import { hasMatterAccess, listMcpTokens, mintMcpToken, revokeMcpToken } from "@workspace/core";
 import { type AuthEnv } from "../middleware/auth.js";
 import { mintTokenSchema } from "../schemas/tokens.js";
 
@@ -11,8 +11,19 @@ tokensRoute.get("/api/mcp-tokens", async (c) => {
 });
 
 tokensRoute.post("/api/mcp-tokens", zValidator("json", mintTokenSchema), async (c) => {
-  const label = c.req.valid("json").label?.trim() || "default";
-  const token = await mintMcpToken(c.get("user").id, label);
+  const body = c.req.valid("json");
+  const label = body.label?.trim() || "default";
+  const userId = c.get("user").id;
+  // A token can only be scoped to matters the minter is actually staffed on.
+  for (const matterId of body.allowedMatterIds ?? []) {
+    if (!(await hasMatterAccess(userId, matterId))) {
+      return c.json({ error: "Forbidden: no access to one of the selected matters" }, 403);
+    }
+  }
+  const token = await mintMcpToken(userId, label, {
+    allowedMatterIds: body.allowedMatterIds ?? null,
+    maxRole: body.maxRole ?? null,
+  });
   // Shown once; never retrievable again.
   return c.json({ token }, 201);
 });

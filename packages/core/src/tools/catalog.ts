@@ -184,10 +184,15 @@ export function buildToolCatalog(
 
   // Resolve the matter a new artifact lands in: an explicit (editor-checked)
   // matterId, or the acting user's default matter. Returns null when forbidden.
+  const scope = actor.type === "agent" ? (actor.scope ?? null) : null;
   const resolveMatter = async (matterId?: string): Promise<string | null> => {
     if (matterId) {
-      return (await hasMatterAccess(actor.userId, matterId, "editor")) ? matterId : null;
+      return (await hasMatterAccess(actor, matterId, "editor")) ? matterId : null;
     }
+    // A scoped token gets no implicit default matter: a matter-restricted token
+    // must name one of its matters, and a viewer-capped token cannot create.
+    if (scope?.matterIds) return null;
+    if (scope?.maxRole === "viewer") return null;
     const tenantId = await getUserTenant(actor.userId);
     if (!tenantId) return null;
     return ensureDefaultMatter(actor.userId, opts.defaultMatterLabel, tenantId);
