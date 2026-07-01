@@ -2,9 +2,23 @@ import { createFileRoute, Link, useNavigate, useParams } from "@tanstack/react-r
 import { useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createColumnHelper, type SortingState } from "@tanstack/react-table";
-import { FolderPlus, MessageSquarePlus, Pencil, Plus, TableProperties, Users } from "lucide-react";
+import {
+  FileClock,
+  FolderPlus,
+  MessageSquarePlus,
+  Pencil,
+  Plus,
+  TableProperties,
+  Users,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { DataTable } from "@/components/DataTable";
 import { PageHeader } from "@/components/PageHeader";
 import { PageShell } from "@/components/PageShell";
@@ -105,6 +119,28 @@ function MatterWorkspace() {
               >
                 <Pencil className="size-4" />
               </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  render={
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      title="Export audit trail"
+                      aria-label="Export audit trail"
+                    >
+                      <FileClock className="size-4" />
+                    </Button>
+                  }
+                />
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem render={<a href={api.matterAuditExportUrl(id, "csv")} />}>
+                    Audit trail (CSV)
+                  </DropdownMenuItem>
+                  <DropdownMenuItem render={<a href={api.matterAuditExportUrl(id, "docx")} />}>
+                    Audit trail (Word)
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>,
             <div key="create" className="flex items-center gap-0.5 rounded-full glass-panel p-1">
               <Button

@@ -576,6 +576,8 @@ export const api = {
   history: (id: string) => req<Blame[]>(`/api/tabular/reviews/${id}/history`),
   reviewExportUrl: (id: string, format: "csv" | "xlsx") =>
     `/api/tabular/reviews/${id}/export?format=${format}`,
+  matterAuditExportUrl: (id: string, format: "csv" | "docx") =>
+    `/api/matters/${id}/audit-export?format=${format}`,
   listTokens: () =>
     req<
       Array<{

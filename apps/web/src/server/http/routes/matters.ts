@@ -3,6 +3,8 @@ import { zValidator } from "@hono/zod-validator";
 import {
   addClientMember,
   addMember,
+  auditTrailToCsv,
+  auditTrailToDocx,
   checkConflicts,
   clearConflicts,
   closeMatter,
@@ -13,6 +15,7 @@ import {
   deleteClients,
   deleteFolder,
   findUserByEmail,
+  gatherMatterAudit,
   getClientOverview,
   getMatter,
   hasClientAccess,
@@ -30,6 +33,7 @@ import {
   renameFolder,
   searchUsers,
   selectClients,
+  recordAudit,
   updateClient,
   updateMatter,
   rowsToCsv,
@@ -212,6 +216,40 @@ mattersRoute.get("/api/matters/:id", async (c) => {
   if (!(await hasMatterAccess(c.get("user").id, id))) return c.json({ error: "Not found" }, 404);
   const matter = await getMatter(id);
   return matter ? c.json(matter) : c.json({ error: "Not found" }, 404);
+});
+
+// Export the matter's full audit trail (read-only, no commit). Any member can
+// export; each export is itself recorded in the security audit log.
+mattersRoute.get("/api/matters/:id/audit-export", async (c) => {
+  const id = c.req.param("id");
+  const userId = c.get("user").id;
+  if (!(await hasMatterAccess(userId, id))) return c.json({ error: "Not found" }, 404);
+  const trail = await gatherMatterAudit(id);
+  if (!trail) return c.json({ error: "Not found" }, 404);
+  const matter = await getMatter(id);
+  const format = c.req.query("format") === "docx" ? "docx" : "csv";
+  void recordAudit({
+    eventType: "matter.audit_export",
+    actorId: userId,
+    tenantId: matter?.tenantId,
+    target: id,
+    metadata: { format, entries: trail.entries.length },
+  });
+  const safe = trail.matterName.replace(/[^\w.-]+/g, "_") || "matter";
+  if (format === "docx") {
+    return new Response((await auditTrailToDocx(trail)) as BodyInit, {
+      headers: {
+        "Content-Type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "Content-Disposition": `attachment; filename="${safe}-audit.docx"`,
+      },
+    });
+  }
+  return new Response(auditTrailToCsv(trail), {
+    headers: {
+      "Content-Type": "text/csv; charset=utf-8",
+      "Content-Disposition": `attachment; filename="${safe}-audit.csv"`,
+    },
+  });
 });
 
 mattersRoute.patch("/api/matters/:id", zValidator("json", updateMatterSchema), async (c) => {
