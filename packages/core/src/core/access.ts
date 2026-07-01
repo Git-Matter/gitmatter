@@ -4,6 +4,7 @@ import {
   type ArtifactType,
   type MatterRole,
   artifactShares,
+  clauses,
   clientMembers,
   clients,
   documents,
@@ -67,6 +68,7 @@ const MATTER_TABLE = {
   tabular_review: tabularReviews,
   workflow: workflows,
   document: documents,
+  clause: clauses,
 } as const;
 
 /**

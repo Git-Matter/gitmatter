@@ -10,6 +10,7 @@ import {
   BookOpen,
   Briefcase,
   Building2,
+  BookMarked,
   Check,
   ChevronsUpDown,
   FolderOpen,
@@ -45,6 +46,7 @@ const NEW_CHAT = { href: "/assistant", label: "New chat", icon: Plus } as const;
 const NAV_ITEMS = [
   { href: "/reviews", label: "Reviews", icon: Table2 },
   { href: "/workflows", label: "Workflows", icon: Library },
+  { href: "/library", label: "Clauses", icon: BookMarked },
   { href: "/documents", label: "Documents", icon: FolderOpen },
   { href: "/clients", label: "Clients", icon: Building2 },
   { href: "/matters", label: "Matters", icon: Briefcase },

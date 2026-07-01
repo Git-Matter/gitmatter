@@ -16,7 +16,7 @@ import type { ToolSpec } from "./types.js";
 // route or agent tool) is a commit attributed to an actor (a user, or an agent
 // with its label — e.g. "mcp:<token>" or "chat"). These tools let an inbound
 // agent see who changed what, exactly, and with what.
-const ARTIFACT_TYPES = ["tabular_review", "workflow", "document"] as const;
+const ARTIFACT_TYPES = ["tabular_review", "workflow", "document", "clause"] as const;
 const artifactType = z.enum(ARTIFACT_TYPES);
 type ArtifactKind = (typeof ARTIFACT_TYPES)[number];
 

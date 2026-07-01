@@ -29,6 +29,7 @@ import { Route as AuthWorkflowsIndexRouteImport } from './routes/_auth/workflows
 import { Route as AuthSettingsIndexRouteImport } from './routes/_auth/settings/index'
 import { Route as AuthReviewsIndexRouteImport } from './routes/_auth/reviews/index'
 import { Route as AuthMattersIndexRouteImport } from './routes/_auth/matters/index'
+import { Route as AuthLibraryIndexRouteImport } from './routes/_auth/library/index'
 import { Route as AuthDocumentsIndexRouteImport } from './routes/_auth/documents/index'
 import { Route as AuthClientsIndexRouteImport } from './routes/_auth/clients/index'
 import { Route as AuthAssistantIndexRouteImport } from './routes/_auth/assistant/index'
@@ -142,6 +143,11 @@ const AuthReviewsIndexRoute = AuthReviewsIndexRouteImport.update({
 const AuthMattersIndexRoute = AuthMattersIndexRouteImport.update({
   id: '/matters/',
   path: '/matters/',
+  getParentRoute: () => AuthRouteRoute,
+} as any)
+const AuthLibraryIndexRoute = AuthLibraryIndexRouteImport.update({
+  id: '/library/',
+  path: '/library/',
   getParentRoute: () => AuthRouteRoute,
 } as any)
 const AuthDocumentsIndexRoute = AuthDocumentsIndexRouteImport.update({
@@ -262,6 +268,7 @@ export interface FileRoutesByFullPath {
   '/assistant/': typeof AuthAssistantIndexRoute
   '/clients/': typeof AuthClientsIndexRoute
   '/documents/': typeof AuthDocumentsIndexRoute
+  '/library/': typeof AuthLibraryIndexRoute
   '/matters/': typeof AuthMattersIndexRoute
   '/reviews/': typeof AuthReviewsIndexRoute
   '/settings/': typeof AuthSettingsIndexRoute
@@ -298,6 +305,7 @@ export interface FileRoutesByTo {
   '/assistant': typeof AuthAssistantIndexRoute
   '/clients': typeof AuthClientsIndexRoute
   '/documents': typeof AuthDocumentsIndexRoute
+  '/library': typeof AuthLibraryIndexRoute
   '/matters': typeof AuthMattersIndexRoute
   '/reviews': typeof AuthReviewsIndexRoute
   '/settings': typeof AuthSettingsIndexRoute
@@ -338,6 +346,7 @@ export interface FileRoutesById {
   '/_auth/assistant/': typeof AuthAssistantIndexRoute
   '/_auth/clients/': typeof AuthClientsIndexRoute
   '/_auth/documents/': typeof AuthDocumentsIndexRoute
+  '/_auth/library/': typeof AuthLibraryIndexRoute
   '/_auth/matters/': typeof AuthMattersIndexRoute
   '/_auth/reviews/': typeof AuthReviewsIndexRoute
   '/_auth/settings/': typeof AuthSettingsIndexRoute
@@ -376,6 +385,7 @@ export interface FileRouteTypes {
     | '/assistant/'
     | '/clients/'
     | '/documents/'
+    | '/library/'
     | '/matters/'
     | '/reviews/'
     | '/settings/'
@@ -412,6 +422,7 @@ export interface FileRouteTypes {
     | '/assistant'
     | '/clients'
     | '/documents'
+    | '/library'
     | '/matters'
     | '/reviews'
     | '/settings'
@@ -451,6 +462,7 @@ export interface FileRouteTypes {
     | '/_auth/assistant/'
     | '/_auth/clients/'
     | '/_auth/documents/'
+    | '/_auth/library/'
     | '/_auth/matters/'
     | '/_auth/reviews/'
     | '/_auth/settings/'
@@ -610,6 +622,13 @@ declare module '@tanstack/react-router' {
       path: '/matters'
       fullPath: '/matters/'
       preLoaderRoute: typeof AuthMattersIndexRouteImport
+      parentRoute: typeof AuthRouteRoute
+    }
+    '/_auth/library/': {
+      id: '/_auth/library/'
+      path: '/library'
+      fullPath: '/library/'
+      preLoaderRoute: typeof AuthLibraryIndexRouteImport
       parentRoute: typeof AuthRouteRoute
     }
     '/_auth/documents/': {
@@ -775,6 +794,7 @@ interface AuthRouteRouteChildren {
   AuthAssistantIndexRoute: typeof AuthAssistantIndexRoute
   AuthClientsIndexRoute: typeof AuthClientsIndexRoute
   AuthDocumentsIndexRoute: typeof AuthDocumentsIndexRoute
+  AuthLibraryIndexRoute: typeof AuthLibraryIndexRoute
   AuthMattersIndexRoute: typeof AuthMattersIndexRoute
   AuthReviewsIndexRoute: typeof AuthReviewsIndexRoute
   AuthSettingsIndexRoute: typeof AuthSettingsIndexRoute
@@ -793,6 +813,7 @@ const AuthRouteRouteChildren: AuthRouteRouteChildren = {
   AuthAssistantIndexRoute: AuthAssistantIndexRoute,
   AuthClientsIndexRoute: AuthClientsIndexRoute,
   AuthDocumentsIndexRoute: AuthDocumentsIndexRoute,
+  AuthLibraryIndexRoute: AuthLibraryIndexRoute,
   AuthMattersIndexRoute: AuthMattersIndexRoute,
   AuthReviewsIndexRoute: AuthReviewsIndexRoute,
   AuthSettingsIndexRoute: AuthSettingsIndexRoute,

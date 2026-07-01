@@ -105,6 +105,39 @@ export type Matter = {
 
 // listMattersForUser joins matter + client + the caller's role, plus the owner's
 // name and how many people have access (for the Projects-style list).
+// Clause library — approved language + fallback ladders, versioned on the spine.
+export type Clause = {
+  id: string;
+  title: string;
+  body: string;
+  category: string;
+  jurisdiction: string | null;
+  riskRating: "acceptable" | "negotiable" | "escalate";
+  guidance: string | null;
+  tags: string[] | null;
+  status: "approved" | "draft" | "deprecated";
+  matterId: string | null;
+  clientId: string | null;
+  parentClauseId: string | null;
+  fallbackRank: number | null;
+  userId: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ClauseInput = {
+  title: string;
+  body: string;
+  category: string;
+  jurisdiction?: string | null;
+  riskRating?: Clause["riskRating"];
+  guidance?: string | null;
+  tags?: string[] | null;
+  status?: Clause["status"];
+  parentClauseId?: string | null;
+  fallbackRank?: number | null;
+};
+
 // Per-matter LLM/tool spend, aggregated server-side (matterUsageSummary).
 export type MatterUsageSummary = {
   llm: Array<{
@@ -600,6 +633,23 @@ export const api = {
     `/api/matters/${id}/audit-export?format=${format}`,
   getMatterUsage: (id: string) => req<MatterUsageSummary>(`/api/matters/${id}/usage`),
   matterUsageExportUrl: (id: string) => `/api/matters/${id}/usage?format=csv`,
+
+  // Clause library
+  listClauses: (opts?: { category?: string; includeDeprecated?: boolean }) =>
+    req<Clause[]>(
+      `/api/clauses?${new URLSearchParams({
+        ...(opts?.category ? { category: opts.category } : {}),
+        ...(opts?.includeDeprecated ? { includeDeprecated: "true" } : {}),
+      })}`
+    ),
+  getClause: (id: string) => req<{ clause: Clause; ladder: Clause[] }>(`/api/clauses/${id}`),
+  createClause: (input: ClauseInput) =>
+    req<{ id: string }>("/api/clauses", { method: "POST", body: JSON.stringify(input) }),
+  updateClause: (id: string, patch: Partial<ClauseInput>) =>
+    req<{ committed: boolean }>(`/api/clauses/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(patch),
+    }),
   listTokens: () =>
     req<
       Array<{

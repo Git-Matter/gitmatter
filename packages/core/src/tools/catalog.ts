@@ -2,6 +2,7 @@ import { type ProviderId, providersFor } from "@workspace/registry";
 import { type Actor, getUserTenant, hasMatterAccess, logEvent } from "../core/index.js";
 import { ensureDefaultMatter } from "../platform/index.js";
 import { buildAuditTools } from "./audit.js";
+import { buildClauseTools } from "./clauses.js";
 import { buildDiscoveryTools } from "./discovery.js";
 import { buildDocumentTools } from "./documents.js";
 import { buildMatterTools } from "./matters.js";
@@ -207,6 +208,7 @@ export function buildToolCatalog(
     ...buildDocumentTools(ctx),
     ...buildDiscoveryTools(ctx),
     ...buildWorkflowTools(ctx),
+    ...buildClauseTools(ctx),
     ...buildResearchTools(ctx, providerIds),
   ].map((t) => withToolLogging(t, actor));
 }

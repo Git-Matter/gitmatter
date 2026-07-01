@@ -4,6 +4,7 @@ import { db, type Tx } from "@workspace/db/client";
 import {
   type ArtifactType,
   type MatterRole,
+  clauses,
   commits,
   documents,
   fieldChanges,
@@ -40,6 +41,7 @@ const HEAD_TABLE = {
   tabular_review: tabularReviews,
   workflow: workflows,
   document: documents,
+  clause: clauses,
 } as const;
 
 export interface RecordCommitArgs {

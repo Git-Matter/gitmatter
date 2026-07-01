@@ -16,6 +16,7 @@ import {
 } from "@workspace/core";
 import { resolveJurisdiction } from "@workspace/registry";
 import { chatRoute } from "./routes/chat.js";
+import { clausesRoute } from "./routes/clauses.js";
 import { documentsRoute } from "./routes/documents.js";
 import { keysRoute } from "./routes/keys.js";
 import { mattersRoute } from "./routes/matters.js";
@@ -241,6 +242,7 @@ app.route("/", tabularRoute);
 app.route("/", workflowRoute);
 app.route("/", chatRoute);
 app.route("/", tokensRoute);
+app.route("/", clausesRoute);
 
 // Exposed MCP server for Claude Desktop / CLI / Cowork. Authenticated by a
 // gitmatter access token; a fresh stateless server/transport per request.
