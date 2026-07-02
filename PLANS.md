@@ -12,7 +12,7 @@ Shared architectural facts these plans rely on:
 
 Suggested build order: 5 → 3 → 11 → 7 → 4 → 12 → 8+9 → 2 → 6 → 10 → 1 (roughly ascending risk; 5 unblocks enterprise, 1 is the deepest schema change).
 
-Status (2026-07-01): 5 (scoped tokens) and 3 (audit export) shipped; 11 (per-matter metering) schema landed, threading + report pending. 8+9 (clause library + playbooks) unified and prioritized next by user request — see the section for lawyer use cases and the Harvey-inspired authoring model.
+Status (2026-07-02): 5 (scoped tokens), 3 (audit export), and 11 (per-matter metering) shipped. 8+9 shipped through phase 2: clause library (artifact type `clause`, fallback ladders, client overlays, admin approval) and playbooks (`workflows.type: "playbook"` with rules, executed via the tabular runner, `draft_playbook` generator, seeded NDA playbook). **Architecture decision (Option B): "Library" is the shared product surface and lifecycle — one Library page (Clauses | Playbooks tabs), one draft → admin-approved → deprecated lifecycle, `list_*/get_*/suggest_*/write_*` MCP naming — while storage stays per-kind (typed tables, no generic library_items). Extract a shared base only when a third/fourth kind proves the repetition.** Remaining from 8+9 phase 3: clause injection into redline/chat prompts, per-cell "propose redline with fallback" handoff, escalation tie-in (needs Plan 2).
 
 ---
 

@@ -5,8 +5,10 @@ import {
   deleteWorkflow,
   deleteWorkflowShare,
   getWorkflowForViewer,
+  hasMatterAccess,
   hideWorkflow,
   listCommits,
+  runPlaybook,
   listHiddenWorkflows,
   listWorkflows,
   listWorkflowPractices,
@@ -23,13 +25,14 @@ import {
   createWorkflowSchema,
   hideWorkflowSchema,
   patchWorkflowSchema,
+  runPlaybookSchema,
   shareWorkflowSchema,
 } from "../schemas/workflow.js";
 
 export const workflowRoute = new Hono<AuthEnv>();
 
 const workflowTabs = ["all", "builtin", "custom", "hidden"] as const;
-const workflowTypes = ["assistant", "tabular"] as const;
+const workflowTypes = ["assistant", "tabular", "playbook"] as const;
 const workflowSorts = ["title", "type", "createdAt", "updatedAt", "practice", "source"] as const;
 
 function asTab(v: string | undefined) {
@@ -69,6 +72,7 @@ workflowRoute.post("/api/workflows", zValidator("json", createWorkflowSchema), a
       type: body.type,
       promptMd: body.promptMd ?? "",
       columnsConfig: body.columnsConfig,
+      rules: body.rules ?? null,
       practice: body.practice ?? null,
       matterId,
     }
@@ -116,9 +120,39 @@ workflowRoute.patch("/api/workflows/:id", zValidator("json", patchWorkflowSchema
   const result = await getWorkflowForViewer(id, user.id, user.email);
   if (!result || result.workflow.isSystem || !result.access?.canEdit)
     return c.json({ error: "Not found" }, 404);
-  await updateWorkflow({ type: "user", userId: user.id }, id, c.req.valid("json"));
+  const patch = c.req.valid("json");
+  // Library lifecycle: only a firm admin publishes or retires an item.
+  if (patch.status && patch.status !== "draft" && user.tenantRole !== "admin")
+    return c.json({ error: "Forbidden: only a firm admin can change approval status" }, 403);
+  await updateWorkflow({ type: "user", userId: user.id }, id, patch);
   return c.json(await getWorkflowForViewer(id, user.id, user.email));
 });
+
+// Run a playbook: materialize a tabular review (one verdict column per rule)
+// over the chosen documents. The review is then run like any other review.
+workflowRoute.post(
+  "/api/workflows/:id/run-playbook",
+  zValidator("json", runPlaybookSchema),
+  async (c) => {
+    const user = c.get("user");
+    const id = c.req.param("id");
+    const result = await getWorkflowForViewer(id, user.id, user.email);
+    if (!result || (!result.workflow.isSystem && !result.access?.canView))
+      return c.json({ error: "Not found" }, 404);
+    const body = c.req.valid("json");
+    if (!(await hasMatterAccess(user.id, body.matterId, "editor")))
+      return c.json({ error: "Forbidden" }, 403);
+    try {
+      const run = await runPlaybook(
+        { type: "user", userId: user.id },
+        { playbookId: id, documentIds: body.documentIds, matterId: body.matterId }
+      );
+      return c.json(run, 201);
+    } catch (err) {
+      return c.json({ error: err instanceof Error ? err.message : "Failed" }, 400);
+    }
+  }
+);
 
 workflowRoute.delete("/api/workflows/:id", async (c) => {
   const user = c.get("user");

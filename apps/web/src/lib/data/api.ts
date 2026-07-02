@@ -716,9 +716,10 @@ export const api = {
   },
   createWorkflow: (d: {
     title: string;
-    type: "assistant" | "tabular";
+    type: "assistant" | "tabular" | "playbook";
     promptMd?: string;
     columnsConfig?: Column[];
+    rules?: PlaybookRule[] | null;
     practice?: string | null;
     matterId?: string;
   }) => req<WorkflowDetail>("/api/workflows", { method: "POST", body: JSON.stringify(d) }),
@@ -730,10 +731,17 @@ export const api = {
       promptMd?: string;
       steps?: WorkflowStep[] | null;
       columnsConfig?: Column[];
+      rules?: PlaybookRule[] | null;
+      status?: "draft" | "approved" | "deprecated";
       practice?: string | null;
     }
   ) =>
     req<WorkflowDetail>(`/api/workflows/${id}`, { method: "PATCH", body: JSON.stringify(patch) }),
+  runPlaybook: (id: string, body: { matterId: string; documentIds: string[] }) =>
+    req<{ reviewId: string; ruleCount: number }>(`/api/workflows/${id}/run-playbook`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
   deleteWorkflow: (id: string) => req<null>(`/api/workflows/${id}`, { method: "DELETE" }),
   workflowHistory: (id: string) => req<Blame[]>(`/api/workflows/${id}/history`),
   // Hidden built-ins (per user)
@@ -1073,13 +1081,27 @@ export type DocumentDetail = {
 // One step of a multi-step assistant workflow (runs as its own chat turn, in order).
 export type WorkflowStep = { title?: string; promptMd: string };
 
+// One playbook rule (Harvey-style anatomy). Fallbacks are inline text or a
+// clause-library reference.
+export type PlaybookRule = {
+  id: string;
+  clauseType: string;
+  standardPosition: string;
+  fallbacks?: Array<string | { clauseId: string }>;
+  unacceptable?: string;
+  guidance?: string;
+  severity: "red" | "yellow";
+};
+
 export type WorkflowListItem = {
   id: string;
   title: string;
-  type: "assistant" | "tabular";
+  type: "assistant" | "tabular" | "playbook";
   promptMd: string;
   steps: WorkflowStep[] | null;
   columnsConfig: Column[] | null;
+  rules: PlaybookRule[] | null;
+  status: "draft" | "approved" | "deprecated";
   practice: string | null;
   isSystem: boolean;
   isOwner: boolean;

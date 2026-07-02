@@ -57,7 +57,7 @@ function useWorkflowForm({ open, onClose, onCreated, editWorkflow, onUpdated }: 
     if (!open) return;
     if (editWorkflow) {
       setTitle(editWorkflow.title);
-      setType(editWorkflow.type);
+      setType(editWorkflow.type === "playbook" ? "assistant" : editWorkflow.type);
       setPractice(editWorkflow.practice ?? null);
     } else {
       setTitle("");
