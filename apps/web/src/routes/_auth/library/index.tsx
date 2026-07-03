@@ -1,8 +1,9 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createColumnHelper } from "@tanstack/react-table";
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { BookMarked, ClipboardCheck, Play, Plus, Trash2 } from "lucide-react";
+import { BookMarked, ClipboardCheck, Play, Plus, Trash2, User } from "lucide-react";
 import {
   api,
   type Clause,
@@ -10,6 +11,7 @@ import {
   type PlaybookRule,
   type WorkflowListItem,
 } from "@/lib/data/api";
+import { DataTable } from "@/components/DataTable";
 import { ToolbarTabs } from "@/components/ToolbarTabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -33,8 +35,11 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { PageHeader } from "@/components/PageHeader";
 import { PageShell } from "@/components/PageShell";
+import { TablePager } from "@/components/TablePager";
 import { TableSearch } from "@/components/TableSearch";
 import { useSession } from "@/lib/auth/auth-client";
+import { queryKeys } from "@/lib/data/queries";
+import { useDataTable } from "@/lib/hooks/table/useDataTable";
 
 export const Route = createFileRoute("/_auth/library/")({ component: LibraryPage });
 
@@ -46,37 +51,99 @@ const RISK_LABEL = { acceptable: "Acceptable", negotiable: "Negotiable", escalat
 const STATUS_VARIANT = { approved: "default", draft: "secondary", deprecated: "outline" } as const;
 
 type LibraryTab = "clauses" | "playbooks";
+const LIBRARY_TABS = [
+  { id: "clauses" as const, label: "Clauses" },
+  { id: "playbooks" as const, label: "Playbooks" },
+];
+const clauseColumn = createColumnHelper<Clause>();
+const playbookColumn = createColumnHelper<WorkflowListItem>();
 
 function LibraryPage() {
+  // DataTable receives a stable TanStack table whose rows mutate in place.
+  "use no memo";
   const [tab, setTab] = useState<LibraryTab>("clauses");
+  const [clauseSearch, setClauseSearch] = useState("");
+  const [playbookSearch, setPlaybookSearch] = useState("");
+  const [creatingClause, setCreatingClause] = useState(false);
+  const [creatingPlaybook, setCreatingPlaybook] = useState(false);
   const { data: session } = useSession();
   const isAdmin =
     session?.user && "tenantRole" in session.user
       ? (session.user as { tenantRole?: string }).tenantRole === "admin"
       : false;
+  const search = tab === "clauses" ? clauseSearch : playbookSearch;
+  const setSearch = tab === "clauses" ? setClauseSearch : setPlaybookSearch;
 
   return (
-    <PageShell header={<PageHeader breadcrumbs={[{ label: "Library" }]} />}>
+    <PageShell
+      mode="fill"
+      bodyClassName="gap-stack"
+      header={
+        <PageHeader
+          title="Library"
+          action={
+            <Button
+              variant="outline"
+              size="icon-sm"
+              className="rounded-full"
+              tooltip={tab === "clauses" ? "New clause" : "New playbook"}
+              onClick={() =>
+                tab === "clauses" ? setCreatingClause(true) : setCreatingPlaybook(true)
+              }
+            >
+              <Plus className="size-4" />
+            </Button>
+          }
+        />
+      }
+    >
       <ToolbarTabs
-        tabs={[
-          { id: "clauses" as const, label: "Clauses" },
-          { id: "playbooks" as const, label: "Playbooks" },
-        ]}
+        tabs={LIBRARY_TABS}
         active={tab}
         onChange={setTab}
+        actions={
+          <TableSearch
+            value={search}
+            onChange={setSearch}
+            placeholder={tab === "clauses" ? "Search clauses…" : "Search playbooks…"}
+          />
+        }
       />
-      {tab === "clauses" && <ClausesSection isAdmin={isAdmin} />}
-      {tab === "playbooks" && <PlaybooksSection isAdmin={isAdmin} />}
+      {tab === "clauses" && (
+        <ClausesSection
+          isAdmin={isAdmin}
+          search={clauseSearch}
+          creating={creatingClause}
+          onCreatingChange={setCreatingClause}
+        />
+      )}
+      {tab === "playbooks" && (
+        <PlaybooksSection
+          isAdmin={isAdmin}
+          search={playbookSearch}
+          creating={creatingPlaybook}
+          onCreatingChange={setCreatingPlaybook}
+        />
+      )}
     </PageShell>
   );
 }
 
-function ClausesSection({ isAdmin }: { isAdmin: boolean }) {
+function ClausesSection({
+  isAdmin,
+  search,
+  creating,
+  onCreatingChange,
+}: {
+  isAdmin: boolean;
+  search: string;
+  creating: boolean;
+  onCreatingChange: (open: boolean) => void;
+}) {
   const qc = useQueryClient();
-  const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editing, setEditing] = useState<Clause | null>(null);
-  const [creating, setCreating] = useState<{ parent?: Clause } | null>(null);
+  const [creatingParent, setCreatingParent] = useState<Clause | null>(null);
 
   const { data: clausesList = [] } = useQuery({
     queryKey: ["clauses"],
@@ -111,94 +178,79 @@ function ClausesSection({ isAdmin }: { isAdmin: boolean }) {
   });
 
   const filtered = useMemo(
-    () =>
-      clausesList.filter(
-        (cl) =>
-          cl.title.toLowerCase().includes(search.toLowerCase()) ||
-          cl.category.toLowerCase().includes(search.toLowerCase())
-      ),
+    () => clausesList.filter((cl) => clauseMatches(cl, search)),
     [clausesList, search]
   );
-  const byCategory = useMemo(() => {
-    const m = new Map<string, Clause[]>();
-    for (const cl of filtered) m.set(cl.category, [...(m.get(cl.category) ?? []), cl]);
-    return [...m.entries()].sort(([a], [b]) => a.localeCompare(b));
-  }, [filtered]);
+  const columns = useMemo(
+    () =>
+      clauseColumns({
+        isAdmin,
+        onOpen: (cl) => setSelectedId(cl.id),
+        onEdit: setEditing,
+        onApprove: (id) => approveMutation.mutate(id),
+        onDeprecate: (id) => deprecateMutation.mutate(id),
+      }),
+    [isAdmin, approveMutation, deprecateMutation]
+  );
+  const { table } = useDataTable({
+    mode: "client",
+    columns,
+    data: filtered,
+    getRowId: (cl) => cl.id,
+    defaultSorting: [{ id: "category", desc: false }],
+  });
 
   return (
-    <div className="flex flex-col gap-stack">
-      <div className="flex items-center justify-between gap-3">
-        <TableSearch value={search} onChange={setSearch} placeholder="Filter clauses…" />
-        <div className="flex items-center gap-3">
-          <p className="text-sm text-muted-foreground">
-            Approved language and fallback positions. Every edit is a commit with blame.
-          </p>
-          <Button size="sm" onClick={() => setCreating({})}>
-            <Plus className="size-4" /> New clause
-          </Button>
-        </div>
-      </div>
+    <>
+      <DataTable
+        table={table}
+        onRowClick={(cl) => setSelectedId(cl.id)}
+        empty={
+          search.trim()
+            ? `No clauses match "${search}".`
+            : "No clauses yet. Add your firm's standard language to get started."
+        }
+      />
+      {filtered.length > 0 && <TablePager table={table} />}
 
-      {byCategory.map(([category, rows]) => (
-        <div key={category} className="flex flex-col gap-1.5">
-          <p className="mt-2 text-sm font-medium text-muted-foreground">{category}</p>
-          <ul className="flex flex-col">
-            {rows.map((cl) => (
-              <li
-                key={cl.id}
-                className="flex cursor-pointer items-center justify-between gap-3 border-b py-2 hover:bg-muted/40"
-                onClick={() => setSelectedId(cl.id === selectedId ? null : cl.id)}
-              >
-                <div className="flex min-w-0 items-center gap-2">
-                  <BookMarked className="size-4 shrink-0 text-muted-foreground" />
-                  <span className="truncate font-medium">{cl.title}</span>
-                  {cl.jurisdiction && (
-                    <span className="text-xs text-muted-foreground">{cl.jurisdiction}</span>
-                  )}
-                </div>
-                <div className="flex shrink-0 items-center gap-1.5">
-                  <span className="text-xs text-muted-foreground">{RISK_LABEL[cl.riskRating]}</span>
-                  <Badge variant={STATUS_VARIANT[cl.status]}>{cl.status}</Badge>
-                </div>
-              </li>
-            ))}
-          </ul>
-          {selectedId && detail && rows.some((r) => r.id === selectedId) && (
-            <ClauseDetail
-              detail={detail}
-              isAdmin={isAdmin}
-              onEdit={(cl) => setEditing(cl)}
-              onAddFallback={(parent) => setCreating({ parent })}
-              onApprove={(id) => approveMutation.mutate(id)}
-              onDeprecate={(id) => deprecateMutation.mutate(id)}
-            />
-          )}
-        </div>
-      ))}
-      {!filtered.length && (
-        <p className="py-8 text-center text-sm text-muted-foreground">
-          No clauses yet. Add your firm's standard language to get started.
-        </p>
+      {selectedId && detail && (
+        <ClauseDetailDialog
+          detail={detail}
+          isAdmin={isAdmin}
+          onClose={() => setSelectedId(null)}
+          onEdit={(cl) => {
+            setSelectedId(null);
+            setEditing(cl);
+          }}
+          onAddFallback={(parent) => {
+            setSelectedId(null);
+            setCreatingParent(parent);
+          }}
+          onApprove={(id) => approveMutation.mutate(id)}
+          onDeprecate={(id) => deprecateMutation.mutate(id)}
+        />
       )}
 
-      {(creating || editing) && (
+      {(creating || creatingParent || editing) && (
         <ClauseFormDialog
           clause={editing}
-          parent={creating?.parent}
+          parent={creatingParent ?? undefined}
           onClose={() => {
-            setCreating(null);
+            onCreatingChange(false);
+            setCreatingParent(null);
             setEditing(null);
           }}
           onSaved={invalidate}
         />
       )}
-    </div>
+    </>
   );
 }
 
-function ClauseDetail({
+function ClauseDetailDialog({
   detail,
   isAdmin,
+  onClose,
   onEdit,
   onAddFallback,
   onApprove,
@@ -206,6 +258,7 @@ function ClauseDetail({
 }: {
   detail: { clause: Clause; ladder: Clause[] };
   isAdmin: boolean;
+  onClose: () => void;
   onEdit: (cl: Clause) => void;
   onAddFallback: (parent: Clause) => void;
   onApprove: (id: string) => void;
@@ -213,47 +266,155 @@ function ClauseDetail({
 }) {
   const { ladder } = detail;
   return (
-    <div className="rounded-md border bg-muted/20 p-3">
-      {ladder.map((cl, i) => (
-        <div key={cl.id} className={i > 0 ? "mt-3 border-t pt-3" : ""}>
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-sm font-medium">
-              {i === 0 ? "Standard position" : `Fallback ${cl.fallbackRank ?? i}`}
-              {cl.status !== "approved" && (
-                <span className="ml-2 text-xs text-muted-foreground">({cl.status})</span>
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-h-[85vh] max-w-2xl overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>{detail.clause.title}</DialogTitle>
+        </DialogHeader>
+        <div className="flex flex-col gap-3">
+          {ladder.map((cl, i) => (
+            <div key={cl.id} className={i > 0 ? "border-t pt-3" : ""}>
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm font-medium">
+                  {i === 0 ? "Standard position" : `Fallback ${cl.fallbackRank ?? i}`}
+                  {cl.status !== "approved" && (
+                    <span className="ml-2 text-xs text-muted-foreground">({cl.status})</span>
+                  )}
+                </p>
+                <div className="flex items-center gap-1.5">
+                  {isAdmin && cl.status === "draft" && (
+                    <Button size="xs" variant="outline" onClick={() => onApprove(cl.id)}>
+                      Approve
+                    </Button>
+                  )}
+                  {isAdmin && cl.status !== "deprecated" && (
+                    <Button size="xs" variant="ghost" onClick={() => onDeprecate(cl.id)}>
+                      Deprecate
+                    </Button>
+                  )}
+                  <Button size="xs" variant="ghost" onClick={() => onEdit(cl)}>
+                    Edit
+                  </Button>
+                </div>
+              </div>
+              <p className="mt-1 text-sm whitespace-pre-wrap">{cl.body}</p>
+              {cl.guidance && (
+                <p className="mt-1.5 text-xs whitespace-pre-wrap text-muted-foreground">
+                  {cl.guidance}
+                </p>
               )}
-            </p>
-            <div className="flex items-center gap-1.5">
-              {isAdmin && cl.status === "draft" && (
-                <Button size="xs" variant="outline" onClick={() => onApprove(cl.id)}>
-                  Approve
-                </Button>
-              )}
-              {isAdmin && cl.status !== "deprecated" && (
-                <Button size="xs" variant="ghost" onClick={() => onDeprecate(cl.id)}>
-                  Deprecate
-                </Button>
-              )}
-              <Button size="xs" variant="ghost" onClick={() => onEdit(cl)}>
-                Edit
-              </Button>
             </div>
+          ))}
+          <div className="border-t pt-3">
+            <Button size="xs" variant="outline" onClick={() => onAddFallback(ladder[0]!)}>
+              <Plus className="size-3.5" /> Add fallback position
+            </Button>
           </div>
-          <p className="mt-1 text-sm whitespace-pre-wrap">{cl.body}</p>
-          {cl.guidance && (
-            <p className="mt-1.5 text-xs whitespace-pre-wrap text-muted-foreground">
-              {cl.guidance}
-            </p>
-          )}
         </div>
-      ))}
-      <div className="mt-3 border-t pt-2">
-        <Button size="xs" variant="outline" onClick={() => onAddFallback(ladder[0]!)}>
-          <Plus className="size-3.5" /> Add fallback position
-        </Button>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
+}
+
+function clauseMatches(clause: Clause, search: string) {
+  const query = search.trim().toLowerCase();
+  if (!query) return true;
+  return [
+    clause.title,
+    clause.category,
+    clause.jurisdiction,
+    clause.body,
+    clause.guidance,
+    RISK_LABEL[clause.riskRating],
+    clause.status,
+  ].some((value) => value?.toLowerCase().includes(query));
+}
+
+function clauseColumns({
+  isAdmin,
+  onOpen,
+  onEdit,
+  onApprove,
+  onDeprecate,
+}: {
+  isAdmin: boolean;
+  onOpen: (clause: Clause) => void;
+  onEdit: (clause: Clause) => void;
+  onApprove: (id: string) => void;
+  onDeprecate: (id: string) => void;
+}) {
+  return [
+    clauseColumn.accessor("title", {
+      header: "Clause",
+      size: 320,
+      cell: (c) => (
+        <span className="inline-flex min-w-0 items-center gap-2 text-sm text-foreground">
+          <BookMarked className="size-4 shrink-0 text-muted-foreground" />
+          <span className="truncate">{c.getValue()}</span>
+        </span>
+      ),
+    }),
+    clauseColumn.accessor("category", {
+      header: "Category",
+      size: 180,
+      cell: (c) => (
+        <span className="text-xs font-medium text-muted-foreground">{c.getValue()}</span>
+      ),
+    }),
+    clauseColumn.accessor("jurisdiction", {
+      header: "Jurisdiction",
+      size: 120,
+      cell: (c) =>
+        c.getValue() ? (
+          <span className="text-xs font-medium text-muted-foreground">{c.getValue()}</span>
+        ) : (
+          <span className="text-xs text-muted-foreground/40">—</span>
+        ),
+    }),
+    clauseColumn.accessor("riskRating", {
+      header: "Risk",
+      size: 140,
+      cell: (c) => (
+        <span className="text-xs text-muted-foreground">{RISK_LABEL[c.getValue()]}</span>
+      ),
+    }),
+    clauseColumn.accessor("status", {
+      header: "Status",
+      size: 120,
+      meta: { noTruncate: true },
+      cell: (c) => <Badge variant={STATUS_VARIANT[c.getValue()]}>{c.getValue()}</Badge>,
+    }),
+    clauseColumn.display({
+      id: "actions",
+      header: "",
+      size: 144,
+      enableResizing: false,
+      meta: { noTruncate: true },
+      cell: (c) => {
+        const clause = c.row.original;
+        return (
+          <div className="flex justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
+            {isAdmin && clause.status === "draft" && (
+              <Button size="xs" variant="outline" onClick={() => onApprove(clause.id)}>
+                Approve
+              </Button>
+            )}
+            <Button size="xs" variant="ghost" onClick={() => onOpen(clause)}>
+              View
+            </Button>
+            <Button size="xs" variant="ghost" onClick={() => onEdit(clause)}>
+              Edit
+            </Button>
+            {isAdmin && clause.status !== "deprecated" && (
+              <Button size="xs" variant="ghost" onClick={() => onDeprecate(clause.id)}>
+                Deprecate
+              </Button>
+            )}
+          </div>
+        );
+      },
+    }),
+  ];
 }
 
 function ClauseFormDialog({
@@ -387,20 +548,32 @@ function ClauseFormDialog({
 
 // ---- Playbooks section ----------------------------------------------------
 
-function PlaybooksSection({ isAdmin }: { isAdmin: boolean }) {
+function PlaybooksSection({
+  isAdmin,
+  search,
+  creating,
+  onCreatingChange,
+}: {
+  isAdmin: boolean;
+  search: string;
+  creating: boolean;
+  onCreatingChange: (open: boolean) => void;
+}) {
   const qc = useQueryClient();
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selected, setSelected] = useState<WorkflowListItem | null>(null);
   const [editing, setEditing] = useState<WorkflowListItem | null>(null);
-  const [creating, setCreating] = useState(false);
   const [running, setRunning] = useState<WorkflowListItem | null>(null);
 
   const { data: allWorkflows = [] } = useQuery({
-    queryKey: ["workflows-all"],
+    queryKey: queryKeys.workflows,
     queryFn: () => api.listWorkflows(),
   });
-  const playbooks = allWorkflows.filter((w) => w.type === "playbook");
+  const playbooks = useMemo(
+    () => allWorkflows.filter((w) => w.type === "playbook" && playbookMatches(w, search)),
+    [allWorkflows, search]
+  );
 
-  const invalidate = () => void qc.invalidateQueries({ queryKey: ["workflows-all"] });
+  const invalidate = () => void qc.invalidateQueries({ queryKey: queryKeys.workflows });
 
   const statusMutation = useMutation({
     mutationFn: (v: { id: string; status: "approved" | "deprecated" }) =>
@@ -411,127 +584,281 @@ function PlaybooksSection({ isAdmin }: { isAdmin: boolean }) {
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
   });
+  const columns = useMemo(
+    () =>
+      playbookColumns({
+        isAdmin,
+        onOpen: setSelected,
+        onRun: setRunning,
+        onEdit: setEditing,
+        onApprove: (id) => statusMutation.mutate({ id, status: "approved" }),
+        onDeprecate: (id) => statusMutation.mutate({ id, status: "deprecated" }),
+      }),
+    [isAdmin, statusMutation]
+  );
+  const { table } = useDataTable({
+    mode: "client",
+    columns,
+    data: playbooks,
+    getRowId: (pb) => pb.id,
+    defaultSorting: [{ id: "title", desc: false }],
+  });
 
   return (
-    <div className="flex flex-col gap-stack">
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-sm text-muted-foreground">
-          How the firm reviews each contract type: standard positions, fallbacks, and red lines. Run
-          one against documents to get a verdict per rule.
-        </p>
-        <Button size="sm" onClick={() => setCreating(true)}>
-          <Plus className="size-4" /> New playbook
-        </Button>
-      </div>
+    <>
+      <DataTable
+        table={table}
+        onRowClick={setSelected}
+        empty={
+          search.trim()
+            ? `No playbooks match "${search}".`
+            : "No playbooks yet. Create one, or ask your assistant to draft one from your standard template."
+        }
+      />
+      {playbooks.length > 0 && <TablePager table={table} />}
 
-      <ul className="flex flex-col">
-        {playbooks.map((pb) => (
-          <li key={pb.id} className="border-b">
-            <div
-              className="flex cursor-pointer items-center justify-between gap-3 py-2 hover:bg-muted/40"
-              onClick={() => setSelectedId(pb.id === selectedId ? null : pb.id)}
-            >
-              <div className="flex min-w-0 items-center gap-2">
-                <ClipboardCheck className="size-4 shrink-0 text-muted-foreground" />
-                <span className="truncate font-medium">{pb.title}</span>
-                <span className="text-xs text-muted-foreground">
-                  {pb.rules?.length ?? 0} rules{pb.isSystem ? " · built-in" : ""}
-                </span>
-              </div>
-              <div className="flex shrink-0 items-center gap-1.5">
-                <Badge variant={STATUS_VARIANT[pb.status]}>{pb.status}</Badge>
-                <Button
-                  size="xs"
-                  variant="outline"
-                  disabled={pb.status === "deprecated"}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setRunning(pb);
-                  }}
-                >
-                  <Play className="size-3.5" /> Run
-                </Button>
-              </div>
-            </div>
-            {selectedId === pb.id && (
-              <div className="mb-2 rounded-md border bg-muted/20 p-3">
-                {(pb.rules ?? []).map((rule) => (
-                  <div key={rule.id} className="border-b py-2 last:border-b-0">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="text-sm font-medium">{rule.clauseType}</p>
-                      <Badge variant={rule.severity === "red" ? "destructive" : "secondary"}>
-                        {rule.severity}
-                      </Badge>
-                    </div>
-                    <p className="mt-0.5 text-sm">{rule.standardPosition}</p>
-                    {rule.fallbacks?.length ? (
-                      <p className="mt-0.5 text-xs text-muted-foreground">
-                        Fallbacks:{" "}
-                        {rule.fallbacks
-                          .map((f) => (typeof f === "string" ? f : `clause:${f.clauseId}`))
-                          .join(" → ")}
-                      </p>
-                    ) : null}
-                    {rule.unacceptable && (
-                      <p className="mt-0.5 text-xs text-destructive">
-                        Red line: {rule.unacceptable}
-                      </p>
-                    )}
-                    {rule.guidance && (
-                      <p className="mt-0.5 text-xs text-muted-foreground">{rule.guidance}</p>
-                    )}
-                  </div>
-                ))}
-                <div className="mt-2 flex items-center gap-1.5 border-t pt-2">
-                  {isAdmin && pb.status === "draft" && (
-                    <Button
-                      size="xs"
-                      variant="outline"
-                      onClick={() => statusMutation.mutate({ id: pb.id, status: "approved" })}
-                    >
-                      Approve
-                    </Button>
-                  )}
-                  {isAdmin && pb.status !== "deprecated" && !pb.isSystem && (
-                    <Button
-                      size="xs"
-                      variant="ghost"
-                      onClick={() => statusMutation.mutate({ id: pb.id, status: "deprecated" })}
-                    >
-                      Deprecate
-                    </Button>
-                  )}
-                  {!pb.isSystem && pb.allowEdit && (
-                    <Button size="xs" variant="ghost" onClick={() => setEditing(pb)}>
-                      Edit rules
-                    </Button>
-                  )}
-                </div>
-              </div>
-            )}
-          </li>
-        ))}
-        {!playbooks.length && (
-          <p className="py-8 text-center text-sm text-muted-foreground">
-            No playbooks yet. Create one, or ask your assistant to draft one from your standard
-            template (draft_playbook).
-          </p>
-        )}
-      </ul>
+      {selected && (
+        <PlaybookDetailDialog
+          playbook={selected}
+          isAdmin={isAdmin}
+          onClose={() => setSelected(null)}
+          onRun={setRunning}
+          onEdit={(playbook) => {
+            setSelected(null);
+            setEditing(playbook);
+          }}
+          onApprove={(id) => statusMutation.mutate({ id, status: "approved" })}
+          onDeprecate={(id) => statusMutation.mutate({ id, status: "deprecated" })}
+        />
+      )}
 
       {(creating || editing) && (
         <PlaybookFormDialog
           playbook={editing}
           onClose={() => {
-            setCreating(false);
+            onCreatingChange(false);
             setEditing(null);
           }}
           onSaved={invalidate}
         />
       )}
       {running && <RunPlaybookDialog playbook={running} onClose={() => setRunning(null)} />}
-    </div>
+    </>
   );
+}
+
+function PlaybookDetailDialog({
+  playbook,
+  isAdmin,
+  onClose,
+  onRun,
+  onEdit,
+  onApprove,
+  onDeprecate,
+}: {
+  playbook: WorkflowListItem;
+  isAdmin: boolean;
+  onClose: () => void;
+  onRun: (playbook: WorkflowListItem) => void;
+  onEdit: (playbook: WorkflowListItem) => void;
+  onApprove: (id: string) => void;
+  onDeprecate: (id: string) => void;
+}) {
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-h-[85vh] max-w-2xl overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>{playbook.title}</DialogTitle>
+        </DialogHeader>
+        <div className="flex flex-col gap-3">
+          {(playbook.rules ?? []).map((rule) => (
+            <div key={rule.id} className="border-b pb-3 last:border-b-0 last:pb-0">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm font-medium">{rule.clauseType}</p>
+                <Badge variant={rule.severity === "red" ? "destructive" : "secondary"}>
+                  {rule.severity}
+                </Badge>
+              </div>
+              <p className="mt-1 text-sm">{rule.standardPosition}</p>
+              {rule.fallbacks?.length ? (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Fallbacks:{" "}
+                  {rule.fallbacks
+                    .map((fallback) =>
+                      typeof fallback === "string" ? fallback : `clause:${fallback.clauseId}`
+                    )
+                    .join(" -> ")}
+                </p>
+              ) : null}
+              {rule.unacceptable && (
+                <p className="mt-1 text-xs text-destructive">Red line: {rule.unacceptable}</p>
+              )}
+              {rule.guidance && (
+                <p className="mt-1 text-xs text-muted-foreground">{rule.guidance}</p>
+              )}
+            </div>
+          ))}
+          {!playbook.rules?.length && (
+            <p className="text-sm text-muted-foreground">No rules have been added yet.</p>
+          )}
+        </div>
+        <DialogFooter>
+          <div className="flex flex-1 items-center gap-1.5">
+            {isAdmin && playbook.status === "draft" && (
+              <Button size="xs" variant="outline" onClick={() => onApprove(playbook.id)}>
+                Approve
+              </Button>
+            )}
+            {isAdmin && playbook.status !== "deprecated" && !playbook.isSystem && (
+              <Button size="xs" variant="ghost" onClick={() => onDeprecate(playbook.id)}>
+                Deprecate
+              </Button>
+            )}
+            {!playbook.isSystem && playbook.allowEdit && (
+              <Button size="xs" variant="ghost" onClick={() => onEdit(playbook)}>
+                Edit rules
+              </Button>
+            )}
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={playbook.status === "deprecated"}
+            onClick={() => onRun(playbook)}
+          >
+            <Play className="size-3.5" /> Run
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function playbookMatches(playbook: WorkflowListItem, search: string) {
+  const query = search.trim().toLowerCase();
+  if (!query) return true;
+  return [
+    playbook.title,
+    playbook.practice,
+    playbook.status,
+    playbook.isSystem ? "built-in" : playbook.isOwner ? "myself" : playbook.sharedByName,
+    ...(playbook.rules ?? []).flatMap((rule) => [
+      rule.clauseType,
+      rule.standardPosition,
+      rule.unacceptable,
+      rule.guidance,
+      rule.severity,
+    ]),
+  ].some((value) => value?.toLowerCase().includes(query));
+}
+
+function playbookColumns({
+  isAdmin,
+  onOpen,
+  onRun,
+  onEdit,
+  onApprove,
+  onDeprecate,
+}: {
+  isAdmin: boolean;
+  onOpen: (playbook: WorkflowListItem) => void;
+  onRun: (playbook: WorkflowListItem) => void;
+  onEdit: (playbook: WorkflowListItem) => void;
+  onApprove: (id: string) => void;
+  onDeprecate: (id: string) => void;
+}) {
+  return [
+    playbookColumn.accessor("title", {
+      header: "Playbook",
+      size: 320,
+      cell: (c) => (
+        <span className="inline-flex min-w-0 items-center gap-2 text-sm text-foreground">
+          <ClipboardCheck className="size-4 shrink-0 text-muted-foreground" />
+          <span className="truncate">{c.getValue()}</span>
+        </span>
+      ),
+    }),
+    playbookColumn.display({
+      id: "rules",
+      header: "Rules",
+      size: 100,
+      cell: (c) => (
+        <span className="text-xs font-medium text-muted-foreground">
+          {c.row.original.rules?.length ?? 0} rules
+        </span>
+      ),
+    }),
+    playbookColumn.display({
+      id: "source",
+      header: "Source",
+      size: 140,
+      cell: (c) => {
+        const playbook = c.row.original;
+        return (
+          <span className="inline-flex min-w-0 items-center gap-1.5 text-xs font-medium text-muted-foreground">
+            {playbook.isSystem ? (
+              <ClipboardCheck className="size-3.5 shrink-0" />
+            ) : (
+              <User className="size-3.5 shrink-0" />
+            )}
+            <span className="truncate">
+              {playbook.isSystem
+                ? "Built-in"
+                : playbook.isOwner
+                  ? "Myself"
+                  : (playbook.sharedByName ?? "Shared")}
+            </span>
+          </span>
+        );
+      },
+    }),
+    playbookColumn.accessor("status", {
+      header: "Status",
+      size: 120,
+      meta: { noTruncate: true },
+      cell: (c) => <Badge variant={STATUS_VARIANT[c.getValue()]}>{c.getValue()}</Badge>,
+    }),
+    playbookColumn.display({
+      id: "actions",
+      header: "",
+      size: 184,
+      enableResizing: false,
+      meta: { noTruncate: true },
+      cell: (c) => {
+        const playbook = c.row.original;
+        return (
+          <div className="flex justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
+            {isAdmin && playbook.status === "draft" && (
+              <Button size="xs" variant="outline" onClick={() => onApprove(playbook.id)}>
+                Approve
+              </Button>
+            )}
+            <Button size="xs" variant="ghost" onClick={() => onOpen(playbook)}>
+              View
+            </Button>
+            {!playbook.isSystem && playbook.allowEdit && (
+              <Button size="xs" variant="ghost" onClick={() => onEdit(playbook)}>
+                Edit
+              </Button>
+            )}
+            <Button
+              size="xs"
+              variant="outline"
+              disabled={playbook.status === "deprecated"}
+              onClick={() => onRun(playbook)}
+            >
+              <Play className="size-3.5" /> Run
+            </Button>
+            {isAdmin && playbook.status !== "deprecated" && !playbook.isSystem && (
+              <Button size="xs" variant="ghost" onClick={() => onDeprecate(playbook.id)}>
+                Deprecate
+              </Button>
+            )}
+          </div>
+        );
+      },
+    }),
+  ];
 }
 
 const EMPTY_RULE = (): PlaybookRule => ({
