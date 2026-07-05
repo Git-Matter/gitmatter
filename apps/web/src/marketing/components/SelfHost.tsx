@@ -21,9 +21,9 @@ const POINTS: {
   },
   {
     title: "Run on our cloud",
-    body: "Skip the setup and start in the hosted app. Your files are never kept or used to train anyone's model.",
-    cta: "Test Demo",
-    to: "/login",
+    body: "Skip the setup and start with a hosted walkthrough. Your files are never kept or used to train anyone's model.",
+    cta: "Book demo",
+    href: SITE.bookDemo,
   },
 ];
 
@@ -44,7 +44,7 @@ export default function SelfHost() {
               <h3 className="font-heading text-lg tracking-tight">{p.title}</h3>
               <p className="text-sm leading-relaxed text-muted-foreground">{p.body}</p>
               {p.href ? (
-                <a href={p.href} className={ctaClass}>
+                <a href={p.href} target="_blank" rel="noreferrer" className={ctaClass}>
                   {p.cta}
                   <ArrowRight className="size-4" />
                 </a>

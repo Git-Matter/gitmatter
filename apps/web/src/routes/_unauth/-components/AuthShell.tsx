@@ -21,17 +21,6 @@ export function AuthShell({
           <h1 className="font-heading text-xl">{title}</h1>
           <p className="text-sm text-muted-foreground">{subtitle}</p>
         </div>
-        {import.meta.env.VITE_DEPLOYMENT === "cloud" ? (
-          <p className="rounded-md border border-bronze/40 bg-bronze-tint p-3 text-sm text-muted-foreground">
-            <strong className="text-foreground">Demo.</strong> gitmatter is a demo for evaluation.
-            Use only non-sensitive documents — do not upload confidential, privileged, or client
-            material. See the{" "}
-            <Link to="/terms" className="text-foreground underline underline-offset-4">
-              terms
-            </Link>
-            .
-          </p>
-        ) : null}
         {children}
       </div>
     </div>

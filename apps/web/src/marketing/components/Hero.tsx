@@ -1,10 +1,9 @@
-import { Link } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import { SITE } from "@/marketing/site";
 import Eyebrow from "@/marketing/components/Eyebrow";
 
-// Centered editorial hero built around transparency: the tagline, the demo
-// video as proof, and two plain actions — test it out, or set it up. Below it,
+// Centered editorial hero built around transparency: the tagline, the product
+// video as proof, and two plain actions — book a demo, or set it up. Below it,
 // four benefits in one glance. No jargon.
 const POINTS = [
   { k: "Set up in minutes", v: "no IT project" },
@@ -25,8 +24,8 @@ export default function Hero() {
           Download, install, and run.
         </p>
         <div className="mt-2 flex flex-wrap items-center justify-center gap-3">
-          <Button size="lg" render={<Link to="/login" />}>
-            Test Demo
+          <Button size="lg" render={<a href={SITE.bookDemo} target="_blank" rel="noreferrer" />}>
+            Book demo
           </Button>
           <Button size="lg" variant="outline" render={<a href={SITE.docs} />}>
             Install locally
@@ -34,7 +33,7 @@ export default function Hero() {
         </div>
       </div>
 
-      {/* Demo video — the proof. Poster + controls for the visitor to play. */}
+      {/* Product video — the proof. Poster + controls for the visitor to play. */}
       <div className="mt-section overflow-hidden rounded-xl border border-border bg-card shadow-xs">
         <video
           className="aspect-video w-full"

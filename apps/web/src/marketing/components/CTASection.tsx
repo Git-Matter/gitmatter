@@ -1,4 +1,3 @@
-import { Link } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import { SITE } from "@/marketing/site";
 import Eyebrow from "@/marketing/components/Eyebrow";
@@ -12,13 +11,13 @@ export default function CTASection() {
         See the work. Skip the black box.
       </h2>
       <p className="mt-stack max-w-[50ch] text-lg leading-relaxed text-muted-foreground">
-        Try it with your own AI account and watch the record build itself — every change saved with
-        who, what, and when. Set up in minutes.
+        Book a walkthrough with your own AI account and see the record build itself — every change
+        saved with who, what, and when. Set up in minutes.
       </p>
       <div className="mt-section flex flex-wrap items-center gap-3">
-        <Link to="/login">
-          <Button size="lg">Test Demo</Button>
-        </Link>
+        <a href={SITE.bookDemo} target="_blank" rel="noreferrer">
+          <Button size="lg">Book demo</Button>
+        </a>
         <a href={SITE.docs}>
           <Button size="lg" variant="outline">
             Read docs

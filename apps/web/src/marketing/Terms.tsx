@@ -1,8 +1,7 @@
 import { SITE } from "@/marketing/site";
 import { LegalPage } from "./LegalPage";
 
-// Cloud-only marketing page. Demo-stage boilerplate — review with counsel
-// before any production launch.
+// Cloud-only marketing page. Review with counsel before production launch.
 export default function Terms() {
   return (
     <LegalPage title="Terms of Service" lastUpdated="June 20, 2026">
@@ -24,11 +23,10 @@ export default function Terms() {
         run on your own LLM key (bring your own key).
       </p>
       <p>
-        The hosted application is currently provided as a demo for evaluation and testing only. Do
-        not upload, transmit, or store sensitive, confidential, privileged, proprietary, personally
-        identifiable, client, or otherwise restricted information. Use the Service only with
-        non-sensitive materials and at your own risk. We may add, remove, suspend, or modify
-        features or third-party integrations at any time.
+        We may add, remove, suspend, or modify features or third-party integrations at any time. You
+        are responsible for ensuring that your use of the Service, including any uploaded materials,
+        complies with your confidentiality, privilege, data-protection, and professional
+        obligations.
       </p>
 
       <h2>3. Eligibility and authority</h2>
@@ -148,9 +146,8 @@ export default function Terms() {
         To the maximum extent permitted by law, gitmatter and its affiliates, officers, employees,
         contractors, agents, suppliers, and licensors will not be liable for indirect, incidental,
         special, consequential, exemplary, or punitive damages, or for lost profits, revenue, data,
-        goodwill, or business interruption. During this demo period the Service is provided free of
-        charge, and to the maximum extent permitted by law we will not be liable for any damages
-        arising out of or relating to the Service or these Terms.
+        goodwill, or business interruption. To the maximum extent permitted by law, we will not be
+        liable for any damages arising out of or relating to the Service or these Terms.
       </p>
 
       <h2>17. Indemnity</h2>

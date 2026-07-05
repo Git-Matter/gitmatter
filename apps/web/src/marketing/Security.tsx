@@ -1,16 +1,15 @@
 import { SITE } from "@/marketing/site";
 import { LegalPage } from "./LegalPage";
 
-// Cloud-only marketing page. Demo-stage summary of gitmatter's security
-// posture — review before any production launch.
+// Cloud-only marketing page summarizing gitmatter's security posture.
 export default function Security() {
   return (
     <LegalPage title="Security" lastUpdated="June 20, 2026">
       <p>
         Security is the core of gitmatter: the product exists to make every change to legal work
-        attributable and reviewable. This page summarizes our posture during the demo period. It
-        describes the hosted service; self-hosted deployments inherit these controls but their
-        operational security depends on how you run them.
+        attributable and reviewable. This page summarizes our current posture for the hosted
+        service; self-hosted deployments inherit these controls but their operational security
+        depends on how you run them.
       </p>
 
       <h2>Audit spine</h2>
@@ -33,7 +32,7 @@ export default function Security() {
         Accounts use email and password, with credentials stored using a strong one-way hash and
         sessions managed by our authentication layer. We recommend a unique, strong password for
         your account. Multi-factor authentication and single sign-on are on our roadmap and are not
-        yet available in the demo.
+        not yet available.
       </p>
 
       <h2>Secrets and credentials</h2>
@@ -70,8 +69,8 @@ export default function Security() {
       <h2>Backups and resilience</h2>
       <p>
         The database is backed up on a regular schedule to support recovery from failures. Backups
-        inherit the same access controls as production data. As a demo service, gitmatter does not
-        offer a formal uptime or recovery-time commitment.
+        inherit the same access controls as production data. gitmatter does not currently offer a
+        formal uptime or recovery-time commitment.
       </p>
 
       <h2>Subprocessors and hosting</h2>
@@ -98,11 +97,11 @@ export default function Security() {
         required by applicable law.
       </p>
 
-      <h2>Demo limitations</h2>
+      <h2>Security limitations</h2>
       <p>
-        The hosted application is a demo for evaluation only. It has not completed a formal security
-        certification, and no method of transmission or storage is perfectly secure. Do not upload
-        sensitive, confidential, privileged, or client materials to the hosted demo.
+        The hosted application has not completed a formal security certification, and no method of
+        transmission or storage is perfectly secure. Review your obligations before uploading
+        sensitive, confidential, privileged, or client materials.
       </p>
 
       <h2>Reporting a vulnerability</h2>
