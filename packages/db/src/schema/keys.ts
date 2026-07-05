@@ -1,5 +1,6 @@
-import { pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
+import { jsonb, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
 import { user } from "./auth.js";
+import type { MatterRole } from "./matters.js";
 
 // Encrypted bring-your-own provider keys (AES-256-GCM).
 export const userApiKeys = pgTable(
@@ -28,6 +29,11 @@ export const mcpAccessTokens = pgTable("mcp_access_tokens", {
     .references(() => user.id, { onDelete: "cascade" }),
   tokenHash: text("token_hash").notNull().unique(),
   label: text("label").notNull(),
+  // Least-privilege scope. Null = unscoped (full power of the minting user),
+  // which is also what every pre-scope token gets. A non-null allowedMatterIds
+  // restricts the token to those matters; maxRole caps its effective role.
+  allowedMatterIds: jsonb("allowed_matter_ids").$type<string[]>(),
+  maxRole: text("max_role").$type<MatterRole>(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   lastUsedAt: timestamp("last_used_at"),
   revokedAt: timestamp("revoked_at"),

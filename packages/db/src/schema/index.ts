@@ -10,6 +10,7 @@ export * from "./documents.js";
 export * from "./tabular.js";
 export * from "./workflow.js";
 export * from "./chat.js";
+export * from "./clauses.js";
 export * from "./keys.js";
 export * from "./oauth.js";
 export * from "./settings.js";

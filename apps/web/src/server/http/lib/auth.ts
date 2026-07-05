@@ -1,9 +1,10 @@
 import { betterAuth } from "better-auth";
-import { APIError } from "better-auth/api";
+import { APIError, createAuthMiddleware } from "better-auth/api";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { passkey as passkeyPlugin } from "@better-auth/passkey";
 import { captcha } from "better-auth/plugins";
 import { tanstackStartCookies } from "better-auth/tanstack-start";
+import { eq } from "drizzle-orm";
 import {
   emailEnabled,
   getEnv,
@@ -15,9 +16,21 @@ import {
 } from "@workspace/core";
 import { db } from "@workspace/db/client";
 import { account, passkey, session, user, verification } from "@workspace/db/schema";
-import { authRateLimitFromEnv, trustedOriginsFromEnv } from "./auth-options.js";
+import {
+  allowedEmailDomainsFromEnv,
+  authRateLimitFromEnv,
+  emailAllowed,
+  trustedOriginsFromEnv,
+} from "./auth-options.js";
 
 const trustedOrigins = trustedOriginsFromEnv(getEnv);
+const allowedEmailDomains = allowedEmailDomainsFromEnv(getEnv);
+const emailDomainError = "Use your approved work email to access this environment.";
+
+function rejectEmailDomain(email: string | undefined) {
+  if (emailAllowed(email, allowedEmailDomains)) return;
+  throw new APIError("BAD_REQUEST", { message: emailDomainError });
+}
 
 export const auth = betterAuth({
   // Optional: when unset, better-auth infers the origin from the request, so the
@@ -26,6 +39,20 @@ export const auth = betterAuth({
   ...(trustedOrigins ? { trustedOrigins } : {}),
   secret: getEnv("BETTER_AUTH_SECRET"),
   rateLimit: authRateLimitFromEnv(getEnv),
+  hooks: {
+    before: createAuthMiddleware(async (ctx) => {
+      if (ctx.path !== "/sign-up/email") return;
+      rejectEmailDomain(ctx.body?.email);
+    }),
+  },
+  session: {
+    // Cache the session in a signed, httpOnly cookie so read paths verify it
+    // without a DB round-trip. maxAge bounds how long a revoked session can
+    // still read — our documented revocation SLA. Mutations bypass this cache
+    // (see requireUser) so a revoked session can never write to the audit
+    // spine. Keep this window short for SOC 2 / ISO 27001 access-control.
+    cookieCache: { enabled: true, maxAge: 60 },
+  },
   database: drizzleAdapter(db, {
     provider: "pg",
     // Auth tables live in the `auth` Postgres schema; pass them explicitly.
@@ -34,6 +61,11 @@ export const auth = betterAuth({
   emailAndPassword: {
     enabled: true,
     disableSignUp: getEnv("ALLOW_SIGNUPS") === "false",
+    // Disable auto sign-in only when verification is required (real provider).
+    // Otherwise auto sign-in hits the unverified-email path and fires a second
+    // verification email via sendOnSignIn. In dev (no provider) keep it on so
+    // signup lands straight in the app.
+    autoSignIn: !emailEnabled(),
     // Require a verified email before sign-in only once a real provider is
     // configured. In dev (console transport) this stays off so local accounts
     // remain usable without clicking a logged link.
@@ -81,6 +113,17 @@ export const auth = betterAuth({
   databaseHooks: {
     session: {
       create: {
+        // Staging can restrict account access to approved email domains. Enforce
+        // here so every sign-in method, including passkeys, uses the same gate.
+        before: async (s) => {
+          const rows = await db
+            .select({ email: user.email })
+            .from(user)
+            .where(eq(user.id, s.userId))
+            .limit(1);
+          rejectEmailDomain(rows[0]?.email);
+          return { data: s };
+        },
         // A new session = a successful login. Capture it for the audit log.
         after: async (s) => {
           void recordAudit({
@@ -99,6 +142,7 @@ export const auth = betterAuth({
         // column is NOT NULL but still accepts "", so reject empty/whitespace-only
         // names here (covers any client, not just our form) and store it trimmed.
         before: async (u) => {
+          rejectEmailDomain(u.email);
           const name = u.name?.trim() ?? "";
           if (!name) throw new APIError("BAD_REQUEST", { message: "Name is required." });
           return { data: { ...u, name } };

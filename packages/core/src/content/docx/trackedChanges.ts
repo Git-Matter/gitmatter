@@ -658,34 +658,46 @@ export async function applyTrackedEdits(
           ? documentText.normalized.origIdx[anchor.end - 1] + 1
           : documentText.text.length;
 
-    // Resolve which paragraph the find lands in. The edit (find range) must stay
-    // within ONE paragraph; only context is allowed to straddle boundaries.
+    // Collapse the find→replace diff to its minimal changed sub-span FIRST, using
+    // the document's actual text (which preserves its whitespace/quote style) over
+    // the model's normalized needle. `find` may straddle a paragraph boundary when
+    // the model copies neighbouring-paragraph text into it; that's fine as long as
+    // the part that actually CHANGES stays within one paragraph — the shared
+    // prefix/suffix (which may include the "\n" separator) is left untouched.
+    const originalFind = documentText.text.slice(globalStart, globalEnd);
+    const { deleted, inserted, leadingEq } = collapseDiff(originalFind, replace);
+    const minGlobalStart = globalStart + leadingEq;
+    const minGlobalEnd = minGlobalStart + deleted.length;
+
+    // Resolve which paragraph the minimal edit range lands in. Only the changed
+    // span must stay within ONE paragraph; shared context around it may span.
     let paragraphIndex: number;
     let findStart: number;
-    let findEnd: number;
-    if (globalEnd > globalStart) {
-      paragraphIndex = documentText.paragraphByOffset[globalStart];
-      if (paragraphIndex < 0 || documentText.paragraphByOffset[globalEnd - 1] !== paragraphIndex) {
+    if (minGlobalEnd > minGlobalStart) {
+      paragraphIndex = documentText.paragraphByOffset[minGlobalStart];
+      if (
+        paragraphIndex < 0 ||
+        documentText.paragraphByOffset[minGlobalEnd - 1] !== paragraphIndex
+      ) {
         errors.push({
           index: editIndex,
-          reason: `find="${truncate(find, 80)}" spans a paragraph boundary; each edit must stay within a single paragraph.`,
+          reason: `find="${truncate(find, 80)}" changes text across a paragraph boundary; each edit must stay within a single paragraph.`,
         });
         continue;
       }
-      findStart = documentText.localOffsetByOffset[globalStart];
-      findEnd = documentText.localOffsetByOffset[globalEnd - 1] + 1;
+      findStart = documentText.localOffsetByOffset[minGlobalStart];
     } else {
       // Pure insertion: anchor at the insertion point, falling back to the end
       // of the preceding paragraph when the point sits on a separator.
       if (
-        globalStart < documentText.paragraphByOffset.length &&
-        documentText.paragraphByOffset[globalStart] >= 0
+        minGlobalStart < documentText.paragraphByOffset.length &&
+        documentText.paragraphByOffset[minGlobalStart] >= 0
       ) {
-        paragraphIndex = documentText.paragraphByOffset[globalStart];
-        findStart = documentText.localOffsetByOffset[globalStart];
-      } else if (globalStart > 0 && documentText.paragraphByOffset[globalStart - 1] >= 0) {
-        paragraphIndex = documentText.paragraphByOffset[globalStart - 1];
-        findStart = documentText.localOffsetByOffset[globalStart - 1] + 1;
+        paragraphIndex = documentText.paragraphByOffset[minGlobalStart];
+        findStart = documentText.localOffsetByOffset[minGlobalStart];
+      } else if (minGlobalStart > 0 && documentText.paragraphByOffset[minGlobalStart - 1] >= 0) {
+        paragraphIndex = documentText.paragraphByOffset[minGlobalStart - 1];
+        findStart = documentText.localOffsetByOffset[minGlobalStart - 1] + 1;
       } else {
         errors.push({
           index: editIndex,
@@ -693,16 +705,9 @@ export async function applyTrackedEdits(
         });
         continue;
       }
-      findEnd = findStart;
     }
 
-    // Use the actual original text in that range as `deletedText` —
-    // this preserves the document's whitespace/quote style rather than
-    // the normalized needle the LLM provided.
-    const originalFind = paragraphs[paragraphIndex].flat.paraText.slice(findStart, findEnd);
-
-    const { deleted, inserted, leadingEq } = collapseDiff(originalFind, replace);
-    const minStart = findStart + leadingEq;
+    const minStart = findStart;
     const minEnd = minStart + deleted.length;
 
     const changeId = `gitmatter-${editIndex}-${Date.now()}`;

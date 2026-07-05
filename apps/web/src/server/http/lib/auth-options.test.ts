@@ -1,5 +1,10 @@
 import { describe, expect, test } from "vite-plus/test";
-import { authRateLimitFromEnv, trustedOriginsFromEnv } from "./auth-options.js";
+import {
+  allowedEmailDomainsFromEnv,
+  authRateLimitFromEnv,
+  emailAllowed,
+  trustedOriginsFromEnv,
+} from "./auth-options.js";
 
 function env(values: Record<string, string | undefined>) {
   return (name: string) => values[name];
@@ -87,5 +92,44 @@ describe("authRateLimitFromEnv", () => {
       window: 60,
       max: 100,
     });
+  });
+});
+
+describe("allowedEmailDomainsFromEnv", () => {
+  test("returns undefined when no domains are configured", () => {
+    expect(allowedEmailDomainsFromEnv(env({}))).toBeUndefined();
+    expect(allowedEmailDomainsFromEnv(env({ AUTH_ALLOWED_EMAIL_DOMAINS: " , " }))).toBeUndefined();
+  });
+
+  test("normalizes domains and removes duplicates", () => {
+    expect(
+      allowedEmailDomainsFromEnv(
+        env({ AUTH_ALLOWED_EMAIL_DOMAINS: " GitMatter.com, @example.org, gitmatter.com " })
+      )
+    ).toEqual(["gitmatter.com", "example.org"]);
+  });
+});
+
+describe("emailAllowed", () => {
+  const domains = ["gitmatter.com", "example.org"];
+
+  test("allows every email when the gate is disabled", () => {
+    expect(emailAllowed("person@anything.test", undefined)).toBe(true);
+  });
+
+  test("matches domains case-insensitively", () => {
+    expect(emailAllowed("Person@GitMatter.com", domains)).toBe(true);
+  });
+
+  test("requires an exact domain match", () => {
+    expect(emailAllowed("person@gitmatter.com", domains)).toBe(true);
+    expect(emailAllowed("person@sub.gitmatter.com", domains)).toBe(false);
+    expect(emailAllowed("person@evilgitmatter.com", domains)).toBe(false);
+  });
+
+  test("rejects malformed emails when the gate is enabled", () => {
+    expect(emailAllowed("gitmatter.com", domains)).toBe(false);
+    expect(emailAllowed("@gitmatter.com", domains)).toBe(false);
+    expect(emailAllowed("person@", domains)).toBe(false);
   });
 });

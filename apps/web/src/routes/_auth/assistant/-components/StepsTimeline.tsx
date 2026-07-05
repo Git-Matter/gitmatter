@@ -19,6 +19,7 @@ import {
 } from "@/components/ai-elements/chain-of-thought";
 import { ToolInput, ToolOutput } from "@/components/ai-elements/tool";
 import { SourceList } from "@/components/ai-elements/source-card";
+import { Badge } from "@/components/ui/badge";
 import { Shimmer } from "@/components/ai-elements/shimmer";
 import { type SourceCard } from "@/lib/data/api";
 import { useActivityPanel } from "./activity-context";
@@ -132,6 +133,17 @@ function searchTerms(step: Step): string[] {
   return Array.isArray(terms) ? terms.map(String) : [];
 }
 
+// The actual query a tool ran with — shown monospace under the row (Grok style).
+function toolQuery(step: Step): string | null {
+  const input = step.detail?.input;
+  if (input && typeof input === "object") {
+    const rawQuery = (input as Record<string, unknown>).query;
+    if (typeof rawQuery === "string" && rawQuery.trim()) return rawQuery.trim();
+  }
+  const terms = searchTerms(step);
+  return terms.length ? terms.join(", ") : null;
+}
+
 function sourcesOf(step: Step): SourceCard[] {
   const sources = step.detail?.sources;
   return Array.isArray(sources) ? (sources as SourceCard[]) : [];
@@ -182,7 +194,8 @@ function StepDetail({
   if (step.kind === "tool_call") {
     const sources = sourcesOf(step);
     if (sources.length) {
-      return <SourceList label={labelFor(step)} cards={sources} onOpenSource={onOpenSource} />;
+      // Count + label live on the step row; render the cards headerless here.
+      return <SourceList cards={sources} onOpenSource={onOpenSource} />;
     }
     return (
       <>
@@ -223,27 +236,43 @@ export function ActivityTimeline({
 }) {
   return (
     <>
-      {steps.map((step) => (
-        <ChainOfThoughtStep
-          key={step.id}
-          icon={iconFor(step)}
-          status={step.status === "running" ? "active" : "complete"}
-          label={
-            <div className="flex w-full items-center gap-2">
-              <span className={step.status === "error" ? "flex-1 text-destructive" : "flex-1"}>
-                {labelFor(step)}
-              </span>
-              {step.status !== "running" && typeof step.durationMs === "number" && (
-                <span className="shrink-0 text-xs text-muted-foreground">
-                  {compactDuration(step.durationMs)}
-                </span>
-              )}
-            </div>
-          }
-        >
-          <StepDetail step={step} onOpenSource={onOpenSource} />
-        </ChainOfThoughtStep>
-      ))}
+      {steps.map((step) => {
+        const query = step.kind === "tool_call" ? toolQuery(step) : null;
+        const count = step.kind === "tool_call" ? sourcesOf(step).length : 0;
+        return (
+          <ChainOfThoughtStep
+            key={step.id}
+            icon={iconFor(step)}
+            status={step.status === "running" ? "active" : "complete"}
+            label={
+              <div className="flex w-full flex-col gap-1">
+                <div className="flex w-full items-center gap-2">
+                  <span className={step.status === "error" ? "flex-1 text-destructive" : "flex-1"}>
+                    {labelFor(step)}
+                  </span>
+                  {count > 0 && (
+                    <Badge variant="secondary" className="shrink-0 rounded px-1.5 py-0 text-xs">
+                      {count}
+                    </Badge>
+                  )}
+                  {step.status !== "running" && typeof step.durationMs === "number" && (
+                    <span className="shrink-0 text-xs text-muted-foreground">
+                      {compactDuration(step.durationMs)}
+                    </span>
+                  )}
+                </div>
+                {query && (
+                  <code className="block truncate font-mono text-xs text-muted-foreground">
+                    {query}
+                  </code>
+                )}
+              </div>
+            }
+          >
+            <StepDetail step={step} onOpenSource={onOpenSource} />
+          </ChainOfThoughtStep>
+        );
+      })}
     </>
   );
 }

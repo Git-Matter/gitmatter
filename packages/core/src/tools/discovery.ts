@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { canAccessArtifact } from "../core/index.js";
+import { canAccessArtifact, scopeAllowsMatter } from "../core/index.js";
 import { getReview, listReviews } from "../ai/index.js";
 import { getDocument, listDocuments } from "../content/index.js";
 import type { ToolContext, ToolSpec } from "./types.js";
@@ -8,6 +8,9 @@ import type { ToolContext, ToolSpec } from "./types.js";
 // finds reviews and documents by keyword and returns ids; `fetch` returns the
 // full content of one result by its id.
 export function buildDiscoveryTools({ actor }: ToolContext): ToolSpec[] {
+  // Search lists by ownership, not through the artifact guard — so a scoped
+  // token must filter here too, or it leaks out-of-scope titles.
+  const scope = actor.type === "agent" ? (actor.scope ?? null) : null;
   return [
     {
       name: "search",
@@ -22,14 +25,14 @@ export function buildDiscoveryTools({ actor }: ToolContext): ToolSpec[] {
         ]);
         const results = [
           ...reviews
-            .filter((r) => hit(r.title))
+            .filter((r) => hit(r.title) && scopeAllowsMatter(scope, r.matterId))
             .map((r) => ({
               id: `review:${r.id}`,
               title: r.title,
               url: `/reviews/${r.id}`,
             })),
           ...docs
-            .filter((d) => hit(d.title))
+            .filter((d) => hit(d.title) && scopeAllowsMatter(scope, d.matterId))
             .map((d) => ({
               id: `document:${d.id}`,
               title: d.title,
@@ -47,7 +50,7 @@ export function buildDiscoveryTools({ actor }: ToolContext): ToolSpec[] {
         const [kind, artifactId] = (id as string).split(":");
         if (!artifactId) return { error: "Not found" };
         if (kind === "review") {
-          if (!(await canAccessArtifact(actor.userId, "tabular_review", artifactId)))
+          if (!(await canAccessArtifact(actor, "tabular_review", artifactId)))
             return { error: "Not found" };
           const r = await getReview(artifactId);
           if (!r) return { error: "Not found" };
@@ -60,7 +63,7 @@ export function buildDiscoveryTools({ actor }: ToolContext): ToolSpec[] {
           };
         }
         if (kind === "document") {
-          if (!(await canAccessArtifact(actor.userId, "document", artifactId)))
+          if (!(await canAccessArtifact(actor, "document", artifactId)))
             return { error: "Not found" };
           const d = await getDocument(artifactId);
           if (!d) return { error: "Not found" };

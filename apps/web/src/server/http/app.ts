@@ -16,6 +16,7 @@ import {
 } from "@workspace/core";
 import { resolveJurisdiction } from "@workspace/registry";
 import { chatRoute } from "./routes/chat.js";
+import { clausesRoute } from "./routes/clauses.js";
 import { documentsRoute } from "./routes/documents.js";
 import { keysRoute } from "./routes/keys.js";
 import { mattersRoute } from "./routes/matters.js";
@@ -80,14 +81,17 @@ app.use("*", requestLog);
 // 500 response. The user (if any) is attached for attribution; no body is sent.
 app.onError((err, c) => {
   const user = c.get("user");
-  // captureException carries the stack; logged directly (not via logEvent) so
-  // the error sink does not also send a duplicate message for the same error.
+  // captureException carries the stack; the structured log suppresses the error
+  // reporter so Sentry does not receive a duplicate message for the same error.
   Sentry.captureException(err, {
     user: user ? { id: user.id } : undefined,
     tags: { method: c.req.method, path: c.req.routePath },
   });
-  console.log(
-    JSON.stringify({ level: "error", msg: "unhandled", path: c.req.path, error: String(err) })
+  logEvent(
+    "error",
+    "unhandled",
+    { path: c.req.path, error: err instanceof Error ? err.message : String(err) },
+    { report: false }
   );
   return c.json({ error: "Internal Server Error" }, 500);
 });
@@ -238,6 +242,7 @@ app.route("/", tabularRoute);
 app.route("/", workflowRoute);
 app.route("/", chatRoute);
 app.route("/", tokensRoute);
+app.route("/", clausesRoute);
 
 // Exposed MCP server for Claude Desktop / CLI / Cowork. Authenticated by a
 // gitmatter access token; a fresh stateless server/transport per request.
@@ -261,6 +266,7 @@ app.all("/api/mcp", async (c) => {
     tokenId: account.tokenId,
     tenantId: account.tenantId,
     jurisdiction,
+    scope: account.scope,
   });
   const transport = new StreamableHTTPTransport({ sessionIdGenerator: undefined });
   await server.connect(transport);

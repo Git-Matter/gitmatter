@@ -8,3 +8,4 @@ export { type CellResult, queryCell, queryRow } from "./extract.js";
 export * from "./runner.js";
 export * from "./reviews.js";
 export * from "./queries.js";
+export * from "./playbook.js";

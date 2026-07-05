@@ -25,6 +25,7 @@ export type AuditEventType =
   | "document.discard_staged"
   | "storage.delete_failed"
   | "tenant.export"
+  | "matter.audit_export"
   | "budget.exceeded";
 
 export const auditEvents = pgTable(

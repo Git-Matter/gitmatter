@@ -3,6 +3,8 @@ import { zValidator } from "@hono/zod-validator";
 import {
   addClientMember,
   addMember,
+  auditTrailToCsv,
+  auditTrailToDocx,
   checkConflicts,
   clearConflicts,
   closeMatter,
@@ -13,6 +15,7 @@ import {
   deleteClients,
   deleteFolder,
   findUserByEmail,
+  gatherMatterAudit,
   getClientOverview,
   getMatter,
   hasClientAccess,
@@ -24,12 +27,14 @@ import {
   listMattersForUser,
   listMattersPage,
   listPracticeAreas,
+  matterUsageSummary,
   listMembers,
   removeClientMember,
   removeMember,
   renameFolder,
   searchUsers,
   selectClients,
+  recordAudit,
   updateClient,
   updateMatter,
   rowsToCsv,
@@ -212,6 +217,68 @@ mattersRoute.get("/api/matters/:id", async (c) => {
   if (!(await hasMatterAccess(c.get("user").id, id))) return c.json({ error: "Not found" }, 404);
   const matter = await getMatter(id);
   return matter ? c.json(matter) : c.json({ error: "Not found" }, 404);
+});
+
+// Per-matter LLM/tool usage, aggregated for billing the spend to the matter as
+// a client disbursement. CSV format for pasting into a billing system.
+mattersRoute.get("/api/matters/:id/usage", async (c) => {
+  const id = c.req.param("id");
+  if (!(await hasMatterAccess(c.get("user").id, id))) return c.json({ error: "Not found" }, 404);
+  const summary = await matterUsageSummary(id);
+  if (c.req.query("format") !== "csv") return c.json(summary);
+  const rows: Array<Array<string | number | null>> = [
+    ["kind", "provider", "model_or_tool", "calls", "input_tokens", "output_tokens", "est_cost_usd"],
+    ...summary.llm.map((r) => [
+      "llm",
+      r.provider,
+      r.model,
+      r.calls,
+      r.inputTokens,
+      r.outputTokens,
+      r.costUsd === null ? null : r.costUsd.toFixed(4),
+    ]),
+    ...summary.tools.map((r) => ["tool", null, r.tool, r.calls, null, null, null]),
+  ];
+  return new Response(rowsToCsv(rows), {
+    headers: {
+      "Content-Type": "text/csv; charset=utf-8",
+      "Content-Disposition": `attachment; filename="matter-usage.csv"`,
+    },
+  });
+});
+
+// Export the matter's full audit trail (read-only, no commit). Any member can
+// export; each export is itself recorded in the security audit log.
+mattersRoute.get("/api/matters/:id/audit-export", async (c) => {
+  const id = c.req.param("id");
+  const userId = c.get("user").id;
+  if (!(await hasMatterAccess(userId, id))) return c.json({ error: "Not found" }, 404);
+  const trail = await gatherMatterAudit(id);
+  if (!trail) return c.json({ error: "Not found" }, 404);
+  const matter = await getMatter(id);
+  const format = c.req.query("format") === "docx" ? "docx" : "csv";
+  void recordAudit({
+    eventType: "matter.audit_export",
+    actorId: userId,
+    tenantId: matter?.tenantId,
+    target: id,
+    metadata: { format, entries: trail.entries.length },
+  });
+  const safe = trail.matterName.replace(/[^\w.-]+/g, "_") || "matter";
+  if (format === "docx") {
+    return new Response((await auditTrailToDocx(trail)) as BodyInit, {
+      headers: {
+        "Content-Type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "Content-Disposition": `attachment; filename="${safe}-audit.docx"`,
+      },
+    });
+  }
+  return new Response(auditTrailToCsv(trail), {
+    headers: {
+      "Content-Type": "text/csv; charset=utf-8",
+      "Content-Disposition": `attachment; filename="${safe}-audit.csv"`,
+    },
+  });
 });
 
 mattersRoute.patch("/api/matters/:id", zValidator("json", updateMatterSchema), async (c) => {

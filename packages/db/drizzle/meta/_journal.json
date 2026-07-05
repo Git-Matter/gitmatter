@@ -22,6 +22,34 @@
       "when": 1782408633702,
       "tag": "0002_high_steve_rogers",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1782939177114,
+      "tag": "0003_familiar_elektra",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1782940354063,
+      "tag": "0004_greedy_kang",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1782941243624,
+      "tag": "0005_living_wendigo",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1782978624592,
+      "tag": "0006_brave_donald_blake",
+      "breakpoints": true
     }
   ]
 }

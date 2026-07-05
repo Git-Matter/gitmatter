@@ -17,6 +17,24 @@ import type { TabularColumn } from "./tabular.js";
 // One step of a multi-step assistant workflow.
 export type WorkflowStep = { title?: string; promptMd: string };
 
+// One playbook rule: how the firm handles one clause type in this contract
+// type. Harvey-style anatomy — a standard position, ordered fallbacks (inline
+// text or a clause-library reference), a red line, and teaching guidance.
+export type PlaybookRule = {
+  id: string;
+  clauseType: string;
+  standardPosition: string;
+  fallbacks?: Array<string | { clauseId: string }>;
+  unacceptable?: string;
+  guidance?: string;
+  // red = unacceptable deviation blocks the deal; yellow = needs review.
+  severity: "red" | "yellow";
+};
+
+// Library lifecycle shared with clauses: members/agents draft, a firm admin
+// approves, deprecated items drop out of suggestion and execution.
+export type WorkflowStatus = "draft" | "approved" | "deprecated";
+
 export const workflows = pgTable(
   "workflows",
   {
@@ -28,8 +46,13 @@ export const workflows = pgTable(
     matterId: uuid("matter_id").references(() => matters.id, { onDelete: "cascade" }),
     createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
     title: text("title").notNull(),
-    type: text("type").$type<"assistant" | "tabular">().notNull(),
+    type: text("type").$type<"assistant" | "tabular" | "playbook">().notNull(),
     promptMd: text("prompt_md").notNull(),
+    // Playbook rules (type "playbook" only).
+    rules: jsonb("rules").$type<PlaybookRule[]>(),
+    // Default "approved" keeps every pre-lifecycle workflow behaving as before;
+    // new playbooks are created as drafts explicitly.
+    status: text("status").$type<WorkflowStatus>().default("approved").notNull(),
     // Ordered prompt steps for assistant workflows. Each runs as its own chat
     // turn in sequence, so a later step sees earlier steps' answers. Null/empty
     // means the workflow is a single prompt (promptMd) — the legacy shape.

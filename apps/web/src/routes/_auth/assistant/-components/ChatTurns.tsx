@@ -1,29 +1,50 @@
 import { FileDown, FileText } from "lucide-react";
 import { Message, MessageContent, MessageResponse } from "@/components/ai-elements/message";
-import { Source, Sources, SourcesContent, SourcesTrigger } from "@/components/ai-elements/sources";
 import { Shimmer } from "@/components/ai-elements/shimmer";
 import { api, type Citation, type SourceCard } from "../../../../lib/data/api";
 import { ChatEditCards } from "./ChatEditCards";
 import { StepsTimeline } from "./StepsTimeline";
 import { type Turn } from "./useChatSession";
+import { citationComponents, linkifyCitations, type ResolvedCitation } from "./citation-markdown";
 
-function citationHref(cit: Citation): string {
-  if (cit.cluster_id) return `https://www.courtlistener.com/opinion/${cit.cluster_id}/`;
-  return "/documents";
+function cardsFromSteps(t: Turn): SourceCard[] {
+  return (t.steps ?? []).flatMap((s) =>
+    Array.isArray(s.detail?.sources) ? (s.detail.sources as SourceCard[]) : []
+  );
 }
 
-function citationLabel(cit: Citation): string {
-  if (cit.cluster_id) return `Case law (opinion ${cit.opinion_id ?? cit.cluster_id})`;
-  if (cit.quotes?.length) return cit.quotes[0]!;
-  return "Document";
+function resolveCitation(cit: Citation, cards: SourceCard[]): ResolvedCitation {
+  if (cit.cluster_id) {
+    const needle = `/opinion/${cit.cluster_id}/`;
+    const card = cards.find((c) => {
+      if (!c.url) return false;
+      try {
+        return new URL(c.url, "https://www.courtlistener.com").pathname.includes(needle);
+      } catch {
+        return false;
+      }
+    });
+    return {
+      href: card?.url ?? `https://www.courtlistener.com/opinion/${cit.cluster_id}/`,
+      label: card?.title ?? `Case law (opinion ${cit.opinion_id ?? cit.cluster_id})`,
+      snippet: card?.snippet ?? cit.quotes?.[0],
+    };
+  }
+  const card = cit.doc_id ? cards.find((c) => c.docId === cit.doc_id) : undefined;
+  return {
+    href: card?.url ?? "/documents",
+    label: card?.title ?? cit.quotes?.[0] ?? "Document",
+    snippet: card?.snippet ?? cit.quotes?.[0],
+  };
 }
 
-/**
- * Renders a conversation's turns. User turns are a quiet bubble; assistant turns
- * open markdown on the page — the answer is the hero (DESIGN.md). When
- * `onOpenDocument` is given (matter workspace), generated-document cards open in
- * the center viewer instead of downloading.
- */
+function citationMap(t: Turn): Map<number, ResolvedCitation> {
+  const cards = cardsFromSteps(t);
+  const map = new Map<number, ResolvedCitation>();
+  for (const cit of t.citations ?? []) map.set(cit.ref, resolveCitation(cit, cards));
+  return map;
+}
+
 export function ChatTurns({
   turns,
   busy,
@@ -54,18 +75,18 @@ export function ChatTurns({
               {t.steps && t.steps.length > 0 && (
                 <StepsTimeline steps={t.steps} onOpenSource={onOpenSource} />
               )}
-              {t.text && <MessageResponse>{t.text}</MessageResponse>}
+              {t.text &&
+                (() => {
+                  // Citations render inline at each [N] marker (badge + hover preview),
+                  // resolved to the real slugged source URL — no bottom footnote.
+                  const map = citationMap(t);
+                  return (
+                    <MessageResponse components={citationComponents(map)}>
+                      {linkifyCitations(t.text, new Set(map.keys()))}
+                    </MessageResponse>
+                  );
+                })()}
               {t.edits && t.edits.length > 0 && <ChatEditCards edits={t.edits} />}
-              {t.citations && t.citations.length > 0 && (
-                <Sources>
-                  <SourcesTrigger count={t.citations.length} />
-                  <SourcesContent>
-                    {t.citations.map((cit) => (
-                      <Source key={cit.ref} href={citationHref(cit)} title={citationLabel(cit)} />
-                    ))}
-                  </SourcesContent>
-                </Sources>
-              )}
               {t.documents?.map((d) =>
                 onOpenDocument ? (
                   <button

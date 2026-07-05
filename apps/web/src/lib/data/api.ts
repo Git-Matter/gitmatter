@@ -105,6 +105,59 @@ export type Matter = {
 
 // listMattersForUser joins matter + client + the caller's role, plus the owner's
 // name and how many people have access (for the Projects-style list).
+// Clause library — approved language + fallback ladders, versioned on the spine.
+export type Clause = {
+  id: string;
+  title: string;
+  body: string;
+  category: string;
+  jurisdiction: string | null;
+  riskRating: "acceptable" | "negotiable" | "escalate";
+  guidance: string | null;
+  tags: string[] | null;
+  status: "approved" | "draft" | "deprecated";
+  matterId: string | null;
+  clientId: string | null;
+  parentClauseId: string | null;
+  fallbackRank: number | null;
+  userId: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ClauseInput = {
+  title: string;
+  body: string;
+  category: string;
+  jurisdiction?: string | null;
+  riskRating?: Clause["riskRating"];
+  guidance?: string | null;
+  tags?: string[] | null;
+  status?: Clause["status"];
+  parentClauseId?: string | null;
+  fallbackRank?: number | null;
+};
+
+// Per-matter LLM/tool spend, aggregated server-side (matterUsageSummary).
+export type MatterUsageSummary = {
+  llm: Array<{
+    provider: string | null;
+    model: string | null;
+    calls: number;
+    inputTokens: number;
+    outputTokens: number;
+    costUsd: number | null;
+  }>;
+  tools: Array<{ tool: string | null; calls: number }>;
+  totals: {
+    llmCalls: number;
+    inputTokens: number;
+    outputTokens: number;
+    costUsd: number | null;
+    toolCalls: number;
+  };
+};
+
 export type MatterListItem = {
   matter: Matter;
   client: Client;
@@ -576,18 +629,44 @@ export const api = {
   history: (id: string) => req<Blame[]>(`/api/tabular/reviews/${id}/history`),
   reviewExportUrl: (id: string, format: "csv" | "xlsx") =>
     `/api/tabular/reviews/${id}/export?format=${format}`,
+  matterAuditExportUrl: (id: string, format: "csv" | "docx") =>
+    `/api/matters/${id}/audit-export?format=${format}`,
+  getMatterUsage: (id: string) => req<MatterUsageSummary>(`/api/matters/${id}/usage`),
+  matterUsageExportUrl: (id: string) => `/api/matters/${id}/usage?format=csv`,
+
+  // Clause library
+  listClauses: (opts?: { category?: string; includeDeprecated?: boolean }) =>
+    req<Clause[]>(
+      `/api/clauses?${new URLSearchParams({
+        ...(opts?.category ? { category: opts.category } : {}),
+        ...(opts?.includeDeprecated ? { includeDeprecated: "true" } : {}),
+      })}`
+    ),
+  getClause: (id: string) => req<{ clause: Clause; ladder: Clause[] }>(`/api/clauses/${id}`),
+  createClause: (input: ClauseInput) =>
+    req<{ id: string }>("/api/clauses", { method: "POST", body: JSON.stringify(input) }),
+  updateClause: (id: string, patch: Partial<ClauseInput>) =>
+    req<{ committed: boolean }>(`/api/clauses/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(patch),
+    }),
   listTokens: () =>
     req<
       Array<{
         id: string;
         label: string;
+        allowedMatterIds: string[] | null;
+        maxRole: MatterRole | null;
         createdAt: string;
         lastUsedAt: string | null;
         revokedAt: string | null;
       }>
     >("/api/mcp-tokens"),
-  mintToken: (label: string) =>
-    req<{ token: string }>("/api/mcp-tokens", { method: "POST", body: JSON.stringify({ label }) }),
+  mintToken: (label: string, scope?: { allowedMatterIds?: string[]; maxRole?: MatterRole }) =>
+    req<{ token: string }>("/api/mcp-tokens", {
+      method: "POST",
+      body: JSON.stringify({ label, ...scope }),
+    }),
   revokeToken: (id: string) => req<null>(`/api/mcp-tokens/${id}`, { method: "DELETE" }),
 
   // Account settings
@@ -637,9 +716,10 @@ export const api = {
   },
   createWorkflow: (d: {
     title: string;
-    type: "assistant" | "tabular";
+    type: "assistant" | "tabular" | "playbook";
     promptMd?: string;
     columnsConfig?: Column[];
+    rules?: PlaybookRule[] | null;
     practice?: string | null;
     matterId?: string;
   }) => req<WorkflowDetail>("/api/workflows", { method: "POST", body: JSON.stringify(d) }),
@@ -651,10 +731,17 @@ export const api = {
       promptMd?: string;
       steps?: WorkflowStep[] | null;
       columnsConfig?: Column[];
+      rules?: PlaybookRule[] | null;
+      status?: "draft" | "approved" | "deprecated";
       practice?: string | null;
     }
   ) =>
     req<WorkflowDetail>(`/api/workflows/${id}`, { method: "PATCH", body: JSON.stringify(patch) }),
+  runPlaybook: (id: string, body: { matterId: string; documentIds: string[] }) =>
+    req<{ reviewId: string; ruleCount: number }>(`/api/workflows/${id}/run-playbook`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
   deleteWorkflow: (id: string) => req<null>(`/api/workflows/${id}`, { method: "DELETE" }),
   workflowHistory: (id: string) => req<Blame[]>(`/api/workflows/${id}/history`),
   // Hidden built-ins (per user)
@@ -994,13 +1081,27 @@ export type DocumentDetail = {
 // One step of a multi-step assistant workflow (runs as its own chat turn, in order).
 export type WorkflowStep = { title?: string; promptMd: string };
 
+// One playbook rule (Harvey-style anatomy). Fallbacks are inline text or a
+// clause-library reference.
+export type PlaybookRule = {
+  id: string;
+  clauseType: string;
+  standardPosition: string;
+  fallbacks?: Array<string | { clauseId: string }>;
+  unacceptable?: string;
+  guidance?: string;
+  severity: "red" | "yellow";
+};
+
 export type WorkflowListItem = {
   id: string;
   title: string;
-  type: "assistant" | "tabular";
+  type: "assistant" | "tabular" | "playbook";
   promptMd: string;
   steps: WorkflowStep[] | null;
   columnsConfig: Column[] | null;
+  rules: PlaybookRule[] | null;
+  status: "draft" | "approved" | "deprecated";
   practice: string | null;
   isSystem: boolean;
   isOwner: boolean;

@@ -15,6 +15,7 @@ import {
   commitStagedDocuments,
   getDocument,
   getEditsByRef,
+  getObject,
   type ChatMessage,
   DEFAULT_MODEL,
   getChat,
@@ -26,7 +27,9 @@ import {
   listAllChats,
   listChats,
   listMatterDocuments,
+  listVersions,
   LLM_MODELS,
+  logEvent,
   parseCitations,
   persistChat,
   providerForModel,
@@ -34,13 +37,26 @@ import {
   resolveLlmKey,
   setChatPinned,
   streamComplete,
+  summarizeToolInput,
+  summarizeToolOutput,
   type ToolDef,
 } from "@workspace/core";
 import { resolveJurisdiction } from "@workspace/registry";
 import { type AuthEnv } from "../middleware/auth.js";
 import { chatSchema, pinSchema } from "../schemas/chat.js";
+import {
+  assistantToolCacheEnabled,
+  readAssistantToolCache,
+  writeAssistantToolCache,
+} from "../lib/assistant-tool-cache.js";
 
 export const chatRoute = new Hono<AuthEnv>();
+
+// Replacement body for a get_document read that a later edit made stale. Short
+// enough to cost almost nothing; instructs the model to re-read for fresh text.
+const STALE_DOC_READ = JSON.stringify({
+  note: "Stale: this document was edited after this read. Call get_document again for current text.",
+});
 
 // Catalog tools carry a zod raw shape; the LLM tool API wants a JSON Schema.
 function toJsonSchema(shape: z.ZodRawShape): Record<string, unknown> {
@@ -79,20 +95,28 @@ function withAttachments(
 // key instruction that the model does NOT retain document content between turns
 // and must re-read on demand. Without this, a follow-up like
 // "what's on page 5?" arrives with no document in context, so the model guesses or
-// reads the wrong file. The page-marker note keeps page-specific answers honest:
-// extracted text carries sequential [Page N] markers, so the model can only answer
-// per-page questions from the matching block. Returns "" when nothing's attached.
+// reads the wrong file. When a PDF is attached, the extra page-marker note keeps
+// page-specific answers honest: PDF text carries sequential [Page N] markers, so
+// the model answers per-page questions only from the matching block. DOCX/text
+// bodies have no such markers, so that note is omitted. Returns "" when nothing's attached.
 async function attachmentsContextBlock(userId: string, docIds: string[]): Promise<string> {
   const lines: string[] = [];
+  let hasPdfAttachment = false;
   for (const id of docIds) {
     if (!(await canAccessArtifact(userId, "document", id))) continue;
     const doc = await getDocument(id);
     if (!doc) continue;
+    if (doc.fileType === "pdf") hasPdfAttachment = true;
     const pages = doc.pageCount ? `, ${doc.pageCount} pages` : "";
     lines.push(`- "${doc.title}" (id: ${id}${pages})`);
   }
   if (!lines.length) return "";
-  return `\n\n[Attached documents] The user attached these documents to THIS conversation; treat them as the primary context:\n${lines.join("\n")}\nYou do NOT retain document content between turns. At the START of every response that involves a document's content, call get_document with its id (even if you read it earlier in this conversation) — otherwise you will use stale or hallucinated text. The returned markdown marks pages as sequential [Page N] markers; answer page-specific questions ONLY from the matching [Page N] block and cite pages by that marker. If a page isn't present, say so rather than guessing. Answer from these attached documents; do not list or search other matters or documents unless the user explicitly asks for them.`;
+  // The [Page N] marker guidance only applies to PDFs; DOCX/text bodies have no
+  // such markers, so omit it there to save tokens and avoid a false instruction.
+  const pageGuidance = hasPdfAttachment
+    ? " The returned text marks pages as sequential [Page N] markers; answer page-specific questions ONLY from the matching [Page N] block and cite pages by that marker. If a page isn't present, say so rather than guessing."
+    : "";
+  return `\n\n[Attached documents] The user attached these documents to THIS conversation; treat them as the primary context:\n${lines.join("\n")}\nYou do NOT retain document content between turns. At the START of every response that involves a document's content, call get_document with its id (even if you read it earlier in this conversation) — otherwise you will use stale or hallucinated text.${pageGuidance} Answer from these attached documents; do not list or search other matters or documents unless the user explicitly asks for them.`;
 }
 
 // A matter-scoped chat carries its matter as ambient context: the matter name
@@ -363,6 +387,181 @@ function outputSummary(output: unknown): Record<string, unknown> {
   };
 }
 
+type InternalToolMap = Map<string, (input: Record<string, unknown>) => Promise<unknown>>;
+
+async function runToolCall({
+  tc,
+  internal,
+  trace,
+  handlers,
+  messages,
+  generated,
+  editRefs,
+  docReads,
+  source = "model",
+}: {
+  tc: { id: string; name: string; input: Record<string, unknown> };
+  internal: InternalToolMap;
+  trace: ChatTraceEvent[];
+  handlers: RunHandlers;
+  messages?: ChatMessage[];
+  generated: Array<{ id: string; title: string; download: string }>;
+  editRefs: Array<{ documentId: string; changeId: string }>;
+  docReads?: Map<string, ChatMessage[]>;
+  source?: "model" | "cache";
+}): Promise<unknown> {
+  const started = performance.now();
+  logEvent("info", "assistant.tool_call.start", {
+    tool: tc.name,
+    source,
+    inputSummary: summarizeToolInput(tc.name, tc.input),
+  });
+  const toolTrace = startTrace(trace, handlers, {
+    kind: "tool_call",
+    label: "Running tool",
+    summary: tc.name.replace(/_/g, " "),
+    detail: { tool: tc.name, input: tc.input },
+  });
+  handlers.onTool?.(tc.name, tc.input);
+  try {
+    const internalFn = internal.get(tc.name);
+    if (internalFn) {
+      const out = await internalFn(tc.input);
+      if (tc.name === "generate_docx" && out && typeof out === "object" && "documentId" in out) {
+        const g = out as { documentId: string; title: string; download: string };
+        generated.push({ id: g.documentId, title: g.title, download: g.download });
+      }
+      const succeeded = out && typeof out === "object" && !("error" in out);
+      if (
+        (tc.name === "propose_document_edit" || tc.name === "resolve_document_edit") &&
+        succeeded
+      ) {
+        const documentId = tc.input.documentId;
+        const changeIds =
+          tc.name === "propose_document_edit"
+            ? ((out as { changeIds?: string[] }).changeIds ?? [])
+            : [tc.input.changeId].filter((x): x is string => typeof x === "string" && !!x);
+        if (typeof documentId === "string") {
+          for (const changeId of changeIds) editRefs.push({ documentId, changeId });
+          // The document text just changed, so any earlier get_document read of it
+          // in this conversation is stale AND redundant. Replace its body with a
+          // short marker: keeps the tool_use/tool_result pairing intact (Anthropic
+          // rejects an orphaned tool_use), drops the large body from every future
+          // request, and nudges the model to re-read for current text.
+          for (const stale of docReads?.get(documentId) ?? []) stale.content = STALE_DOC_READ;
+          docReads?.delete(documentId);
+        }
+      }
+      const toolMsg: ChatMessage = {
+        role: "tool",
+        toolCallId: tc.id,
+        content: JSON.stringify(out),
+      };
+      messages?.push(toolMsg);
+      if (tc.name === "get_document" && succeeded && typeof tc.input.documentId === "string") {
+        const list = docReads?.get(tc.input.documentId);
+        if (list) list.push(toolMsg);
+        else docReads?.set(tc.input.documentId, [toolMsg]);
+      }
+      const cards = sourceCards(out);
+      finishTrace(trace, handlers, toolTrace, {
+        summary: tc.name.replace(/_/g, " "),
+        detail: {
+          tool: tc.name,
+          input: tc.input,
+          output: outputSummary(out),
+          ...(cards ? { sources: cards } : {}),
+        },
+      });
+      logEvent("info", "assistant.tool_call.finish", {
+        tool: tc.name,
+        source,
+        ok: true,
+        ms: Math.round(performance.now() - started),
+        outputSummary: summarizeToolOutput(tc.name, out),
+      });
+      return out;
+    }
+    messages?.push({
+      role: "tool",
+      toolCallId: tc.id,
+      content: "Unknown tool",
+      isError: true,
+    });
+    finishTrace(trace, handlers, toolTrace, {
+      status: "error",
+      summary: "Unknown tool",
+      detail: { tool: tc.name, input: tc.input, error: "Unknown tool" },
+    });
+    logEvent("warn", "assistant.tool_call.finish", {
+      tool: tc.name,
+      source,
+      ok: false,
+      ms: Math.round(performance.now() - started),
+      error: "Unknown tool",
+    });
+    return { error: "Unknown tool" };
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "tool failed";
+    messages?.push({
+      role: "tool",
+      toolCallId: tc.id,
+      content: message,
+      isError: true,
+    });
+    finishTrace(trace, handlers, toolTrace, {
+      status: "error",
+      summary: message,
+      detail: { tool: tc.name, input: tc.input, error: message },
+    });
+    logEvent("warn", "assistant.tool_call.finish", {
+      tool: tc.name,
+      source,
+      ok: false,
+      ms: Math.round(performance.now() - started),
+      error: message,
+    });
+    return { error: message };
+  }
+}
+
+function isToolInput(input: unknown): input is Record<string, unknown> {
+  return !!input && typeof input === "object" && !Array.isArray(input);
+}
+
+function safeOriginalFilename(title: string, fileType: string) {
+  const ext = fileType.replace(/[^a-z0-9]+/gi, "").toLowerCase() || "bin";
+  const name = title
+    .trim()
+    .replace(/[/:\\]+/g, "-")
+    .replace(/\s+/g, " ")
+    .replace(/^\.+/, "")
+    .slice(0, 160);
+  const fallback = `original.${ext}`;
+  const filename = name || fallback;
+  return filename.toLowerCase().endsWith(`.${ext}`) ? filename : `${filename}.${ext}`;
+}
+
+async function originalDocumentFile(documentId: string) {
+  try {
+    const doc = await getDocument(documentId);
+    if (!doc) return null;
+    const current = (await listVersions(documentId)).find((v) => v.id === doc.currentVersionId);
+    if (!current?.storagePath) return null;
+    const fileType = current.fileType || doc.fileType || "bin";
+    return {
+      filename: safeOriginalFilename(doc.title, fileType),
+      bytes: await getObject(current.storagePath),
+    };
+  } catch (e) {
+    logEvent("warn", "assistant_tool_cache.original_copy_failed", {
+      documentId,
+      error: e instanceof Error ? e.message : "failed",
+    });
+    return null;
+  }
+}
+
 /**
  * Run the assistant's tool loop once and return the final payload. Streams token
  * deltas through `handlers` when given; otherwise buffers. Shared by the buffered
@@ -373,6 +572,7 @@ async function runAssistant(
   body: ChatBody,
   handlers: RunHandlers
 ): Promise<ChatResult> {
+  const runStarted = performance.now();
   const trace: ChatTraceEvent[] = [];
   const assess = startTrace(trace, handlers, {
     kind: "assess_query",
@@ -380,12 +580,18 @@ async function runAssistant(
     summary: body.message,
   });
 
-  // Model picks the provider; the key is the user's own, else the server's.
+  // Model picks the provider. Resolve the key/client only if the dev cache misses.
   const model = body.model ?? DEFAULT_MODEL;
   const provider = providerForModel(model);
-  const { key } = await resolveLlmKey(user.id, provider);
-  if (!key) throw new HttpError(400, `No API key for ${provider} (set one in Settings)`);
-  const client = getLlmClient(provider, key);
+  logEvent("info", "assistant.run.start", {
+    userId: user.id,
+    chatId: body.chatId ?? null,
+    matterId: body.matterId ?? null,
+    model,
+    provider,
+    attachmentCount: body.attachments?.length ?? 0,
+    sourceCount: body.sourceIds?.length ?? 0,
+  });
 
   // Drop the thinking request for known non-reasoning models so they don't reject
   // it. Unknown ids (OpenRouter) pass through — those providers ignore what they
@@ -396,9 +602,6 @@ async function runAssistant(
   // Jurisdiction: request override > user default > system default.
   const jurisdiction = resolveJurisdiction(body.jurisdiction, await getUserJurisdiction(user.id));
 
-  // Resolved once for usage metering across the tool loop's completions.
-  const tenantId = await getUserTenant(user.id);
-
   // Shared gitmatter tools — the same catalog the MCP server exposes.
   const actor: Actor = { type: "agent", userId: user.id, agentLabel: "chat" };
   const catalog = buildToolCatalog(actor, {
@@ -406,17 +609,22 @@ async function runAssistant(
     defaultMatterLabel: user.name,
     sourceIds: body.sourceIds,
   });
-  const internal = new Map(catalog.map((t) => [t.name, t.handler]));
   const tools: ToolDef[] = catalog.map((t) => ({
     name: t.name,
     description: t.description,
     inputSchema: toJsonSchema(t.schema),
   }));
+  const internal: InternalToolMap = new Map(
+    catalog.map((t) => [t.name, t.handler as (input: Record<string, unknown>) => Promise<unknown>])
+  );
 
   const generated: Array<{ id: string; title: string; download: string }> = [];
   // Tracked changes the assistant proposed/resolved this turn, hydrated into
   // chat cards after the loop.
   const editRefs: Array<{ documentId: string; changeId: string }> = [];
+  // get_document tool-result messages per documentId, so a later edit can blank
+  // out the now-stale read instead of re-sending the whole body every pass.
+  const docReads = new Map<string, ChatMessage[]>();
 
   // Continue a conversation: replay prior user/assistant turns (text only) so the
   // model has context, then append this turn.
@@ -488,7 +696,99 @@ async function runAssistant(
       matterId: matterId ?? null,
     },
   });
+
+  const cacheDocumentId = turnDocIds.length === 1 ? turnDocIds[0] : null;
+  if (!cacheDocumentId && assistantToolCacheEnabled())
+    logEvent("info", "assistant_tool_cache.skip", {
+      tool: "propose_document_edit",
+      reason: "requires_one_attached_document",
+      attachmentCount: turnDocIds.length,
+    });
+  const cached =
+    cacheDocumentId &&
+    (await readAssistantToolCache({
+      documentId: cacheDocumentId,
+      tool: "propose_document_edit",
+    }));
+  if (cached && isToolInput(cached.input)) {
+    const draft = startTrace(trace, handlers, {
+      kind: "draft_answer",
+      label: "Using cached tool call",
+      summary: "Loaded .scratch/assistant-cache replay",
+      detail: { path: cached.path, tool: cached.tool, documentId: cacheDocumentId },
+    });
+    const input = { ...cached.input, documentId: cacheDocumentId };
+    const tc = { id: `cache-${traceId()}`, name: cached.tool, input };
+    const parsed = parseCitations(cached.finalText);
+    const citations = (
+      cached.citations?.length ? cached.citations : parsed.citations
+    ) as ReturnType<typeof parseCitations>["citations"];
+    const displayText = parsed.text;
+    if (displayText) handlers.onText?.(displayText);
+    finishTrace(trace, handlers, draft, {
+      summary: "Prepared cached response",
+      detail: { path: cached.path, tool: cached.tool },
+    });
+    const toolCalls = [{ tool: tc.name, input: tc.input }];
+    await runToolCall({
+      tc,
+      internal,
+      trace,
+      handlers,
+      generated,
+      editRefs,
+      source: "cache",
+    });
+    const edits = await getEditsByRef(editRefs);
+    const chatId = await persistChat(
+      user.id,
+      {
+        message: body.message,
+        finalText: displayText,
+        toolCalls,
+        trace,
+        citations,
+        edits,
+        attachmentDocIds: turnDocIds.length ? turnDocIds : undefined,
+      },
+      body.chatId,
+      body.matterId
+    );
+    logEvent("info", "assistant.run.finish", {
+      userId: user.id,
+      chatId,
+      matterId: body.matterId ?? null,
+      model,
+      provider,
+      source: "cache",
+      toolCallCount: toolCalls.length,
+      editRefCount: editRefs.length,
+      editCardCount: edits.length,
+      citationCount: citations.length,
+      generatedDocumentCount: generated.length,
+      ms: Math.round(performance.now() - runStarted),
+    });
+    return {
+      chatId,
+      text: displayText,
+      toolCalls,
+      trace,
+      tools: tools.map((t) => t.name),
+      jurisdiction,
+      documents: generated,
+      edits,
+      citations,
+    };
+  }
+
+  const { key } = await resolveLlmKey(user.id, provider);
+  if (!key) throw new HttpError(400, `No API key for ${provider} (set one in Settings)`);
+  const client = getLlmClient(provider, key);
+  // Resolved once for usage metering across the tool loop's completions.
+  const tenantId = await getUserTenant(user.id);
+
   const toolCalls: Array<{ tool: string; input: unknown }> = [];
+  let cacheableToolCall: { documentId: string; input: Record<string, unknown> } | null = null;
   let finalText = "";
   let thinking: ChatTraceEvent | null = null;
   let thinkingText = "";
@@ -549,11 +849,24 @@ async function runAssistant(
           : "Prepared final response",
       detail: { pass: i + 1, stop: res.stop, toolCallCount: res.toolCalls.length },
     });
+    logEvent("info", "assistant.model.finish", {
+      userId: user.id,
+      chatId: body.chatId ?? null,
+      matterId: matterId ?? null,
+      model,
+      provider,
+      pass: i + 1,
+      stop: res.stop,
+      toolCallCount: res.toolCalls.length,
+      inputTokens: res.usage?.inputTokens,
+      outputTokens: res.usage?.outputTokens,
+    });
     // Meter this completion's token spend (log-only; never blocks the turn).
     if (res.usage)
       void recordLlmUsage({
         userId: user.id,
         tenantId,
+        matterId: matterId ?? null,
         provider,
         model,
         inputTokens: res.usage.inputTokens,
@@ -569,85 +882,44 @@ async function runAssistant(
 
     for (const tc of res.toolCalls) {
       toolCalls.push({ tool: tc.name, input: tc.input });
-      const toolTrace = startTrace(trace, handlers, {
-        kind: "tool_call",
-        label: "Running tool",
-        summary: tc.name.replace(/_/g, " "),
-        detail: { tool: tc.name, input: tc.input },
+      const out = await runToolCall({
+        tc,
+        internal,
+        trace,
+        handlers,
+        messages,
+        generated,
+        editRefs,
+        docReads,
       });
-      handlers.onTool?.(tc.name, tc.input);
-      try {
-        const internalFn = internal.get(tc.name);
-        if (internalFn) {
-          const out = await internalFn(tc.input);
-          if (
-            tc.name === "generate_docx" &&
-            out &&
-            typeof out === "object" &&
-            "documentId" in out
-          ) {
-            const g = out as { documentId: string; title: string; download: string };
-            generated.push({ id: g.documentId, title: g.title, download: g.download });
-          }
-          if (
-            (tc.name === "propose_document_edit" || tc.name === "resolve_document_edit") &&
-            out &&
-            typeof out === "object" &&
-            !("error" in out)
-          ) {
-            const documentId = (tc.input as { documentId?: string })?.documentId;
-            // propose returns a changeId per applied edit; resolve carries one in its input.
-            const changeIds =
-              tc.name === "propose_document_edit"
-                ? ((out as { changeIds?: string[] }).changeIds ?? [])
-                : [(tc.input as { changeId?: string })?.changeId].filter((x): x is string => !!x);
-            if (documentId)
-              for (const changeId of changeIds) editRefs.push({ documentId, changeId });
-          }
-          messages.push({ role: "tool", toolCallId: tc.id, content: JSON.stringify(out) });
-          const cards = sourceCards(out);
-          finishTrace(trace, handlers, toolTrace, {
-            summary: tc.name.replace(/_/g, " "),
-            detail: {
-              tool: tc.name,
-              input: tc.input,
-              output: outputSummary(out),
-              ...(cards ? { sources: cards } : {}),
-            },
-          });
-          continue;
-        }
-        // Not an internal catalog tool — nothing else is exposed.
-        messages.push({
-          role: "tool",
-          toolCallId: tc.id,
-          content: "Unknown tool",
-          isError: true,
-        });
-        finishTrace(trace, handlers, toolTrace, {
-          status: "error",
-          summary: "Unknown tool",
-          detail: { tool: tc.name, input: tc.input, error: "Unknown tool" },
-        });
-      } catch (e) {
-        const message = e instanceof Error ? e.message : "tool failed";
-        messages.push({
-          role: "tool",
-          toolCallId: tc.id,
-          content: message,
-          isError: true,
-        });
-        finishTrace(trace, handlers, toolTrace, {
-          status: "error",
-          summary: message,
-          detail: { tool: tc.name, input: tc.input, error: message },
-        });
+      if (
+        !cacheableToolCall &&
+        tc.name === "propose_document_edit" &&
+        out &&
+        typeof out === "object" &&
+        !("error" in out) &&
+        typeof tc.input.documentId === "string"
+      ) {
+        cacheableToolCall = { documentId: tc.input.documentId, input: tc.input };
       }
     }
   }
 
   // Split the citations block off the prose; store the array, show clean text.
   const { text: displayText, citations } = parseCitations(finalText);
+  if (cacheableToolCall)
+    void writeAssistantToolCache(
+      {
+        documentId: cacheableToolCall.documentId,
+        tool: "propose_document_edit",
+      },
+      {
+        input: cacheableToolCall.input,
+        finalText: displayText,
+        citations,
+        original: (await originalDocumentFile(cacheableToolCall.documentId)) ?? undefined,
+      }
+    ).catch(() => {});
   const edits = await getEditsByRef(editRefs);
   const chatId = await persistChat(
     user.id,
@@ -663,6 +935,20 @@ async function runAssistant(
     body.chatId,
     body.matterId
   );
+  logEvent("info", "assistant.run.finish", {
+    userId: user.id,
+    chatId,
+    matterId: body.matterId ?? prior?.matterId ?? null,
+    model,
+    provider,
+    source: "model",
+    toolCallCount: toolCalls.length,
+    editRefCount: editRefs.length,
+    editCardCount: edits.length,
+    citationCount: citations.length,
+    generatedDocumentCount: generated.length,
+    ms: Math.round(performance.now() - runStarted),
+  });
 
   return {
     chatId,

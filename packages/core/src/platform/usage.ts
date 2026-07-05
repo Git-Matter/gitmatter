@@ -1,4 +1,5 @@
-import { and, eq, gte, isNotNull, type SQL, sql } from "drizzle-orm";
+import { and, desc, eq, gte, isNotNull, type SQL, sql } from "drizzle-orm";
+import { estimateCostUsd } from "@workspace/registry";
 import { db } from "@workspace/db/client";
 import { documentVersions, documents, type UsageKind, usageEvents } from "@workspace/db/schema";
 import { getEnvNumber } from "../core/config.js";
@@ -57,6 +58,7 @@ async function countInWindow(kind: UsageKind, scope: SQL, after: Date): Promise<
 export async function recordLlmUsage(e: {
   userId: string;
   tenantId?: string | null;
+  matterId?: string | null;
   provider?: string | null;
   model?: string | null;
   inputTokens?: number;
@@ -67,6 +69,7 @@ export async function recordLlmUsage(e: {
       kind: "llm",
       userId: e.userId,
       tenantId: e.tenantId ?? null,
+      matterId: e.matterId ?? null,
       provider: e.provider ?? null,
       model: e.model ?? null,
       inputTokens: e.inputTokens ?? 0,
@@ -103,6 +106,7 @@ export async function recordToolCall(e: {
   tokenId?: string | null;
   userId: string;
   tenantId?: string | null;
+  matterId?: string | null;
   tool: string;
 }): Promise<void> {
   try {
@@ -110,6 +114,7 @@ export async function recordToolCall(e: {
       kind: "tool",
       userId: e.userId,
       tenantId: e.tenantId ?? null,
+      matterId: e.matterId ?? null,
       tokenId: e.tokenId ?? null,
       tool: e.tool,
     });
@@ -194,6 +199,82 @@ export async function recordExtraction(e: {
   } catch {
     // best-effort
   }
+}
+
+// --- Per-matter usage report ----------------------------------------------
+// Read-side aggregation for billing LLM spend to a matter as a client
+// disbursement. Dollar cost is estimated at read time from the registry price
+// table (never stored), so a price update reprices history.
+
+export type MatterUsageSummary = {
+  llm: Array<{
+    provider: string | null;
+    model: string | null;
+    calls: number;
+    inputTokens: number;
+    outputTokens: number;
+    /** Estimated USD, or null when the model is unpriced. */
+    costUsd: number | null;
+  }>;
+  tools: Array<{ tool: string | null; calls: number }>;
+  totals: {
+    llmCalls: number;
+    inputTokens: number;
+    outputTokens: number;
+    /** Sum over priced models only; null when nothing is priced. */
+    costUsd: number | null;
+    toolCalls: number;
+  };
+};
+
+export async function matterUsageSummary(matterId: string): Promise<MatterUsageSummary> {
+  const llmRows = await db
+    .select({
+      provider: usageEvents.provider,
+      model: usageEvents.model,
+      calls: sql<number>`count(*)`,
+      inputTokens: sql<number>`coalesce(sum(${usageEvents.inputTokens}), 0)`,
+      outputTokens: sql<number>`coalesce(sum(${usageEvents.outputTokens}), 0)`,
+    })
+    .from(usageEvents)
+    .where(and(eq(usageEvents.kind, "llm"), eq(usageEvents.matterId, matterId)))
+    .groupBy(usageEvents.provider, usageEvents.model)
+    .orderBy(
+      desc(
+        sql`sum(coalesce(${usageEvents.inputTokens}, 0) + coalesce(${usageEvents.outputTokens}, 0))`
+      )
+    );
+
+  const toolRows = await db
+    .select({ tool: usageEvents.tool, calls: sql<number>`count(*)` })
+    .from(usageEvents)
+    .where(and(eq(usageEvents.kind, "tool"), eq(usageEvents.matterId, matterId)))
+    .groupBy(usageEvents.tool)
+    .orderBy(desc(sql`count(*)`));
+
+  const llm = llmRows.map((r) => ({
+    provider: r.provider,
+    model: r.model,
+    calls: Number(r.calls),
+    inputTokens: Number(r.inputTokens),
+    outputTokens: Number(r.outputTokens),
+    costUsd: r.model
+      ? estimateCostUsd(r.model, Number(r.inputTokens), Number(r.outputTokens))
+      : null,
+  }));
+  const tools = toolRows.map((r) => ({ tool: r.tool, calls: Number(r.calls) }));
+  const priced = llm.filter((r) => r.costUsd !== null);
+  return {
+    llm,
+    tools,
+    totals: {
+      llmCalls: llm.reduce((n, r) => n + r.calls, 0),
+      inputTokens: llm.reduce((n, r) => n + r.inputTokens, 0),
+      outputTokens: llm.reduce((n, r) => n + r.outputTokens, 0),
+      costUsd: priced.length ? priced.reduce((n, r) => n + (r.costUsd ?? 0), 0) : null,
+      toolCalls: tools.reduce((n, r) => n + r.calls, 0),
+    },
+  };
 }
 
 // --- Per-tenant storage quota (HARD limit) -------------------------------

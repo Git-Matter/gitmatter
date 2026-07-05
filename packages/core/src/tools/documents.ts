@@ -5,7 +5,7 @@ import {
   createGeneratedDocument,
   getDocumentDetail,
   type EditSpec,
-  proposeEdit,
+  proposeEditDetail,
   resolveEdit,
 } from "../content/index.js";
 import type { ToolContext, ToolSpec } from "./types.js";
@@ -51,7 +51,7 @@ export function buildDocumentTools({ actor, resolveMatter }: ToolContext): ToolS
       schema: { documentId: z.string() },
       handler: async ({ documentId }) => {
         const result = await getDocumentDetail(documentId as string);
-        if (!result || !(await canAccessArtifact(actor.userId, "document", documentId as string)))
+        if (!result || !(await canAccessArtifact(actor, "document", documentId as string)))
           return { error: "Not found" };
         return result;
       },
@@ -75,11 +75,10 @@ export function buildDocumentTools({ actor, resolveMatter }: ToolContext): ToolS
           .min(1),
       },
       handler: async ({ documentId, edits }) => {
-        if (!(await canAccessArtifact(actor.userId, "document", documentId as string, "editor")))
+        if (!(await canAccessArtifact(actor, "document", documentId as string, "editor")))
           return { error: "Not found" };
         try {
-          const changeIds = await proposeEdit(actor, documentId as string, edits as EditSpec[]);
-          return { changeIds };
+          return await proposeEditDetail(actor, documentId as string, edits as EditSpec[]);
         } catch (e) {
           return { error: e instanceof Error ? e.message : "failed" };
         }
@@ -94,7 +93,7 @@ export function buildDocumentTools({ actor, resolveMatter }: ToolContext): ToolS
         decision: z.enum(["accept", "reject"]),
       },
       handler: async ({ documentId, changeId, decision }) => {
-        if (!(await canAccessArtifact(actor.userId, "document", documentId as string, "editor")))
+        if (!(await canAccessArtifact(actor, "document", documentId as string, "editor")))
           return { error: "Not found" };
         try {
           const r = await resolveEdit(

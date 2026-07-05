@@ -53,8 +53,8 @@ export function initSentry(): void {
   // Forward error-level structured logs into Sentry. Unhandled exceptions are
   // captured at the Hono error boundary (app.onError) and by Sentry's global
   // process handlers; this covers errors that are logged but caught.
-  setErrorReporter((msg, fields) => {
-    Sentry.captureMessage(msg, { level: "error", extra: fields });
+  setErrorReporter((level, msg, fields) => {
+    Sentry.captureMessage(msg, { level, extra: fields });
   });
 
   // Flush buffered events on shutdown so a final error isn't lost when Dokploy

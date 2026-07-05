@@ -11,6 +11,15 @@ import { buildDocxSpec, generateDocx } from "../src/content/docx/generate.js";
 
 const fixture = (): Buffer =>
   readFileSync(fileURLToPath(new URL("./fixtures/single-paragraph.docx", import.meta.url)));
+const contractFixture = (): Buffer =>
+  readFileSync(
+    fileURLToPath(
+      new URL(
+        "../../../test/data/contracts/Fictional Marine Lifecycle Services Agreement.docx",
+        import.meta.url
+      )
+    )
+  );
 
 async function buildDocx(title: string, paragraphs: string[]): Promise<Buffer> {
   return Buffer.from(
@@ -247,7 +256,7 @@ describe("docx tracked-changes engine", () => {
     );
 
     expect(result.changes).toHaveLength(0);
-    expect(result.errors[0]?.reason).toContain("spans a paragraph boundary");
+    expect(result.errors[0]?.reason).toContain("paragraph boundary");
   });
 
   test("applies the first overlapping edit and reports the second one", async () => {
@@ -318,5 +327,75 @@ describe("docx tracked-changes engine", () => {
     const text = await extractDocxBodyText(accepted.bytes);
     expect(text).toContain("The quick brown fox.");
     expect(text.split(repeated).length - 1).toBe(2);
+  });
+
+  test("applies paragraph-local redlines across ten sample contract areas", async () => {
+    const bytes = contractFixture();
+    const edits = [
+      {
+        find: "Provider shall use commercially reasonable efforts to meet the following service levels:",
+        replace:
+          "Provider shall meet the following service levels, subject only to Customer delays, force majeure events, and other exclusions expressly stated in this Agreement:",
+      },
+      {
+        find: "Provider does not guarantee uninterrupted vessel operation, fuel savings, emissions reductions, or avoidance of all unplanned downtime.",
+        replace:
+          "Provider does not guarantee uninterrupted vessel operation, fuel savings, emissions reductions, or avoidance of all unplanned downtime, but repeated failure to meet the service levels in this Section shall require a corrective action plan at no additional charge to Customer.",
+      },
+      {
+        find: "Provider shall not be liable for delays or failures caused by Customer’s failure to comply with this Section.",
+        replace:
+          "Provider shall not be liable for delays or failures to the extent caused by Customer’s failure to comply with this Section.",
+      },
+      {
+        find: "Provider may retain Operational Data for as long as it considers commercially useful.",
+        replace:
+          "Provider may retain Operational Data only for as long as reasonably necessary to provide the Services or comply with applicable law.",
+      },
+      {
+        find: "Provider shall notify Customer of a confirmed security incident affecting Operational Data without undue delay.",
+        replace:
+          "Provider shall notify Customer of a confirmed security incident affecting Operational Data without undue delay and in any event within forty-eight (48) hours after confirmation.",
+      },
+      {
+        find: "Provider may use Operational Data to train or improve general analytics models, provided that Provider does not intentionally disclose Customer’s vessel name or Customer identity in external-facing materials.",
+        replace:
+          "Provider shall not use Operational Data to train or improve general analytics models without Customer’s prior written consent in a separate written instrument.",
+      },
+      {
+        find: "Unless expressly stated in an accepted purchase order, delivery dates for spare parts are estimates only.",
+        replace:
+          "Unless expressly stated in an accepted purchase order, delivery dates for spare parts are estimates only, and Provider shall promptly notify Customer of any material delay.",
+      },
+      {
+        find: "Provider may suspend Services or terminate this Agreement upon written notice if Customer fails to pay undisputed amounts when due.",
+        replace:
+          "Provider may suspend Services or terminate this Agreement upon written notice if Customer fails to pay undisputed amounts within ten (10) business days after receiving written notice of non-payment.",
+      },
+      {
+        find: "Provider’s total aggregate liability arising out of or relating to this Agreement shall not exceed the fees paid by Customer under this Agreement during the twelve months preceding the event giving rise to the claim.",
+        replace:
+          "Provider’s total aggregate liability arising out of or relating to this Agreement shall not exceed the fees paid by Customer under this Agreement during the twelve months preceding the event giving rise to the claim, except that this limitation shall not apply to confidentiality breaches, data misuse, intellectual property indemnity obligations, fraud, willful misconduct, or gross negligence.",
+      },
+      {
+        find: "Provider may identify Customer as a customer in marketing materials, investor presentations, case studies, and website listings unless Customer objects in writing.",
+        replace:
+          "Provider shall not identify Customer, Customer’s vessels, or Customer’s performance results in marketing materials, investor presentations, case studies, or website listings without Customer’s prior written approval.",
+      },
+    ].map((edit) => ({ ...edit, context_before: "", context_after: "" }));
+
+    const result = await applyTrackedEdits(bytes, edits, { author: "tester" });
+
+    expect(result.errors).toEqual([]);
+    expect(result.changes).toHaveLength(10);
+
+    const accepted = await acceptAllChanges(
+      result.bytes,
+      result.changes.flatMap((change) => [change.delId, change.insId])
+    );
+    const text = await extractDocxBodyText(accepted.bytes);
+    for (const edit of edits) {
+      expect(text).toContain(edit.replace);
+    }
   });
 });

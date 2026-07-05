@@ -46,6 +46,7 @@ services:
       AUTH_SIGN_IN_RATE_LIMIT: ${AUTH_SIGN_IN_RATE_LIMIT:-}
       AUTH_SIGN_UP_RATE_LIMIT: ${AUTH_SIGN_UP_RATE_LIMIT:-}
       AUTH_PASSWORD_RATE_LIMIT: ${AUTH_PASSWORD_RATE_LIMIT:-}
+      AUTH_ALLOWED_EMAIL_DOMAINS: ${AUTH_ALLOWED_EMAIL_DOMAINS:-}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:?set in .env}
       # S3-compatible object storage (required — no local fallback).
       S3_ENDPOINT: ${S3_ENDPOINT:?set in .env}

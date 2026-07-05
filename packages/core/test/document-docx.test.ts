@@ -12,6 +12,7 @@ import {
   getEditsByRef,
   listVersions,
   proposeEdit,
+  proposeEditDetail,
   resolveEdit,
   uploadDocument,
 } from "../src/content/documents.js";
@@ -168,6 +169,39 @@ const hasS3 = !!process.env.S3_ACCESS_KEY;
     const after = await listVersions(doc.id);
     expect(after[0]!.versionNumber).toBe(3);
     expect(after[0]!.source).toBe("user_accept");
+  });
+
+  test("partial proposed edits report applied and failed counts without leaking edit text", async () => {
+    const doc = await uploadDocument(userId, {
+      title: "NDA partial",
+      fileType: "docx",
+      bytes: fixture(),
+      matterId,
+    });
+    const text = await extractDocxBodyText(fixture());
+    const idx = text.indexOf("imported");
+    expect(idx).toBeGreaterThanOrEqual(0);
+
+    const result = await proposeEditDetail(actor, doc.id, [
+      {
+        find: "imported",
+        replace: "global",
+        contextBefore: text.slice(Math.max(0, idx - 20), idx),
+        contextAfter: text.slice(idx + "imported".length, idx + "imported".length + 20),
+      },
+      {
+        find: "commercially sensitive missing text",
+        replace: "replacement that must not be logged",
+      },
+    ]);
+
+    expect(result.changeIds).toHaveLength(1);
+    expect(result).toMatchObject({ requested: 2, applied: 1, failed: 1 });
+    expect(result.errors).toHaveLength(1);
+    expect(result.errors[0]?.index).toBe(1);
+    const serialized = JSON.stringify(result.errors);
+    expect(serialized).not.toContain("commercially sensitive missing text");
+    expect(serialized).not.toContain("replacement that must not be logged");
   });
 
   test("every mutation is a linear commit", async () => {

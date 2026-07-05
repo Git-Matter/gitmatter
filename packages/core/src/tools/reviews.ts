@@ -28,10 +28,7 @@ export function buildReviewTools({ actor, resolveMatter }: ToolContext): ToolSpe
       schema: { reviewId: z.string() },
       handler: async ({ reviewId }) => {
         const result = await getReview(reviewId as string);
-        if (
-          !result ||
-          !(await canAccessArtifact(actor.userId, "tabular_review", reviewId as string))
-        )
+        if (!result || !(await canAccessArtifact(actor, "tabular_review", reviewId as string)))
           return { error: "Not found" };
         return result;
       },
@@ -46,7 +43,7 @@ export function buildReviewTools({ actor, resolveMatter }: ToolContext): ToolSpe
         documentIds: z.array(z.string()).optional(),
       },
       handler: async ({ reviewId, columnIndices, documentIds }) => {
-        if (!(await canAccessArtifact(actor.userId, "tabular_review", reviewId as string)))
+        if (!(await canAccessArtifact(actor, "tabular_review", reviewId as string)))
           return { error: "Not found" };
         const result = await getReview(reviewId as string);
         if (!result) return { error: "Not found" };
@@ -129,9 +126,7 @@ export function buildReviewTools({ actor, resolveMatter }: ToolContext): ToolSpe
         model: z.string().optional(),
       },
       handler: async ({ reviewId, documentId, columnIndex, model }) => {
-        if (
-          !(await canAccessArtifact(actor.userId, "tabular_review", reviewId as string, "editor"))
-        )
+        if (!(await canAccessArtifact(actor, "tabular_review", reviewId as string, "editor")))
           return { error: "Not found" };
         try {
           const result = await runCell(actor, {
@@ -168,9 +163,7 @@ export function buildReviewTools({ actor, resolveMatter }: ToolContext): ToolSpe
         reasoning,
         citations,
       }) => {
-        if (
-          !(await canAccessArtifact(actor.userId, "tabular_review", reviewId as string, "editor"))
-        )
+        if (!(await canAccessArtifact(actor, "tabular_review", reviewId as string, "editor")))
           return { error: "Not found" };
         try {
           const result = await writeCell(actor, {

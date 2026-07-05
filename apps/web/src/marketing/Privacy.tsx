@@ -1,17 +1,15 @@
 import { SITE } from "@/marketing/site";
 import { LegalPage } from "./LegalPage";
 
-// Cloud-only marketing page. Demo-stage boilerplate — review with counsel
-// before any production launch.
+// Cloud-only marketing page. Review with counsel before production launch.
 export default function Privacy() {
   return (
     <LegalPage title="Privacy Policy" lastUpdated="June 20, 2026">
       <h2>1. Scope of this policy</h2>
       <p>
         This Privacy Policy explains how gitmatter handles information for the marketing website and
-        the hosted demo application at gitmatter.com. It does not cover self-hosted deployments,
-        where you run gitmatter on your own infrastructure and the gitmatter maintainers receive no
-        data.
+        the hosted application at gitmatter.com. It does not cover self-hosted deployments, where
+        you run gitmatter on your own infrastructure and the gitmatter maintainers receive no data.
       </p>
 
       <h2>2. Controller and processor roles</h2>
@@ -31,15 +29,17 @@ export default function Privacy() {
         hosting providers, model providers, and configuration you choose for your deployment.
       </p>
 
-      <h2>4. Hosted demo notice</h2>
+      <h2>4. Hosted service notice</h2>
       <p>
-        The hosted application is provided as a demo and evaluation service. Do not upload, submit,
-        or store confidential, privileged, proprietary, client, regulated, personal, or otherwise
-        sensitive materials in the hosted demo.
+        You are responsible for ensuring that anything you upload, submit, or store in the hosted
+        service complies with your confidentiality, privilege, data-protection, and professional
+        obligations.
       </p>
 
       <h2>5. Information we collect for the hosted service</h2>
-      <p>When you use the hosted website or demo, we may collect information needed to run it:</p>
+      <p>
+        When you use the hosted website or application, we may collect information needed to run it:
+      </p>
       <ul>
         <li>Email address and account credentials</li>
         <li>Clients, matters, and the documents and files you upload</li>
@@ -149,9 +149,8 @@ export default function Privacy() {
       <p>
         We use technical and organizational measures designed to protect information in the hosted
         service; see the Security page for our posture. No method of transmission or storage is
-        perfectly secure, and the hosted demo should not be used for sensitive or client materials.
-        If we become aware of a breach affecting your personal data, we will notify you and any
-        relevant authority as required by applicable law.
+        perfectly secure. If we become aware of a breach affecting your personal data, we will
+        notify you and any relevant authority as required by applicable law.
       </p>
 
       <h2>13. Data retention and deletion</h2>

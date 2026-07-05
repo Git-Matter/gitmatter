@@ -22,16 +22,25 @@ import {
   workflowShares,
   workflows,
 } from "@workspace/db/schema";
-import type { TabularColumn, Workflow, WorkflowShare, WorkflowStep } from "@workspace/db/schema";
+import type {
+  PlaybookRule,
+  TabularColumn,
+  Workflow,
+  WorkflowShare,
+  WorkflowStatus,
+  WorkflowStep,
+} from "@workspace/db/schema";
 import { type Actor, recordCommit } from "../core/commit.js";
 import { canAccessArtifact } from "../core/access.js";
 
 type WorkflowInput = {
   title: string;
-  type: "assistant" | "tabular";
+  type: "assistant" | "tabular" | "playbook";
   promptMd: string;
   steps?: WorkflowStep[] | null;
   columnsConfig?: TabularColumn[];
+  rules?: PlaybookRule[] | null;
+  status?: WorkflowStatus;
   practice?: string | null;
 };
 
@@ -68,6 +77,8 @@ export async function createWorkflow(actor: Actor, input: WorkflowInput & { matt
         "field/prompt_md": commitId,
         "field/steps": commitId,
         "field/columns_config": commitId,
+        "field/rules": commitId,
+        "field/status": commitId,
         "field/practice": commitId,
       };
       await tx.insert(workflows).values({
@@ -81,6 +92,10 @@ export async function createWorkflow(actor: Actor, input: WorkflowInput & { matt
         promptMd: input.promptMd,
         steps: input.steps ?? null,
         columnsConfig: input.columnsConfig ?? null,
+        rules: input.rules ?? null,
+        // Playbooks join the library lifecycle as drafts; other workflow types
+        // keep the pre-lifecycle behavior (immediately usable).
+        status: input.status ?? (input.type === "playbook" ? "draft" : "approved"),
         practice: input.practice ?? null,
         fieldCommits,
       });
@@ -91,6 +106,8 @@ export async function createWorkflow(actor: Actor, input: WorkflowInput & { matt
           { path: "field/prompt_md", before: null, after: input.promptMd },
           { path: "field/steps", before: null, after: input.steps ?? null },
           { path: "field/columns_config", before: null, after: input.columnsConfig ?? null },
+          { path: "field/rules", before: null, after: input.rules ?? null },
+          { path: "field/status", before: null, after: input.status ?? null },
           { path: "field/practice", before: null, after: input.practice ?? null },
         ],
       };
@@ -133,6 +150,15 @@ export async function updateWorkflow(
       before: wf.columnsConfig,
       after: patch.columnsConfig,
     });
+  if (patch.rules !== undefined)
+    fields.push({
+      key: "field/rules",
+      col: "rules",
+      before: wf.rules,
+      after: patch.rules,
+    });
+  if (patch.status !== undefined && patch.status !== wf.status)
+    fields.push({ key: "field/status", col: "status", before: wf.status, after: patch.status });
   if (patch.practice !== undefined && patch.practice !== wf.practice)
     fields.push({
       key: "field/practice",
@@ -320,7 +346,7 @@ async function resolveWorkflowAccess(
 }
 
 export type WorkflowListTab = "all" | "builtin" | "custom" | "hidden";
-export type WorkflowListType = "assistant" | "tabular";
+export type WorkflowListType = "assistant" | "tabular" | "playbook";
 export type WorkflowListSort = "title" | "type" | "createdAt" | "updatedAt" | "practice" | "source";
 
 export type WorkflowListParams = {
@@ -680,6 +706,55 @@ const BUILTINS: WorkflowInput[] = [
       { index: 1, name: "Indemnity", prompt: "Summarize the indemnification obligations." },
     ],
   },
+  {
+    title: "NDA Playbook",
+    type: "playbook",
+    promptMd: "Review an inbound NDA against standard positions.",
+    // System playbooks ship approved (curated), unlike user drafts.
+    status: "approved",
+    rules: [
+      {
+        id: "mutuality",
+        clauseType: "Mutuality",
+        standardPosition:
+          "The NDA is mutual: both parties' confidential information is protected on equal terms.",
+        unacceptable: "One-way obligations where only our disclosures are unprotected.",
+        guidance: "One-way is acceptable only when we receive and never disclose.",
+        severity: "red",
+      },
+      {
+        id: "term",
+        clauseType: "Confidentiality term",
+        standardPosition: "Confidentiality obligations last 3 years from disclosure.",
+        fallbacks: ["5 years from disclosure", "Perpetual for trade secrets only"],
+        unacceptable: "Perpetual confidentiality for all information.",
+        severity: "yellow",
+      },
+      {
+        id: "carveouts",
+        clauseType: "Standard carve-outs",
+        standardPosition:
+          "Excludes information that is public, already known, independently developed, or rightfully received from a third party; compelled disclosure permitted with notice.",
+        unacceptable: "Missing independent-development or compelled-disclosure carve-outs.",
+        severity: "red",
+      },
+      {
+        id: "residuals",
+        clauseType: "Residuals clause",
+        standardPosition: "No residuals clause (no right to use retained mental impressions).",
+        fallbacks: ["Residuals limited to general know-how, excluding technical data"],
+        unacceptable: "Broad residuals clause covering technical information.",
+        severity: "yellow",
+      },
+      {
+        id: "remedies",
+        clauseType: "Remedies",
+        standardPosition: "Injunctive relief available; no liquidated damages.",
+        unacceptable: "Liquidated damages or penalties for breach.",
+        severity: "yellow",
+      },
+    ],
+  },
 ];
 
 /** Idempotently seed the system workflow templates. */
@@ -692,6 +767,7 @@ export async function seedBuiltinWorkflows() {
       type: b.type,
       promptMd: b.promptMd,
       columnsConfig: b.columnsConfig ?? null,
+      rules: b.rules ?? null,
       isSystem: true,
     });
   }

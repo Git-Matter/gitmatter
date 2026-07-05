@@ -36,6 +36,7 @@ import {
   applyTrackedEdits,
   extractDocxBodyText,
   resolveTrackedChange,
+  type EditError,
 } from "./docx/trackedChanges.js";
 import {
   buildStoragePath,
@@ -96,6 +97,7 @@ export type DocumentListParams = {
 
 const documentListFields = {
   id: documents.id,
+  matterId: documents.matterId,
   title: documents.title,
   fileType: documents.fileType,
   status: documents.status,
@@ -896,8 +898,36 @@ export type EditSpec = {
   reason?: string;
 };
 
+export type ProposeEditResult = {
+  changeIds: string[];
+  requested: number;
+  applied: number;
+  failed: number;
+  errors: EditError[];
+};
+
 // Provenance stamped on the version a redline mutation produces.
 type VersionSource = "assistant_edit" | "user_edit" | "user_accept" | "user_reject";
+
+class RedlineApplyError extends Error {
+  constructor(
+    message: string,
+    readonly errors: EditError[]
+  ) {
+    super(message);
+  }
+}
+
+function actorSource(actor: Actor) {
+  return actor.type === "agent" ? actor.agentLabel : actor.type;
+}
+
+function safeEditErrors(errors: EditError[]): EditError[] {
+  return errors.map((error) => ({
+    index: error.index,
+    reason: error.reason.replace(/find="[^"]*"/g, "find text"),
+  }));
+}
 
 // All of a turn's proposed edits land in ONE new version + ONE commit, with one
 // document_edits row per change that actually anchored.
@@ -906,7 +936,7 @@ async function proposeDocxEdit(
   doc: Document,
   edits: EditSpec[],
   source: VersionSource
-): Promise<string[]> {
+): Promise<ProposeEditResult> {
   const v = await latestVersion(doc.id);
   if (!v?.storagePath) throw new Error("Document has no stored version");
   const result = await applyTrackedEdits(
@@ -921,8 +951,12 @@ async function proposeDocxEdit(
     { author: actor.userId }
   );
   const applied = result.changes;
+  const errors = safeEditErrors(result.errors);
   if (!applied.length)
-    throw new Error(result.errors[0]?.reason ?? "no edits could be applied to the document");
+    throw new RedlineApplyError(
+      errors[0]?.reason ?? "no edits could be applied to the document",
+      errors
+    );
 
   const versionNumber = v.versionNumber + 1;
   const storagePath = buildStoragePath({
@@ -995,7 +1029,13 @@ async function proposeDocxEdit(
       };
     },
   });
-  return applied.map((a) => a.id);
+  return {
+    changeIds: applied.map((a) => a.id),
+    requested: edits.length,
+    applied: applied.length,
+    failed: errors.length,
+    errors,
+  };
 }
 
 // Accept or reject a batch of pending changes in ONE new version + ONE commit.
@@ -1076,56 +1116,121 @@ async function resolveDocxEdits(
  * in ONE new version + ONE commit; the version's source reflects who proposed
  * (chat → assistant_edit, user → user_edit). Returns a changeId per applied edit.
  */
+export async function proposeEditDetail(
+  actor: Actor,
+  documentId: string,
+  edits: EditSpec[]
+): Promise<ProposeEditResult> {
+  if (!edits.length) throw new Error("No edits to propose");
+  const started = performance.now();
+  const doc = await getDocument(documentId);
+  if (!doc) throw new Error("Document not found");
+  const source: VersionSource = actor.type === "agent" ? "assistant_edit" : "user_edit";
+  const mode = isDocxMode(doc) ? "docx" : "markdown";
+  const base = {
+    documentId,
+    actor: actorSource(actor),
+    userId: actor.userId,
+    fileType: doc.fileType,
+    mode,
+    requested: edits.length,
+  };
+  logEvent("info", "redline.propose.start", base);
+  try {
+    if (isDocxMode(doc)) {
+      const result = await proposeDocxEdit(actor, doc, edits, source);
+      if (result.failed > 0)
+        logEvent("warn", "redline.propose.partial", {
+          ...base,
+          applied: result.applied,
+          failed: result.failed,
+          errors: result.errors,
+        });
+      logEvent("info", "redline.propose.finish", {
+        ...base,
+        applied: result.applied,
+        failed: result.failed,
+        ms: Math.round(performance.now() - started),
+      });
+      return result;
+    }
+    if (doc.markdown === null) throw new Error("Document has no text to edit yet");
+    for (const e of edits)
+      if (!doc.markdown.includes(e.find))
+        throw new Error("`find` text not present in the document");
+
+    const changeIds = edits.map(() => randomUUID());
+    await recordCommit({
+      artifactType: "document",
+      artifactId: documentId,
+      actor,
+      op: "propose_edit",
+      message:
+        edits.length === 1
+          ? `Proposed edit: "${edits[0]!.find.slice(0, 40)}" → "${edits[0]!.replace.slice(0, 40)}"`
+          : `Proposed ${edits.length} edits`,
+      apply: async ({ tx, commitId }) => {
+        await tx.insert(documentEdits).values(
+          edits.map((e, i) => ({
+            documentId,
+            changeId: changeIds[i]!,
+            deletedText: e.find,
+            insertedText: e.replace,
+            contextBefore: e.contextBefore ?? null,
+            contextAfter: e.contextAfter ?? null,
+            reason: e.reason ?? null,
+            status: "pending" as const,
+            createdBy: actor.userId,
+            lastCommitId: commitId,
+          }))
+        );
+        return {
+          changes: edits.map((e, i) => ({
+            path: `edit/${changeIds[i]}`,
+            before: null,
+            after: {
+              find: e.find,
+              replace: e.replace,
+              reason: e.reason ?? null,
+              status: "pending",
+            },
+          })),
+        };
+      },
+    });
+    const result = {
+      changeIds,
+      requested: edits.length,
+      applied: edits.length,
+      failed: 0,
+      errors: [],
+    };
+    logEvent("info", "redline.propose.finish", {
+      ...base,
+      applied: result.applied,
+      failed: result.failed,
+      ms: Math.round(performance.now() - started),
+    });
+    return result;
+  } catch (e) {
+    logEvent("warn", "redline.propose.failed", {
+      ...base,
+      applied: e instanceof RedlineApplyError ? 0 : undefined,
+      failed: e instanceof RedlineApplyError ? e.errors.length : undefined,
+      errors: e instanceof RedlineApplyError ? e.errors : undefined,
+      error: e instanceof Error ? e.message : "failed",
+      ms: Math.round(performance.now() - started),
+    });
+    throw e;
+  }
+}
+
 export async function proposeEdit(
   actor: Actor,
   documentId: string,
   edits: EditSpec[]
 ): Promise<string[]> {
-  if (!edits.length) throw new Error("No edits to propose");
-  const doc = await getDocument(documentId);
-  if (!doc) throw new Error("Document not found");
-  const source: VersionSource = actor.type === "agent" ? "assistant_edit" : "user_edit";
-  if (isDocxMode(doc)) return proposeDocxEdit(actor, doc, edits, source);
-  if (doc.markdown === null) throw new Error("Document has no text to edit yet");
-  for (const e of edits)
-    if (!doc.markdown.includes(e.find))
-      throw new Error(`\`find\` text not present in the document: "${e.find.slice(0, 40)}"`);
-
-  const changeIds = edits.map(() => randomUUID());
-  await recordCommit({
-    artifactType: "document",
-    artifactId: documentId,
-    actor,
-    op: "propose_edit",
-    message:
-      edits.length === 1
-        ? `Proposed edit: "${edits[0]!.find.slice(0, 40)}" → "${edits[0]!.replace.slice(0, 40)}"`
-        : `Proposed ${edits.length} edits`,
-    apply: async ({ tx, commitId }) => {
-      await tx.insert(documentEdits).values(
-        edits.map((e, i) => ({
-          documentId,
-          changeId: changeIds[i]!,
-          deletedText: e.find,
-          insertedText: e.replace,
-          contextBefore: e.contextBefore ?? null,
-          contextAfter: e.contextAfter ?? null,
-          reason: e.reason ?? null,
-          status: "pending" as const,
-          createdBy: actor.userId,
-          lastCommitId: commitId,
-        }))
-      );
-      return {
-        changes: edits.map((e, i) => ({
-          path: `edit/${changeIds[i]}`,
-          before: null,
-          after: { find: e.find, replace: e.replace, reason: e.reason ?? null, status: "pending" },
-        })),
-      };
-    },
-  });
-  return changeIds;
+  return (await proposeEditDetail(actor, documentId, edits)).changeIds;
 }
 
 /**
@@ -1139,57 +1244,94 @@ export async function resolveEdits(
   decision: "accept" | "reject"
 ) {
   if (!changeIds.length) throw new Error("No edits to resolve");
-  const edits = await db
-    .select()
-    .from(documentEdits)
-    .where(
-      and(eq(documentEdits.documentId, documentId), inArray(documentEdits.changeId, changeIds))
-    );
-  const pending = edits.filter((e) => e.status === "pending");
-  if (!pending.length) throw new Error("No pending edits to resolve");
-
-  const doc = await getDocument(documentId);
-  if (!doc) throw new Error("Document not found");
-
-  if (isDocxMode(doc)) return resolveDocxEdits(actor, doc, pending, decision);
-
-  const status = decision === "accept" ? "accepted" : "rejected";
-  const editIds = pending.map((e) => e.id);
-  return recordCommit({
-    artifactType: "document",
-    artifactId: documentId,
-    actor,
-    op: "resolve_edit",
-    message:
-      pending.length === 1
-        ? `${status} edit ${pending[0]!.changeId.slice(0, 8)}`
-        : `${status} ${pending.length} edits`,
-    apply: async ({ tx, commitId }) => {
-      await tx
-        .update(documentEdits)
-        .set({ status, resolvedBy: actor.userId, resolvedAt: new Date(), lastCommitId: commitId })
-        .where(inArray(documentEdits.id, editIds));
-
-      const changes: Array<{ path: string; before: unknown; after: unknown }> = pending.map(
-        (e) => ({
-          path: `edit/${e.changeId}/status`,
-          before: "pending",
-          after: status,
-        })
+  const started = performance.now();
+  const base = {
+    documentId,
+    actor: actorSource(actor),
+    userId: actor.userId,
+    requested: changeIds.length,
+    decision,
+  };
+  logEvent("info", "redline.resolve.start", base);
+  try {
+    const edits = await db
+      .select()
+      .from(documentEdits)
+      .where(
+        and(eq(documentEdits.documentId, documentId), inArray(documentEdits.changeId, changeIds))
       );
+    const pending = edits.filter((e) => e.status === "pending");
+    if (!pending.length) throw new Error("No pending edits to resolve");
 
-      if (decision === "accept" && doc.markdown !== null) {
-        let md = doc.markdown;
-        for (const e of pending)
-          if (e.deletedText !== null) md = md.replace(e.deletedText, e.insertedText ?? "");
-        if (md !== doc.markdown) {
-          await tx.update(documents).set({ markdown: md }).where(eq(documents.id, documentId));
-          changes.push({ path: "markdown", before: doc.markdown, after: md });
-        }
-      }
-      return { changes };
-    },
-  });
+    const doc = await getDocument(documentId);
+    if (!doc) throw new Error("Document not found");
+
+    const result = isDocxMode(doc)
+      ? await resolveDocxEdits(actor, doc, pending, decision)
+      : await (async () => {
+          const status = decision === "accept" ? "accepted" : "rejected";
+          const editIds = pending.map((e) => e.id);
+          return recordCommit({
+            artifactType: "document",
+            artifactId: documentId,
+            actor,
+            op: "resolve_edit",
+            message:
+              pending.length === 1
+                ? `${status} edit ${pending[0]!.changeId.slice(0, 8)}`
+                : `${status} ${pending.length} edits`,
+            apply: async ({ tx, commitId }) => {
+              await tx
+                .update(documentEdits)
+                .set({
+                  status,
+                  resolvedBy: actor.userId,
+                  resolvedAt: new Date(),
+                  lastCommitId: commitId,
+                })
+                .where(inArray(documentEdits.id, editIds));
+
+              const changes: Array<{ path: string; before: unknown; after: unknown }> = pending.map(
+                (e) => ({
+                  path: `edit/${e.changeId}/status`,
+                  before: "pending",
+                  after: status,
+                })
+              );
+
+              if (decision === "accept" && doc.markdown !== null) {
+                let md = doc.markdown;
+                for (const e of pending)
+                  if (e.deletedText !== null) md = md.replace(e.deletedText, e.insertedText ?? "");
+                if (md !== doc.markdown) {
+                  await tx
+                    .update(documents)
+                    .set({ markdown: md })
+                    .where(eq(documents.id, documentId));
+                  changes.push({ path: "markdown", before: doc.markdown, after: md });
+                }
+              }
+              return { changes };
+            },
+          });
+        })();
+    logEvent("info", "redline.resolve.finish", {
+      ...base,
+      mode: isDocxMode(doc) ? "docx" : "markdown",
+      matched: edits.length,
+      resolved: pending.length,
+      committed: result.commit?.seq ?? null,
+      ms: Math.round(performance.now() - started),
+    });
+    return result;
+  } catch (e) {
+    logEvent("warn", "redline.resolve.failed", {
+      ...base,
+      error: e instanceof Error ? e.message : "failed",
+      ms: Math.round(performance.now() - started),
+    });
+    throw e;
+  }
 }
 
 /** Accept or reject a single tracked change (one version/commit). */

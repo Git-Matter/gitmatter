@@ -61,7 +61,7 @@ export function rateLimit(opts: {
     c.header("RateLimit-Reset", String(resetSec));
     if (!r.ok) {
       c.header("Retry-After", String(resetSec));
-      logEvent("warn", "rate_limit.block", { name: opts.name, key: opts.key(c) });
+      logEvent("warn", "rate_limit.block", { name: opts.name });
       return c.json({ error: "rate_limited" }, 429);
     }
     return next();

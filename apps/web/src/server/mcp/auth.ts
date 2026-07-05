@@ -1,5 +1,5 @@
 import type { Context } from "hono";
-import { resolveMcpAccount, resolveOAuthToken } from "@workspace/core";
+import { resolveMcpAccount, resolveOAuthToken, type TokenScope } from "@workspace/core";
 import { mcpResourceUri } from "../http/lib/origin.js";
 
 /** The fully-resolved account behind an MCP request: who, plus the tenant and
@@ -11,6 +11,9 @@ export type AuthenticatedMcp = {
   tokenId?: string;
   tenantId: string | null;
   jurisdiction: string | null;
+  /** Least-privilege restriction minted into a static token; OAuth tokens are
+   *  unscoped for now. Null = full power of the user. */
+  scope: TokenScope | null;
 };
 
 /** Resolve the gitmatter account behind an `Authorization: Bearer <token>`
@@ -32,6 +35,7 @@ export async function authenticateMcp(c: Context): Promise<AuthenticatedMcp | nu
       label: `oauth:${oauth.clientId}`,
       tenantId: oauth.tenantId,
       jurisdiction: oauth.jurisdiction,
+      scope: null,
     };
   }
   return null;

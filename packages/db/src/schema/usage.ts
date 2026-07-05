@@ -15,6 +15,9 @@ export const usageEvents = pgTable(
     kind: text("kind").$type<UsageKind>().notNull(),
     userId: text("user_id"),
     tenantId: uuid("tenant_id"),
+    // The matter this spend belongs to (best-effort) — lets a firm bill LLM
+    // usage to a matter as a client disbursement. Null = not attributable.
+    matterId: uuid("matter_id"),
     // Identifies the charging principal for per-token (MCP) metering.
     tokenId: uuid("token_id"),
     // Free-form descriptors: provider/model for llm, tool name for tool calls.
@@ -31,6 +34,7 @@ export const usageEvents = pgTable(
     index("usage_events_user_created_idx").on(t.userId, t.createdAt),
     index("usage_events_tenant_created_idx").on(t.tenantId, t.createdAt),
     index("usage_events_token_created_idx").on(t.tokenId, t.createdAt),
+    index("usage_events_matter_created_idx").on(t.matterId, t.createdAt),
   ]
 );
 

@@ -49,6 +49,22 @@ export function toAnthropicMessages(messages: ChatMessage[]): Anthropic.MessageP
   return out;
 }
 
+// Cache the growing conversation prefix: a breakpoint on the last message block
+// lets every prior turn — including large get_document tool results — read from
+// cache across the tool loop's passes and later turns instead of re-billing the
+// full history each request. Complements the system + tool-definition breakpoints.
+export function markLastMessageCacheable(messages: Anthropic.MessageParam[]): void {
+  const last = messages[messages.length - 1];
+  if (!last) return;
+  if (typeof last.content === "string") {
+    last.content = [{ type: "text", text: last.content, cache_control: { type: "ephemeral" } }];
+    return;
+  }
+  const block = last.content[last.content.length - 1];
+  if (block)
+    (block as { cache_control?: { type: "ephemeral" } }).cache_control = { type: "ephemeral" };
+}
+
 // Anthropic has no JSON mode — force a single-tool turn whose input *is* the
 // schema, then read the tool input back as the structured result.
 const ANTHROPIC_STRUCTURED_TOOL = "structured_response";
@@ -79,6 +95,11 @@ export class AnthropicClient implements LlmClient {
     // preceding tool definition across the loop's turns.
     if (req.cache && tools?.length) tools[tools.length - 1]!.cache_control = { type: "ephemeral" };
 
+    const messages = toAnthropicMessages(req.messages);
+    // Cache the conversation prefix too, so large tool results (get_document
+    // body) aren't re-billed on every pass of the tool loop.
+    if (req.cache) markLastMessageCacheable(messages);
+
     return {
       model: req.model,
       max_tokens: maxTokens,
@@ -87,7 +108,7 @@ export class AnthropicClient implements LlmClient {
         req.cache && req.system
           ? [{ type: "text", text: req.system, cache_control: { type: "ephemeral" } }]
           : req.system,
-      messages: toAnthropicMessages(req.messages),
+      messages,
       // Extended thinking pins temperature to 1, so only send it otherwise.
       temperature: budget ? undefined : req.temperature,
       thinking: budget ? { type: "enabled", budget_tokens: budget } : undefined,

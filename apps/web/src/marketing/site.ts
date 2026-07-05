@@ -7,4 +7,5 @@ export const SITE = {
   get contact() {
     return `mailto:${this.email}`;
   },
+  bookDemo: "https://www.cal.eu/gitmatter/demo",
 };

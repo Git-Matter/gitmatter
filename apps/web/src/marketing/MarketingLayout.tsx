@@ -43,9 +43,9 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
             GitHub
           </a>
         </nav>
-        <Link to="/signup">
-          <Button size="sm">Get started</Button>
-        </Link>
+        <a href={SITE.bookDemo} target="_blank" rel="noreferrer">
+          <Button size="sm">Book demo</Button>
+        </a>
       </header>
 
       <main className="flex-1">{children}</main>
