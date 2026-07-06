@@ -49,6 +49,19 @@ function hashText(text: string): string {
   return createHash("sha256").update(text).digest("hex");
 }
 
+// Raw full text for agent context, with a truncation note when the size cap
+// clipped it — so the model knows it is not seeing the whole document.
+function fullText(markdown: string): string {
+  if (markdown.length <= MAX_FULL_TEXT_CHARS) return markdown;
+  return `${markdown.slice(0, MAX_FULL_TEXT_CHARS)}\n\n[Truncated: document exceeds the ${MAX_FULL_TEXT_CHARS}-character context cap. Call get_document with mode "query" and a focused question to reach the rest.]`;
+}
+
+// Prepended to any partial (chunked) view so the model treats it as a subset
+// and pages the rest instead of answering as if it saw the full document.
+function partialBanner(shown: number, total: number): string {
+  return `[Partial view: ${shown} of ${total} chunks shown. To read other parts, call get_document again with mode "query" and a focused question, or mode "chunks" with refs chunk:0 through chunk:${total - 1}.]`;
+}
+
 function words(text: string): string[] {
   return text.match(/\S+/g) ?? [];
 }
@@ -266,7 +279,7 @@ export async function getDocumentContext(
       mode: "full",
       pipeline,
       tokenEstimate: totalTokens,
-      text: markdown.slice(0, MAX_FULL_TEXT_CHARS),
+      text: fullText(markdown),
       chunks: [],
     };
   }
@@ -289,7 +302,7 @@ export async function getDocumentContext(
       mode: "full",
       pipeline,
       tokenEstimate: totalTokens,
-      text: markdown.slice(0, MAX_FULL_TEXT_CHARS),
+      text: fullText(markdown),
       chunks: [],
     };
   }
@@ -333,11 +346,13 @@ export async function getDocumentContext(
     if (!selected.length) selected = rows.slice(0, Math.min(rows.length, opts.maxChunks ?? 4));
   }
 
+  const body = selected.map(formatChunk).join("\n\n");
+  const partial = selected.length < rows.length;
   return {
     mode: "chunks",
     pipeline,
     tokenEstimate: selected.reduce((n, c) => n + c.tokenEstimate, 0),
-    text: selected.map(formatChunk).join("\n\n"),
+    text: partial ? `${partialBanner(selected.length, rows.length)}\n\n${body}` : body,
     chunks: contextChunks(selected),
   };
 }
