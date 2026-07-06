@@ -78,7 +78,7 @@ export class OpenAIResponsesClient implements LlmClient {
     };
   }
 
-  private finalize(res: OpenAI.Responses.Response): CompleteResult {
+  private finalize(req: CompleteRequest, res: OpenAI.Responses.Response): CompleteResult {
     const items = res.output ?? [];
     const toolCalls = items
       .filter((i): i is OpenAI.Responses.ResponseFunctionToolCall => i.type === "function_call")
@@ -91,7 +91,13 @@ export class OpenAIResponsesClient implements LlmClient {
       stop: toolCalls.length ? "tool_use" : "end",
       reasoning: reasoning.length ? reasoning : undefined,
       usage: res.usage
-        ? { inputTokens: res.usage.input_tokens, outputTokens: res.usage.output_tokens }
+        ? {
+            inputTokens: res.usage.input_tokens,
+            outputTokens: res.usage.output_tokens,
+            cachedInputTokens: res.usage.input_tokens_details?.cached_tokens,
+            cacheMode: "automatic",
+            cacheKey: req.cacheKey,
+          }
         : undefined,
     };
   }
@@ -101,7 +107,7 @@ export class OpenAIResponsesClient implements LlmClient {
       apiKey: this.apiKey,
       ...(llmTimeoutMs() ? { timeout: llmTimeoutMs() } : {}),
     });
-    return this.finalize(await openai.responses.create(this.buildParams(req)));
+    return this.finalize(req, await openai.responses.create(this.buildParams(req)));
   }
 
   async stream(req: CompleteRequest, handlers: StreamHandlers): Promise<CompleteResult> {
@@ -124,7 +130,7 @@ export class OpenAIResponsesClient implements LlmClient {
       } else if (event.type === "response.reasoning_summary_text.delta")
         handlers.onReasoning?.(event.delta);
     }
-    const res = this.finalize(await s.finalResponse());
+    const res = this.finalize(req, await s.finalResponse());
     return res.text ? res : { ...res, text: acc };
   }
 }

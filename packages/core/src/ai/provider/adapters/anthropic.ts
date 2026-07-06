@@ -5,6 +5,7 @@ import type {
   CompleteRequest,
   CompleteResult,
   LlmClient,
+  UsageInfo,
   StreamHandlers,
 } from "../types.js";
 
@@ -68,6 +69,24 @@ export function markLastMessageCacheable(messages: Anthropic.MessageParam[]): vo
 // Anthropic has no JSON mode — force a single-tool turn whose input *is* the
 // schema, then read the tool input back as the structured result.
 const ANTHROPIC_STRUCTURED_TOOL = "structured_response";
+
+function anthropicUsage(usage: Anthropic.Message["usage"], req: CompleteRequest): UsageInfo {
+  const raw = usage as unknown as {
+    input_tokens: number;
+    output_tokens: number;
+    cache_read_input_tokens?: number;
+    cache_creation_input_tokens?: number;
+  };
+  return {
+    inputTokens: raw.input_tokens,
+    outputTokens: raw.output_tokens,
+    cacheReadTokens: raw.cache_read_input_tokens,
+    cacheWriteTokens: raw.cache_creation_input_tokens,
+    cachedInputTokens: raw.cache_read_input_tokens,
+    cacheMode: req.cache ? "explicit" : undefined,
+    cacheKey: req.cacheKey,
+  };
+}
 
 export class AnthropicClient implements LlmClient {
   constructor(private readonly apiKey: string) {}
@@ -156,7 +175,7 @@ export class AnthropicClient implements LlmClient {
     });
     const res = await anthropic.messages.create(this.buildParams(req));
     const out = this.finalize(req, res.content, res.stop_reason);
-    out.usage = { inputTokens: res.usage.input_tokens, outputTokens: res.usage.output_tokens };
+    out.usage = anthropicUsage(res.usage, req);
     return out;
   }
 
@@ -170,7 +189,7 @@ export class AnthropicClient implements LlmClient {
     if (handlers.onReasoning) s.on("thinking", (delta) => handlers.onReasoning!(delta));
     const msg = await s.finalMessage();
     const out = this.finalize(req, msg.content, msg.stop_reason);
-    out.usage = { inputTokens: msg.usage.input_tokens, outputTokens: msg.usage.output_tokens };
+    out.usage = anthropicUsage(msg.usage, req);
     return out;
   }
 }

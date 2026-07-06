@@ -13,6 +13,7 @@
 export * from "./types.js";
 export { streamComplete } from "./shared.js";
 export * from "./catalog.js";
+export * from "./cache.js";
 export * from "./keys.js";
 export { getLlmClient } from "./factory.js";
 export { completeText } from "./complete.js";

@@ -2,6 +2,7 @@ import type { LlmProvider } from "@workspace/contracts";
 import { getEnv } from "../../core/config.js";
 import { DEFAULT_MODEL, PROVIDERS, providerForModel } from "./catalog.js";
 import { getLlmClient } from "./factory.js";
+import type { UsageInfo } from "./types.js";
 
 /**
  * Single-shot text completion across any provider — used by tabular extraction.
@@ -22,12 +23,7 @@ export async function completeText(params: {
   cacheKey?: string;
   // Reports the provider's token usage after the call so callers can meter it
   // (best-effort: some providers omit usage; never blocks the completion).
-  onUsage?: (u: {
-    provider: LlmProvider;
-    model: string;
-    inputTokens: number;
-    outputTokens: number;
-  }) => void;
+  onUsage?: (u: UsageInfo & { provider: LlmProvider; model: string }) => void;
 }): Promise<string> {
   const model = params.model ?? DEFAULT_MODEL;
   const provider = params.provider ?? providerForModel(model);
@@ -47,8 +43,8 @@ export async function completeText(params: {
     params.onUsage({
       provider,
       model,
-      inputTokens: res.usage.inputTokens,
-      outputTokens: res.usage.outputTokens,
+      ...res.usage,
+      cacheKey: res.usage.cacheKey ?? params.cacheKey,
     });
   return res.text;
 }

@@ -5,6 +5,7 @@ import type {
   OpenRouterModel,
   ProviderCatalog,
 } from "@workspace/contracts";
+import type { CacheMode } from "./cache.js";
 
 export type { LlmModel, LlmProvider, ModelCapabilities, OpenRouterModel, ProviderCatalog };
 
@@ -47,6 +48,16 @@ export type CompleteRequest = {
   cacheKey?: string;
 };
 
+export type UsageInfo = {
+  inputTokens: number;
+  outputTokens: number;
+  cachedInputTokens?: number;
+  cacheWriteTokens?: number;
+  cacheReadTokens?: number;
+  cacheMode?: CacheMode;
+  cacheKey?: string;
+};
+
 export type CompleteResult = {
   text: string;
   toolCalls: ToolCall[];
@@ -54,7 +65,7 @@ export type CompleteResult = {
   reasoning?: unknown[];
   // Token usage as reported by the provider, when it exposes it. Optional —
   // absent providers leave it undefined; metering treats that as zero.
-  usage?: { inputTokens: number; outputTokens: number };
+  usage?: UsageInfo;
 };
 
 // Live callbacks for streaming. onText fires per answer-token delta; onReasoning

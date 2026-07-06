@@ -5,6 +5,7 @@ import type {
   CompleteRequest,
   CompleteResult,
   LlmClient,
+  UsageInfo,
   StreamHandlers,
 } from "../types.js";
 
@@ -116,7 +117,7 @@ export class GeminiClient implements LlmClient {
     });
     const res = await ai.models.generateContent(this.buildRequest(req));
     const out = this.finalize(res.candidates?.[0]?.content?.parts ?? []);
-    out.usage = geminiUsage(res.usageMetadata);
+    out.usage = geminiUsage(res.usageMetadata, req);
     return out;
   }
 
@@ -127,7 +128,13 @@ export class GeminiClient implements LlmClient {
     });
     const gen = await ai.models.generateContentStream(this.buildRequest(req));
     const parts: Part[] = [];
-    let usageMeta: { promptTokenCount?: number; candidatesTokenCount?: number } | undefined;
+    let usageMeta:
+      | {
+          promptTokenCount?: number;
+          candidatesTokenCount?: number;
+          cachedContentTokenCount?: number;
+        }
+      | undefined;
     for await (const chunk of gen) {
       for (const p of chunk.candidates?.[0]?.content?.parts ?? []) {
         if (p.text) (p.thought ? handlers.onReasoning : handlers.onText)?.(p.text);
@@ -136,15 +143,25 @@ export class GeminiClient implements LlmClient {
       if (chunk.usageMetadata) usageMeta = chunk.usageMetadata; // last chunk carries the totals
     }
     const out = this.finalize(parts);
-    out.usage = geminiUsage(usageMeta);
+    out.usage = geminiUsage(usageMeta, req);
     return out;
   }
 }
 
 // Gemini reports cumulative counts on usageMetadata; map to our shape (null-safe).
 function geminiUsage(
-  m: { promptTokenCount?: number; candidatesTokenCount?: number } | undefined
-): { inputTokens: number; outputTokens: number } | undefined {
+  m:
+    | { promptTokenCount?: number; candidatesTokenCount?: number; cachedContentTokenCount?: number }
+    | undefined,
+  req: CompleteRequest
+): UsageInfo | undefined {
   if (!m) return undefined;
-  return { inputTokens: m.promptTokenCount ?? 0, outputTokens: m.candidatesTokenCount ?? 0 };
+  return {
+    inputTokens: m.promptTokenCount ?? 0,
+    outputTokens: m.candidatesTokenCount ?? 0,
+    cachedInputTokens: m.cachedContentTokenCount,
+    cacheReadTokens: m.cachedContentTokenCount,
+    cacheMode: "automatic",
+    cacheKey: req.cacheKey,
+  };
 }

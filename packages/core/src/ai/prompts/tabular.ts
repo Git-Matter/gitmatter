@@ -83,7 +83,7 @@ export function buildCellPrompt(params: {
 }): { system: string; user: string } {
   const instruction = `${params.columnPrompt}${formatSuffix(params.format, params.tags)} If not found, state "Not Found". Put all reasoning in the "reasoning" field only.`;
   return {
-    system: `${EXTRACTION_SYSTEM}\n\n--- Document: ${params.filename} ---\n${params.documentText.slice(0, 120_000)}`,
+    system: `${EXTRACTION_SYSTEM}\n\n--- Document: ${params.filename} ---\n${params.documentText}`,
     user: `Instruction: ${instruction}`,
   };
 }
@@ -117,6 +117,6 @@ Give exactly one entry per column listed, tagged with its column_index.
 Output the JSON object only — no text around it.`;
   return {
     system,
-    user: `Document: ${params.filename}\n\n${params.documentText.slice(0, 120_000)}\n\n---\nColumns to extract:\n${colList}`,
+    user: `Document: ${params.filename}\n\n${params.documentText}\n\n---\nColumns to extract:\n${colList}`,
   };
 }

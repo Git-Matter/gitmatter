@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { PlaybookRule } from "@workspace/db/schema";
 import { canAccessArtifact, canReadDocument } from "../core/index.js";
+import { getDocumentContext } from "../content/chunks.js";
 import { getDocument } from "../content/documents.js";
 import { generatePlaybookRules, runPlaybook } from "../ai/tabular/playbook.js";
 import { resolveRunModel } from "../ai/provider/index.js";
@@ -115,9 +116,18 @@ export function buildWorkflowTools({ actor, resolveMatter }: ToolContext): ToolS
         if (!(await canReadDocument(actor, documentId as string))) return { error: "Not found" };
         const doc = await getDocument(documentId as string);
         if (!doc?.markdown) return { error: "Document has no extracted text" };
+        const context = await getDocumentContext(doc, {
+          mode: "query",
+          query: [contractType, "standard position fallback unacceptable guidance clause"]
+            .filter(Boolean)
+            .join(" "),
+          task: "playbook",
+          repeated: true,
+          maxChunks: 24,
+        });
         const run = await resolveRunModel(actor.userId, model as string | undefined);
         const rules = await generatePlaybookRules({
-          documentText: doc.markdown,
+          documentText: context.text,
           filename: doc.title,
           contractType: contractType as string | undefined,
           model: run.model,

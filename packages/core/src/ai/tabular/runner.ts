@@ -8,12 +8,14 @@ import {
   tabularReviews,
 } from "@workspace/db/schema";
 import { type Actor, recordCommit } from "../../core/commit.js";
+import { getDocumentContext } from "../../content/chunks.js";
 import { recordLlmUsage } from "../../platform/usage.js";
 import {
   DEFAULT_MODEL,
   providerForModel,
   resolveLlmKey,
   resolveRunModel,
+  type UsageInfo,
 } from "../provider/index.js";
 import { coerceCitations, coerceFlag, queryCell, queryRow } from "./extract.js";
 
@@ -22,7 +24,7 @@ import { coerceCitations, coerceFlag, queryCell, queryRow } from "./extract.js";
 function meterFor(
   actor: Actor,
   review: { tenantId: string | null; matterId: string | null }
-): (u: { provider: string; model: string; inputTokens: number; outputTokens: number }) => void {
+): (u: UsageInfo & { provider: string; model: string }) => void {
   return (u) =>
     void recordLlmUsage({
       userId: actor.userId,
@@ -137,7 +139,14 @@ export async function runCell(
   const { content, citations } = await queryCell({
     model,
     filename: doc.title,
-    documentText: doc.markdown ?? "",
+    documentText: (
+      await getDocumentContext(doc, {
+        mode: "query",
+        query: col.prompt,
+        task: "tabular",
+        repeated: true,
+      })
+    ).text,
     columnPrompt: col.prompt,
     format: col.format,
     tags: col.tags,
@@ -230,7 +239,15 @@ export async function runDocument(
   const results = await queryRow({
     model,
     filename: doc.title,
-    documentText: doc.markdown ?? "",
+    documentText: (
+      await getDocumentContext(doc, {
+        mode: "query",
+        query: review.columnsConfig.map((c) => `${c.name}: ${c.prompt}`).join("\n"),
+        task: "tabular",
+        repeated: true,
+        maxChunks: 16,
+      })
+    ).text,
     columns: review.columnsConfig,
     apiKey: key,
     onUsage: meterFor(actor, review),
@@ -355,16 +372,25 @@ export async function runReviewStreaming(
       handlers.onCellStart(documentId, col.index);
       await markStatus(documentId, col.index, "generating");
       try {
+        const context = await getDocumentContext(doc, {
+          mode: "query",
+          query: col.prompt,
+          task: "tabular",
+          repeated: true,
+        });
         const { content, citations } = await queryCell({
           model,
           filename: doc.title,
-          documentText: doc.markdown ?? "",
+          documentText: context.text,
           columnPrompt: col.prompt,
           format: col.format,
           tags: col.tags,
           apiKey: key,
           cache: true,
-          cacheKey,
+          cacheKey: `${cacheKey}:${context.chunks.map((c) => c.index).join("-") || "full"}`.slice(
+            0,
+            64
+          ),
           onUsage: meterFor(actor, review),
         });
         await commitCell(actor, {

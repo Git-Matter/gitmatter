@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { and, desc, eq, gte, isNotNull, type SQL, sql } from "drizzle-orm";
 import { estimateCostUsd } from "@workspace/registry";
 import { db } from "@workspace/db/client";
@@ -19,6 +20,11 @@ import { recordAudit } from "./audit.js";
 
 const windowMinutes = () => getEnvNumber("BUDGET_WINDOW_MINUTES", 60);
 const since = (minutes: number) => new Date(Date.now() - minutes * 60_000);
+
+function shortHash(value?: string | null): string | null {
+  if (!value) return null;
+  return createHash("sha256").update(value).digest("hex").slice(0, 16);
+}
 
 async function flag(
   scope: string,
@@ -63,6 +69,11 @@ export async function recordLlmUsage(e: {
   model?: string | null;
   inputTokens?: number;
   outputTokens?: number;
+  cachedInputTokens?: number;
+  cacheWriteTokens?: number;
+  cacheReadTokens?: number;
+  cacheMode?: string | null;
+  cacheKey?: string | null;
 }): Promise<void> {
   try {
     await db.insert(usageEvents).values({
@@ -74,6 +85,11 @@ export async function recordLlmUsage(e: {
       model: e.model ?? null,
       inputTokens: e.inputTokens ?? 0,
       outputTokens: e.outputTokens ?? 0,
+      cachedInputTokens: e.cachedInputTokens ?? null,
+      cacheWriteTokens: e.cacheWriteTokens ?? null,
+      cacheReadTokens: e.cacheReadTokens ?? null,
+      cacheMode: e.cacheMode ?? null,
+      cacheKey: shortHash(e.cacheKey),
     });
     const after = since(windowMinutes());
     const userBudget = getEnvNumber("USER_LLM_TOKEN_BUDGET", 0);
@@ -213,6 +229,9 @@ export type MatterUsageSummary = {
     calls: number;
     inputTokens: number;
     outputTokens: number;
+    cachedInputTokens: number;
+    cacheReadTokens: number;
+    cacheWriteTokens: number;
     /** Estimated USD, or null when the model is unpriced. */
     costUsd: number | null;
   }>;
@@ -221,6 +240,9 @@ export type MatterUsageSummary = {
     llmCalls: number;
     inputTokens: number;
     outputTokens: number;
+    cachedInputTokens: number;
+    cacheReadTokens: number;
+    cacheWriteTokens: number;
     /** Sum over priced models only; null when nothing is priced. */
     costUsd: number | null;
     toolCalls: number;
@@ -235,6 +257,9 @@ export async function matterUsageSummary(matterId: string): Promise<MatterUsageS
       calls: sql<number>`count(*)`,
       inputTokens: sql<number>`coalesce(sum(${usageEvents.inputTokens}), 0)`,
       outputTokens: sql<number>`coalesce(sum(${usageEvents.outputTokens}), 0)`,
+      cachedInputTokens: sql<number>`coalesce(sum(${usageEvents.cachedInputTokens}), 0)`,
+      cacheReadTokens: sql<number>`coalesce(sum(${usageEvents.cacheReadTokens}), 0)`,
+      cacheWriteTokens: sql<number>`coalesce(sum(${usageEvents.cacheWriteTokens}), 0)`,
     })
     .from(usageEvents)
     .where(and(eq(usageEvents.kind, "llm"), eq(usageEvents.matterId, matterId)))
@@ -258,6 +283,9 @@ export async function matterUsageSummary(matterId: string): Promise<MatterUsageS
     calls: Number(r.calls),
     inputTokens: Number(r.inputTokens),
     outputTokens: Number(r.outputTokens),
+    cachedInputTokens: Number(r.cachedInputTokens),
+    cacheReadTokens: Number(r.cacheReadTokens),
+    cacheWriteTokens: Number(r.cacheWriteTokens),
     costUsd: r.model
       ? estimateCostUsd(r.model, Number(r.inputTokens), Number(r.outputTokens))
       : null,
@@ -271,6 +299,9 @@ export async function matterUsageSummary(matterId: string): Promise<MatterUsageS
       llmCalls: llm.reduce((n, r) => n + r.calls, 0),
       inputTokens: llm.reduce((n, r) => n + r.inputTokens, 0),
       outputTokens: llm.reduce((n, r) => n + r.outputTokens, 0),
+      cachedInputTokens: llm.reduce((n, r) => n + r.cachedInputTokens, 0),
+      cacheReadTokens: llm.reduce((n, r) => n + r.cacheReadTokens, 0),
+      cacheWriteTokens: llm.reduce((n, r) => n + r.cacheWriteTokens, 0),
       costUsd: priced.length ? priced.reduce((n, r) => n + (r.costUsd ?? 0), 0) : null,
       toolCalls: tools.reduce((n, r) => n + r.calls, 0),
     },

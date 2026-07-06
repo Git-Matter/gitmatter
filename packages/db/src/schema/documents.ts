@@ -162,6 +162,33 @@ export const documentVersions = pgTable(
   (t) => [unique("document_version_unique").on(t.documentId, t.versionNumber)]
 );
 
+// Derived read index for large-document AI context. Chunks are rebuilt from the
+// active version's markdown after extraction or document edits; they are not the
+// mutation source of truth.
+export const documentChunks = pgTable(
+  "document_chunks",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    documentId: uuid("document_id")
+      .notNull()
+      .references(() => documents.id, { onDelete: "cascade" }),
+    versionId: uuid("version_id").references(() => documentVersions.id, { onDelete: "cascade" }),
+    index: integer("chunk_index").notNull(),
+    text: text("text").notNull(),
+    tokenEstimate: integer("token_estimate").notNull(),
+    pageStart: integer("page_start"),
+    pageEnd: integer("page_end"),
+    label: text("label"),
+    contentHash: text("content_hash").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => [
+    unique("document_chunks_doc_version_index_unique").on(t.documentId, t.versionId, t.index),
+    index("document_chunks_doc_idx").on(t.documentId),
+    index("document_chunks_version_idx").on(t.versionId),
+  ]
+);
+
 // Tracked changes (redlines) on a document. For docx documents the w-ids point at
 // the OOXML w:ins/w:del wrappers; for text/pdf documents they stay null and the
 // edit is a find->replace on documents.markdown.
@@ -191,4 +218,5 @@ export type DocumentFolder = typeof documentFolders.$inferSelect;
 export type Document = typeof documents.$inferSelect;
 export type MatterDocument = typeof matterDocuments.$inferSelect;
 export type DocumentVersion = typeof documentVersions.$inferSelect;
+export type DocumentChunk = typeof documentChunks.$inferSelect;
 export type DocumentEdit = typeof documentEdits.$inferSelect;

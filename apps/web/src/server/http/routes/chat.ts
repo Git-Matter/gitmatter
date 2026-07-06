@@ -860,6 +860,9 @@ async function runAssistant(
       toolCallCount: res.toolCalls.length,
       inputTokens: res.usage?.inputTokens,
       outputTokens: res.usage?.outputTokens,
+      cachedInputTokens: res.usage?.cachedInputTokens,
+      cacheReadTokens: res.usage?.cacheReadTokens,
+      cacheWriteTokens: res.usage?.cacheWriteTokens,
     });
     // Meter this completion's token spend (log-only; never blocks the turn).
     if (res.usage)
@@ -869,8 +872,7 @@ async function runAssistant(
         matterId: matterId ?? null,
         provider,
         model,
-        inputTokens: res.usage.inputTokens,
-        outputTokens: res.usage.outputTokens,
+        ...res.usage,
       });
     messages.push({
       role: "assistant",

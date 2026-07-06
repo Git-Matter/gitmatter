@@ -36,7 +36,12 @@ export function summarizeToolInput(tool: string, input: Record<string, unknown>)
         matterProvided: typeof input.matterId === "string",
       };
     case "get_document":
-      return { documentId: input.documentId };
+      return {
+        documentId: input.documentId,
+        mode: input.mode,
+        hasQuery: typeof input.query === "string" && input.query.length > 0,
+        chunkCount: arrayCount(input.chunkRefs),
+      };
     case "propose_document_edit":
       return {
         documentId: input.documentId,

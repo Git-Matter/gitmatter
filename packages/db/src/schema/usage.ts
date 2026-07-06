@@ -26,6 +26,11 @@ export const usageEvents = pgTable(
     tool: text("tool"),
     inputTokens: integer("input_tokens"),
     outputTokens: integer("output_tokens"),
+    cachedInputTokens: integer("cached_input_tokens"),
+    cacheWriteTokens: integer("cache_write_tokens"),
+    cacheReadTokens: integer("cache_read_tokens"),
+    cacheMode: text("cache_mode"),
+    cacheKey: text("cache_key"),
     // Generic unit count for kinds that meter by occurrence (tool/cl/extraction).
     count: integer("count").notNull().default(1),
     createdAt: timestamp("created_at").defaultNow().notNull(),

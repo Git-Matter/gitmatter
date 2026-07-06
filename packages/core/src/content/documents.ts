@@ -29,6 +29,7 @@ import { assertStorageWithinQuota } from "../platform/usage.js";
 import { accessCountSql, accessSummaryByArtifact, sharedArtifactIds } from "../platform/shares.js";
 import { type Actor, recordCommit } from "../core/commit.js";
 import { logEvent } from "../core/log.js";
+import { getDocumentContext, replaceDocumentChunks, type ContextMode } from "./chunks.js";
 import { extractMarkdown, type SupportedFileType } from "./extract.js";
 import { emitDocStatus } from "./extractionEvents.js";
 import { generateDocx, type DocxSpec } from "./docx/generate.js";
@@ -311,6 +312,12 @@ export async function createDocument(
       status: "ready",
     })
     .returning();
+  await replaceDocumentChunks(db, {
+    documentId: doc.id,
+    versionId: doc.currentVersionId,
+    markdown: input.markdown,
+    fileType: doc.fileType,
+  });
   return doc;
 }
 
@@ -847,6 +854,12 @@ export async function processDocument(doc: Document): Promise<void> {
             ocrSuggested,
           })
           .where(eq(documents.id, doc.id));
+        await replaceDocumentChunks(tx, {
+          documentId: doc.id,
+          versionId: doc.currentVersionId,
+          markdown,
+          fileType: doc.fileType,
+        });
         return { changes: [{ path: "markdown", before: null, after: markdown }] };
       },
     });
@@ -1012,6 +1025,12 @@ async function proposeDocxEdit(
         .update(documents)
         .set({ markdown: newMarkdown, currentVersionId: nv!.id })
         .where(eq(documents.id, doc.id));
+      await replaceDocumentChunks(tx, {
+        documentId: doc.id,
+        versionId: nv!.id,
+        markdown: newMarkdown,
+        fileType: doc.fileType,
+      });
       return {
         changes: [
           ...applied.map((a) => ({
@@ -1097,6 +1116,12 @@ async function resolveDocxEdits(
         .update(documents)
         .set({ markdown: newMarkdown, currentVersionId: nv!.id })
         .where(eq(documents.id, doc.id));
+      await replaceDocumentChunks(tx, {
+        documentId: doc.id,
+        versionId: nv!.id,
+        markdown: newMarkdown,
+        fileType: doc.fileType,
+      });
       return {
         changes: [
           ...edits.map((e) => ({
@@ -1308,6 +1333,12 @@ export async function resolveEdits(
                     .update(documents)
                     .set({ markdown: md })
                     .where(eq(documents.id, documentId));
+                  await replaceDocumentChunks(tx, {
+                    documentId,
+                    versionId: doc.currentVersionId,
+                    markdown: md,
+                    fileType: doc.fileType,
+                  });
                   changes.push({ path: "markdown", before: doc.markdown, after: md });
                 }
               }
@@ -1364,7 +1395,14 @@ export async function resolveAllEdits(
 }
 
 /** Document with its tracked edits and per-edit blame (commit that last touched each). */
-export async function getDocumentDetail(documentId: string) {
+export async function getDocumentDetail(
+  documentId: string,
+  opts: {
+    mode?: ContextMode;
+    query?: string;
+    chunkRefs?: Array<string | number>;
+  } = {}
+) {
   const doc = await getDocument(documentId);
   if (!doc) return null;
 
@@ -1389,8 +1427,29 @@ export async function getDocumentDetail(documentId: string) {
     .from(user)
     .where(eq(user.id, doc.userId));
 
+  const context = await getDocumentContext(doc, {
+    mode: opts.mode ?? "auto",
+    query: opts.query,
+    chunkRefs: opts.chunkRefs,
+    task: "chat",
+    repeated: true,
+  });
+
   return {
-    document: { ...doc, ownerName: owner?.name ?? null, ownerEmail: owner?.email ?? null },
+    document: {
+      ...doc,
+      ownerName: owner?.name ?? null,
+      ownerEmail: owner?.email ?? null,
+      // Raw `doc.markdown` stays full for the human viewer. The bounded,
+      // possibly-chunked AI view lives on its own field so consumers pick.
+      context: {
+        text: context.text,
+        mode: context.mode,
+        pipeline: context.pipeline,
+        tokenEstimate: context.tokenEstimate,
+        chunks: context.chunks,
+      },
+    },
     edits: edits.map((e) => ({
       ...e,
       blame: e.lastCommitId ? (blameById.get(e.lastCommitId) ?? null) : null,
