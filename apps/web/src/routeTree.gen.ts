@@ -24,6 +24,7 @@ import { Route as marketingUseCasesRouteImport } from './routes/(marketing)/use-
 import { Route as marketingTermsRouteImport } from './routes/(marketing)/terms'
 import { Route as marketingSecurityRouteImport } from './routes/(marketing)/security'
 import { Route as marketingPrivacyRouteImport } from './routes/(marketing)/privacy'
+import { Route as marketingFeaturesRouteImport } from './routes/(marketing)/features'
 import { Route as marketingAboutRouteImport } from './routes/(marketing)/about'
 import { Route as AuthWorkflowsIndexRouteImport } from './routes/_auth/workflows/index'
 import { Route as AuthSettingsIndexRouteImport } from './routes/_auth/settings/index'
@@ -118,6 +119,11 @@ const marketingSecurityRoute = marketingSecurityRouteImport.update({
 const marketingPrivacyRoute = marketingPrivacyRouteImport.update({
   id: '/privacy',
   path: '/privacy',
+  getParentRoute: () => marketingRouteRoute,
+} as any)
+const marketingFeaturesRoute = marketingFeaturesRouteImport.update({
+  id: '/features',
+  path: '/features',
   getParentRoute: () => marketingRouteRoute,
 } as any)
 const marketingAboutRoute = marketingAboutRouteImport.update({
@@ -245,6 +251,7 @@ const AuthMattersIdAssistantChatIdRoute =
 export interface FileRoutesByFullPath {
   '/': typeof marketingIndexRoute
   '/about': typeof marketingAboutRoute
+  '/features': typeof marketingFeaturesRoute
   '/privacy': typeof marketingPrivacyRoute
   '/security': typeof marketingSecurityRoute
   '/terms': typeof marketingTermsRoute
@@ -282,6 +289,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof marketingIndexRoute
   '/about': typeof marketingAboutRoute
+  '/features': typeof marketingFeaturesRoute
   '/privacy': typeof marketingPrivacyRoute
   '/security': typeof marketingSecurityRoute
   '/terms': typeof marketingTermsRoute
@@ -322,6 +330,7 @@ export interface FileRoutesById {
   '/_auth': typeof AuthRouteRouteWithChildren
   '/_unauth': typeof UnauthRouteRouteWithChildren
   '/(marketing)/about': typeof marketingAboutRoute
+  '/(marketing)/features': typeof marketingFeaturesRoute
   '/(marketing)/privacy': typeof marketingPrivacyRoute
   '/(marketing)/security': typeof marketingSecurityRoute
   '/(marketing)/terms': typeof marketingTermsRoute
@@ -362,6 +371,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/about'
+    | '/features'
     | '/privacy'
     | '/security'
     | '/terms'
@@ -399,6 +409,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/about'
+    | '/features'
     | '/privacy'
     | '/security'
     | '/terms'
@@ -438,6 +449,7 @@ export interface FileRouteTypes {
     | '/_auth'
     | '/_unauth'
     | '/(marketing)/about'
+    | '/(marketing)/features'
     | '/(marketing)/privacy'
     | '/(marketing)/security'
     | '/(marketing)/terms'
@@ -587,6 +599,13 @@ declare module '@tanstack/react-router' {
       path: '/privacy'
       fullPath: '/privacy'
       preLoaderRoute: typeof marketingPrivacyRouteImport
+      parentRoute: typeof marketingRouteRoute
+    }
+    '/(marketing)/features': {
+      id: '/(marketing)/features'
+      path: '/features'
+      fullPath: '/features'
+      preLoaderRoute: typeof marketingFeaturesRouteImport
       parentRoute: typeof marketingRouteRoute
     }
     '/(marketing)/about': {
@@ -755,6 +774,7 @@ declare module '@tanstack/react-router' {
 
 interface marketingRouteRouteChildren {
   marketingAboutRoute: typeof marketingAboutRoute
+  marketingFeaturesRoute: typeof marketingFeaturesRoute
   marketingPrivacyRoute: typeof marketingPrivacyRoute
   marketingSecurityRoute: typeof marketingSecurityRoute
   marketingTermsRoute: typeof marketingTermsRoute
@@ -770,6 +790,7 @@ interface marketingRouteRouteChildren {
 
 const marketingRouteRouteChildren: marketingRouteRouteChildren = {
   marketingAboutRoute: marketingAboutRoute,
+  marketingFeaturesRoute: marketingFeaturesRoute,
   marketingPrivacyRoute: marketingPrivacyRoute,
   marketingSecurityRoute: marketingSecurityRoute,
   marketingTermsRoute: marketingTermsRoute,
