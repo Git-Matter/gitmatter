@@ -18,6 +18,7 @@ import {
   AgentClip,
   AGENT_FRAMES,
 } from "./clips";
+import { Overview, OVERVIEW_FRAMES } from "./Overview";
 import { McpSession, MCP_FRAMES } from "./McpSession";
 import { Install, INSTALL_FRAMES } from "./Install";
 import { AuditDive, AUDITDIVE_FRAMES } from "./AuditDive";
@@ -66,6 +67,14 @@ export const RemotionRoot: React.FC = () => {
         fps={30}
         width={1920}
         height={1080}
+      />
+      <Composition
+        id="FeatureOverview"
+        component={Overview}
+        durationInFrames={OVERVIEW_FRAMES}
+        fps={CLIP.fps}
+        width={CLIP.w}
+        height={CLIP.h}
       />
       {clips.map((c) => (
         <Composition

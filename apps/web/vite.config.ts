@@ -33,6 +33,33 @@ const PUBLIC_PRERENDER_PATHS = [
   "/terms",
   "/login",
   "/signup",
+  // Platform + solutions indexes and one path per catalog entry (slugs come
+  // from src/marketing/catalog.ts). Keep in sync with public/sitemap.xml.
+  "/platform",
+  "/platform/assistant",
+  "/platform/tabular-review",
+  "/platform/redline-and-drafting",
+  "/platform/workflows",
+  "/platform/clause-library-and-playbooks",
+  "/platform/audit-trail",
+  "/platform/bring-your-own-agent",
+  "/solutions",
+  "/solutions/contract-redline",
+  "/solutions/data-extraction",
+  "/solutions/drafting",
+  "/solutions/audit-trail",
+  "/solutions/bring-your-own-agent",
+  "/solutions/bring-your-own-key",
+  // Resources hub + one watch page per video (slugs from
+  // src/marketing/resourceCatalog.ts VIDEOS).
+  "/resources",
+  "/resources/platform-overview",
+  "/resources/product-tour",
+  "/resources/install",
+  "/resources/who-changed-this-clause",
+  "/resources/agent-at-work",
+  "/resources/ai-first-pass-redline",
+  "/resources/where-your-key-goes",
   // Blog index + one path per post (slug = filename in src/marketing/blog/posts).
   // Keep in sync when adding a post, along with public/sitemap.xml.
   "/blog",

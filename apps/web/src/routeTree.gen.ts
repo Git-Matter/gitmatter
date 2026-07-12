@@ -34,11 +34,17 @@ import { Route as AuthLibraryIndexRouteImport } from './routes/_auth/library/ind
 import { Route as AuthDocumentsIndexRouteImport } from './routes/_auth/documents/index'
 import { Route as AuthClientsIndexRouteImport } from './routes/_auth/clients/index'
 import { Route as AuthAssistantIndexRouteImport } from './routes/_auth/assistant/index'
+import { Route as marketingSolutionsIndexRouteImport } from './routes/(marketing)/solutions.index'
+import { Route as marketingResourcesIndexRouteImport } from './routes/(marketing)/resources.index'
+import { Route as marketingPlatformIndexRouteImport } from './routes/(marketing)/platform.index'
 import { Route as marketingCompareIndexRouteImport } from './routes/(marketing)/compare.index'
 import { Route as marketingBlogIndexRouteImport } from './routes/(marketing)/blog.index'
 import { Route as AuthReviewsIdRouteImport } from './routes/_auth/reviews/$id'
 import { Route as AuthDocumentsIdRouteImport } from './routes/_auth/documents/$id'
 import { Route as AuthAssistantIdRouteImport } from './routes/_auth/assistant/$id'
+import { Route as marketingSolutionsSlugRouteImport } from './routes/(marketing)/solutions.$slug'
+import { Route as marketingResourcesSlugRouteImport } from './routes/(marketing)/resources.$slug'
+import { Route as marketingPlatformSlugRouteImport } from './routes/(marketing)/platform.$slug'
 import { Route as marketingCompareSpellbookRouteImport } from './routes/(marketing)/compare.spellbook'
 import { Route as marketingCompareLegalonRouteImport } from './routes/(marketing)/compare.legalon'
 import { Route as marketingCompareLegalflyRouteImport } from './routes/(marketing)/compare.legalfly'
@@ -173,6 +179,21 @@ const AuthAssistantIndexRoute = AuthAssistantIndexRouteImport.update({
   path: '/assistant/',
   getParentRoute: () => AuthRouteRoute,
 } as any)
+const marketingSolutionsIndexRoute = marketingSolutionsIndexRouteImport.update({
+  id: '/solutions/',
+  path: '/solutions/',
+  getParentRoute: () => marketingRouteRoute,
+} as any)
+const marketingResourcesIndexRoute = marketingResourcesIndexRouteImport.update({
+  id: '/resources/',
+  path: '/resources/',
+  getParentRoute: () => marketingRouteRoute,
+} as any)
+const marketingPlatformIndexRoute = marketingPlatformIndexRouteImport.update({
+  id: '/platform/',
+  path: '/platform/',
+  getParentRoute: () => marketingRouteRoute,
+} as any)
 const marketingCompareIndexRoute = marketingCompareIndexRouteImport.update({
   id: '/compare/',
   path: '/compare/',
@@ -197,6 +218,21 @@ const AuthAssistantIdRoute = AuthAssistantIdRouteImport.update({
   id: '/assistant/$id',
   path: '/assistant/$id',
   getParentRoute: () => AuthRouteRoute,
+} as any)
+const marketingSolutionsSlugRoute = marketingSolutionsSlugRouteImport.update({
+  id: '/solutions/$slug',
+  path: '/solutions/$slug',
+  getParentRoute: () => marketingRouteRoute,
+} as any)
+const marketingResourcesSlugRoute = marketingResourcesSlugRouteImport.update({
+  id: '/resources/$slug',
+  path: '/resources/$slug',
+  getParentRoute: () => marketingRouteRoute,
+} as any)
+const marketingPlatformSlugRoute = marketingPlatformSlugRouteImport.update({
+  id: '/platform/$slug',
+  path: '/platform/$slug',
+  getParentRoute: () => marketingRouteRoute,
 } as any)
 const marketingCompareSpellbookRoute =
   marketingCompareSpellbookRouteImport.update({
@@ -281,11 +317,17 @@ export interface FileRoutesByFullPath {
   '/compare/legalfly': typeof marketingCompareLegalflyRoute
   '/compare/legalon': typeof marketingCompareLegalonRoute
   '/compare/spellbook': typeof marketingCompareSpellbookRoute
+  '/platform/$slug': typeof marketingPlatformSlugRoute
+  '/resources/$slug': typeof marketingResourcesSlugRoute
+  '/solutions/$slug': typeof marketingSolutionsSlugRoute
   '/assistant/$id': typeof AuthAssistantIdRoute
   '/documents/$id': typeof AuthDocumentsIdRoute
   '/reviews/$id': typeof AuthReviewsIdRoute
   '/blog/': typeof marketingBlogIndexRoute
   '/compare/': typeof marketingCompareIndexRoute
+  '/platform/': typeof marketingPlatformIndexRoute
+  '/resources/': typeof marketingResourcesIndexRoute
+  '/solutions/': typeof marketingSolutionsIndexRoute
   '/assistant/': typeof AuthAssistantIndexRoute
   '/clients/': typeof AuthClientsIndexRoute
   '/documents/': typeof AuthDocumentsIndexRoute
@@ -321,11 +363,17 @@ export interface FileRoutesByTo {
   '/compare/legalfly': typeof marketingCompareLegalflyRoute
   '/compare/legalon': typeof marketingCompareLegalonRoute
   '/compare/spellbook': typeof marketingCompareSpellbookRoute
+  '/platform/$slug': typeof marketingPlatformSlugRoute
+  '/resources/$slug': typeof marketingResourcesSlugRoute
+  '/solutions/$slug': typeof marketingSolutionsSlugRoute
   '/assistant/$id': typeof AuthAssistantIdRoute
   '/documents/$id': typeof AuthDocumentsIdRoute
   '/reviews/$id': typeof AuthReviewsIdRoute
   '/blog': typeof marketingBlogIndexRoute
   '/compare': typeof marketingCompareIndexRoute
+  '/platform': typeof marketingPlatformIndexRoute
+  '/resources': typeof marketingResourcesIndexRoute
+  '/solutions': typeof marketingSolutionsIndexRoute
   '/assistant': typeof AuthAssistantIndexRoute
   '/clients': typeof AuthClientsIndexRoute
   '/documents': typeof AuthDocumentsIndexRoute
@@ -365,11 +413,17 @@ export interface FileRoutesById {
   '/(marketing)/compare/legalfly': typeof marketingCompareLegalflyRoute
   '/(marketing)/compare/legalon': typeof marketingCompareLegalonRoute
   '/(marketing)/compare/spellbook': typeof marketingCompareSpellbookRoute
+  '/(marketing)/platform/$slug': typeof marketingPlatformSlugRoute
+  '/(marketing)/resources/$slug': typeof marketingResourcesSlugRoute
+  '/(marketing)/solutions/$slug': typeof marketingSolutionsSlugRoute
   '/_auth/assistant/$id': typeof AuthAssistantIdRoute
   '/_auth/documents/$id': typeof AuthDocumentsIdRoute
   '/_auth/reviews/$id': typeof AuthReviewsIdRoute
   '/(marketing)/blog/': typeof marketingBlogIndexRoute
   '/(marketing)/compare/': typeof marketingCompareIndexRoute
+  '/(marketing)/platform/': typeof marketingPlatformIndexRoute
+  '/(marketing)/resources/': typeof marketingResourcesIndexRoute
+  '/(marketing)/solutions/': typeof marketingSolutionsIndexRoute
   '/_auth/assistant/': typeof AuthAssistantIndexRoute
   '/_auth/clients/': typeof AuthClientsIndexRoute
   '/_auth/documents/': typeof AuthDocumentsIndexRoute
@@ -407,11 +461,17 @@ export interface FileRouteTypes {
     | '/compare/legalfly'
     | '/compare/legalon'
     | '/compare/spellbook'
+    | '/platform/$slug'
+    | '/resources/$slug'
+    | '/solutions/$slug'
     | '/assistant/$id'
     | '/documents/$id'
     | '/reviews/$id'
     | '/blog/'
     | '/compare/'
+    | '/platform/'
+    | '/resources/'
+    | '/solutions/'
     | '/assistant/'
     | '/clients/'
     | '/documents/'
@@ -447,11 +507,17 @@ export interface FileRouteTypes {
     | '/compare/legalfly'
     | '/compare/legalon'
     | '/compare/spellbook'
+    | '/platform/$slug'
+    | '/resources/$slug'
+    | '/solutions/$slug'
     | '/assistant/$id'
     | '/documents/$id'
     | '/reviews/$id'
     | '/blog'
     | '/compare'
+    | '/platform'
+    | '/resources'
+    | '/solutions'
     | '/assistant'
     | '/clients'
     | '/documents'
@@ -490,11 +556,17 @@ export interface FileRouteTypes {
     | '/(marketing)/compare/legalfly'
     | '/(marketing)/compare/legalon'
     | '/(marketing)/compare/spellbook'
+    | '/(marketing)/platform/$slug'
+    | '/(marketing)/resources/$slug'
+    | '/(marketing)/solutions/$slug'
     | '/_auth/assistant/$id'
     | '/_auth/documents/$id'
     | '/_auth/reviews/$id'
     | '/(marketing)/blog/'
     | '/(marketing)/compare/'
+    | '/(marketing)/platform/'
+    | '/(marketing)/resources/'
+    | '/(marketing)/solutions/'
     | '/_auth/assistant/'
     | '/_auth/clients/'
     | '/_auth/documents/'
@@ -695,6 +767,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthAssistantIndexRouteImport
       parentRoute: typeof AuthRouteRoute
     }
+    '/(marketing)/solutions/': {
+      id: '/(marketing)/solutions/'
+      path: '/solutions'
+      fullPath: '/solutions/'
+      preLoaderRoute: typeof marketingSolutionsIndexRouteImport
+      parentRoute: typeof marketingRouteRoute
+    }
+    '/(marketing)/resources/': {
+      id: '/(marketing)/resources/'
+      path: '/resources'
+      fullPath: '/resources/'
+      preLoaderRoute: typeof marketingResourcesIndexRouteImport
+      parentRoute: typeof marketingRouteRoute
+    }
+    '/(marketing)/platform/': {
+      id: '/(marketing)/platform/'
+      path: '/platform'
+      fullPath: '/platform/'
+      preLoaderRoute: typeof marketingPlatformIndexRouteImport
+      parentRoute: typeof marketingRouteRoute
+    }
     '/(marketing)/compare/': {
       id: '/(marketing)/compare/'
       path: '/compare'
@@ -729,6 +822,27 @@ declare module '@tanstack/react-router' {
       fullPath: '/assistant/$id'
       preLoaderRoute: typeof AuthAssistantIdRouteImport
       parentRoute: typeof AuthRouteRoute
+    }
+    '/(marketing)/solutions/$slug': {
+      id: '/(marketing)/solutions/$slug'
+      path: '/solutions/$slug'
+      fullPath: '/solutions/$slug'
+      preLoaderRoute: typeof marketingSolutionsSlugRouteImport
+      parentRoute: typeof marketingRouteRoute
+    }
+    '/(marketing)/resources/$slug': {
+      id: '/(marketing)/resources/$slug'
+      path: '/resources/$slug'
+      fullPath: '/resources/$slug'
+      preLoaderRoute: typeof marketingResourcesSlugRouteImport
+      parentRoute: typeof marketingRouteRoute
+    }
+    '/(marketing)/platform/$slug': {
+      id: '/(marketing)/platform/$slug'
+      path: '/platform/$slug'
+      fullPath: '/platform/$slug'
+      preLoaderRoute: typeof marketingPlatformSlugRouteImport
+      parentRoute: typeof marketingRouteRoute
     }
     '/(marketing)/compare/spellbook': {
       id: '/(marketing)/compare/spellbook'
@@ -824,8 +938,14 @@ interface marketingRouteRouteChildren {
   marketingCompareLegalflyRoute: typeof marketingCompareLegalflyRoute
   marketingCompareLegalonRoute: typeof marketingCompareLegalonRoute
   marketingCompareSpellbookRoute: typeof marketingCompareSpellbookRoute
+  marketingPlatformSlugRoute: typeof marketingPlatformSlugRoute
+  marketingResourcesSlugRoute: typeof marketingResourcesSlugRoute
+  marketingSolutionsSlugRoute: typeof marketingSolutionsSlugRoute
   marketingBlogIndexRoute: typeof marketingBlogIndexRoute
   marketingCompareIndexRoute: typeof marketingCompareIndexRoute
+  marketingPlatformIndexRoute: typeof marketingPlatformIndexRoute
+  marketingResourcesIndexRoute: typeof marketingResourcesIndexRoute
+  marketingSolutionsIndexRoute: typeof marketingSolutionsIndexRoute
 }
 
 const marketingRouteRouteChildren: marketingRouteRouteChildren = {
@@ -842,8 +962,14 @@ const marketingRouteRouteChildren: marketingRouteRouteChildren = {
   marketingCompareLegalflyRoute: marketingCompareLegalflyRoute,
   marketingCompareLegalonRoute: marketingCompareLegalonRoute,
   marketingCompareSpellbookRoute: marketingCompareSpellbookRoute,
+  marketingPlatformSlugRoute: marketingPlatformSlugRoute,
+  marketingResourcesSlugRoute: marketingResourcesSlugRoute,
+  marketingSolutionsSlugRoute: marketingSolutionsSlugRoute,
   marketingBlogIndexRoute: marketingBlogIndexRoute,
   marketingCompareIndexRoute: marketingCompareIndexRoute,
+  marketingPlatformIndexRoute: marketingPlatformIndexRoute,
+  marketingResourcesIndexRoute: marketingResourcesIndexRoute,
+  marketingSolutionsIndexRoute: marketingSolutionsIndexRoute,
 }
 
 const marketingRouteRouteWithChildren = marketingRouteRoute._addFileChildren(
