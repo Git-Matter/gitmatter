@@ -12,6 +12,11 @@ export const JURISDICTIONS: { code: Jurisdiction; label: string }[] = [
   { code: "EU", label: "European Union" },
   { code: "UK", label: "United Kingdom" },
   { code: "AU", label: "Australia" },
+  { code: "CA", label: "Canada" },
+  { code: "FR", label: "France" },
+  { code: "NL", label: "Netherlands" },
+  { code: "JP", label: "Japan" },
+  { code: "KR", label: "South Korea" },
 ];
 
 export const DEFAULT_JURISDICTION: Jurisdiction = "US";

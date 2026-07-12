@@ -6,7 +6,18 @@
 import { type Jurisdiction, jurisdictionMatches } from "./jurisdiction.js";
 import { TOOL, TOOL_META, type ToolMeta } from "./tools.js";
 
-export const SOURCE_IDS = ["courtlistener", "ipaustralia"] as const;
+export const SOURCE_IDS = [
+  "courtlistener",
+  "ipaustralia",
+  "uklegislation",
+  "eurlex",
+  "egovjapan",
+  "rechtspraak",
+  "legifrance",
+  "canlii",
+  "korealaw",
+  "govinfo",
+] as const;
 
 export type ProviderId = (typeof SOURCE_IDS)[number];
 export type SourceId = ProviderId;
@@ -42,6 +53,62 @@ export const PROVIDERS: ToolProvider[] = [
       TOOL_META[TOOL.searchPatents],
       TOOL_META[TOOL.getPatent],
     ],
+  },
+  {
+    id: "govinfo",
+    name: "govinfo (US GPO)",
+    jurisdictions: ["US"],
+    // US federal statutes and documents via the GPO govinfo API.
+    tools: [TOOL_META[TOOL.searchUsFederalLaw], TOOL_META[TOOL.getUsFederalPackage]],
+  },
+  {
+    id: "uklegislation",
+    name: "legislation.gov.uk",
+    jurisdictions: ["UK"],
+    // UK statute book, official open API (no key).
+    tools: [TOOL_META[TOOL.searchUkLegislation], TOOL_META[TOOL.getUkLegislation]],
+  },
+  {
+    id: "eurlex",
+    name: "EUR-Lex",
+    jurisdictions: ["EU"],
+    // EU legislation and case law via the Publications Office endpoints.
+    tools: [TOOL_META[TOOL.searchEuLaw], TOOL_META[TOOL.getEuLaw]],
+  },
+  {
+    id: "legifrance",
+    name: "Légifrance",
+    jurisdictions: ["FR"],
+    // French codes/statutes via the PISTE API (server-env OAuth credentials).
+    tools: [TOOL_META[TOOL.searchFrenchLaw], TOOL_META[TOOL.getFrenchLaw]],
+  },
+  {
+    id: "rechtspraak",
+    name: "de Rechtspraak",
+    jurisdictions: ["NL"],
+    // Dutch court decisions, official open data API (no key).
+    tools: [TOOL_META[TOOL.searchDutchCaseLaw], TOOL_META[TOOL.getDutchCaseLaw]],
+  },
+  {
+    id: "canlii",
+    name: "CanLII",
+    jurisdictions: ["CA"],
+    // Canadian case law metadata; bring-your-own CanLII API key.
+    tools: [TOOL_META[TOOL.searchCanadianCaseLaw], TOOL_META[TOOL.getCanadianCase]],
+  },
+  {
+    id: "egovjapan",
+    name: "e-Gov 法令検索",
+    jurisdictions: ["JP"],
+    // Japanese statutes via the e-Gov Law API v2 (no key).
+    tools: [TOOL_META[TOOL.searchJapanLaws], TOOL_META[TOOL.getJapanLaw]],
+  },
+  {
+    id: "korealaw",
+    name: "국가법령정보센터 (law.go.kr)",
+    jurisdictions: ["KR"],
+    // Korean statutes via the law.go.kr Open API (bring-your-own OC key).
+    tools: [TOOL_META[TOOL.searchKoreanLaws], TOOL_META[TOOL.getKoreanLaw]],
   },
 ];
 
