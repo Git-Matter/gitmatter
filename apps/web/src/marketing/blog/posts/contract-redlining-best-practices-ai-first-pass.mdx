@@ -1,0 +1,109 @@
+Contract redlining is where legal AI has landed hardest and fastest. A well-set-up AI
+can read an incoming agreement, compare it against your firm's standard positions, and
+produce a full first-pass markup in minutes. That used to be an associate's whole
+afternoon.
+
+The gains are real. So are the ways it goes wrong: confident edits with no explanation,
+markups that drift away from firm positions, and final documents where nobody can say
+which language the AI wrote.
+
+The difference between teams that get the gains and teams that get the problems is
+process. These ten practices come from watching legal teams run AI-first redlining
+well.
+
+<Clip
+  src="/blog/redline-loop.mp4"
+  caption="An AI first pass done right: playbook-driven suggestions as tracked changes, a lawyer accepting two and rejecting one, every decision recorded."
+/>
+
+## 1. Treat every AI edit as a proposal, not a change
+
+The single most important rule. An AI's redline should enter the document the way a
+junior colleague's draft does: as a tracked change waiting for review, never as
+silently applied text. The AI writes suggestions, and only a named lawyer's acceptance
+turns a suggestion into the document. If your software lets the AI change documents
+directly with no acceptance step, fix that before anything else.
+
+## 2. Redline against a playbook, not the model's taste
+
+Ask a general-purpose AI to "review this contract" and it will apply a rough average of
+every contract it has ever seen. That is not your firm's position. Write your standard
+positions, fallbacks, and walk-away points into a playbook, and instruct the AI to mark
+up against it. The markup stops being "what the model thinks" and becomes "where this
+agreement differs from what we have already decided." That second thing is reviewable.
+
+## 3. Require a reason on every suggested change
+
+"Changed 'sole discretion' to 'reasonable discretion'" tells you what happened.
+"Changed to reasonable discretion because the playbook flags one-sided discretion in
+termination clauses" tells you whether it was right. Insist that every AI edit carries
+its reasoning, attached to the change itself rather than buried in a separate chat you
+will never dig back through.
+
+## 4. Review changes as a list, not as a marked-up document
+
+Reading a heavily marked document top to bottom invites skimming. Review the changes as
+a list instead: each clause, its before and after, and the reason. Lawyers make better
+accept-or-reject decisions on twenty separate proposals than on one wall of tracked
+changes, and each decision gets recorded against its clause.
+
+## 5. Keep a record of which edits were AI
+
+Once tracked changes are accepted in Word, AI edits and human edits look identical.
+Keep a history that survives acceptance: every change saved with its author, whether AI
+or named lawyer, plus the exact edit and who approved it. Six months later, when a
+counterparty questions a clause, the history should answer who wrote it, who approved
+it, and why.
+
+## 6. Never let the AI review its own markup
+
+A common mistake: the AI marks up the agreement, then the AI is asked to check its own
+work. Self-review catches typos, not judgment errors. The reviewer of an AI first pass
+is always a lawyer. Budget real review time. The AI shortens the drafting, not the
+responsibility.
+
+## 7. Send the hard ones up, automatically
+
+Not every agreement deserves equal scrutiny. Let the playbook sort them: markups where
+the AI found only standard deviations with standard fallbacks can go to one reviewer,
+while anything that touches a walk-away position or an unusual clause goes to a senior
+lawyer. Reviewing by exception is how one partner supervises a hundred contracts
+honestly.
+
+## 8. Feed decisions back into the playbook
+
+Every time a lawyer overrides the AI, that is information. If reviewers keep rejecting
+the same suggested fallback, the playbook is stale or the firm's position has moved.
+Look at the pattern monthly and update the playbook. Teams that close this loop watch
+the AI get more useful; teams that do not argue about the same clause forever.
+
+## 9. Keep the whole negotiation in one history
+
+Redlining rarely ends after one round. Counterparty paper comes back, positions move,
+and version seven needs to be explainable against version two. Keep every round, the AI
+passes, the lawyer edits, and the accepted counterparty changes, in one chronological
+history with names and reasons. The alternative is the familiar archaeology of
+`Agreement_v7_FINAL_clean(2).docx`.
+
+## 10. Know where the contract text goes
+
+A first-pass redline sends the entire agreement through an AI model. Where that text
+goes is a confidentiality question, not an IT detail. Run the AI on your firm's own
+account with the provider, set up so documents are processed and then discarded, never
+kept in a chat history and never used to train anyone's model. If you cannot answer
+"where does the contract text go?", stop and answer it first.
+
+## The pattern underneath
+
+Nine of these ten practices are one idea seen from different angles: **the AI proposes,
+a lawyer decides, and the system records both.** Get that structure right and the speed
+comes free. Get it wrong and every hour the AI saves comes back later as an hour of
+reconstruction when someone finally asks who changed the clause.
+
+gitmatter is built around exactly this structure. Redlines run against your firm's own
+playbooks and clause library. Every suggestion lands as a tracked change with its
+reasoning. Every accept and reject is recorded with a name and the exact edit, and any
+clause's full negotiation can be replayed from the history. It runs on your firm's own
+AI account, with the assistant your firm already uses, ChatGPT or Claude, connected
+directly. [Book a demo](https://www.cal.eu/gitmatter/demo) and watch a first-pass
+markup arrive with the record already written.

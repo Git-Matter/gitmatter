@@ -6,6 +6,11 @@
     <priority>1.0</priority>
   </url>
   <url>
+    <loc>https://gitmatter.com/features</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
     <loc>https://gitmatter.com/use-cases</loc>
     <changefreq>weekly</changefreq>
     <priority>0.9</priority>
@@ -37,6 +42,31 @@
   </url>
   <url>
     <loc>https://gitmatter.com/compare/gitlaw</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://gitmatter.com/blog</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://gitmatter.com/blog/ai-audit-trail-legal-work</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://gitmatter.com/blog/chatgpt-claude-legal-work-audit-trail</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://gitmatter.com/blog/contract-redlining-best-practices-ai-first-pass</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://gitmatter.com/blog/byok-zero-data-retention-legal-ai</loc>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>

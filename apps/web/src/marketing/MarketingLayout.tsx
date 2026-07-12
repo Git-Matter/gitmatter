@@ -16,6 +16,12 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
         </Link>
         <nav className="absolute left-1/2 flex -translate-x-1/2 items-center gap-1 text-sm">
           <Link
+            to="/features"
+            className="rounded-md px-3 py-2 text-muted-foreground hover:text-foreground"
+          >
+            Features
+          </Link>
+          <Link
             to="/use-cases"
             className="rounded-md px-3 py-2 text-muted-foreground hover:text-foreground"
           >
@@ -26,6 +32,12 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
             className="rounded-md px-3 py-2 text-muted-foreground hover:text-foreground"
           >
             About
+          </Link>
+          <Link
+            to="/blog"
+            className="rounded-md px-3 py-2 text-muted-foreground hover:text-foreground"
+          >
+            Blog
           </Link>
           <a
             href={SITE.docs}
@@ -56,11 +68,17 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
             <Wordmark />
           </div>
           <nav className="flex flex-wrap items-center gap-4">
+            <Link to="/features" className="hover:text-foreground">
+              Features
+            </Link>
             <Link to="/use-cases" className="hover:text-foreground">
               Use cases
             </Link>
             <Link to="/compare" className="hover:text-foreground">
               Compare
+            </Link>
+            <Link to="/blog" className="hover:text-foreground">
+              Blog
             </Link>
             <a href={SITE.docs} className="hover:text-foreground">
               Docs

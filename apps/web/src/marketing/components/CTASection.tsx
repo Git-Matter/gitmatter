@@ -11,7 +11,7 @@ export default function CTASection() {
         See the work. Skip the black box.
       </h2>
       <p className="mt-stack max-w-[50ch] text-lg leading-relaxed text-muted-foreground">
-        Book a walkthrough with your own AI account and see the record build itself — every change
+        Book a walkthrough with your own AI account and see the record build itself: every change
         saved with who, what, and when. Set up in minutes.
       </p>
       <div className="mt-section flex flex-wrap items-center gap-3">

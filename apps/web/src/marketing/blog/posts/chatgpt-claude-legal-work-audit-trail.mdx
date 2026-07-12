@@ -1,0 +1,152 @@
+Your firm almost certainly pays for an AI assistant already. Lawyers use ChatGPT or
+Claude for research, summaries, and first drafts, usually by copying text in and
+copying answers out.
+
+That copy-and-paste habit is the problem. It works, but it leaves no record of what the
+AI did, and it sends client text into a personal chat account. There is now a better
+way: connect the assistant your firm already uses directly to a legal work platform, so
+the AI can do real work on your matters while every action it takes is recorded.
+
+This guide explains how that connection works, in plain language, and how to introduce
+it at a firm step by step. No technical background needed.
+
+<Clip
+  src="/blog/mcp-session.mp4"
+  caption="Claude reviewing twelve NDAs through gitmatter, with every step landing on the record."
+/>
+
+## First, the problem with copy and paste
+
+Today, most AI-assisted legal work happens in a loop like this:
+
+1. A lawyer copies contract text into a chat window.
+2. The AI suggests changes.
+3. The lawyer pastes the results back into Word and tidies up by hand.
+
+Three things go wrong.
+
+**The record is lost.** Nothing in the final document shows which language the AI
+proposed and which language the lawyer wrote.
+
+**The AI is working blind.** It sees the paragraph you pasted, not the rest of the
+agreement, the earlier drafts, or the other documents on the matter.
+
+**Client text went somewhere.** A personal chat account keeps history under terms
+nobody at the firm has reviewed. That is a confidentiality question, not a
+technicality.
+
+## What is MCP? The plug that connects your AI to other tools
+
+MCP stands for Model Context Protocol. Behind the acronym is a simple idea: it is a
+standard plug that lets an AI assistant connect to another piece of software and use
+it, with your permission.
+
+You have already used this pattern elsewhere. When you let your calendar see your
+email, or let a document signing tool access a file, you clicked a button that said
+something like "Allow access." MCP brings the same idea to AI assistants. ChatGPT and
+Claude both support it, and both call these connections "connectors."
+
+Once gitmatter is added as a connector, your assistant can see your matters and use
+gitmatter's tools: open documents, review them, suggest redlines, pull key terms into a
+table. You ask for things in plain English. gitmatter does the actual work and writes
+every action into the matter's history.
+
+Two roles, clearly split:
+
+- **The assistant (ChatGPT or Claude) is the colleague you talk to.** It understands
+  your request and decides what to ask gitmatter to do.
+- **gitmatter is the file room and the record.** Documents, matters, playbooks, and
+  clause libraries live there. Every change is saved with who made it, what changed,
+  and why.
+
+Because the record lives in gitmatter and not in the chat, it does not matter which
+assistant your firm uses this year. Switch from ChatGPT to Claude, or use both, and the
+matter history stays complete.
+
+## How to connect: about five minutes, no code
+
+You connect once, and it works from then on. The steps are the same kind you follow to
+link any two apps.
+
+### If you use ChatGPT
+
+1. In ChatGPT (paid plans), open **Settings**, then **Connectors**.
+2. Add a custom connector and enter your firm's gitmatter address:
+   `https://your-gitmatter-address/api/mcp`.
+3. ChatGPT opens a gitmatter sign-in page. Sign in and click approve.
+
+That is the whole process. There is no code to copy.
+
+### If you use Claude
+
+1. In Claude (desktop or web), add a connector.
+2. Enter the same address: `https://your-gitmatter-address/api/mcp`.
+3. Sign in to gitmatter and approve.
+
+The sign-in step matters: the assistant acts as **you**, with your access and nobody
+else's, and everything it does is recorded under the assistant's name inside your
+account. Technical colleagues who use command-line tools can connect too; the
+[connect-an-agent guide](/docs/ai-agents/connect-an-agent) covers those.
+
+## What you can ask for once connected
+
+Once connected, you brief your assistant the way you would brief a junior colleague:
+
+- **Questions about a matter.** "Summarize the open issues on the Meridian
+  acquisition." The answer comes from the matter's own documents, with citations to
+  the exact passages, so checking it takes one click.
+- **A table from a pile of contracts.** "Ask these eight questions of every contract
+  in the data room and give me a table." Each cell links back to the passage it came
+  from.
+- **A first-pass markup.** "Redline this MSA against our standard positions." The
+  suggestions arrive as tracked changes with the reasoning attached, each one waiting
+  for a lawyer to accept or reject.
+- **A draft from your templates.** New documents start from the firm's templates and
+  approved clauses, not from whatever the AI imagines a contract looks like.
+
+The pattern in every case: the AI proposes, a named lawyer decides, and the record
+shows both.
+
+## The safety rules, built in rather than promised
+
+Letting an AI touch matters is only responsible when the safeguards are part of how the
+system works, not lines in a policy document.
+
+1. **Nothing skips the record.** Every change the AI makes goes through the same
+   history as a human edit. There is no side door.
+2. **The AI has your access, not master access.** It acts as the person who connected
+   it and can only see the matters that person can see.
+3. **AI edits are labeled as AI edits.** The history shows the change came from the
+   assistant, under which lawyer's account, with what reasoning.
+4. **Client text stays under the firm's terms.** gitmatter's own AI features run on
+   the firm's own account with the AI provider, set up so documents are not stored or
+   used to train anyone's model.
+5. **Everything can be undone.** Any change the AI made can be found in the history
+   and reversed on its own.
+
+## A four-week way to introduce it
+
+Do not start with your hardest matter. A rollout that works:
+
+1. **Week one: questions only.** Connect the assistant and ask it about a closed
+   matter. The team learns what the AI can see and how citations work. Nothing
+   changes in any document.
+2. **Week two: extraction.** Run a table across a stack of documents. Lawyers check
+   the answers cell by cell. Still nothing changes in the documents.
+3. **Week three: supervised redlining.** Let the AI make a first-pass markup of a live
+   agreement against your playbook. A lawyer accepts or rejects every suggestion.
+4. **Week four: read the record together.** Open the matter history as a team and
+   read what the AI did. This is the step that converts skeptics: the "black box"
+   turns out to be a readable list of changes.
+
+## The record outlasts the assistant
+
+AI assistants change fast: new models, new vendors, new features every quarter. Your
+matter records should not change with them. That is the real argument for this setup.
+The firm's work, its history, and its accountability live in a system the firm
+controls, and whichever assistant you prefer this year simply plugs into it.
+
+gitmatter is that system: an audited legal backend that ChatGPT and Claude connect to,
+with a complete history under every matter.
+[Book a demo](https://www.cal.eu/gitmatter/demo) with your own assistant and watch the
+record build itself.
