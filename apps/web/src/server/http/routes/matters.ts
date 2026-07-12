@@ -237,6 +237,15 @@ mattersRoute.get("/api/matters/:id/usage", async (c) => {
       r.outputTokens,
       r.costUsd === null ? null : r.costUsd.toFixed(4),
     ]),
+    ...summary.embeddings.map((r) => [
+      "embedding",
+      r.provider,
+      r.model,
+      r.calls,
+      r.inputTokens,
+      0,
+      null,
+    ]),
     ...summary.tools.map((r) => ["tool", null, r.tool, r.calls, null, null, null]),
   ];
   return new Response(rowsToCsv(rows), {

@@ -6,7 +6,13 @@ import { index, integer, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-c
 // (over-budget emits a `budget.exceeded` audit event, never rejects). Kept apart
 // from audit_events so high-volume metering never crowds the security log.
 
-export type UsageKind = "llm" | "tool" | "courtlistener" | "ipaustralia" | "extraction";
+export type UsageKind =
+  | "llm"
+  | "embedding"
+  | "tool"
+  | "courtlistener"
+  | "ipaustralia"
+  | "extraction";
 
 export const usageEvents = pgTable(
   "usage_events",

@@ -1,6 +1,7 @@
 import {
   type AnyPgColumn,
   boolean,
+  customType,
   index,
   integer,
   pgTable,
@@ -13,6 +14,18 @@ import {
 import { user } from "./auth.js";
 import { matters } from "./matters.js";
 import { tenants } from "./tenants.js";
+
+const vector = customType<{ data: number[]; driverData: string }>({
+  dataType() {
+    return "vector";
+  },
+  toDriver(value) {
+    return `[${value.join(",")}]`;
+  },
+  fromDriver(value) {
+    return value.slice(1, -1).split(",").filter(Boolean).map(Number);
+  },
+});
 
 // Uploaded source documents. `markdown` holds the extracted text (PDF via
 // pdf.js, DOCX via mammoth) used as LLM context. Extraction
@@ -189,6 +202,44 @@ export const documentChunks = pgTable(
   ]
 );
 
+// Semantic read index for RAG. One chunk can have multiple embedding rows when
+// the deployment changes provider/model/dimensions. The chunk text remains the
+// source for retrieval output; vectors are only a derived search aid.
+export const documentChunkEmbeddings = pgTable(
+  "document_chunk_embeddings",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    chunkId: uuid("chunk_id")
+      .notNull()
+      .references(() => documentChunks.id, { onDelete: "cascade" }),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    documentId: uuid("document_id")
+      .notNull()
+      .references(() => documents.id, { onDelete: "cascade" }),
+    versionId: uuid("version_id").references(() => documentVersions.id, { onDelete: "cascade" }),
+    provider: text("provider").notNull(),
+    model: text("model").notNull(),
+    dimensions: integer("dimensions").notNull(),
+    contentHash: text("content_hash").notNull(),
+    embedding: vector("embedding").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => [
+    unique("document_chunk_embeddings_profile_unique").on(
+      t.chunkId,
+      t.provider,
+      t.model,
+      t.dimensions,
+      t.contentHash
+    ),
+    index("document_chunk_embeddings_doc_idx").on(t.documentId),
+    index("document_chunk_embeddings_tenant_idx").on(t.tenantId),
+    index("document_chunk_embeddings_profile_idx").on(t.provider, t.model, t.dimensions),
+  ]
+);
+
 // Tracked changes (redlines) on a document. For docx documents the w-ids point at
 // the OOXML w:ins/w:del wrappers; for text/pdf documents they stay null and the
 // edit is a find->replace on documents.markdown.
@@ -219,4 +270,5 @@ export type Document = typeof documents.$inferSelect;
 export type MatterDocument = typeof matterDocuments.$inferSelect;
 export type DocumentVersion = typeof documentVersions.$inferSelect;
 export type DocumentChunk = typeof documentChunks.$inferSelect;
+export type DocumentChunkEmbedding = typeof documentChunkEmbeddings.$inferSelect;
 export type DocumentEdit = typeof documentEdits.$inferSelect;

@@ -491,8 +491,9 @@ function UsageTab({ matterId }: { matterId: string }) {
         <p className="text-sm text-muted-foreground">
           AI spend attributable to this matter — {fmt(usage.totals.llmCalls)} completions,{" "}
           {fmt(usage.totals.inputTokens + usage.totals.outputTokens)} tokens, est.{" "}
-          {cost(usage.totals.costUsd)}, {fmt(usage.totals.toolCalls)} agent tool calls. Costs are
-          estimates from list prices; unpriced models show tokens only.
+          {cost(usage.totals.costUsd)}, {fmt(usage.totals.embeddingCalls)} embedding calls,{" "}
+          {fmt(usage.totals.toolCalls)} agent tool calls. Costs are estimates from list prices;
+          unpriced models show tokens only.
         </p>
         <Button
           size="sm"
@@ -536,6 +537,24 @@ function UsageTab({ matterId }: { matterId: string }) {
           )}
         </tbody>
       </table>
+
+      {usage.embeddings.length > 0 && (
+        <div className="flex flex-col gap-1.5">
+          <p className="text-sm font-medium">Embedding calls</p>
+          <ul className="text-sm text-muted-foreground">
+            {usage.embeddings.map((r, i) => (
+              <li key={i} className="flex justify-between border-b py-1">
+                <span>
+                  {r.model ?? "unknown"} {r.provider ? `(${r.provider})` : ""}
+                </span>
+                <span>
+                  {fmt(r.calls)} calls · {fmt(r.inputTokens)} tokens
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {usage.tools.length > 0 && (
         <div className="flex flex-col gap-1.5">

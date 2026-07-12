@@ -1,7 +1,21 @@
 import { createHash } from "node:crypto";
-import { and, asc, eq, inArray, isNull, or } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { db } from "@workspace/db/client";
-import { documentChunks, type Document, type DocumentChunk } from "@workspace/db/schema";
+import {
+  documentChunkEmbeddings,
+  documentChunks,
+  documents,
+  type Document,
+  type DocumentChunk,
+} from "@workspace/db/schema";
+import {
+  embedTexts,
+  resolveEmbeddingProfile,
+  type ResolvedEmbeddingProfile,
+} from "../ai/embeddings.js";
+import { logEvent } from "../core/log.js";
+import { enqueueEmbedding } from "../platform/queue.js";
+import { recordEmbeddingUsage } from "../platform/usage.js";
 
 export const FULL_TEXT_TOKEN_LIMIT = 8_000;
 // Safety cap on raw markdown handed to a provider when no chunk index applies
@@ -201,6 +215,12 @@ export async function replaceDocumentChunks(
       contentHash: chunk.contentHash,
     }))
   );
+  // Warm the vector index off the request path. Fire-and-forget and idempotent
+  // (dedup by document id) — a no-op when Redis is unconfigured, in which case
+  // ensureEmbeddings embeds lazily on the next query. Embeddings are a derived
+  // index, so it is safe if this runs before an outer transaction commits: the
+  // worker embeds whatever state is committed when it runs.
+  void enqueueEmbedding(input.documentId);
 }
 
 export function choosePipeline(input: {
@@ -252,6 +272,155 @@ function contextChunks(chunks: DocumentChunk[]) {
     tokenEstimate: chunk.tokenEstimate,
     text: chunk.text,
   }));
+}
+
+function vectorLiteral(vector: number[]): string {
+  return `[${vector.join(",")}]`;
+}
+
+// Embed and store any chunk rows missing a vector under the active profile.
+// Idempotent (the profile-unique constraint + onConflictDoNothing make repeat
+// calls safe) and side-effect only, so it serves both the lazy query path and
+// the background embed worker. Returns false when embedding could not complete
+// (provider returned the wrong vector count), so the lazy caller can fall back.
+async function storeMissingChunkEmbeddings(
+  doc: Document,
+  rows: DocumentChunk[],
+  profile: ResolvedEmbeddingProfile
+): Promise<boolean> {
+  const chunkIds = rows.map((chunk) => chunk.id);
+  const existing = chunkIds.length
+    ? await db
+        .select({
+          chunkId: documentChunkEmbeddings.chunkId,
+          contentHash: documentChunkEmbeddings.contentHash,
+        })
+        .from(documentChunkEmbeddings)
+        .where(
+          and(
+            inArray(documentChunkEmbeddings.chunkId, chunkIds),
+            eq(documentChunkEmbeddings.provider, profile.provider),
+            eq(documentChunkEmbeddings.model, profile.model),
+            eq(documentChunkEmbeddings.dimensions, profile.dimensions)
+          )
+        )
+    : [];
+  const currentHashByChunk = new Map(rows.map((chunk) => [chunk.id, chunk.contentHash]));
+  const existingIds = new Set(
+    existing
+      .filter((row) => currentHashByChunk.get(row.chunkId) === row.contentHash)
+      .map((row) => row.chunkId)
+  );
+  const missing = rows.filter((chunk) => !existingIds.has(chunk.id));
+  if (!missing.length) return true;
+
+  const embedded = await embedTexts(
+    profile,
+    missing.map((chunk) => chunk.text)
+  );
+  if (embedded.vectors.length !== missing.length) return false;
+  await db
+    .insert(documentChunkEmbeddings)
+    .values(
+      missing.map((chunk, index) => ({
+        chunkId: chunk.id,
+        tenantId: doc.tenantId,
+        documentId: doc.id,
+        versionId: chunk.versionId,
+        provider: profile.provider,
+        model: profile.model,
+        dimensions: profile.dimensions,
+        contentHash: chunk.contentHash,
+        embedding: embedded.vectors[index]!,
+      }))
+    )
+    .onConflictDoNothing();
+  void recordEmbeddingUsage({
+    userId: doc.userId,
+    tenantId: doc.tenantId,
+    matterId: doc.matterId,
+    provider: profile.provider,
+    model: profile.model,
+    inputTokens: embedded.inputTokens,
+  });
+  return true;
+}
+
+// Background embed entry point: build the vector index for a document's current
+// chunks so the retrieval path stays warm. Called off the request path (from the
+// embed queue) after extraction/edit rebuilds chunks. No-op when no embedding
+// profile is configured or the document has no chunks yet.
+export async function embedDocumentChunks(documentId: string): Promise<void> {
+  const profile = resolveEmbeddingProfile();
+  if (!profile) return;
+  const [doc] = await db.select().from(documents).where(eq(documents.id, documentId)).limit(1);
+  if (!doc) return;
+  const rows = await db
+    .select()
+    .from(documentChunks)
+    .where(
+      and(
+        eq(documentChunks.documentId, doc.id),
+        doc.currentVersionId
+          ? or(eq(documentChunks.versionId, doc.currentVersionId), isNull(documentChunks.versionId))
+          : undefined
+      )
+    )
+    .orderBy(asc(documentChunks.index));
+  if (!rows.length) return;
+  await storeMissingChunkEmbeddings(doc, rows, profile);
+}
+
+async function ensureEmbeddings(
+  doc: Document,
+  rows: DocumentChunk[],
+  input: { query: string; maxChunks: number }
+): Promise<DocumentChunk[] | null> {
+  const profile = resolveEmbeddingProfile();
+  if (!profile || !input.query.trim()) return null;
+
+  // Warm any missing vectors first (also the background job's responsibility, but
+  // done here too so a query never returns stale-index results).
+  const stored = await storeMissingChunkEmbeddings(doc, rows, profile);
+  if (!stored) return null;
+
+  const query = await embedTexts(profile, [input.query], "query");
+  const queryVector = query.vectors[0];
+  if (!queryVector) return null;
+  void recordEmbeddingUsage({
+    userId: doc.userId,
+    tenantId: doc.tenantId,
+    matterId: doc.matterId,
+    provider: profile.provider,
+    model: profile.model,
+    inputTokens: query.inputTokens,
+  });
+
+  const distance = sql<number>`(${documentChunkEmbeddings.embedding}::vector(${profile.dimensions}) <=> ${vectorLiteral(queryVector)}::vector(${profile.dimensions}))`;
+  const selected = await db
+    .select({ chunk: documentChunks, distance })
+    .from(documentChunkEmbeddings)
+    .innerJoin(documentChunks, eq(documentChunks.id, documentChunkEmbeddings.chunkId))
+    .where(
+      and(
+        eq(documentChunkEmbeddings.tenantId, doc.tenantId),
+        eq(documentChunkEmbeddings.documentId, doc.id),
+        doc.currentVersionId
+          ? or(
+              eq(documentChunkEmbeddings.versionId, doc.currentVersionId),
+              isNull(documentChunkEmbeddings.versionId)
+            )
+          : undefined,
+        eq(documentChunkEmbeddings.provider, profile.provider),
+        eq(documentChunkEmbeddings.model, profile.model),
+        eq(documentChunkEmbeddings.dimensions, profile.dimensions),
+        eq(documentChunkEmbeddings.contentHash, documentChunks.contentHash)
+      )
+    )
+    .orderBy(distance)
+    .limit(input.maxChunks);
+
+  return selected.map((row) => row.chunk).sort((a, b) => a.index - b.index);
 }
 
 export async function getDocumentContext(
@@ -322,7 +491,21 @@ export async function getDocumentContext(
     };
   }
 
-  let selected: DocumentChunk[];
+  let selected: DocumentChunk[] | null = null;
+  if (opts.query) {
+    try {
+      selected = await ensureEmbeddings(doc, rows, {
+        query: opts.query,
+        maxChunks: opts.maxChunks ?? (opts.task === "tabular" ? 8 : 12),
+      });
+    } catch (err) {
+      logEvent("warn", "document_embeddings.fallback", {
+        documentId: doc.id,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
   if (mode === "chunks" && opts.chunkRefs?.length) {
     const indexes = opts.chunkRefs
       .map((ref) => (typeof ref === "number" ? ref : Number(String(ref).replace(/^chunk:/, ""))))
@@ -334,7 +517,7 @@ export async function getDocumentContext(
           .where(and(eq(documentChunks.documentId, doc.id), inArray(documentChunks.index, indexes)))
           .orderBy(asc(documentChunks.index))
       : [];
-  } else {
+  } else if (!selected?.length) {
     const terms = cleanTerms(opts.query ?? "");
     selected = rows
       .map((chunk) => ({ chunk, score: scoreChunk(chunk, terms) }))

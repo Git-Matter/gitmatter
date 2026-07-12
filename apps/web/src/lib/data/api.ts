@@ -148,12 +148,20 @@ export type MatterUsageSummary = {
     outputTokens: number;
     costUsd: number | null;
   }>;
+  embeddings: Array<{
+    provider: string | null;
+    model: string | null;
+    calls: number;
+    inputTokens: number;
+  }>;
   tools: Array<{ tool: string | null; calls: number }>;
   totals: {
     llmCalls: number;
     inputTokens: number;
     outputTokens: number;
     costUsd: number | null;
+    embeddingCalls: number;
+    embeddingInputTokens: number;
     toolCalls: number;
   };
 };

@@ -117,6 +117,31 @@ export async function recordLlmUsage(e: {
   }
 }
 
+/** Record one embedding request. Kept separate from LLM completions for spend clarity. */
+export async function recordEmbeddingUsage(e: {
+  userId: string;
+  tenantId?: string | null;
+  matterId?: string | null;
+  provider?: string | null;
+  model?: string | null;
+  inputTokens?: number;
+}): Promise<void> {
+  try {
+    await db.insert(usageEvents).values({
+      kind: "embedding",
+      userId: e.userId,
+      tenantId: e.tenantId ?? null,
+      matterId: e.matterId ?? null,
+      provider: e.provider ?? null,
+      model: e.model ?? null,
+      inputTokens: e.inputTokens ?? 0,
+      outputTokens: 0,
+    });
+  } catch {
+    // best-effort: semantic indexing should never fail because metering did
+  }
+}
+
 /** Record one MCP tool call and check the per-token call budget. */
 export async function recordToolCall(e: {
   tokenId?: string | null;
@@ -235,6 +260,12 @@ export type MatterUsageSummary = {
     /** Estimated USD, or null when the model is unpriced. */
     costUsd: number | null;
   }>;
+  embeddings: Array<{
+    provider: string | null;
+    model: string | null;
+    calls: number;
+    inputTokens: number;
+  }>;
   tools: Array<{ tool: string | null; calls: number }>;
   totals: {
     llmCalls: number;
@@ -245,6 +276,8 @@ export type MatterUsageSummary = {
     cacheWriteTokens: number;
     /** Sum over priced models only; null when nothing is priced. */
     costUsd: number | null;
+    embeddingCalls: number;
+    embeddingInputTokens: number;
     toolCalls: number;
   };
 };
@@ -277,6 +310,18 @@ export async function matterUsageSummary(matterId: string): Promise<MatterUsageS
     .groupBy(usageEvents.tool)
     .orderBy(desc(sql`count(*)`));
 
+  const embeddingRows = await db
+    .select({
+      provider: usageEvents.provider,
+      model: usageEvents.model,
+      calls: sql<number>`count(*)`,
+      inputTokens: sql<number>`coalesce(sum(${usageEvents.inputTokens}), 0)`,
+    })
+    .from(usageEvents)
+    .where(and(eq(usageEvents.kind, "embedding"), eq(usageEvents.matterId, matterId)))
+    .groupBy(usageEvents.provider, usageEvents.model)
+    .orderBy(desc(sql`sum(coalesce(${usageEvents.inputTokens}, 0))`));
+
   const llm = llmRows.map((r) => ({
     provider: r.provider,
     model: r.model,
@@ -290,10 +335,17 @@ export async function matterUsageSummary(matterId: string): Promise<MatterUsageS
       ? estimateCostUsd(r.model, Number(r.inputTokens), Number(r.outputTokens))
       : null,
   }));
+  const embeddings = embeddingRows.map((r) => ({
+    provider: r.provider,
+    model: r.model,
+    calls: Number(r.calls),
+    inputTokens: Number(r.inputTokens),
+  }));
   const tools = toolRows.map((r) => ({ tool: r.tool, calls: Number(r.calls) }));
   const priced = llm.filter((r) => r.costUsd !== null);
   return {
     llm,
+    embeddings,
     tools,
     totals: {
       llmCalls: llm.reduce((n, r) => n + r.calls, 0),
@@ -303,6 +355,8 @@ export async function matterUsageSummary(matterId: string): Promise<MatterUsageS
       cacheReadTokens: llm.reduce((n, r) => n + r.cacheReadTokens, 0),
       cacheWriteTokens: llm.reduce((n, r) => n + r.cacheWriteTokens, 0),
       costUsd: priced.length ? priced.reduce((n, r) => n + (r.costUsd ?? 0), 0) : null,
+      embeddingCalls: embeddings.reduce((n, r) => n + r.calls, 0),
+      embeddingInputTokens: embeddings.reduce((n, r) => n + r.inputTokens, 0),
       toolCalls: tools.reduce((n, r) => n + r.calls, 0),
     },
   };
