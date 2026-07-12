@@ -33,6 +33,12 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
           >
             About
           </Link>
+          <Link
+            to="/blog"
+            className="rounded-md px-3 py-2 text-muted-foreground hover:text-foreground"
+          >
+            Blog
+          </Link>
           <a
             href={SITE.docs}
             className="rounded-md px-3 py-2 text-muted-foreground hover:text-foreground"
@@ -70,6 +76,9 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
             </Link>
             <Link to="/compare" className="hover:text-foreground">
               Compare
+            </Link>
+            <Link to="/blog" className="hover:text-foreground">
+              Blog
             </Link>
             <a href={SITE.docs} className="hover:text-foreground">
               Docs

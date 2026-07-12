@@ -1,0 +1,120 @@
+An AI audit trail is a complete record of every change made to a legal document or
+matter. It shows who made each change, exactly what changed, when it happened, and why.
+"Who" includes the AI: if an AI tool suggested or made a change, the record says so.
+
+If your firm is starting to use AI for contract review, redlining, or drafting, this is
+the single most important piece of plumbing to get right. It is what separates work you
+can stand behind from work you simply hope is right.
+
+This guide explains what an AI audit trail is in plain terms, why the tools you already
+use do not provide one, and what to look for when you evaluate legal AI software.
+
+<Clip
+  src="/blog/audit-dive.mp4"
+  caption="One clause's full history: every change with its author and its exact before and after, plus a one-click undo."
+/>
+
+## Start with what you already know: track changes
+
+Every lawyer knows tracked changes in Word. Each edit shows up marked, with the name of
+the person who made it, and you accept or reject each one. That is a small audit trail,
+and it works well for one document and one round of edits between people.
+
+An AI audit trail is the same idea, extended to cover everything that happens on a
+matter, including what the AI does. Every edit, whether it came from a colleague or
+from an AI tool, is saved as a small record with four parts:
+
+1. **Who made the change.** A named person, or the AI acting for a named person.
+2. **What exactly changed.** The precise before and after, down to the clause.
+3. **Why it changed.** A short note explaining the reason.
+4. **When it happened.**
+
+Software engineers have worked this way for decades. Their tool for it is called git,
+and each saved change is called a "commit." You do not need to know anything about git
+to use a system built this way. The point is simply that every change is on the record,
+with a name and a reason attached.
+
+## Why Word versions and the DMS are not enough
+
+Most firms already keep records: document versions in the DMS, tracked changes in Word,
+an email thread that explains the negotiation. Those records were designed for a world
+where every edit came from a person. AI breaks that assumption in four ways.
+
+**You cannot tell AI edits from human edits.** Once tracked changes are accepted in
+Word, there is no difference between language the AI wrote and language a lawyer wrote.
+Six months later, nobody can say which was which.
+
+**There is no record of the AI's reasoning.** A saved version shows the result. It does
+not show why the liability cap was lowered, or what instruction the AI was following
+when it made the change.
+
+**There is no record of who approved it.** Accepting an AI suggestion is a professional
+judgment. If that acceptance is not saved as an act by a named person, accountability
+disappears.
+
+**Volume overwhelms manual review.** When an AI proposes a hundred redlines across a
+stack of contracts, "version 7, edited by associate@firm.com" tells you almost nothing
+about what actually happened.
+
+Bar guidance on generative AI keeps landing on the same requirement: lawyers remain
+responsible for AI-assisted work, so they must be able to show what the AI did and how
+it was supervised. You cannot supervise what you cannot see.
+
+## What a good audit trail makes possible
+
+It is tempting to treat this as compliance overhead. In practice, the audit trail is
+what lets a firm use AI confidently rather than nervously.
+
+**Supervision at scale.** A partner cannot re-read a hundred AI-reviewed contracts. A
+partner can scan a hundred small, clearly described changes, each with a one-line
+reason, and open the three that look wrong.
+
+**Answers to "who changed this clause?"** With a full history, you can pick any clause
+in the final document and see every change that touched it, in order, with names and
+reasons. This is the question a client, an opposing party, or an insurer will actually
+ask.
+
+**A defensible process.** If a deal term is ever disputed, the firm can show the whole
+chain: the AI proposed this wording for this reason, and this lawyer reviewed and
+accepted it on this date. "The AI did it and we spot-checked" is not a defensible
+process. This is.
+
+**A precise undo.** When every change is saved separately, a bad one can be found and
+reversed on its own, without unwinding everything that came after it.
+
+**Faster adoption.** Lawyers trust AI faster when every AI action is visible. The audit
+trail turns "black box" anxiety into an ordinary review task.
+
+## Six questions to ask any legal AI vendor
+
+Not everything marketed as an "audit log" clears the bar. When you evaluate software,
+ask:
+
+1. **Is it one history?** Human edits and AI edits should appear in the same record,
+   not in separate logs someone has to reconcile later.
+2. **Is it clause-level?** "The document was modified" is useless. The record should
+   show which clause changed and how.
+3. **Can anything skip the record?** If an administrator, a technical connection, or
+   the AI itself can change a document without leaving a trace, it is not an audit
+   trail.
+4. **Does it capture the AI's reasoning?** The why matters as much as the what.
+5. **Can a lawyer read it?** The history should read like tracked changes with a memo
+   attached, not like a technical log file.
+6. **Does it survive a change of AI tools?** If the firm switches from one AI assistant
+   to another next year, the record of past work should be unaffected.
+
+## How gitmatter approaches it
+
+gitmatter is built around exactly this record. Every change on a matter, whether a
+lawyer makes it in the app or an AI makes it on a lawyer's behalf, is saved with a
+name, a reason, and the exact before and after. There is no way to change a document
+that skips the record. Work is organized by client and matter, with a legal team
+staffed on each matter, so every change traces to a member of the team.
+
+Firms connect the AI they already use, such as ChatGPT or Claude, and everything the AI
+does lands on the record automatically. The AI features run on the firm's own account
+with the AI provider, set up so documents are not stored or used for training.
+
+If your team is adopting AI for contract work, start with the record.
+[Book a demo](https://www.cal.eu/gitmatter/demo) and watch the audit trail build itself
+while an AI does real work.

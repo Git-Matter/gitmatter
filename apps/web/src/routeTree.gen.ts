@@ -35,6 +35,7 @@ import { Route as AuthDocumentsIndexRouteImport } from './routes/_auth/documents
 import { Route as AuthClientsIndexRouteImport } from './routes/_auth/clients/index'
 import { Route as AuthAssistantIndexRouteImport } from './routes/_auth/assistant/index'
 import { Route as marketingCompareIndexRouteImport } from './routes/(marketing)/compare.index'
+import { Route as marketingBlogIndexRouteImport } from './routes/(marketing)/blog.index'
 import { Route as AuthReviewsIdRouteImport } from './routes/_auth/reviews/$id'
 import { Route as AuthDocumentsIdRouteImport } from './routes/_auth/documents/$id'
 import { Route as AuthAssistantIdRouteImport } from './routes/_auth/assistant/$id'
@@ -43,6 +44,7 @@ import { Route as marketingCompareLegalonRouteImport } from './routes/(marketing
 import { Route as marketingCompareLegalflyRouteImport } from './routes/(marketing)/compare.legalfly'
 import { Route as marketingCompareHarveyRouteImport } from './routes/(marketing)/compare.harvey'
 import { Route as marketingCompareGitlawRouteImport } from './routes/(marketing)/compare.gitlaw'
+import { Route as marketingBlogSlugRouteImport } from './routes/(marketing)/blog.$slug'
 import { Route as AuthMattersIdIndexRouteImport } from './routes/_auth/matters/$id/index'
 import { Route as AuthWorkflowsTabularReviewIdRouteImport } from './routes/_auth/workflows/tabular-review/$id'
 import { Route as AuthWorkflowsAssistantIdRouteImport } from './routes/_auth/workflows/assistant/$id'
@@ -176,6 +178,11 @@ const marketingCompareIndexRoute = marketingCompareIndexRouteImport.update({
   path: '/compare/',
   getParentRoute: () => marketingRouteRoute,
 } as any)
+const marketingBlogIndexRoute = marketingBlogIndexRouteImport.update({
+  id: '/blog/',
+  path: '/blog/',
+  getParentRoute: () => marketingRouteRoute,
+} as any)
 const AuthReviewsIdRoute = AuthReviewsIdRouteImport.update({
   id: '/reviews/$id',
   path: '/reviews/$id',
@@ -216,6 +223,11 @@ const marketingCompareHarveyRoute = marketingCompareHarveyRouteImport.update({
 const marketingCompareGitlawRoute = marketingCompareGitlawRouteImport.update({
   id: '/compare/gitlaw',
   path: '/compare/gitlaw',
+  getParentRoute: () => marketingRouteRoute,
+} as any)
+const marketingBlogSlugRoute = marketingBlogSlugRouteImport.update({
+  id: '/blog/$slug',
+  path: '/blog/$slug',
   getParentRoute: () => marketingRouteRoute,
 } as any)
 const AuthMattersIdIndexRoute = AuthMattersIdIndexRouteImport.update({
@@ -263,6 +275,7 @@ export interface FileRoutesByFullPath {
   '/signup': typeof UnauthSignupRoute
   '/verify-email': typeof UnauthVerifyEmailRoute
   '/api/$': typeof ApiSplatRoute
+  '/blog/$slug': typeof marketingBlogSlugRoute
   '/compare/gitlaw': typeof marketingCompareGitlawRoute
   '/compare/harvey': typeof marketingCompareHarveyRoute
   '/compare/legalfly': typeof marketingCompareLegalflyRoute
@@ -271,6 +284,7 @@ export interface FileRoutesByFullPath {
   '/assistant/$id': typeof AuthAssistantIdRoute
   '/documents/$id': typeof AuthDocumentsIdRoute
   '/reviews/$id': typeof AuthReviewsIdRoute
+  '/blog/': typeof marketingBlogIndexRoute
   '/compare/': typeof marketingCompareIndexRoute
   '/assistant/': typeof AuthAssistantIndexRoute
   '/clients/': typeof AuthClientsIndexRoute
@@ -301,6 +315,7 @@ export interface FileRoutesByTo {
   '/signup': typeof UnauthSignupRoute
   '/verify-email': typeof UnauthVerifyEmailRoute
   '/api/$': typeof ApiSplatRoute
+  '/blog/$slug': typeof marketingBlogSlugRoute
   '/compare/gitlaw': typeof marketingCompareGitlawRoute
   '/compare/harvey': typeof marketingCompareHarveyRoute
   '/compare/legalfly': typeof marketingCompareLegalflyRoute
@@ -309,6 +324,7 @@ export interface FileRoutesByTo {
   '/assistant/$id': typeof AuthAssistantIdRoute
   '/documents/$id': typeof AuthDocumentsIdRoute
   '/reviews/$id': typeof AuthReviewsIdRoute
+  '/blog': typeof marketingBlogIndexRoute
   '/compare': typeof marketingCompareIndexRoute
   '/assistant': typeof AuthAssistantIndexRoute
   '/clients': typeof AuthClientsIndexRoute
@@ -343,6 +359,7 @@ export interface FileRoutesById {
   '/_unauth/verify-email': typeof UnauthVerifyEmailRoute
   '/api/$': typeof ApiSplatRoute
   '/(marketing)/': typeof marketingIndexRoute
+  '/(marketing)/blog/$slug': typeof marketingBlogSlugRoute
   '/(marketing)/compare/gitlaw': typeof marketingCompareGitlawRoute
   '/(marketing)/compare/harvey': typeof marketingCompareHarveyRoute
   '/(marketing)/compare/legalfly': typeof marketingCompareLegalflyRoute
@@ -351,6 +368,7 @@ export interface FileRoutesById {
   '/_auth/assistant/$id': typeof AuthAssistantIdRoute
   '/_auth/documents/$id': typeof AuthDocumentsIdRoute
   '/_auth/reviews/$id': typeof AuthReviewsIdRoute
+  '/(marketing)/blog/': typeof marketingBlogIndexRoute
   '/(marketing)/compare/': typeof marketingCompareIndexRoute
   '/_auth/assistant/': typeof AuthAssistantIndexRoute
   '/_auth/clients/': typeof AuthClientsIndexRoute
@@ -383,6 +401,7 @@ export interface FileRouteTypes {
     | '/signup'
     | '/verify-email'
     | '/api/$'
+    | '/blog/$slug'
     | '/compare/gitlaw'
     | '/compare/harvey'
     | '/compare/legalfly'
@@ -391,6 +410,7 @@ export interface FileRouteTypes {
     | '/assistant/$id'
     | '/documents/$id'
     | '/reviews/$id'
+    | '/blog/'
     | '/compare/'
     | '/assistant/'
     | '/clients/'
@@ -421,6 +441,7 @@ export interface FileRouteTypes {
     | '/signup'
     | '/verify-email'
     | '/api/$'
+    | '/blog/$slug'
     | '/compare/gitlaw'
     | '/compare/harvey'
     | '/compare/legalfly'
@@ -429,6 +450,7 @@ export interface FileRouteTypes {
     | '/assistant/$id'
     | '/documents/$id'
     | '/reviews/$id'
+    | '/blog'
     | '/compare'
     | '/assistant'
     | '/clients'
@@ -462,6 +484,7 @@ export interface FileRouteTypes {
     | '/_unauth/verify-email'
     | '/api/$'
     | '/(marketing)/'
+    | '/(marketing)/blog/$slug'
     | '/(marketing)/compare/gitlaw'
     | '/(marketing)/compare/harvey'
     | '/(marketing)/compare/legalfly'
@@ -470,6 +493,7 @@ export interface FileRouteTypes {
     | '/_auth/assistant/$id'
     | '/_auth/documents/$id'
     | '/_auth/reviews/$id'
+    | '/(marketing)/blog/'
     | '/(marketing)/compare/'
     | '/_auth/assistant/'
     | '/_auth/clients/'
@@ -678,6 +702,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof marketingCompareIndexRouteImport
       parentRoute: typeof marketingRouteRoute
     }
+    '/(marketing)/blog/': {
+      id: '/(marketing)/blog/'
+      path: '/blog'
+      fullPath: '/blog/'
+      preLoaderRoute: typeof marketingBlogIndexRouteImport
+      parentRoute: typeof marketingRouteRoute
+    }
     '/_auth/reviews/$id': {
       id: '/_auth/reviews/$id'
       path: '/reviews/$id'
@@ -734,6 +765,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof marketingCompareGitlawRouteImport
       parentRoute: typeof marketingRouteRoute
     }
+    '/(marketing)/blog/$slug': {
+      id: '/(marketing)/blog/$slug'
+      path: '/blog/$slug'
+      fullPath: '/blog/$slug'
+      preLoaderRoute: typeof marketingBlogSlugRouteImport
+      parentRoute: typeof marketingRouteRoute
+    }
     '/_auth/matters/$id/': {
       id: '/_auth/matters/$id/'
       path: '/matters/$id'
@@ -780,11 +818,13 @@ interface marketingRouteRouteChildren {
   marketingTermsRoute: typeof marketingTermsRoute
   marketingUseCasesRoute: typeof marketingUseCasesRoute
   marketingIndexRoute: typeof marketingIndexRoute
+  marketingBlogSlugRoute: typeof marketingBlogSlugRoute
   marketingCompareGitlawRoute: typeof marketingCompareGitlawRoute
   marketingCompareHarveyRoute: typeof marketingCompareHarveyRoute
   marketingCompareLegalflyRoute: typeof marketingCompareLegalflyRoute
   marketingCompareLegalonRoute: typeof marketingCompareLegalonRoute
   marketingCompareSpellbookRoute: typeof marketingCompareSpellbookRoute
+  marketingBlogIndexRoute: typeof marketingBlogIndexRoute
   marketingCompareIndexRoute: typeof marketingCompareIndexRoute
 }
 
@@ -796,11 +836,13 @@ const marketingRouteRouteChildren: marketingRouteRouteChildren = {
   marketingTermsRoute: marketingTermsRoute,
   marketingUseCasesRoute: marketingUseCasesRoute,
   marketingIndexRoute: marketingIndexRoute,
+  marketingBlogSlugRoute: marketingBlogSlugRoute,
   marketingCompareGitlawRoute: marketingCompareGitlawRoute,
   marketingCompareHarveyRoute: marketingCompareHarveyRoute,
   marketingCompareLegalflyRoute: marketingCompareLegalflyRoute,
   marketingCompareLegalonRoute: marketingCompareLegalonRoute,
   marketingCompareSpellbookRoute: marketingCompareSpellbookRoute,
+  marketingBlogIndexRoute: marketingBlogIndexRoute,
   marketingCompareIndexRoute: marketingCompareIndexRoute,
 }
 

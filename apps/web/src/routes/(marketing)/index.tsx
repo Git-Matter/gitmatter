@@ -15,6 +15,37 @@ export const Route = createFileRoute("/(marketing)/")({
       description:
         "Contract redline, extraction, and drafting on a git-style audit spine — every change a commit with author, message, and blame. Open source, self-hostable, bring your own agent and LLM key.",
       path: "/",
+      jsonLd: [
+        {
+          "@context": "https://schema.org",
+          "@type": "Organization",
+          name: "gitmatter",
+          url: "https://gitmatter.com",
+          logo: "https://gitmatter.com/favicon.svg",
+          sameAs: ["https://github.com/Git-Matter/gitmatter"],
+          contactPoint: {
+            "@type": "ContactPoint",
+            email: "contact@gitmatter.com",
+            contactType: "sales",
+          },
+        },
+        {
+          "@context": "https://schema.org",
+          "@type": "SoftwareApplication",
+          name: "gitmatter",
+          applicationCategory: "BusinessApplication",
+          operatingSystem: "Web",
+          url: "https://gitmatter.com",
+          description:
+            "AI-assisted legal review — contract redline, tabular extraction, and drafting — on a git-style audit spine. Bring your own AI agent over MCP and your own LLM key.",
+          offers: {
+            "@type": "Offer",
+            price: "0",
+            priceCurrency: "USD",
+            description: "Open source and self-hostable",
+          },
+        },
+      ],
     }),
   component: Page,
 });
