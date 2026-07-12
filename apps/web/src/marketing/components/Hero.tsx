@@ -40,7 +40,7 @@ export default function Hero() {
           poster="/demo-poster.png"
           controls
           playsInline
-          preload="metadata"
+          preload="auto"
         >
           <source src="/demo.mp4" type="video/mp4" />
         </video>
