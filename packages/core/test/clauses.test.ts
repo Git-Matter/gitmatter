@@ -1,13 +1,14 @@
 import { afterAll, beforeAll, describe, expect, test } from "vite-plus/test";
 import { randomUUID } from "node:crypto";
 import { db, sql } from "@workspace/db/client";
-import { clauses, clients, tenants, user } from "@workspace/db/schema";
+import { clauses, clients, matters, tenants, user } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 import { deriveBlame, listCommits } from "../src/core/commit.js";
 import {
   createClause,
   getClauseLadder,
   listClauses,
+  resolveClause,
   suggestClauses,
   updateClause,
 } from "../src/content/clauses.js";
@@ -17,6 +18,7 @@ import type { Actor } from "../src/core/commit.js";
 const userId = `clause-user-${randomUUID()}`;
 let tenantId: string;
 let clientId: string;
+let matterId: string;
 const actor: Actor = { type: "user", userId };
 
 beforeAll(async () => {
@@ -34,6 +36,11 @@ beforeAll(async () => {
     .values({ tenantId, name: "Overlay Client", createdBy: userId })
     .returning();
   clientId = cl!.id;
+  const [matter] = await db
+    .insert(matters)
+    .values({ tenantId, clientId, name: "Overlay matter", createdBy: userId })
+    .returning();
+  matterId = matter!.id;
 });
 
 afterAll(async () => {
@@ -87,12 +94,20 @@ describe("clause library", () => {
       fallbackRank: 1,
       status: "approved",
     });
+    const fb3 = await createClause(actor, {
+      title: "Indemnity — third fallback",
+      body: "Narrow one-way indemnity.",
+      category: "indemnification",
+      parentClauseId: std,
+      status: "approved",
+    });
 
     const ladder = await getClauseLadder(std);
-    expect(ladder.map((c) => c.id)).toEqual([std, fb1, fb2]);
+    expect(ladder.map((c) => c.id)).toEqual([std, fb1, fb2, fb3]);
+    expect(ladder[3]?.fallbackRank).toBe(3);
     // Ladder resolves the same from a fallback.
     const fromFallback = await getClauseLadder(fb2);
-    expect(fromFallback.map((c) => c.id)).toEqual([std, fb1, fb2]);
+    expect(fromFallback.map((c) => c.id)).toEqual([std, fb1, fb2, fb3]);
 
     // Fallbacks cannot chain off fallbacks.
     await expect(
@@ -113,7 +128,7 @@ describe("clause library", () => {
       status: "approved",
     });
     await updateClause(actor, dep, { status: "deprecated" });
-    await createClause(actor, {
+    const firm = await createClause(actor, {
       title: "Governing law (NY)",
       body: "New York law.",
       category: "governing-law",
@@ -125,6 +140,7 @@ describe("clause library", () => {
       body: "Delaware law for this client.",
       category: "governing-law",
       clientId,
+      overridesClauseId: firm,
       status: "approved",
     });
 
@@ -140,6 +156,30 @@ describe("clause library", () => {
     // For the overlay's client, the overlay shadows the firm default.
     const forClient = await suggestClauses(tenantId, { category: "governing-law", clientId });
     expect(forClient.map((c) => c.title)).toEqual(["Governing law — client overlay"]);
+
+    const matterOverlay = await createClause(actor, {
+      title: "Governing law — matter overlay",
+      body: "English law for this transaction.",
+      category: "governing-law",
+      matterId,
+      overridesClauseId: firm,
+      status: "approved",
+    });
+    const resolved = await resolveClause(tenantId, firm, { matterId });
+    expect(resolved?.id).toBe(matterOverlay);
+    expect(resolved?.appliedScope).toBe("matter");
+  });
+
+  test("scoped standards must explicitly name the firm clause they replace", async () => {
+    await expect(
+      createClause(actor, {
+        title: "Unlinked client exception",
+        body: "No arbitration.",
+        category: "dispute-resolution",
+        clientId,
+        status: "draft",
+      })
+    ).rejects.toThrow(/must name the firm standard/i);
   });
 
   test("scoped tokens cannot write the library but can read it", async () => {

@@ -55,7 +55,13 @@ workflowRoute.get("/api/workflows", async (c) => {
   if (paged) {
     // practice is freeform (not a fixed enum), so it's read outside parsePageQuery.
     const practice = c.req.query("practice")?.trim() || undefined;
-    return c.json(await listWorkflowsPage(user.id, user.email, { ...paged, practice }));
+    return c.json(
+      await listWorkflowsPage(user.id, user.email, {
+        ...paged,
+        practice,
+        excludePlaybooks: c.req.query("excludePlaybooks") === "true",
+      })
+    );
   }
   return c.json(await listWorkflows(user.id, user.email));
 });
@@ -63,8 +69,8 @@ workflowRoute.get("/api/workflows", async (c) => {
 workflowRoute.post("/api/workflows", zValidator("json", createWorkflowSchema), async (c) => {
   const user = c.get("user");
   const body = c.req.valid("json");
-  const matterId = await resolveCreateMatter(user, body.matterId);
-  if (!matterId) return c.json({ error: "Forbidden" }, 403);
+  const matterId = body.type === "playbook" ? null : await resolveCreateMatter(user, body.matterId);
+  if (body.type !== "playbook" && !matterId) return c.json({ error: "Forbidden" }, 403);
   const id = await createWorkflow(
     { type: "user", userId: user.id },
     {
@@ -75,6 +81,7 @@ workflowRoute.post("/api/workflows", zValidator("json", createWorkflowSchema), a
       rules: body.rules ?? null,
       practice: body.practice ?? null,
       matterId,
+      tenantId: user.tenantId,
     }
   );
   const created = await getWorkflowForViewer(id, user.id, user.email);
@@ -103,6 +110,7 @@ workflowRoute.get("/api/workflows/practices", async (c) => {
     await listWorkflowPractices(user.id, user.email, {
       tab: asTab(c.req.query("tab")),
       type: asType(c.req.query("type")),
+      excludePlaybooks: c.req.query("excludePlaybooks") === "true",
     })
   );
 });

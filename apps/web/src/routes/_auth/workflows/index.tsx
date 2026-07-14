@@ -66,7 +66,12 @@ function Workflows() {
     pagination,
     setPagination,
     extraDeps: [tab, typeFilter, practiceFilter],
-    extraParams: { tab, type: typeFilter ?? undefined, practice: practiceFilter ?? undefined },
+    extraParams: {
+      tab,
+      type: typeFilter ?? undefined,
+      practice: practiceFilter ?? undefined,
+      excludePlaybooks: "true",
+    },
   });
 
   const { data } = useQuery({
@@ -79,8 +84,9 @@ function Workflows() {
   const rowCount = data?.rowCount ?? 0;
 
   const { data: practices = [] } = useQuery({
-    queryKey: queryKeys.workflowPractices({ tab, type: typeFilter }),
-    queryFn: () => api.listWorkflowPractices({ tab, type: typeFilter ?? undefined }),
+    queryKey: queryKeys.workflowPractices({ tab, type: typeFilter, excludePlaybooks: true }),
+    queryFn: () =>
+      api.listWorkflowPractices({ tab, type: typeFilter ?? undefined, excludePlaybooks: true }),
   });
 
   // A new filter changes which rows exist, so any prior selection is stale.

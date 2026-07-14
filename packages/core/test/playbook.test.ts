@@ -42,6 +42,20 @@ afterAll(async () => {
 });
 
 describe("playbooks", () => {
+  test("firm playbooks are tenant-wide rather than filed in a default matter", async () => {
+    const id = await createWorkflow(actor, {
+      title: "Firm NDA Playbook",
+      type: "playbook",
+      promptMd: "",
+      rules: [
+        { id: "nda", clauseType: "Confidentiality", standardPosition: "Mutual.", severity: "red" },
+      ],
+    });
+    const [row] = await db.select().from(workflows).where(eq(workflows.id, id));
+    expect(row?.tenantId).toBe(tenantId);
+    expect(row?.matterId).toBeNull();
+  });
+
   test("playbook creates as draft with rules blame; approval is a commit", async () => {
     const id = await createWorkflow(actor, {
       title: "MSA Playbook",
@@ -74,18 +88,51 @@ describe("playbooks", () => {
       category: "limitation-of-liability",
       status: "approved",
     });
-    const prompt = await rulePrompt({
-      id: "r1",
-      clauseType: "Limitation of liability",
-      standardPosition: "Cap at 12 months' fees.",
-      fallbacks: ["Inline fallback text", { clauseId }],
-      unacceptable: "Uncapped liability.",
-      severity: "red",
-    });
+    const prompt = await rulePrompt(
+      {
+        id: "r1",
+        clauseType: "Limitation of liability",
+        standardPosition: "Cap at 12 months' fees.",
+        fallbacks: ["Inline fallback text", { clauseId }],
+        unacceptable: "Uncapped liability.",
+        severity: "red",
+      },
+      tenantId
+    );
     expect(prompt).toContain("Cap at 12 months' fees.");
     expect(prompt).toContain("1. Inline fallback text");
     expect(prompt).toContain("2. Cap at 24 months' fees paid.");
     expect(prompt).toContain("red line");
+  });
+
+  test("rule prompt applies a matter exception instead of the firm standard", async () => {
+    const firmClauseId = await createClause(actor, {
+      title: "Firm liability cap",
+      body: "Cap liability at 12 months' fees.",
+      category: "limitation-of-liability",
+      status: "approved",
+    });
+    await createClause(actor, {
+      title: "Matter liability cap",
+      body: "Cap liability at 24 months' fees for this matter.",
+      category: "limitation-of-liability",
+      matterId,
+      overridesClauseId: firmClauseId,
+      status: "approved",
+    });
+
+    const prompt = await rulePrompt(
+      {
+        id: "contextual",
+        clauseType: "Limitation of liability",
+        standardPosition: "Unused fallback text.",
+        standardClauseId: firmClauseId,
+        severity: "red",
+      },
+      { tenantId, matterId }
+    );
+    expect(prompt).toContain("Cap liability at 24 months' fees for this matter.");
+    expect(prompt).toContain("matter library clause");
   });
 
   test("runPlaybook materializes a review with one column per rule", async () => {
@@ -111,6 +158,11 @@ describe("playbooks", () => {
     expect(review?.columnsConfig.map((c) => c.name)).toEqual(["Mutuality", "Term"]);
     expect(review?.documentIds).toEqual([docId]);
 
+    await updateWorkflow(actor, pbId, { status: "draft" });
+    await expect(
+      runPlaybook(actor, { playbookId: pbId, documentIds: [docId], matterId })
+    ).rejects.toThrow(/approved/);
+
     // Deprecated playbooks refuse to run.
     await updateWorkflow(actor, pbId, { status: "deprecated" });
     await expect(
@@ -119,10 +171,13 @@ describe("playbooks", () => {
   });
 
   test("columns preserve rule order and severity shows in prompts", async () => {
-    const cols = await playbookColumns([
-      { id: "x", clauseType: "A", standardPosition: "sa", severity: "yellow" },
-      { id: "y", clauseType: "B", standardPosition: "sb", severity: "red" },
-    ]);
+    const cols = await playbookColumns(
+      [
+        { id: "x", clauseType: "A", standardPosition: "sa", severity: "yellow" },
+        { id: "y", clauseType: "B", standardPosition: "sb", severity: "red" },
+      ],
+      tenantId
+    );
     expect(cols.map((c) => c.index)).toEqual([0, 1]);
     expect(cols[0]!.prompt).toContain("flag yellow if it crosses the red line");
     expect(cols[1]!.prompt).toContain("flag red if it crosses the red line");

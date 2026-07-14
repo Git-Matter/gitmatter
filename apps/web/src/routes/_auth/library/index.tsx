@@ -51,6 +51,7 @@ const RISK_LABEL = { acceptable: "Acceptable", negotiable: "Negotiable", escalat
 const STATUS_VARIANT = { approved: "default", draft: "secondary", deprecated: "outline" } as const;
 
 type LibraryTab = "clauses" | "playbooks";
+type ClauseScope = "firm" | "client" | "matter";
 const LIBRARY_TABS = [
   { id: "clauses" as const, label: "Clauses" },
   { id: "playbooks" as const, label: "Playbooks" },
@@ -66,7 +67,35 @@ function LibraryPage() {
   const [playbookSearch, setPlaybookSearch] = useState("");
   const [creatingClause, setCreatingClause] = useState(false);
   const [creatingPlaybook, setCreatingPlaybook] = useState(false);
+  const [clauseScope, setClauseScope] = useState<ClauseScope>("firm");
+  const [scopeId, setScopeId] = useState<string | null>(null);
   const { data: session } = useSession();
+  // Keep both library collections warm when the workspace opens. Tabs only
+  // change which table is visible; they should not decide whether its data loads.
+  const { data: clausesList = [] } = useQuery({
+    queryKey: ["clauses", clauseScope, scopeId],
+    queryFn: () =>
+      api.listClauses(
+        clauseScope === "client" && scopeId
+          ? { clientId: scopeId }
+          : clauseScope === "matter" && scopeId
+            ? { matterId: scopeId }
+            : undefined
+      ),
+    enabled: clauseScope === "firm" || !!scopeId,
+  });
+  const { data: clients = [] } = useQuery({
+    queryKey: ["clients"],
+    queryFn: () => api.listClients(),
+  });
+  const { data: matters = [] } = useQuery({
+    queryKey: ["matters"],
+    queryFn: () => api.listMatters(),
+  });
+  const { data: allWorkflows = [] } = useQuery({
+    queryKey: queryKeys.workflows,
+    queryFn: () => api.listWorkflows(),
+  });
   const isAdmin =
     session?.user && "tenantRole" in session.user
       ? (session.user as { tenantRole?: string }).tenantRole === "admin"
@@ -102,16 +131,71 @@ function LibraryPage() {
         active={tab}
         onChange={setTab}
         actions={
-          <TableSearch
-            value={search}
-            onChange={setSearch}
-            placeholder={tab === "clauses" ? "Search clauses…" : "Search playbooks…"}
-          />
+          <div className="flex items-center gap-2">
+            {tab === "clauses" && (
+              <>
+                <Select
+                  value={clauseScope}
+                  onValueChange={(value) => {
+                    setClauseScope(value as ClauseScope);
+                    setScopeId(null);
+                  }}
+                >
+                  <SelectTrigger className="h-8 w-36 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="firm">Firm standards</SelectItem>
+                    <SelectItem value="client">Client exceptions</SelectItem>
+                    <SelectItem value="matter">Matter exceptions</SelectItem>
+                  </SelectContent>
+                </Select>
+                {clauseScope === "client" && (
+                  <Select value={scopeId ?? ""} onValueChange={setScopeId}>
+                    <SelectTrigger className="h-8 w-44 text-xs">
+                      <SelectValue placeholder="Select client…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {clients.map((client) => (
+                        <SelectItem key={client.id} value={client.id}>
+                          {client.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+                {clauseScope === "matter" && (
+                  <Select value={scopeId ?? ""} onValueChange={setScopeId}>
+                    <SelectTrigger className="h-8 w-44 text-xs">
+                      <SelectValue placeholder="Select matter…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {matters.map(({ matter }) => (
+                        <SelectItem key={matter.id} value={matter.id}>
+                          {matter.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </>
+            )}
+            <TableSearch
+              value={search}
+              onChange={setSearch}
+              placeholder={tab === "clauses" ? "Search clauses…" : "Search playbooks…"}
+            />
+          </div>
         }
       />
       {tab === "clauses" && (
         <ClausesSection
           isAdmin={isAdmin}
+          clausesList={clausesList}
+          clauseScope={clauseScope}
+          scopeId={scopeId}
+          clients={clients}
+          matters={matters}
           search={clauseSearch}
           creating={creatingClause}
           onCreatingChange={setCreatingClause}
@@ -120,6 +204,7 @@ function LibraryPage() {
       {tab === "playbooks" && (
         <PlaybooksSection
           isAdmin={isAdmin}
+          allWorkflows={allWorkflows}
           search={playbookSearch}
           creating={creatingPlaybook}
           onCreatingChange={setCreatingPlaybook}
@@ -131,24 +216,34 @@ function LibraryPage() {
 
 function ClausesSection({
   isAdmin,
+  clausesList,
+  clauseScope,
+  scopeId,
+  clients,
+  matters,
   search,
   creating,
   onCreatingChange,
 }: {
   isAdmin: boolean;
+  clausesList: Clause[];
+  clauseScope: ClauseScope;
+  scopeId: string | null;
+  clients: Array<{ id: string; name: string }>;
+  matters: Array<{ matter: { id: string; name: string } }>;
   search: string;
   creating: boolean;
   onCreatingChange: (open: boolean) => void;
 }) {
+  // DataTable holds a stable TanStack table reference, so query updates need
+  // to re-render this owner instead of being memoized by the React Compiler.
+  "use no memo";
   const qc = useQueryClient();
+  const navigate = useNavigate();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editing, setEditing] = useState<Clause | null>(null);
   const [creatingParent, setCreatingParent] = useState<Clause | null>(null);
 
-  const { data: clausesList = [] } = useQuery({
-    queryKey: ["clauses"],
-    queryFn: () => api.listClauses(),
-  });
   const { data: detail } = useQuery({
     queryKey: ["clause", selectedId],
     queryFn: () => api.getClause(selectedId!),
@@ -228,6 +323,17 @@ function ClausesSection({
           }}
           onApprove={(id) => approveMutation.mutate(id)}
           onDeprecate={(id) => deprecateMutation.mutate(id)}
+          onAskAssistant={(cl) => {
+            sessionStorage.setItem(
+              "workflowChatSeed",
+              JSON.stringify({
+                steps: [
+                  `Help me work with the approved clause "${cl.title}" (id: ${cl.id}). Read it with get_clause first, then explain its standard position, fallback ladder, and drafting implications.`,
+                ],
+              })
+            );
+            void navigate({ to: "/assistant" });
+          }}
         />
       )}
 
@@ -235,6 +341,10 @@ function ClausesSection({
         <ClauseFormDialog
           clause={editing}
           parent={creatingParent ?? undefined}
+          defaultScope={clauseScope}
+          defaultScopeId={scopeId}
+          clients={clients}
+          matters={matters}
           onClose={() => {
             onCreatingChange(false);
             setCreatingParent(null);
@@ -255,6 +365,7 @@ function ClauseDetailDialog({
   onAddFallback,
   onApprove,
   onDeprecate,
+  onAskAssistant,
 }: {
   detail: { clause: Clause; ladder: Clause[] };
   isAdmin: boolean;
@@ -263,6 +374,7 @@ function ClauseDetailDialog({
   onAddFallback: (parent: Clause) => void;
   onApprove: (id: string) => void;
   onDeprecate: (id: string) => void;
+  onAskAssistant: (clause: Clause) => void;
 }) {
   const { ladder } = detail;
   return (
@@ -306,9 +418,14 @@ function ClauseDetailDialog({
             </div>
           ))}
           <div className="border-t pt-3">
-            <Button size="xs" variant="outline" onClick={() => onAddFallback(ladder[0]!)}>
-              <Plus className="size-3.5" /> Add fallback position
-            </Button>
+            <div className="flex gap-1.5">
+              <Button size="xs" variant="outline" onClick={() => onAddFallback(ladder[0]!)}>
+                <Plus className="size-3.5" /> Add fallback position
+              </Button>
+              <Button size="xs" variant="ghost" onClick={() => onAskAssistant(detail.clause)}>
+                Ask Assistant
+              </Button>
+            </div>
           </div>
         </div>
       </DialogContent>
@@ -420,11 +537,19 @@ function clauseColumns({
 function ClauseFormDialog({
   clause,
   parent,
+  defaultScope,
+  defaultScopeId,
+  clients,
+  matters,
   onClose,
   onSaved,
 }: {
   clause: Clause | null;
   parent?: Clause;
+  defaultScope: ClauseScope;
+  defaultScopeId: string | null;
+  clients: Array<{ id: string; name: string }>;
+  matters: Array<{ matter: { id: string; name: string } }>;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -436,6 +561,22 @@ function ClauseFormDialog({
   const [riskRating, setRiskRating] = useState<Clause["riskRating"]>(
     clause?.riskRating ?? (parent ? "negotiable" : "acceptable")
   );
+  const [scope, setScope] = useState<ClauseScope>(
+    clause?.clientId ? "client" : clause?.matterId ? "matter" : defaultScope
+  );
+  const [scopeId, setScopeId] = useState<string | null>(
+    clause?.clientId ?? clause?.matterId ?? defaultScopeId
+  );
+  const [overridesClauseId, setOverridesClauseId] = useState<string | null>(
+    clause?.overridesClauseId ?? null
+  );
+  const { data: firmClauses = [] } = useQuery({
+    queryKey: ["clauses", "firm", "approved"],
+    queryFn: () => api.listClauses(),
+  });
+  const approvedFirmClauses = firmClauses.filter(
+    (item) => item.status === "approved" && !item.parentClauseId
+  );
 
   const saveMutation = useMutation({
     mutationFn: async () => {
@@ -446,6 +587,9 @@ function ClauseFormDialog({
         guidance: guidance || null,
         jurisdiction: jurisdiction || null,
         riskRating,
+        ...(scope === "client" && scopeId ? { clientId: scopeId } : {}),
+        ...(scope === "matter" && scopeId ? { matterId: scopeId } : {}),
+        ...(scope !== "firm" && overridesClauseId ? { overridesClauseId } : {}),
         ...(parent ? { parentClauseId: parent.id } : {}),
       };
       if (clause) await api.updateClause(clause.id, input);
@@ -484,6 +628,88 @@ function ClauseFormDialog({
               />
             </div>
           </div>
+          {!clause && !parent && (
+            <div className="flex gap-2">
+              <div className="flex flex-1 flex-col gap-1.5">
+                <Label>Position scope</Label>
+                <Select
+                  value={scope}
+                  onValueChange={(value) => {
+                    setScope(value as ClauseScope);
+                    setScopeId(null);
+                    setOverridesClauseId(null);
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="firm">Firm standard</SelectItem>
+                    <SelectItem value="client">Client exception</SelectItem>
+                    <SelectItem value="matter">Matter exception</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {scope === "client" && (
+                <div className="flex flex-1 flex-col gap-1.5">
+                  <Label>Client</Label>
+                  <Select value={scopeId ?? ""} onValueChange={setScopeId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select client…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {clients.map((client) => (
+                        <SelectItem key={client.id} value={client.id}>
+                          {client.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+              {scope === "matter" && (
+                <div className="flex flex-1 flex-col gap-1.5">
+                  <Label>Matter</Label>
+                  <Select value={scopeId ?? ""} onValueChange={setScopeId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select matter…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {matters.map(({ matter }) => (
+                        <SelectItem key={matter.id} value={matter.id}>
+                          {matter.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+            </div>
+          )}
+          {!clause && !parent && scope !== "firm" && (
+            <div className="flex flex-col gap-1.5">
+              <Label>Overrides firm standard</Label>
+              <Select value={overridesClauseId ?? ""} onValueChange={setOverridesClauseId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select the firm position this replaces…" />
+                </SelectTrigger>
+                <SelectContent>
+                  {approvedFirmClauses
+                    .filter((item) => !category || item.category === category)
+                    .map((item) => (
+                      <SelectItem key={item.id} value={item.id}>
+                        {item.title} · {item.category}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+              {!approvedFirmClauses.length && (
+                <p className="text-xs text-muted-foreground">
+                  Approve a firm standard first, then create its client or matter exception.
+                </p>
+              )}
+            </div>
+          )}
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="cl-body">Clause language</Label>
             <Textarea
@@ -536,7 +762,13 @@ function ClauseFormDialog({
           </Button>
           <Button
             onClick={() => saveMutation.mutate()}
-            disabled={saveMutation.isPending || !title.trim() || !body.trim() || !category.trim()}
+            disabled={
+              saveMutation.isPending ||
+              !title.trim() ||
+              !body.trim() ||
+              !category.trim() ||
+              ((scope === "client" || scope === "matter") && (!scopeId || !overridesClauseId))
+            }
           >
             {saveMutation.isPending ? "Saving…" : "Save"}
           </Button>
@@ -550,24 +782,24 @@ function ClauseFormDialog({
 
 function PlaybooksSection({
   isAdmin,
+  allWorkflows,
   search,
   creating,
   onCreatingChange,
 }: {
   isAdmin: boolean;
+  allWorkflows: WorkflowListItem[];
   search: string;
   creating: boolean;
   onCreatingChange: (open: boolean) => void;
 }) {
+  // Keep playbook query and mutation updates visible in the shared DataTable.
+  "use no memo";
   const qc = useQueryClient();
   const [selected, setSelected] = useState<WorkflowListItem | null>(null);
   const [editing, setEditing] = useState<WorkflowListItem | null>(null);
   const [running, setRunning] = useState<WorkflowListItem | null>(null);
 
-  const { data: allWorkflows = [] } = useQuery({
-    queryKey: queryKeys.workflows,
-    queryFn: () => api.listWorkflows(),
-  });
   const playbooks = useMemo(
     () => allWorkflows.filter((w) => w.type === "playbook" && playbookMatches(w, search)),
     [allWorkflows, search]
@@ -879,9 +1111,31 @@ function PlaybookFormDialog({
 }) {
   const [title, setTitle] = useState(playbook?.title ?? "");
   const [rules, setRules] = useState<PlaybookRule[]>(playbook?.rules ?? [EMPTY_RULE()]);
+  const { data: clauses = [] } = useQuery({
+    queryKey: ["clauses", "approved", "fallbacks"],
+    queryFn: () => api.listClauses({ includeFallbacks: true }),
+  });
+  const approvedClauses = clauses.filter((clause) => clause.status === "approved");
 
   const setRule = (id: string, patch: Partial<PlaybookRule>) =>
     setRules((rs) => rs.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+  const addFallback = (id: string, clauseId: string) =>
+    setRules((rs) =>
+      rs.map((r) => {
+        if (
+          r.id !== id ||
+          r.fallbacks?.some((f) => typeof f !== "string" && f.clauseId === clauseId)
+        )
+          return r;
+        return { ...r, fallbacks: [...(r.fallbacks ?? []), { clauseId }] };
+      })
+    );
+  const removeFallback = (id: string, index: number) =>
+    setRules((rs) =>
+      rs.map((r) =>
+        r.id === id ? { ...r, fallbacks: r.fallbacks?.filter((_, i) => i !== index) } : r
+      )
+    );
 
   const valid =
     title.trim() &&
@@ -949,6 +1203,41 @@ function PlaybookFormDialog({
                 value={rule.clauseType}
                 onChange={(e) => setRule(rule.id, { clauseType: e.target.value })}
               />
+              <div className="flex flex-col gap-1.5">
+                <Label>Approved standard clause</Label>
+                <Select
+                  value={rule.standardClauseId}
+                  onValueChange={(clauseId) => {
+                    const clause = approvedClauses.find((c) => c.id === clauseId);
+                    if (clause)
+                      setRule(rule.id, {
+                        standardClauseId: clause.id,
+                        standardPosition: clause.body,
+                      });
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Use written standard below…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {approvedClauses.map((clause) => (
+                      <SelectItem key={clause.id} value={clause.id}>
+                        {clause.title} · {clause.category}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {rule.standardClauseId && (
+                  <Button
+                    size="xs"
+                    variant="ghost"
+                    className="self-start"
+                    onClick={() => setRule(rule.id, { standardClauseId: undefined })}
+                  >
+                    Use written standard instead
+                  </Button>
+                )}
+              </div>
               <Textarea
                 placeholder="Standard position"
                 rows={2}
@@ -967,6 +1256,49 @@ function PlaybookFormDialog({
                 value={rule.guidance ?? ""}
                 onChange={(e) => setRule(rule.id, { guidance: e.target.value || undefined })}
               />
+              <div className="flex flex-col gap-1.5">
+                <Label>Approved library fallbacks</Label>
+                <Select onValueChange={(clauseId) => addFallback(rule.id, clauseId as string)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Add an approved clause…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {approvedClauses.map((clause) => (
+                      <SelectItem key={clause.id} value={clause.id}>
+                        {clause.title} · {clause.category}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {rule.fallbacks?.map((fallback, index) => {
+                  const clause =
+                    typeof fallback === "string"
+                      ? null
+                      : approvedClauses.find((c) => c.id === fallback.clauseId);
+                  return (
+                    <div
+                      key={`${typeof fallback === "string" ? fallback : fallback.clauseId}-${index}`}
+                      className="flex items-center justify-between gap-2 text-xs text-muted-foreground"
+                    >
+                      <span>
+                        {clause
+                          ? clause.title
+                          : typeof fallback === "string"
+                            ? fallback
+                            : "Unavailable clause"}
+                      </span>
+                      <Button
+                        size="icon-sm"
+                        variant="ghost"
+                        aria-label="Remove fallback"
+                        onClick={() => removeFallback(rule.id, index)}
+                      >
+                        <Trash2 className="size-3.5" />
+                      </Button>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           ))}
           <Button
@@ -1067,11 +1399,30 @@ function RunPlaybookDialog({
                   </label>
                 ))}
                 {!docs.length && (
-                  <p className="text-sm text-muted-foreground">No documents in this matter.</p>
+                  <div className="flex flex-col gap-2 p-1">
+                    <p className="text-sm text-muted-foreground">
+                      No documents are filed in this matter yet. A playbook review is always filed
+                      to a matter, so add the inbound document there first.
+                    </p>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="self-start"
+                      onClick={() =>
+                        void navigate({ to: "/matters/$id", params: { id: matterId } })
+                      }
+                    >
+                      Open matter documents
+                    </Button>
+                  </div>
                 )}
               </div>
             </div>
           )}
+          <p className="text-xs text-muted-foreground">
+            Confirm this playbook matches the contract type before running it. The review records
+            the exact firm, client, or matter standard applied to each rule.
+          </p>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>

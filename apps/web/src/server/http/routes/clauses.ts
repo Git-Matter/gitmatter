@@ -6,6 +6,8 @@ import {
   createClause,
   getClause,
   getClauseLadder,
+  hasClientAccess,
+  hasMatterAccess,
   listClauses,
   updateClause,
 } from "@workspace/core";
@@ -24,8 +26,9 @@ const clauseFields = {
   guidance: z.string().nullable().optional(),
   tags: z.array(z.string()).nullable().optional(),
   status: z.enum(["approved", "draft", "deprecated"]).optional(),
-  parentClauseId: z.string().nullable().optional(),
-  fallbackRank: z.number().int().min(1).nullable().optional(),
+  clientId: z.string().uuid().nullable().optional(),
+  matterId: z.string().uuid().nullable().optional(),
+  overridesClauseId: z.string().uuid().nullable().optional(),
 };
 
 const createClauseSchema = z.object({
@@ -43,10 +46,18 @@ const actorFor = (userId: string): Actor => ({ type: "user", userId });
 clausesRoute.get("/api/clauses", async (c) => {
   const u = c.get("user");
   if (!u.tenantId) return c.json({ error: "No tenant" }, 403);
+  const clientId = c.req.query("clientId");
+  const matterId = c.req.query("matterId");
+  if (clientId && !(await hasClientAccess(u.id, clientId)))
+    return c.json({ error: "Forbidden" }, 403);
+  if (matterId && !(await hasMatterAccess(u.id, matterId)))
+    return c.json({ error: "Forbidden" }, 403);
   const rows = await listClauses(u.tenantId, {
     category: c.req.query("category") || undefined,
     includeDeprecated: c.req.query("includeDeprecated") === "true",
     includeFallbacks: c.req.query("includeFallbacks") === "true",
+    clientId: clientId || undefined,
+    matterId: matterId || undefined,
   });
   return c.json(rows);
 });
@@ -62,6 +73,12 @@ clausesRoute.post("/api/clauses", zValidator("json", createClauseSchema), async 
   const u = c.get("user");
   if (!u.tenantId) return c.json({ error: "No tenant" }, 403);
   const body = c.req.valid("json");
+  if (body.clientId && body.matterId)
+    return c.json({ error: "Choose a client or matter scope, not both" }, 400);
+  if (body.clientId && !(await hasClientAccess(u.id, body.clientId, "editor")))
+    return c.json({ error: "Forbidden" }, 403);
+  if (body.matterId && !(await hasMatterAccess(u.id, body.matterId, "editor")))
+    return c.json({ error: "Forbidden" }, 403);
   // Only admins publish directly; members' clauses land as drafts.
   const status = body.status === "approved" && u.tenantRole !== "admin" ? "draft" : body.status;
   const id = await createClause(actorFor(u.id), { ...body, status });

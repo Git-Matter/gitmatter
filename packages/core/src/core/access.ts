@@ -195,9 +195,22 @@ export async function canAccessArtifact(
   // artifacts the underlying user owns, and artifacts with no matter yet.
   if (!scopeAllowsMatter(scope, row.matterId)) return false;
 
+  // Firm-library clauses and playbooks are visible to every member of the
+  // tenant. Only an admin gets the editor-level capability through this shared
+  // guard; a draft's creator still gets ownership below.
+  let firmRole = -1;
+  if (!row.matterId && row.tenantId && (artifactType === "clause" || artifactType === "workflow")) {
+    const [account] = await db
+      .select({ tenantId: user.tenantId, tenantRole: user.tenantRole })
+      .from(user)
+      .where(eq(user.id, userId));
+    if (account?.tenantId === row.tenantId)
+      firmRole = account.tenantRole === "admin" ? ROLE_RANK.owner : ROLE_RANK.viewer;
+  }
+
   // The intrinsic owner has full access (covers the not-yet-backfilled
   // null-matterId case too), subject to the scope's role cap.
-  let best = row.ownerId === userId ? ROLE_RANK.owner : -1;
+  let best = row.ownerId === userId ? ROLE_RANK.owner : firmRole;
 
   // Effective role = the higher of matter membership and a direct artifact share.
   if (best < ROLE_RANK.owner && row.matterId) {

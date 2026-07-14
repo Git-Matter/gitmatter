@@ -10,6 +10,7 @@ import type { ToolContext, ToolSpec } from "./types.js";
 const ruleSchema = z.object({
   id: z.string().optional(),
   clauseType: z.string(),
+  standardClauseId: z.string().optional(),
   standardPosition: z.string(),
   fallbacks: z.array(z.union([z.string(), z.object({ clauseId: z.string() })])).optional(),
   unacceptable: z.string().optional(),
@@ -89,8 +90,10 @@ export function buildWorkflowTools({ actor, resolveMatter }: ToolContext): ToolS
           return { error: "title, type, promptMd required to create" };
         if (type === "playbook" && !parsedRules?.length)
           return { error: "rules required to create a playbook" };
-        const resolved = await resolveMatter(matterId as string | undefined);
-        if (!resolved) return { error: "Forbidden: no access to that matter" };
+        const resolved =
+          type === "playbook" ? null : await resolveMatter(matterId as string | undefined);
+        if (type !== "playbook" && !resolved)
+          return { error: "Forbidden: no access to that matter" };
         return {
           workflowId: await createWorkflow(actor, {
             title: title as string,
