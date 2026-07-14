@@ -262,7 +262,9 @@ jobs:
               --arg title "$DEPLOY_TITLE" \
               '{ ref: $ref, head_commit: { id: $sha, message: $title }, commits: [] }')"
           fi
-          curl --resolve "$DOKPLOY_HOST:443:$DOKPLOY_TAILNET_IP" --connect-timeout 10 --retry 2 --retry-delay 5 -fsSL -X POST -H "Content-Type: application/json" -H "x-github-event: push" -d "$PAYLOAD" "$WEBHOOK"
+          # Tailscale authenticates and encrypts the VPS connection. Traefik serves
+          # its self-signed origin certificate on the direct Tailnet address.
+          curl --insecure --resolve "$DOKPLOY_HOST:443:$DOKPLOY_TAILNET_IP" --connect-timeout 10 --retry 2 --retry-delay 5 -fsSL -X POST -H "Content-Type: application/json" -H "x-github-event: push" -d "$PAYLOAD" "$WEBHOOK"
 
   deploy-prod-docs:
     needs: [build-docs, version]
@@ -314,4 +316,6 @@ jobs:
               --arg title "$DEPLOY_TITLE" \
               '{ ref: $ref, head_commit: { id: $sha, message: $title }, commits: [] }')"
           fi
-          curl --resolve "$DOKPLOY_HOST:443:$DOKPLOY_TAILNET_IP" --connect-timeout 10 --retry 2 --retry-delay 5 -fsSL -X POST -H "Content-Type: application/json" -H "x-github-event: push" -d "$PAYLOAD" "$WEBHOOK"
+          # Tailscale authenticates and encrypts the VPS connection. Traefik serves
+          # its self-signed origin certificate on the direct Tailnet address.
+          curl --insecure --resolve "$DOKPLOY_HOST:443:$DOKPLOY_TAILNET_IP" --connect-timeout 10 --retry 2 --retry-delay 5 -fsSL -X POST -H "Content-Type: application/json" -H "x-github-event: push" -d "$PAYLOAD" "$WEBHOOK"
