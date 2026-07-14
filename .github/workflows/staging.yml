@@ -89,31 +89,13 @@ jobs:
           cache-from: type=gha,scope=cloud
           cache-to: type=gha,mode=max,scope=cloud
 
-      - name: Connect Tailscale
-        uses: tailscale/github-action@v4
-        with:
-          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
-          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
-          tags: tag:ci
-
-      # Dokploy per-app deploy webhook (token in the URL, no api-key). Replaces the
-      # /api/application.deploy + x-api-key call, which 403'd after the API key was
-      # rotated. The webhook URL is the app's refresh-token endpoint.
+      # Dokploy per-app deploy webhook over the Cloudflare Tunnel (token in the
+      # URL, no api-key). The webhook URL is the app's refresh-token endpoint.
       - name: Trigger staging redeploy
         env:
           WEBHOOK: ${{ secrets.STAGING_DOKPLOY_WEB_WEBHOOK }}
-          DOKPLOY_HOST: dokploy.gitmatter.com
-          DOKPLOY_TAILNET_IP: 100.68.201.48
         run: |
           echo "::add-mask::$WEBHOOK"
-          WEBHOOK_HOST="${WEBHOOK#*://}"
-          WEBHOOK_HOST="${WEBHOOK_HOST%%/*}"
-          WEBHOOK_HOST_ONLY="${WEBHOOK_HOST%%:*}"
-          WEBHOOK_PATH="/${WEBHOOK#*://*/}"
-          WEBHOOK_URL="https://${DOKPLOY_HOST}${WEBHOOK_PATH}"
-          echo "::add-mask::$WEBHOOK_HOST"
-          echo "::add-mask::$WEBHOOK_HOST_ONLY"
-          echo "::add-mask::$WEBHOOK_URL"
           DEPLOY_TITLE_PREFIX="Staging web"
           SHORT_SHA="${GITHUB_SHA::7}"
           SHORT_SHA="${SHORT_SHA:-unknown}"
@@ -139,7 +121,7 @@ jobs:
               --arg title "$DEPLOY_TITLE" \
               '{ ref: $ref, head_commit: { id: $sha, message: $title }, commits: [] }')"
           fi
-          curl --resolve "$DOKPLOY_HOST:443:$DOKPLOY_TAILNET_IP" --connect-timeout 10 --retry 2 --retry-delay 5 -fsSL -X POST -H "Content-Type: application/json" -H "x-github-event: push" -d "$PAYLOAD" "$WEBHOOK_URL"
+          curl --connect-timeout 10 --retry 2 --retry-delay 5 -fsSL -X POST -H "Content-Type: application/json" -H "x-github-event: push" -d "$PAYLOAD" "$WEBHOOK"
 
   # Docs is a standalone Next.js app served under /docs. It builds and ships
   # independently of the web image: next build on the runner produces a
@@ -199,18 +181,9 @@ jobs:
           cache-from: type=gha,scope=docs
           cache-to: type=gha,mode=max,scope=docs
 
-      - name: Connect Tailscale
-        uses: tailscale/github-action@v4
-        with:
-          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
-          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
-          tags: tag:ci
-
       - name: Trigger staging docs redeploy
         env:
           WEBHOOK: ${{ secrets.STAGING_DOKPLOY_DOCS_WEBHOOK }}
-          DOKPLOY_HOST: dokploy.gitmatter.com
-          DOKPLOY_TAILNET_IP: 100.68.201.48
         run: |
           # The docs image is pushed above regardless. The redeploy only fires once
           # STAGING_DOKPLOY_DOCS_WEBHOOK (the docs app's deploy webhook URL) is set —
@@ -220,14 +193,6 @@ jobs:
             exit 0
           fi
           echo "::add-mask::$WEBHOOK"
-          WEBHOOK_HOST="${WEBHOOK#*://}"
-          WEBHOOK_HOST="${WEBHOOK_HOST%%/*}"
-          WEBHOOK_HOST_ONLY="${WEBHOOK_HOST%%:*}"
-          WEBHOOK_PATH="/${WEBHOOK#*://*/}"
-          WEBHOOK_URL="https://${DOKPLOY_HOST}${WEBHOOK_PATH}"
-          echo "::add-mask::$WEBHOOK_HOST"
-          echo "::add-mask::$WEBHOOK_HOST_ONLY"
-          echo "::add-mask::$WEBHOOK_URL"
           DEPLOY_TITLE_PREFIX="Staging docs"
           SHORT_SHA="${GITHUB_SHA::7}"
           SHORT_SHA="${SHORT_SHA:-unknown}"
@@ -253,4 +218,4 @@ jobs:
               --arg title "$DEPLOY_TITLE" \
               '{ ref: $ref, head_commit: { id: $sha, message: $title }, commits: [] }')"
           fi
-          curl --resolve "$DOKPLOY_HOST:443:$DOKPLOY_TAILNET_IP" --connect-timeout 10 --retry 2 --retry-delay 5 -fsSL -X POST -H "Content-Type: application/json" -H "x-github-event: push" -d "$PAYLOAD" "$WEBHOOK_URL"
+          curl --connect-timeout 10 --retry 2 --retry-delay 5 -fsSL -X POST -H "Content-Type: application/json" -H "x-github-event: push" -d "$PAYLOAD" "$WEBHOOK"

@@ -214,16 +214,8 @@ jobs:
     needs: [build, version]
     runs-on: ubuntu-latest
     steps:
-      - name: Connect Tailscale
-        uses: tailscale/github-action@v4
-        with:
-          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
-          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
-          tags: tag:ci
-
-      # Dokploy per-app deploy webhook over the tailnet origin (token in the URL,
-      # no api-key). dokploy.gitmatter.com is Cloudflare-fronted and 403s the
-      # runner, so we hit the origin directly via Tailscale.
+      # Dokploy per-app deploy webhook over the Cloudflare Tunnel (token in the
+      # URL, no api-key).
       - name: Trigger production redeploy
         env:
           WEBHOOK: ${{ secrets.PROD_DOKPLOY_WEB_WEBHOOK }}
@@ -234,11 +226,6 @@ jobs:
             exit 0
           fi
           echo "::add-mask::$WEBHOOK"
-          WEBHOOK_HOST="${WEBHOOK#*://}"
-          WEBHOOK_HOST="${WEBHOOK_HOST%%/*}"
-          WEBHOOK_HOST_ONLY="${WEBHOOK_HOST%%:*}"
-          echo "::add-mask::$WEBHOOK_HOST"
-          echo "::add-mask::$WEBHOOK_HOST_ONLY"
           DEPLOY_TITLE_PREFIX="Production web"
           SHORT_SHA="${GITHUB_SHA::7}"
           SHORT_SHA="${SHORT_SHA:-unknown}"
@@ -271,13 +258,6 @@ jobs:
     needs: [build-docs, version]
     runs-on: ubuntu-latest
     steps:
-      - name: Connect Tailscale
-        uses: tailscale/github-action@v4
-        with:
-          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
-          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
-          tags: tag:ci
-
       - name: Trigger production docs redeploy
         env:
           WEBHOOK: ${{ secrets.PROD_DOKPLOY_DOCS_WEBHOOK }}
@@ -288,11 +268,6 @@ jobs:
             exit 0
           fi
           echo "::add-mask::$WEBHOOK"
-          WEBHOOK_HOST="${WEBHOOK#*://}"
-          WEBHOOK_HOST="${WEBHOOK_HOST%%/*}"
-          WEBHOOK_HOST_ONLY="${WEBHOOK_HOST%%:*}"
-          echo "::add-mask::$WEBHOOK_HOST"
-          echo "::add-mask::$WEBHOOK_HOST_ONLY"
           DEPLOY_TITLE_PREFIX="Production docs"
           SHORT_SHA="${GITHUB_SHA::7}"
           SHORT_SHA="${SHORT_SHA:-unknown}"
