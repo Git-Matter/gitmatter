@@ -9,6 +9,7 @@ const workflowStepSchema = z.object({
 export const playbookRuleSchema = z.object({
   id: z.string(),
   clauseType: z.string().min(1),
+  standardClauseId: z.string().uuid().optional(),
   standardPosition: z.string().min(1),
   fallbacks: z.array(z.union([z.string(), z.object({ clauseId: z.string() })])).optional(),
   unacceptable: z.string().optional(),

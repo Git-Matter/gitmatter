@@ -23,6 +23,9 @@ export type WorkflowStep = { title?: string; promptMd: string };
 export type PlaybookRule = {
   id: string;
   clauseType: string;
+  // Firm standard language. Keep standardPosition as a readable snapshot for
+  // older playbooks, but resolve this reference at run time when present.
+  standardClauseId?: string;
   standardPosition: string;
   fallbacks?: Array<string | { clauseId: string }>;
   unacceptable?: string;

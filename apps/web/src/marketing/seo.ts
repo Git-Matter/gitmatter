@@ -10,6 +10,7 @@ export function marketingHead(opts: {
   description: string;
   path: string;
   og?: { title: string; eyebrow?: string };
+  jsonLd?: object[];
 }) {
   const url = `${SITE.url}${opts.path === "/" ? "" : opts.path}`;
   const image = opts.og
@@ -32,5 +33,13 @@ export function marketingHead(opts: {
       { name: "twitter:image", content: image },
     ],
     links: [{ rel: "canonical", href: url }],
+    ...(opts.jsonLd?.length
+      ? {
+          scripts: opts.jsonLd.map((data) => ({
+            type: "application/ld+json",
+            children: JSON.stringify(data),
+          })),
+        }
+      : {}),
   };
 }

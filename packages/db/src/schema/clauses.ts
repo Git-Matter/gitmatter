@@ -1,4 +1,4 @@
-import { index, integer, jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { index, integer, jsonb, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
 import { user } from "./auth.js";
 import { clients } from "./clients.js";
 import { matters } from "./matters.js";
@@ -50,6 +50,10 @@ export const clauses = pgTable(
     // of the parent, ordered by fallbackRank (1 = first retreat).
     parentClauseId: uuid("parent_clause_id"),
     fallbackRank: integer("fallback_rank"),
+    // A client or matter exception must name the firm position it replaces.
+    // Category alone is not enough: a firm can keep several positions in one
+    // category for different transaction types or jurisdictions.
+    overridesClauseId: uuid("overrides_clause_id"),
     // Precedent link: the matter whose negotiation produced this language.
     sourceMatterId: uuid("source_matter_id"),
     createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
@@ -62,6 +66,8 @@ export const clauses = pgTable(
   (t) => [
     index("clauses_tenant_category_idx").on(t.tenantId, t.category),
     index("clauses_parent_idx").on(t.parentClauseId),
+    index("clauses_overrides_idx").on(t.overridesClauseId),
+    unique("clauses_fallback_rank_unique").on(t.parentClauseId, t.fallbackRank),
   ]
 );
 

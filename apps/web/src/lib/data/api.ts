@@ -120,6 +120,7 @@ export type Clause = {
   clientId: string | null;
   parentClauseId: string | null;
   fallbackRank: number | null;
+  overridesClauseId: string | null;
   userId: string | null;
   createdAt: string;
   updatedAt: string;
@@ -136,6 +137,9 @@ export type ClauseInput = {
   status?: Clause["status"];
   parentClauseId?: string | null;
   fallbackRank?: number | null;
+  matterId?: string | null;
+  clientId?: string | null;
+  overridesClauseId?: string | null;
 };
 
 // Per-matter LLM/tool spend, aggregated server-side (matterUsageSummary).
@@ -635,11 +639,20 @@ export const api = {
   matterUsageExportUrl: (id: string) => `/api/matters/${id}/usage?format=csv`,
 
   // Clause library
-  listClauses: (opts?: { category?: string; includeDeprecated?: boolean }) =>
+  listClauses: (opts?: {
+    category?: string;
+    includeDeprecated?: boolean;
+    includeFallbacks?: boolean;
+    matterId?: string;
+    clientId?: string;
+  }) =>
     req<Clause[]>(
       `/api/clauses?${new URLSearchParams({
         ...(opts?.category ? { category: opts.category } : {}),
         ...(opts?.includeDeprecated ? { includeDeprecated: "true" } : {}),
+        ...(opts?.includeFallbacks ? { includeFallbacks: "true" } : {}),
+        ...(opts?.matterId ? { matterId: opts.matterId } : {}),
+        ...(opts?.clientId ? { clientId: opts.clientId } : {}),
       })}`
     ),
   getClause: (id: string) => req<{ clause: Clause; ladder: Clause[] }>(`/api/clauses/${id}`),
@@ -706,12 +719,18 @@ export const api = {
   // Workflows
   listWorkflows: () => req<WorkflowListItem[]>("/api/workflows"),
   listWorkflowsPage: (
-    params: ListPageParams & { tab?: string; type?: string; practice?: string }
+    params: ListPageParams & {
+      tab?: string;
+      type?: string;
+      practice?: string;
+      excludePlaybooks?: "true";
+    }
   ) => req<PageResult<WorkflowListItem>>(`/api/workflows?${listQuery(params)}`),
-  listWorkflowPractices: (opts: { tab?: string; type?: string }) => {
+  listWorkflowPractices: (opts: { tab?: string; type?: string; excludePlaybooks?: boolean }) => {
     const search = new URLSearchParams();
     if (opts.tab && opts.tab !== "all") search.set("tab", opts.tab);
     if (opts.type) search.set("type", opts.type);
+    if (opts.excludePlaybooks) search.set("excludePlaybooks", "true");
     return req<string[]>(`/api/workflows/practices?${search.toString()}`);
   },
   createWorkflow: (d: {
@@ -1086,6 +1105,7 @@ export type WorkflowStep = { title?: string; promptMd: string };
 export type PlaybookRule = {
   id: string;
   clauseType: string;
+  standardClauseId?: string;
   standardPosition: string;
   fallbacks?: Array<string | { clauseId: string }>;
   unacceptable?: string;

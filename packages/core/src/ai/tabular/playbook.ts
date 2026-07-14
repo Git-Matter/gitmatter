@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@workspace/db/client";
 import { type PlaybookRule, type TabularColumn, workflows } from "@workspace/db/schema";
 import type { Actor } from "../../core/commit.js";
-import { getClause } from "../../content/clauses.js";
+import { resolveClause } from "../../content/clauses.js";
 import { completeText } from "../provider/index.js";
 import { stripJsonFence } from "./extract.js";
 import { createReview } from "./reviews.js";
@@ -16,19 +16,44 @@ import { createReview } from "./reviews.js";
 /** Render one rule as a column extraction prompt. Clause-library fallbacks are
  *  resolved to their current text at run time, so the review always negotiates
  *  from the library's live language. */
-export async function rulePrompt(rule: PlaybookRule): Promise<string> {
+export async function rulePrompt(
+  rule: PlaybookRule,
+  context: { tenantId: string | null; matterId?: string | null } | string | null
+): Promise<string> {
+  const resolvedContext =
+    context && typeof context === "object"
+      ? context
+      : { tenantId: typeof context === "string" ? context : null, matterId: null };
+  let standardPosition = rule.standardPosition;
+  let standardSource = "written playbook standard";
+  if (rule.standardClauseId) {
+    if (!resolvedContext.tenantId) throw new Error("Playbook has no firm library");
+    const resolved = await resolveClause(resolvedContext.tenantId, rule.standardClauseId, {
+      matterId: resolvedContext.matterId,
+    });
+    if (!resolved) throw new Error("Playbook references a missing or unavailable approved clause");
+    standardPosition = resolved.body;
+    standardSource = `${resolved.appliedScope} library clause "${resolved.title}" (id: ${resolved.id})`;
+  }
   const fallbacks: string[] = [];
   for (const [i, fb] of (rule.fallbacks ?? []).entries()) {
     if (typeof fb === "string") fallbacks.push(`${i + 1}. ${fb}`);
     else {
-      const clause = await getClause(fb.clauseId);
-      fallbacks.push(`${i + 1}. ${clause ? clause.body : "(clause not found)"}`);
+      if (!resolvedContext.tenantId) throw new Error("Playbook has no firm library");
+      const resolved = await resolveClause(resolvedContext.tenantId, fb.clauseId, {
+        matterId: resolvedContext.matterId,
+      });
+      if (!resolved)
+        throw new Error("Playbook references a missing or unavailable approved clause");
+      fallbacks.push(
+        `${i + 1}. ${resolved.body} (${resolved.appliedScope} library clause "${resolved.title}")`
+      );
     }
   }
   return [
     `You are reviewing this document against the firm's playbook rule for "${rule.clauseType}".`,
     ``,
-    `Our standard position: ${rule.standardPosition}`,
+    `Applied standard (${standardSource}): ${standardPosition}`,
     fallbacks.length
       ? `Acceptable fallback positions, in order of preference:\n${fallbacks.join("\n")}`
       : "",
@@ -46,12 +71,15 @@ export async function rulePrompt(rule: PlaybookRule): Promise<string> {
 }
 
 /** Rules -> review columns (verdict flag + quoted language per rule). */
-export async function playbookColumns(rules: PlaybookRule[]): Promise<TabularColumn[]> {
+export async function playbookColumns(
+  rules: PlaybookRule[],
+  context: { tenantId: string | null; matterId?: string | null } | string | null
+): Promise<TabularColumn[]> {
   return Promise.all(
     rules.map(async (rule, index) => ({
       index,
       name: rule.clauseType,
-      prompt: await rulePrompt(rule),
+      prompt: await rulePrompt(rule, context),
     }))
   );
 }
@@ -69,13 +97,17 @@ export async function runPlaybook(
   const [wf] = await db.select().from(workflows).where(eq(workflows.id, params.playbookId));
   if (!wf || wf.type !== "playbook") throw new Error("Playbook not found");
   if (wf.status === "deprecated") throw new Error("Playbook is deprecated");
+  if (wf.status !== "approved") throw new Error("Playbook must be approved before it can run");
   const rules = wf.rules ?? [];
   if (!rules.length) throw new Error("Playbook has no rules");
   if (!params.documentIds.length) throw new Error("No documents given");
 
   const reviewId = await createReview(actor, {
     title: `${wf.title} — playbook review`,
-    columnsConfig: await playbookColumns(rules),
+    columnsConfig: await playbookColumns(rules, {
+      tenantId: wf.tenantId,
+      matterId: params.matterId,
+    }),
     documentIds: params.documentIds,
     workflowId: wf.id,
     matterId: params.matterId,

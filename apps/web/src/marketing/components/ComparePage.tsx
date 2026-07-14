@@ -89,8 +89,8 @@ export default function ComparePage(props: {
         </div>
 
         <div className="mt-section flex flex-wrap items-center gap-3">
-          <Link to="/use-cases">
-            <Button>See the use cases</Button>
+          <Link to="/solutions">
+            <Button>See the solutions</Button>
           </Link>
           <a href={SITE.docs}>
             <Button variant="outline">Read docs</Button>

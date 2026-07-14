@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -24,6 +24,7 @@ const STATUS_VARIANT: Record<string, "default" | "secondary" | "outline" | "dest
 
 function DocumentView() {
   const { id } = Route.useParams();
+  const navigate = useNavigate();
   const qc = useQueryClient();
   const { data: session } = useSession();
   const docKey = ["document", id];
@@ -89,6 +90,31 @@ function DocumentView() {
         <PageHeader
           breadcrumbs={[{ label: "Documents", to: "/documents" }, { label: document.title }]}
           title={document.title}
+          action={
+            <Button
+              variant="outline"
+              disabled={!document.markdown}
+              tooltip={
+                document.markdown
+                  ? "Draft a playbook from this document"
+                  : "Wait for text extraction to finish"
+              }
+              onClick={() => {
+                sessionStorage.setItem(
+                  "workflowChatSeed",
+                  JSON.stringify({
+                    steps: [
+                      "Draft a contract-review playbook from the attached document. Use draft_playbook, then explain the proposed rules and save the result as a draft playbook only after I confirm.",
+                    ],
+                    attachments: [{ kind: "document", id: document.id, label: document.title }],
+                  })
+                );
+                void navigate({ to: "/assistant" });
+              }}
+            >
+              Draft playbook
+            </Button>
+          }
         />
 
         <Card>

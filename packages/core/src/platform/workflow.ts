@@ -8,6 +8,8 @@ import {
   ilike,
   inArray,
   isNotNull,
+  isNull,
+  ne,
   notInArray,
   or,
   sql,
@@ -31,7 +33,7 @@ import type {
   WorkflowStep,
 } from "@workspace/db/schema";
 import { type Actor, recordCommit } from "../core/commit.js";
-import { canAccessArtifact } from "../core/access.js";
+import { canAccessArtifact, getUserTenant } from "../core/access.js";
 
 type WorkflowInput = {
   title: string;
@@ -57,13 +59,26 @@ export type WorkflowAccess = {
 
 export type EnrichedWorkflow = Workflow & WorkflowAccess & { hidden: boolean };
 
-export async function createWorkflow(actor: Actor, input: WorkflowInput & { matterId: string }) {
+export async function createWorkflow(
+  actor: Actor,
+  input: WorkflowInput & { matterId?: string | null; tenantId?: string }
+) {
   const workflowId = randomUUID();
-  const [matter] = await db
-    .select({ tenantId: matters.tenantId })
-    .from(matters)
-    .where(eq(matters.id, input.matterId));
-  if (!matter) throw new Error("Matter not found");
+  const [matter, actorTenantId] = await Promise.all([
+    input.matterId
+      ? db
+          .select({ tenantId: matters.tenantId })
+          .from(matters)
+          .where(eq(matters.id, input.matterId))
+          .then((rows) => rows[0] ?? null)
+      : Promise.resolve(null),
+    input.matterId ? Promise.resolve(null) : getUserTenant(actor.userId),
+  ]);
+  if (input.matterId && !matter) throw new Error("Matter not found");
+  const tenantId = matter?.tenantId ?? input.tenantId ?? actorTenantId;
+  if (!tenantId) throw new Error("No tenant");
+  if (input.type !== "playbook" && !input.matterId)
+    throw new Error("Only playbooks can be created in the firm library");
   await recordCommit({
     artifactType: "workflow",
     artifactId: workflowId,
@@ -84,8 +99,8 @@ export async function createWorkflow(actor: Actor, input: WorkflowInput & { matt
       await tx.insert(workflows).values({
         id: workflowId,
         userId: actor.userId,
-        tenantId: matter.tenantId,
-        matterId: input.matterId,
+        tenantId,
+        matterId: input.matterId ?? null,
         createdBy: actor.userId,
         title: input.title,
         type: input.type,
@@ -194,7 +209,12 @@ export async function updateWorkflow(
 async function enrichWorkflows(
   rows: Workflow[],
   userId: string,
-  ctx: { hiddenIds: string[]; shareByWorkflow: Map<string, WorkflowShare> }
+  ctx: {
+    hiddenIds: string[];
+    shareByWorkflow: Map<string, WorkflowShare>;
+    tenantId: string | null;
+    tenantRole: "admin" | "member" | null;
+  }
 ): Promise<EnrichedWorkflow[]> {
   const ownerIds = [
     ...new Set(
@@ -216,9 +236,23 @@ async function enrichWorkflows(
   return rows.map((r) => {
     const isOwner = !r.isSystem && r.userId === userId;
     const share = ctx.shareByWorkflow.get(r.id);
-    const allowEdit = r.isSystem ? false : isOwner ? true : (share?.allowEdit ?? false);
+    const isFirmPlaybook =
+      r.type === "playbook" && !r.matterId && r.tenantId !== null && r.tenantId === ctx.tenantId;
+    const allowEdit = r.isSystem
+      ? false
+      : isFirmPlaybook
+        ? r.status === "draft"
+          ? isOwner || ctx.tenantRole === "admin"
+          : ctx.tenantRole === "admin"
+        : isOwner
+          ? true
+          : (share?.allowEdit ?? false);
     const sharedByName =
-      !r.isSystem && !isOwner ? (ownerName.get(r.userId ?? "") ?? "Shared") : null;
+      !r.isSystem && !isOwner
+        ? isFirmPlaybook
+          ? "Firm library"
+          : (ownerName.get(r.userId ?? "") ?? "Shared")
+        : null;
     return {
       ...r,
       isOwner,
@@ -287,7 +321,14 @@ export async function listWorkflows(userId: string, email?: string): Promise<Enr
       or(
         eq(workflows.isSystem, true),
         eq(workflows.userId, userId),
-        ctx.sharedIds.length ? inArray(workflows.id, ctx.sharedIds) : undefined
+        ctx.sharedIds.length ? inArray(workflows.id, ctx.sharedIds) : undefined,
+        ctx.tenantId
+          ? and(
+              eq(workflows.type, "playbook"),
+              isNull(workflows.matterId),
+              eq(workflows.tenantId, ctx.tenantId)
+            )
+          : undefined
       )
     );
   return enrichWorkflows(rows, userId, ctx);
@@ -310,6 +351,30 @@ async function resolveWorkflowAccess(
       canEdit: false,
     };
   const shareCount = (await workflowShareCounts([wf])).get(wf.id) ?? 0;
+  const [account] = await db
+    .select({ tenantId: user.tenantId, tenantRole: user.tenantRole })
+    .from(user)
+    .where(eq(user.id, userId));
+  const isFirmPlaybook =
+    wf.type === "playbook" &&
+    !wf.matterId &&
+    wf.tenantId !== null &&
+    wf.tenantId === account?.tenantId;
+  if (isFirmPlaybook) {
+    const isOwner = wf.userId === userId;
+    const canEdit =
+      wf.status === "draft"
+        ? isOwner || account?.tenantRole === "admin"
+        : account?.tenantRole === "admin";
+    return {
+      isOwner,
+      allowEdit: canEdit,
+      sharedByName: isOwner ? null : "Firm library",
+      shareCount,
+      canView: true,
+      canEdit,
+    };
+  }
   if (wf.userId === userId)
     return {
       isOwner: true,
@@ -354,6 +419,7 @@ export type WorkflowListParams = {
   tab?: WorkflowListTab;
   type?: WorkflowListType;
   practice?: string;
+  excludePlaybooks?: boolean;
   page: number;
   pageSize: number;
   sort?: WorkflowListSort;
@@ -365,7 +431,7 @@ export type WorkflowListParams = {
 // practice-filter dropdown so they resolve the same set.
 async function workflowAccessContext(userId: string, email?: string) {
   const e = email?.trim().toLowerCase() || null;
-  const [hiddenRows, shareRows] = await Promise.all([
+  const [hiddenRows, shareRows, account] = await Promise.all([
     db
       .select({ id: hiddenWorkflows.workflowId })
       .from(hiddenWorkflows)
@@ -373,11 +439,18 @@ async function workflowAccessContext(userId: string, email?: string) {
     e
       ? db.select().from(workflowShares).where(eq(workflowShares.sharedWithEmail, e))
       : Promise.resolve([] as WorkflowShare[]),
+    db
+      .select({ tenantId: user.tenantId, tenantRole: user.tenantRole })
+      .from(user)
+      .where(eq(user.id, userId))
+      .then((rows) => rows[0] ?? null),
   ]);
   return {
     hiddenIds: hiddenRows.map((h) => h.id),
     sharedIds: shareRows.map((s) => s.workflowId),
     shareByWorkflow: new Map(shareRows.map((s) => [s.workflowId, s])),
+    tenantId: account?.tenantId ?? null,
+    tenantRole: account?.tenantRole ?? null,
   };
 }
 
@@ -387,14 +460,27 @@ async function workflowAccessContext(userId: string, email?: string) {
 // minus hidden built-ins.
 function workflowListWhere(
   userId: string,
-  ctx: { hiddenIds: string[]; sharedIds: string[] },
-  f: { tab?: WorkflowListTab; type?: WorkflowListType; practice?: string; q?: string }
+  ctx: { hiddenIds: string[]; sharedIds: string[]; tenantId: string | null },
+  f: {
+    tab?: WorkflowListTab;
+    type?: WorkflowListType;
+    practice?: string;
+    q?: string;
+    excludePlaybooks?: boolean;
+  }
 ) {
   const { hiddenIds, sharedIds } = ctx;
   const accessible = or(
     eq(workflows.isSystem, true),
     eq(workflows.userId, userId),
-    sharedIds.length ? inArray(workflows.id, sharedIds) : undefined
+    sharedIds.length ? inArray(workflows.id, sharedIds) : undefined,
+    ctx.tenantId
+      ? and(
+          eq(workflows.type, "playbook"),
+          isNull(workflows.matterId),
+          eq(workflows.tenantId, ctx.tenantId)
+        )
+      : undefined
   );
   const notHidden = hiddenIds.length ? notInArray(workflows.id, hiddenIds) : undefined;
   const isHidden = hiddenIds.length ? inArray(workflows.id, hiddenIds) : sql`false`;
@@ -412,6 +498,7 @@ function workflowListWhere(
     accessible,
     tabWhere,
     f.type ? eq(workflows.type, f.type) : undefined,
+    f.excludePlaybooks ? ne(workflows.type, "playbook") : undefined,
     f.practice ? eq(workflows.practice, f.practice) : undefined,
     q ? ilike(workflows.title, `%${q}%`) : undefined
   );
@@ -453,11 +540,15 @@ export async function listWorkflowsPage(
 export async function listWorkflowPractices(
   userId: string,
   email: string | undefined,
-  opts: { tab?: WorkflowListTab; type?: WorkflowListType }
+  opts: { tab?: WorkflowListTab; type?: WorkflowListType; excludePlaybooks?: boolean }
 ): Promise<string[]> {
   const ctx = await workflowAccessContext(userId, email);
   const where = and(
-    workflowListWhere(userId, ctx, { tab: opts.tab, type: opts.type }),
+    workflowListWhere(userId, ctx, {
+      tab: opts.tab,
+      type: opts.type,
+      excludePlaybooks: opts.excludePlaybooks,
+    }),
     isNotNull(workflows.practice)
   );
   const rows = await db

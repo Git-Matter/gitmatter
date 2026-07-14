@@ -8,6 +8,9 @@ import {
   suggestClauses,
   updateClause,
 } from "../content/clauses.js";
+import { db } from "@workspace/db/client";
+import { user } from "@workspace/db/schema";
+import { eq } from "drizzle-orm";
 import type { ToolContext, ToolSpec } from "./types.js";
 
 // The firm's clause library over MCP: agents read approved language and
@@ -19,6 +22,16 @@ export function buildClauseTools({ actor }: ToolContext): ToolSpec[] {
   const readOnly = !!scope?.matterIds || scope?.maxRole === "viewer";
 
   const tenant = async () => getUserTenant(actor.userId);
+  const canEdit = async (clause: { userId: string | null; status: string }) => {
+    if (actor.type === "agent" && (scope?.matterIds || scope?.maxRole === "viewer")) return false;
+    if (clause.status !== "draft") return false;
+    if (clause.userId === actor.userId) return true;
+    const [account] = await db
+      .select({ tenantRole: user.tenantRole })
+      .from(user)
+      .where(eq(user.id, actor.userId));
+    return account?.tenantRole === "admin";
+  };
 
   return [
     {
@@ -64,19 +77,21 @@ export function buildClauseTools({ actor }: ToolContext): ToolSpec[] {
     {
       name: "suggest_clauses",
       description:
-        "Approved clauses relevant to a category and jurisdiction — use these as preferred language when drafting or proposing edits, and cite the clause id.",
+        "Approved clauses relevant to a category and jurisdiction — pass matterId when drafting or reviewing a matter so its matter and client exceptions override the firm standard. Cite the clause id.",
       schema: {
         category: z.string().optional(),
         jurisdiction: z.string().optional(),
         clientId: z.string().optional(),
+        matterId: z.string().optional(),
       },
-      handler: async ({ category, jurisdiction, clientId }) => {
+      handler: async ({ category, jurisdiction, clientId, matterId }) => {
         const tenantId = await tenant();
         if (!tenantId) return { error: "Forbidden: no tenant" };
         const rows = await suggestClauses(tenantId, {
           category: category as string | undefined,
           jurisdiction: jurisdiction as string | undefined,
           clientId: (clientId as string | undefined) ?? null,
+          matterId: (matterId as string | undefined) ?? null,
         });
         return { clauses: rows };
       },
@@ -109,11 +124,14 @@ export function buildClauseTools({ actor }: ToolContext): ToolSpec[] {
           category?: string;
         } & Record<string, unknown>;
         if (clauseId) {
+          if (rest.parentClauseId !== undefined || rest.fallbackRank !== undefined)
+            return { error: "Fallback parent and rank can only be set when creating a clause" };
           const existing = await getClause(clauseId);
           if (!existing || existing.tenantId !== tenantId) return { error: "Not found" };
-          // Agents refine drafts; approved language changes only via the UI.
-          if (existing.status === "approved")
-            return { error: "Forbidden: approved clauses are edited by firm admins in the UI" };
+          if (!(await canEdit(existing)))
+            return {
+              error: "Forbidden: only the draft creator or a firm admin can edit this clause",
+            };
           const result = await updateClause(actor, clauseId, rest);
           return { clauseId, committed: !!result.commit };
         }

@@ -6,7 +6,15 @@ agent (every command takes `--json` and prints actionable fixes).
 
 ## Install
 
-Grab the binary for your OS from Releases, or build it:
+```sh
+curl -fsSL gitmatter.com/install.sh | sh
+```
+
+The script (served from `apps/web/public/install.sh`) detects OS/arch, pulls
+the binary from the latest GitHub Release, and installs it to
+`/usr/local/bin` or `~/.local/bin`.
+
+Or grab the binary for your OS from Releases yourself, or build it:
 
 ```sh
 bun run build         # this platform -> dist/gitmatter
