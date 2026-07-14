@@ -26,6 +26,7 @@ todos.json
 .scratch
 
 # local config
+.claude/
 .codex/
 
 # gitmatter CLI build artifacts

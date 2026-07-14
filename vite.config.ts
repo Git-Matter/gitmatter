@@ -1,10 +1,12 @@
 import { defineConfig } from "vite-plus";
+import { configDefaults } from "vite-plus/test/config";
 
 export default defineConfig({
   staged: {
     "*": "vp check --fix",
   },
   test: {
+    exclude: [...configDefaults.exclude, ".claude/**"],
     // Load root .env into process.env for integration tests (db, auth).
     // bun test did this implicitly; vitest does not expose non-VITE_ vars.
     setupFiles: [new URL("./vitest.setup.ts", import.meta.url).pathname],
@@ -18,7 +20,7 @@ export default defineConfig({
     // cli/ is a standalone package with its own lockfile and node_modules; the
     // root verify doesn't install its deps, so type-aware lint can't resolve its
     // ambient types. It is checked independently, not as part of the workspace.
-    ignorePatterns: ["**/components/ai-elements/**", "scripts/", "cli/"],
+    ignorePatterns: ["**/components/ai-elements/**", ".claude/", "scripts/", "cli/"],
   },
   fmt: {
     endOfLine: "lf",
@@ -40,6 +42,7 @@ export default defineConfig({
       ".nitro/",
       ".tanstack/",
       ".vinxi/",
+      ".claude/",
       "coverage/",
       "pnpm-lock.yaml",
       ".pnpm-store/",
