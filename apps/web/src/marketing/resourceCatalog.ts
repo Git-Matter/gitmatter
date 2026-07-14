@@ -30,6 +30,10 @@ export type VideoResource = {
   desc: string;
   media: string;
   poster: string;
+  /** When this video first became available. */
+  publishedAt: string;
+  /** ISO 8601 duration used in video search metadata. */
+  duration: string;
   /** What the video actually shows — honest, concrete. */
   points: string[];
 };
@@ -41,6 +45,8 @@ export const VIDEOS: VideoResource[] = [
     desc: "Every feature in a single reel: review, redline, extract, and the record underneath.",
     media: "/features/overview.mp4",
     poster: "/posters/overview.jpg",
+    publishedAt: "2026-07-12T23:09:03+02:00",
+    duration: "PT19.648S",
     points: [
       "All seven tools in about twenty seconds: assistant, tabular review, redline and drafting, workflows, clause library, audit trail, and bring-your-own-agent",
       "Each feature shown as a real product moment, not slides",
@@ -53,6 +59,8 @@ export const VIDEOS: VideoResource[] = [
     desc: "The full walkthrough: a matter from first document to a finished, fully attributed record.",
     media: "/demo.mp4",
     poster: "/demo-poster.png",
+    publishedAt: "2026-07-12T23:32:46+02:00",
+    duration: "PT30.186S",
     points: [
       "A matter worked end to end in the actual product",
       "AI suggestions landing as tracked changes, accepted and rejected by a lawyer",
@@ -65,6 +73,8 @@ export const VIDEOS: VideoResource[] = [
     desc: "From zero to a running gitmatter in minutes — on your own machine or server.",
     media: "/videos/install.mp4",
     poster: "/posters/install.jpg",
+    publishedAt: "2026-07-12T23:09:03+02:00",
+    duration: "PT30.059S",
     points: [
       "The self-hosted setup, start to finish",
       "Where your LLM key goes and how it's stored",
@@ -77,6 +87,8 @@ export const VIDEOS: VideoResource[] = [
     desc: "Blame for legal documents, demonstrated: one clause's full history opened, read, and undone.",
     media: "/blog/audit-dive.mp4",
     poster: "/posters/audit-dive.jpg",
+    publishedAt: "2026-07-12T20:54:37+02:00",
+    duration: "PT40.043S",
     points: [
       "Opening a clause's history with one click",
       "Every change with its author, its reason, and the exact before and after",
@@ -89,6 +101,8 @@ export const VIDEOS: VideoResource[] = [
     desc: "Claude connected over MCP, reviewing twelve NDAs through gitmatter while every step lands on the record.",
     media: "/blog/mcp-session.mp4",
     poster: "/posters/mcp-session.jpg",
+    publishedAt: "2026-07-12T20:54:37+02:00",
+    duration: "PT45.056S",
     points: [
       "A real session shape: the assistant calls gitmatter's tools, gitmatter does the work",
       "Each action attributed to the agent, inside the lawyer's session",
@@ -101,6 +115,8 @@ export const VIDEOS: VideoResource[] = [
     desc: "Playbook-driven suggestions land as tracked changes; a lawyer accepts two and rejects one, on the record.",
     media: "/blog/redline-loop.mp4",
     poster: "/posters/redline-loop.jpg",
+    publishedAt: "2026-07-12T20:54:37+02:00",
+    duration: "PT45.056S",
     points: [
       "The AI's markup arriving as suggestions, never silent edits",
       "Each suggestion with its playbook reasoning attached",
@@ -113,6 +129,8 @@ export const VIDEOS: VideoResource[] = [
     desc: "The bring-your-own-key path in thirty seconds: encrypted at rest, straight to your provider, no route to training.",
     media: "/blog/byok.mp4",
     poster: "/posters/byok.jpg",
+    publishedAt: "2026-07-12T20:54:37+02:00",
+    duration: "PT30.059S",
     points: [
       "Your LLM key stored encrypted, never logged, never in the browser",
       "Documents flowing to your own provider account under zero data retention",

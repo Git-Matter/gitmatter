@@ -21,6 +21,18 @@ export const Route = createFileRoute("/(marketing)/resources/$slug")({
       description: video.desc,
       path: `/resources/${video.slug}`,
       og: { title: video.title, eyebrow: "video" },
+      jsonLd: [
+        {
+          "@context": "https://schema.org",
+          "@type": "VideoObject",
+          name: video.title,
+          description: video.desc,
+          thumbnailUrl: `https://gitmatter.com${video.poster}`,
+          uploadDate: video.publishedAt,
+          duration: video.duration,
+          contentUrl: `https://gitmatter.com${video.media}`,
+        },
+      ],
     });
   },
   component: Page,
