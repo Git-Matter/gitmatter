@@ -12,13 +12,19 @@ import { getRequestUrl } from "@tanstack/react-start/server";
 // this origin, and posts challenge results back to it — so it must be allowed
 // in script-src, frame-src, and connect-src.
 const TURNSTILE_ORIGIN = "https://challenges.cloudflare.com";
+// PostHog uses regional API and asset hosts under i.posthog.com (for example,
+// eu.i.posthog.com and eu-assets.i.posthog.com). Keep this scoped to PostHog's
+// ingestion domain instead of allowing scripts and connections from all HTTPS origins.
+const POSTHOG_INGESTION_ORIGIN = "https://*.i.posthog.com";
 
 function buildCsp(): string {
   const dev = process.env.NODE_ENV !== "production";
   const scriptSrc = dev
-    ? `'self' 'unsafe-inline' 'unsafe-eval' ${TURNSTILE_ORIGIN}`
-    : `'self' 'unsafe-inline' ${TURNSTILE_ORIGIN}`;
-  const connectSrc = dev ? `'self' ws: wss: ${TURNSTILE_ORIGIN}` : `'self' ${TURNSTILE_ORIGIN}`;
+    ? `'self' 'unsafe-inline' 'unsafe-eval' ${TURNSTILE_ORIGIN} ${POSTHOG_INGESTION_ORIGIN}`
+    : `'self' 'unsafe-inline' ${TURNSTILE_ORIGIN} ${POSTHOG_INGESTION_ORIGIN}`;
+  const connectSrc = dev
+    ? `'self' ws: wss: ${TURNSTILE_ORIGIN} ${POSTHOG_INGESTION_ORIGIN}`
+    : `'self' ${TURNSTILE_ORIGIN} ${POSTHOG_INGESTION_ORIGIN}`;
   return [
     "default-src 'self'",
     "base-uri 'self'",
