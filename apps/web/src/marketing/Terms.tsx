@@ -80,6 +80,11 @@ export default function Terms() {
         terms, data practices, retention settings, and usage restrictions. We are not responsible
         for third-party service availability, behavior, pricing, outages, or terms.
       </p>
+      <p>
+        Rights in AI-generated Output and the provider's handling of submitted content are governed
+        by the terms of the AI provider you select. gitmatter does not claim ownership of your Input
+        or Output.
+      </p>
 
       <h2>9. Prohibited conduct</h2>
       <p>

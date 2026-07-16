@@ -142,6 +142,17 @@ function Signup() {
               >
                 {busy ? "Creating…" : "Sign up"}
               </Button>
+              <p className="text-center text-xs text-muted-foreground">
+                By creating an account, you agree to the{" "}
+                <Link to="/terms" className="text-foreground underline underline-offset-4">
+                  Terms of Service
+                </Link>{" "}
+                and acknowledge the{" "}
+                <Link to="/privacy" className="text-foreground underline underline-offset-4">
+                  Privacy Policy
+                </Link>
+                .
+              </p>
             </form>
           )}
         </CardContent>

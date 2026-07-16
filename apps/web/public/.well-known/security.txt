@@ -1,0 +1,5 @@
+Contact: mailto:contact@gitmatter.com
+Policy: https://gitmatter.com/security
+Canonical: https://gitmatter.com/.well-known/security.txt
+Preferred-Languages: en
+Expires: 2027-07-16T00:00:00.000Z
