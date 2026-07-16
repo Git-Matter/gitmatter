@@ -228,7 +228,7 @@ jobs:
           WEBHOOK: ${{ secrets.PROD_DOKPLOY_WEB_WEBHOOK }}
           RELEASE_VERSION: ${{ needs.version.outputs.version }}
           DOKPLOY_HOST: dokploy.gitmatter.com
-          DOKPLOY_TAILNET_IP: 100.68.201.48
+          DOKPLOY_TAILNET_IP: 100.101.8.75
         run: |
           if [ -z "$WEBHOOK" ]; then
             echo "PROD_DOKPLOY_WEB_WEBHOOK unset — skipping deploy."
@@ -282,7 +282,7 @@ jobs:
           WEBHOOK: ${{ secrets.PROD_DOKPLOY_DOCS_WEBHOOK }}
           RELEASE_VERSION: ${{ needs.version.outputs.version }}
           DOKPLOY_HOST: dokploy.gitmatter.com
-          DOKPLOY_TAILNET_IP: 100.68.201.48
+          DOKPLOY_TAILNET_IP: 100.101.8.75
         run: |
           if [ -z "$WEBHOOK" ]; then
             echo "PROD_DOKPLOY_DOCS_WEBHOOK unset — docs image pushed, skipping redeploy."
