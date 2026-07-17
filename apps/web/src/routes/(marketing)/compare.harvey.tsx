@@ -13,7 +13,7 @@ export const Route = createFileRoute("/(marketing)/compare/harvey")({
     marketingHead({
       title: "gitmatter vs Harvey · Harvey AI alternative compared",
       description:
-        "An honest comparison of gitmatter and Harvey AI. Harvey leads on legal research and data-room review; gitmatter adds a git-style audit trail, bring-your-own-agent over MCP, bring-your-own-key, open source, and no seat minimum.",
+        "An honest comparison of gitmatter and Harvey AI. Both offer legal research; gitmatter covers US case law and Australian IP search, while Harvey leads on data-room-scale review. gitmatter also adds a git-style audit trail, bring-your-own-agent over MCP, bring-your-own-key, open source, and no seat minimum.",
       path: "/compare/harvey",
       og: { title: "gitmatter vs Harvey", eyebrow: "harvey ai alternative" },
     }),

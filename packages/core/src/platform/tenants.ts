@@ -1,7 +1,14 @@
 import { randomUUID } from "node:crypto";
 import { and, desc, eq, gt, isNull } from "drizzle-orm";
 import { db } from "@workspace/db/client";
-import { type TenantRole, tenantInvites, tenants, user } from "@workspace/db/schema";
+import {
+  auditEvents,
+  type StorageRegion,
+  type TenantRole,
+  tenantInvites,
+  tenants,
+  user,
+} from "@workspace/db/schema";
 import { recordAudit } from "./audit.js";
 import { ensureDefaultMatter } from "./matters.js";
 
@@ -132,4 +139,123 @@ export function getTenant(id: string) {
     .from(tenants)
     .where(eq(tenants.id, id))
     .then((r) => r[0] ?? null);
+}
+
+/**
+ * Choose storage placement once for a newly-created organization. Region is
+ * immutable because moving it later requires an audited object migration.
+ */
+export async function setTenantStorageRegion(
+  tenantId: string,
+  actorId: string,
+  region: Exclude<StorageRegion, "legacy">
+) {
+  const [updated] = await db
+    .update(tenants)
+    .set({ storageRegion: region })
+    .where(and(eq(tenants.id, tenantId), isNull(tenants.storageRegion)))
+    .returning();
+  if (!updated) throw new Error("Data region has already been selected");
+  void recordAudit({
+    eventType: "tenant.storage_region_set",
+    actorId,
+    tenantId,
+    target: tenantId,
+    metadata: { region },
+  });
+  return updated;
+}
+
+/**
+ * A tenant-admin export that proves the application's data-residency control.
+ * It deliberately does not attest to a cloud provider's configuration: retain
+ * the provider-console evidence listed in `externalEvidenceRequired` alongside
+ * this record before making an external residency claim.
+ */
+export async function buildTenantPrivacyEvidence(tenantId: string) {
+  const [tenant] = await db
+    .select({
+      id: tenants.id,
+      name: tenants.name,
+      storageRegion: tenants.storageRegion,
+      createdAt: tenants.createdAt,
+    })
+    .from(tenants)
+    .where(eq(tenants.id, tenantId));
+  if (!tenant) throw new Error("Tenant not found");
+
+  const [selection] = await db
+    .select({
+      actorId: auditEvents.actorId,
+      createdAt: auditEvents.createdAt,
+      metadata: auditEvents.metadata,
+    })
+    .from(auditEvents)
+    .where(
+      and(
+        eq(auditEvents.tenantId, tenantId),
+        eq(auditEvents.eventType, "tenant.storage_region_set")
+      )
+    )
+    .orderBy(desc(auditEvents.createdAt))
+    .limit(1);
+
+  const storageTarget =
+    tenant.storageRegion === "eu"
+      ? {
+          label: "Cloudflare R2 EU jurisdiction",
+          configuration: "S3_EU_*",
+          providerEvidence:
+            "R2 bucket details showing jurisdiction EU and the bucket-scoped API-token policy.",
+        }
+      : tenant.storageRegion === "us"
+        ? {
+            label: "United States regional object storage",
+            configuration: "S3_US_*",
+            providerEvidence:
+              "AWS S3 GetBucketLocation, Block Public Access, encryption, and IAM-policy evidence for the configured bucket.",
+          }
+        : tenant.storageRegion === "au"
+          ? {
+              label: "Australia regional object storage",
+              configuration: "S3_AU_*",
+              providerEvidence:
+                "AWS S3 GetBucketLocation, Block Public Access, encryption, and IAM-policy evidence for the configured bucket.",
+            }
+          : {
+              label: "Legacy object storage",
+              configuration: "S3_*",
+              providerEvidence:
+                "The provider configuration and residency evidence for the legacy bucket.",
+            };
+
+  return {
+    schemaVersion: "1.0",
+    generatedAt: new Date().toISOString(),
+    purpose: "Evidence of gitmatter's document object-storage routing control.",
+    scope:
+      "Document object storage only. This record does not establish the location of Postgres, audit logs, backups, AI providers, or other subprocessors.",
+    tenant: {
+      id: tenant.id,
+      name: tenant.name,
+      createdAt: tenant.createdAt.toISOString(),
+      storageRegion: tenant.storageRegion,
+    },
+    routingControl: {
+      immutableAfterSelection: true,
+      target: storageTarget,
+      selectionAuditEvent: selection
+        ? {
+            actorId: selection.actorId,
+            createdAt: selection.createdAt.toISOString(),
+            metadata: selection.metadata,
+          }
+        : null,
+    },
+    externalEvidenceRequired: [
+      storageTarget.providerEvidence,
+      "A dated export or screenshot of the production deployment environment showing the matching S3_* target is configured, with credentials redacted.",
+      "The current Cloudflare or AWS contractual/data-residency documentation applicable to the account and plan.",
+    ],
+  };
 }

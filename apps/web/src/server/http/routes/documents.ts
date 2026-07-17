@@ -232,7 +232,7 @@ documentsRoute.get("/api/documents/:id/download", async (c) => {
   if (!doc) return c.json({ error: "no stored file" }, 404);
   const storagePath = await activeStoragePath(doc);
   if (!storagePath) return c.json({ error: "no stored file" }, 404);
-  const bytes = await getObject(storagePath);
+  const bytes = await getObject(doc.tenantId, storagePath);
   void recordAudit({
     eventType: "document.download",
     actorId: c.get("user").id,
@@ -296,8 +296,9 @@ documentsRoute.get("/api/documents/:id/versions/:versionId/download", async (c) 
   if (!(await canReadDocument(c.get("user").id, id))) return c.json({ error: "Not found" }, 404);
   const version = (await listVersions(id)).find((v) => v.id === c.req.param("versionId"));
   if (!version?.storagePath) return c.json({ error: "no stored file" }, 404);
-  const bytes = await getObject(version.storagePath);
   const doc = await getDocument(id);
+  if (!doc) return c.json({ error: "Not found" }, 404);
+  const bytes = await getObject(doc.tenantId, version.storagePath);
   const base = doc?.title ?? "document";
   const filename = base.endsWith(`.${version.fileType}`) ? base : `${base}.${version.fileType}`;
   return new Response(bytes as BodyInit, {

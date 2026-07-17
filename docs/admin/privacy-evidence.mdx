@@ -1,0 +1,47 @@
+---
+title: Privacy evidence
+description: What gitmatter proves, what your cloud providers must prove, and how to retain both.
+---
+
+Use this checklist before making a statement about where customer data is stored. It is designed to
+support a narrow, evidence-based statement — not a blanket claim that every category of data stays
+in one region.
+
+## What gitmatter proves
+
+An organization admin can download **Settings → Data & Privacy → Download privacy evidence**. The
+JSON file records:
+
+- the organization and its selected document-storage target;
+- whether the setting is immutable after selection;
+- the timestamp, actor, and metadata of the `tenant.storage_region_set` audit event; and
+- the specific cloud-provider evidence that must accompany the record.
+
+The application routes document bytes using that immutable tenant setting. It does not use this
+setting to locate Postgres, audit logs, backups, email, error monitoring, or AI-provider requests.
+
+## What to retain from the providers
+
+Keep a dated, access-controlled evidence pack per production environment:
+
+| Target             | Evidence to retain                                                                                                  |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------- |
+| EU — Cloudflare R2 | Bucket details showing **EU jurisdiction**, the jurisdictional endpoint, and the bucket-scoped R2 API-token policy. |
+| US — AWS S3        | `GetBucketLocation`, Block Public Access, default encryption, and the scoped IAM policy for the configured bucket.  |
+| Australia — AWS S3 | `GetBucketLocation`, Block Public Access, default encryption, and the scoped IAM policy for the configured bucket.  |
+
+Also retain a redacted deployment-environment export showing the matching `S3_EU_*`, `S3_US_*`, or
+`S3_AU_*` variables and the current provider contractual or residency documentation. Do not include
+access keys, secret keys, session tokens, customer documents, or personal data in the evidence pack.
+
+## Claims supported by this evidence
+
+With the full evidence pack, the following claim is appropriately narrow:
+
+> For organizations that select the EU document-storage option, gitmatter routes document object
+> storage to a Cloudflare R2 bucket configured for the EU jurisdiction. This does not by itself
+> describe the location of account data, audit logs, backups, or AI-provider processing.
+
+Do not say "all customer data remains in the EU" unless you have separately verified and documented
+every system and subprocessor that handles customer data. Cloudflare's US and Oceania R2 placement
+settings are not jurisdiction guarantees, so this hosted setup uses AWS S3 for those targets.

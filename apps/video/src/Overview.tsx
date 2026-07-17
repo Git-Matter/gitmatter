@@ -10,6 +10,7 @@ import {
   AuditClip,
   CLIP,
   LibraryClip,
+  LegalResearchClip,
   RedlineClip,
   ReviewClip,
   WorkflowClip,
@@ -25,6 +26,7 @@ const T = 14; // transition length
 const CARD = 70; // intro/outro cards
 
 const FEATURES: { tag: string; component: React.FC }[] = [
+  { tag: "Legal research", component: LegalResearchClip },
   { tag: "Assistant", component: AssistantClip },
   { tag: "Tabular review", component: ReviewClip },
   { tag: "Redline & drafting", component: RedlineClip },

@@ -532,7 +532,15 @@ export const api = {
     req<null>(`/api/matters/${matterId}/folders/${folderId}`, { method: "DELETE" }),
 
   // Tenant invites (admins)
-  getTenant: () => req<{ id: string; name: string }>("/api/tenant"),
+  getTenant: () =>
+    req<{ id: string; name: string; storageRegion: "legacy" | "eu" | "us" | "au" | null }>(
+      "/api/tenant"
+    ),
+  setTenantStorageRegion: (region: "eu" | "us" | "au") =>
+    req<{ id: string; name: string; storageRegion: "eu" | "us" | "au" }>(
+      "/api/tenant/storage-region",
+      { method: "POST", body: JSON.stringify({ region }) }
+    ),
   getTenantStorage: () => req<{ used: number; limit: number }>("/api/tenant/storage"),
   listInvites: () => req<TenantInvite[]>("/api/tenant/invites"),
   // Returns the full invite (incl. token) in dev; when a real email provider is
@@ -545,6 +553,8 @@ export const api = {
   revokeInvite: (id: string) => req<null>(`/api/tenant/invites/${id}`, { method: "DELETE" }),
   // Browser-download URL for the full per-tenant data export (admin only).
   tenantDataExportUrl: () => "/api/tenant/export",
+  // Browser-download URL for the tenant's document-storage evidence record (admin only).
+  tenantPrivacyEvidenceUrl: () => "/api/tenant/privacy-evidence",
 
   listDocuments: () => req<Doc[]>("/api/documents"),
   listDocumentsPage: (params: ListPageParams) =>

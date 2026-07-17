@@ -42,15 +42,29 @@ export const VIDEOS: VideoResource[] = [
   {
     slug: "platform-overview",
     title: "The platform in one pass",
-    desc: "Every feature in a single reel: review, redline, extract, and the record underneath.",
+    desc: "Every feature in a single reel: research, review, redline, extract, and the record underneath.",
     media: "/features/overview.mp4",
     poster: "/posters/overview.jpg",
     publishedAt: "2026-07-12T23:09:03+02:00",
-    duration: "PT19.648S",
+    duration: "PT21.8S",
     points: [
-      "All seven tools in about twenty seconds: assistant, tabular review, redline and drafting, workflows, clause library, audit trail, and bring-your-own-agent",
+      "Eight product moments in about twenty-two seconds: legal research, assistant, tabular review, redline and drafting, workflows, clause library, audit trail, and bring-your-own-agent",
       "Each feature shown as a real product moment, not slides",
       "Where to go deeper: every feature has its own page under /platform",
+    ],
+  },
+  {
+    slug: "australian-ip-search",
+    title: "Australian IP search",
+    desc: "Before an Australian product launch, counsel checks NORTHSTAR against IP Australia trade marks and reviews the returned records, sources, and tool activity.",
+    media: "/features/legal-research.mp4",
+    poster: "/posters/legal-research.jpg",
+    publishedAt: "2026-07-15T00:00:00+02:00",
+    duration: "PT24S",
+    points: [
+      "A product team asks counsel to clear NORTHSTAR before an Australian launch",
+      "Counsel searches IP Australia trade marks from the assistant",
+      "The returned records, sources, and tool activity stay visible in the session",
     ],
   },
   {

@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import {
   buildTenantExport,
+  buildTenantPrivacyEvidence,
   createInvite,
   emailEnabled,
   getTenant,
@@ -9,6 +10,7 @@ import {
   recordAudit,
   revokeInvite,
   sendInviteEmail,
+  setTenantStorageRegion,
   tenantStorageBytes,
   tenantStorageQuotaBytes,
 } from "@workspace/core";
@@ -22,6 +24,19 @@ export const tenantsRoute = new Hono<AuthEnv>();
 tenantsRoute.get("/api/tenant", async (c) => {
   const t = await getTenant(c.get("user").tenantId);
   return t ? c.json(t) : c.json({ error: "Not found" }, 404);
+});
+
+tenantsRoute.post("/api/tenant/storage-region", async (c) => {
+  const user = c.get("user");
+  if (user.tenantRole !== "admin") return c.json({ error: "Forbidden" }, 403);
+  const body = (await c.req.json().catch(() => ({}))) as { region?: string };
+  if (body.region !== "eu" && body.region !== "us" && body.region !== "au")
+    return c.json({ error: "Choose EU, United States, or Australia" }, 400);
+  try {
+    return c.json(await setTenantStorageRegion(user.tenantId, user.id, body.region));
+  } catch (err) {
+    return c.json({ error: err instanceof Error ? err.message : "Could not set region" }, 409);
+  }
 });
 
 // Shared storage usage for the caller's organization (bytes used + the cap).
@@ -82,6 +97,27 @@ tenantsRoute.get("/api/tenant/export", async (c) => {
     headers: {
       "Content-Type": "application/zip",
       "Content-Disposition": `attachment; filename="${filename}"`,
+    },
+  });
+});
+
+// Machine-readable evidence for the tenant's document-object-storage routing.
+// It is deliberately narrow: provider-console evidence remains necessary for
+// any external data-residency or compliance representation.
+tenantsRoute.get("/api/tenant/privacy-evidence", async (c) => {
+  const user = c.get("user");
+  if (user.tenantRole !== "admin") return c.json({ error: "Forbidden" }, 403);
+  const evidence = await buildTenantPrivacyEvidence(user.tenantId);
+  void recordAudit({
+    eventType: "tenant.privacy_evidence_export",
+    actorId: user.id,
+    tenantId: user.tenantId,
+    ...clientMeta(c),
+  });
+  return new Response(JSON.stringify(evidence, null, 2), {
+    headers: {
+      "Content-Type": "application/json; charset=utf-8",
+      "Content-Disposition": 'attachment; filename="gitmatter-privacy-evidence.json"',
     },
   });
 });

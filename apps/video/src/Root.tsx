@@ -17,6 +17,8 @@ import {
   AUDIT_FRAMES,
   AgentClip,
   AGENT_FRAMES,
+  LegalResearchClip,
+  LEGAL_RESEARCH_FRAMES,
 } from "./clips";
 import { Overview, OVERVIEW_FRAMES } from "./Overview";
 import { McpSession, MCP_FRAMES } from "./McpSession";
@@ -42,19 +44,32 @@ const marketing = [
   { id: "CompareTeaser", component: CompareTeaser, frames: COMPARE_FRAMES },
   { id: "Byok", component: Byok, frames: BYOK_FRAMES },
   { id: "WebinarInHouse", component: WebinarInHouse, frames: WEBINAR_FRAMES },
-  { id: "WebinarTransactional", component: WebinarTransactional, frames: WEBINAR_FRAMES },
+  {
+    id: "WebinarTransactional",
+    component: WebinarTransactional,
+    frames: WEBINAR_FRAMES,
+  },
 ] as const;
 
 // Feature clips render to apps/web/public/features/*.mp4 for the marketing
 // /features page.
 const clips = [
-  { id: "FeatureAssistant", component: AssistantClip, frames: ASSISTANT_FRAMES },
+  {
+    id: "FeatureAssistant",
+    component: AssistantClip,
+    frames: ASSISTANT_FRAMES,
+  },
   { id: "FeatureReview", component: ReviewClip, frames: REVIEW_FRAMES },
   { id: "FeatureRedline", component: RedlineClip, frames: REDLINE_FRAMES },
   { id: "FeatureWorkflow", component: WorkflowClip, frames: WORKFLOW_FRAMES },
   { id: "FeatureLibrary", component: LibraryClip, frames: LIBRARY_FRAMES },
   { id: "FeatureAudit", component: AuditClip, frames: AUDIT_FRAMES },
   { id: "FeatureAgent", component: AgentClip, frames: AGENT_FRAMES },
+  {
+    id: "FeatureLegalResearch",
+    component: LegalResearchClip,
+    frames: LEGAL_RESEARCH_FRAMES,
+  },
 ] as const;
 
 export const RemotionRoot: React.FC = () => {

@@ -551,7 +551,7 @@ async function originalDocumentFile(documentId: string) {
     const fileType = current.fileType || doc.fileType || "bin";
     return {
       filename: safeOriginalFilename(doc.title, fileType),
-      bytes: await getObject(current.storagePath),
+      bytes: await getObject(doc.tenantId, current.storagePath),
     };
   } catch (e) {
     logEvent("warn", "assistant_tool_cache.original_copy_failed", {

@@ -24,6 +24,8 @@ export type AuditEventType =
   | "document.download"
   | "document.discard_staged"
   | "storage.delete_failed"
+  | "tenant.storage_region_set"
+  | "tenant.privacy_evidence_export"
   | "tenant.export"
   | "matter.audit_export"
   | "budget.exceeded";

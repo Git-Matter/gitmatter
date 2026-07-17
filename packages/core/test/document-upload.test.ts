@@ -29,8 +29,14 @@ let tenantB: string;
 let matterA: string;
 
 beforeAll(async () => {
-  const [ta] = await db.insert(tenants).values({ name: "Upload Tenant A" }).returning();
-  const [tb] = await db.insert(tenants).values({ name: "Upload Tenant B" }).returning();
+  const [ta] = await db
+    .insert(tenants)
+    .values({ name: "Upload Tenant A", storageRegion: "legacy" })
+    .returning();
+  const [tb] = await db
+    .insert(tenants)
+    .values({ name: "Upload Tenant B", storageRegion: "legacy" })
+    .returning();
   tenantA = ta!.id;
   tenantB = tb!.id;
   await db.insert(user).values([
@@ -128,6 +134,6 @@ const hasS3 = !!process.env.S3_ACCESS_KEY;
     expect(v1After.deletedAt).toBeTruthy();
     expect(v1After.storagePath).toBeNull();
     // The bytes are gone from storage.
-    await expect(getObject(path)).rejects.toThrow();
+    await expect(getObject(tenantA, path)).rejects.toThrow();
   });
 });

@@ -57,6 +57,13 @@
       "when": 1784019746764,
       "tag": "0007_third_bug",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1784319144443,
+      "tag": "0008_noisy_hardball",
+      "breakpoints": true
     }
   ]
 }

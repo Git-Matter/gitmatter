@@ -2,9 +2,10 @@ import { afterAll, beforeAll, describe, expect, test } from "vite-plus/test";
 import { randomUUID } from "node:crypto";
 import JSZip from "jszip";
 import { db, sql } from "@workspace/db/client";
-import { clients, matters, tenants, user } from "@workspace/db/schema";
+import { auditEvents, clients, matters, tenants, user } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 import { buildTenantExport } from "../src/platform/export.js";
+import { buildTenantPrivacyEvidence } from "../src/platform/tenants.js";
 
 const userId = `test-user-${randomUUID()}`;
 let tenantId: string;
@@ -18,6 +19,13 @@ beforeAll(async () => {
     email: `${userId}@example.com`,
     emailVerified: true,
     tenantId,
+  });
+  await db.update(tenants).set({ storageRegion: "eu" }).where(eq(tenants.id, tenantId));
+  await db.insert(auditEvents).values({
+    tenantId,
+    actorId: userId,
+    eventType: "tenant.storage_region_set",
+    metadata: { region: "eu" },
   });
   const [client] = await db
     .insert(clients)
@@ -49,5 +57,15 @@ describe("buildTenantExport", () => {
     expect(clientsCsv).toContain("Acme Corp");
     const mattersCsv = await zip.file("matters.csv")!.async("string");
     expect(mattersCsv).toContain("Acme v. Roadrunner");
+  });
+
+  test("produces bounded evidence for the selected document-storage target", async () => {
+    const evidence = await buildTenantPrivacyEvidence(tenantId);
+
+    expect(evidence.tenant.storageRegion).toBe("eu");
+    expect(evidence.routingControl.immutableAfterSelection).toBe(true);
+    expect(evidence.routingControl.target.label).toBe("Cloudflare R2 EU jurisdiction");
+    expect(evidence.routingControl.selectionAuditEvent?.metadata).toEqual({ region: "eu" });
+    expect(evidence.scope).toContain("Document object storage only");
   });
 });

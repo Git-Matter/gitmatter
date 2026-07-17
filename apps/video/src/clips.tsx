@@ -12,7 +12,10 @@ import { kc, Cursor, Pop, Scan, usePulse } from "./kinetic";
 export const CLIP = { w: 1200, h: 900, fps: 30 } as const;
 
 export const lin = (f: number, a: number, b: number, c = 0, d = 1) =>
-  interpolate(f, [a, b], [c, d], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+  interpolate(f, [a, b], [c, d], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+  });
 export const ease = (f: number, a: number, b: number, c = 0, d = 1) =>
   interpolate(f, [a, b], [c, d], {
     extrapolateLeft: "clamp",
@@ -53,7 +56,14 @@ export const Panel: React.FC<{
             padding: "26px 36px",
           }}
         >
-          <span style={{ fontFamily: fonts.body, fontWeight: 600, fontSize: 28, color: kc.text }}>
+          <span
+            style={{
+              fontFamily: fonts.body,
+              fontWeight: 600,
+              fontSize: 28,
+              color: kc.text,
+            }}
+          >
             {title}
           </span>
           <span style={{ fontFamily: fonts.mono, fontSize: 24, color: kc.muted }}>{accent}</span>
@@ -88,7 +98,14 @@ export const AssistantClip: React.FC = () => {
   const pulse = usePulse(qDone + 90, 40);
   return (
     <Panel dur={ASSISTANT_FRAMES} title="Acme Acquisition · Assistant" accent="on your key">
-      <div style={{ padding: "40px 36px", display: "flex", flexDirection: "column", gap: 30 }}>
+      <div
+        style={{
+          padding: "40px 36px",
+          display: "flex",
+          flexDirection: "column",
+          gap: 30,
+        }}
+      >
         <div
           style={{
             alignSelf: "flex-end",
@@ -105,7 +122,14 @@ export const AssistantClip: React.FC = () => {
           <Type text={q} f0={20} cps={1.6} />
         </div>
         <div style={{ maxWidth: 860, opacity: lin(f, qDone + 14, qDone + 22) }}>
-          <div style={{ fontFamily: fonts.body, fontSize: 32, lineHeight: 1.55, color: kc.muted }}>
+          <div
+            style={{
+              fontFamily: fonts.body,
+              fontSize: 32,
+              lineHeight: 1.55,
+              color: kc.muted,
+            }}
+          >
             <Type text={a} f0={qDone + 20} cps={2.2} />
           </div>
           <div style={{ display: "flex", gap: 14, marginTop: 26 }}>
@@ -442,7 +466,13 @@ export const LibraryClip: React.FC = () => {
                   borderTop: i ? `1px solid ${kc.line}` : "none",
                 }}
               >
-                <span style={{ fontFamily: fonts.body, fontSize: 30, color: kc.text }}>
+                <span
+                  style={{
+                    fontFamily: fonts.body,
+                    fontSize: 30,
+                    color: kc.text,
+                  }}
+                >
                   {c.name}
                 </span>
                 <span
@@ -490,7 +520,13 @@ export const AuditClip: React.FC = () => {
   const pulse = usePulse(110, 44);
   return (
     <Panel dur={AUDIT_FRAMES} title="Acme Acquisition · NDA.docx" accent="change history">
-      <div style={{ padding: "26px 36px", display: "flex", flexDirection: "column" }}>
+      <div
+        style={{
+          padding: "26px 36px",
+          display: "flex",
+          flexDirection: "column",
+        }}
+      >
         <div
           style={{
             display: "flex",
@@ -518,7 +554,13 @@ export const AuditClip: React.FC = () => {
             <span style={{ fontFamily: fonts.mono, fontSize: 22, color: kc.muted }}>
               M. Reyes · today, 2:14 PM
             </span>
-            <span style={{ fontFamily: fonts.body, fontSize: 26, opacity: lin(f, 116, 128) }}>
+            <span
+              style={{
+                fontFamily: fonts.body,
+                fontSize: 26,
+                opacity: lin(f, 116, 128),
+              }}
+            >
               <span style={{ color: kc.muted }}>Liability cap: </span>
               <span style={{ color: kc.red, textDecoration: "line-through" }}>$5,000,000</span>
               <span style={{ color: kc.muted }}> → </span>
@@ -527,7 +569,12 @@ export const AuditClip: React.FC = () => {
           </div>
         </div>
         <div
-          style={{ borderTop: `1px solid ${kc.line}`, display: "flex", gap: 22, padding: "26px 0" }}
+          style={{
+            borderTop: `1px solid ${kc.line}`,
+            display: "flex",
+            gap: 22,
+            padding: "26px 0",
+          }}
         >
           <span
             style={{
@@ -604,7 +651,14 @@ export const AgentClip: React.FC = () => {
             </span>
           </Pop>
         </div>
-        <div style={{ marginTop: 50, display: "flex", flexDirection: "column", gap: 18 }}>
+        <div
+          style={{
+            marginTop: 50,
+            display: "flex",
+            flexDirection: "column",
+            gap: 18,
+          }}
+        >
           {M_ACTIONS.map((a, i) => (
             <div
               key={a}
@@ -618,7 +672,14 @@ export const AgentClip: React.FC = () => {
                 gap: 16,
               }}
             >
-              <span style={{ width: 10, height: 10, borderRadius: 99, background: kc.green }} />
+              <span
+                style={{
+                  width: 10,
+                  height: 10,
+                  borderRadius: 99,
+                  background: kc.green,
+                }}
+              />
               {a}
             </div>
           ))}
@@ -635,6 +696,209 @@ export const AgentClip: React.FC = () => {
           The agent drives the tools. gitmatter records every step.
         </div>
       </div>
+    </Panel>
+  );
+};
+
+// ---- 08 · Legal research: brand clearance before an Australian launch ----
+
+export const LEGAL_RESEARCH_FRAMES = 720;
+export const LegalResearchClip: React.FC = () => {
+  const f = useCurrentFrame();
+  const query =
+    "We're launching NORTHSTAR in Australia. Check for conflicting trade marks in class 9.";
+  const queryDone = 86 + query.length / 1.35;
+  const searching = lin(f, queryDone + 18, queryDone + 36);
+  const resultsIn = lin(f, queryDone + 96, queryDone + 114);
+  const rows = [
+    ["NORTHSTAR", "Trade mark 2345678", "Class 9 · Registered"],
+    ["NORTH STAR", "Trade mark 1984321", "Class 9 · Pending"],
+  ];
+
+  return (
+    <Panel dur={LEGAL_RESEARCH_FRAMES} title="Acme · Brand launch" accent="Jurisdiction: AU">
+      <div style={{ display: "flex", height: "100%" }}>
+        <div
+          style={{
+            width: 300,
+            borderRight: `1px solid ${kc.line}`,
+            padding: "32px 28px",
+            fontFamily: fonts.body,
+          }}
+        >
+          <div
+            style={{
+              fontSize: 19,
+              fontWeight: 600,
+              color: kc.muted,
+              letterSpacing: 2,
+            }}
+          >
+            TOOL ACTIVITY
+          </div>
+          <div
+            style={{
+              marginTop: 28,
+              display: "flex",
+              flexDirection: "column",
+              gap: 20,
+            }}
+          >
+            {[
+              ["Brand clearance", "NORTHSTAR · Class 9", 28],
+              ["Jurisdiction selected", "Australia (AU)", 48],
+              ["IP Australia", "search_trademarks", queryDone + 18],
+              ["IP Australia", "2 sources returned", queryDone + 96],
+            ].map(([title, detail, delay]) => (
+              <div
+                key={title as string}
+                style={{
+                  opacity: lin(f, delay as number, (delay as number) + 12),
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <span
+                    style={{
+                      width: 9,
+                      height: 9,
+                      borderRadius: 99,
+                      background: kc.green,
+                    }}
+                  />
+                  <span style={{ fontSize: 19, fontWeight: 600, color: kc.text }}>{title}</span>
+                </div>
+                <div
+                  style={{
+                    marginTop: 7,
+                    paddingLeft: 19,
+                    fontFamily: fonts.mono,
+                    fontSize: 16,
+                    color: kc.muted,
+                  }}
+                >
+                  {detail}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div
+          style={{
+            flex: 1,
+            padding: "38px 40px",
+            display: "flex",
+            flexDirection: "column",
+            gap: 28,
+          }}
+        >
+          <div
+            style={{
+              alignSelf: "flex-end",
+              maxWidth: 690,
+              borderRadius: 16,
+              background: kc.panel,
+              padding: "18px 22px",
+              fontFamily: fonts.body,
+              fontSize: 27,
+              lineHeight: 1.4,
+              color: kc.text,
+            }}
+          >
+            <Type text={query} f0={86} cps={1.35} />
+          </div>
+          <div
+            style={{
+              opacity: searching,
+              fontFamily: fonts.body,
+              fontSize: 24,
+              color: kc.muted,
+            }}
+          >
+            Searching IP Australia trade marks…
+          </div>
+          <div style={{ opacity: resultsIn }}>
+            <div
+              style={{
+                fontFamily: fonts.body,
+                fontSize: 28,
+                lineHeight: 1.45,
+                color: kc.text,
+              }}
+            >
+              Two similar trade marks appear in class 9. Before the launch team commits to the name,
+              review the source records and get clearance advice.
+            </div>
+            <div
+              style={{
+                marginTop: 24,
+                display: "flex",
+                flexDirection: "column",
+                gap: 12,
+              }}
+            >
+              {rows.map(([name, record, status], i) => (
+                <Pop key={record} delay={queryDone + 116 + i * 16}>
+                  <div
+                    style={{
+                      border: `1px solid ${kc.line}`,
+                      borderRadius: 12,
+                      padding: "16px 18px",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      fontFamily: fonts.body,
+                    }}
+                  >
+                    <div>
+                      <div
+                        style={{
+                          color: kc.text,
+                          fontSize: 23,
+                          fontWeight: 600,
+                        }}
+                      >
+                        {name}
+                      </div>
+                      <div style={{ marginTop: 4, color: kc.muted, fontSize: 18 }}>{status}</div>
+                    </div>
+                    <span
+                      style={{
+                        fontFamily: fonts.mono,
+                        fontSize: 16,
+                        color: kc.muted,
+                      }}
+                    >
+                      {record}
+                    </span>
+                  </div>
+                </Pop>
+              ))}
+            </div>
+            <div
+              style={{
+                marginTop: 22,
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                fontFamily: fonts.mono,
+                fontSize: 18,
+                color: kc.muted,
+              }}
+            >
+              <span
+                style={{
+                  width: 9,
+                  height: 9,
+                  borderRadius: 99,
+                  background: kc.green,
+                }}
+              />
+              Sources: IP Australia · tool activity visible in this session
+            </div>
+          </div>
+        </div>
+      </div>
+      <Scan f0={queryDone + 28} f1={queryDone + 90} />
     </Panel>
   );
 };

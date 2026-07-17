@@ -4,7 +4,7 @@ import { LegalPage } from "./LegalPage";
 // Cloud-only marketing page. Review with counsel before production launch.
 export default function Privacy() {
   return (
-    <LegalPage title="Privacy Policy" lastUpdated="June 20, 2026">
+    <LegalPage title="Privacy Policy" lastUpdated="July 17, 2026">
       <h2>1. Scope of this policy</h2>
       <p>
         This Privacy Policy explains how gitmatter handles information for the marketing website and
@@ -145,7 +145,22 @@ export default function Privacy() {
         Contractual Clauses — for transfers of personal data outside your region.
       </p>
 
-      <h2>12. Data security and breach notification</h2>
+      <h2>12. Document storage region</h2>
+      <p>
+        For new hosted organizations, an administrator selects an immutable document object-storage
+        target during onboarding. EU selections route document files to our Cloudflare R2 bucket
+        configured for the European Union jurisdiction. US and Australian selections route document
+        files to their respective regional object-storage targets. This control applies to document
+        files only; account data, audit logs, backups, and AI-provider processing may have separate
+        locations and are not covered by this selection.
+      </p>
+      <p>
+        Organization administrators can download a record of the selected target and the associated
+        application audit event from Settings. It should be retained with the applicable provider
+        configuration evidence when assessing or documenting data-residency requirements.
+      </p>
+
+      <h2>13. Data security and breach notification</h2>
       <p>
         We use technical and organizational measures designed to protect information in the hosted
         service; see the Security page for our posture. No method of transmission or storage is
@@ -153,7 +168,7 @@ export default function Privacy() {
         notify you and any relevant authority as required by applicable law.
       </p>
 
-      <h2>13. Data retention and deletion</h2>
+      <h2>14. Data retention and deletion</h2>
       <p>
         Deleted documents are purged after a soft-delete window; aged audit logs and revoked tokens
         are purged on a schedule. Organization admins can export all tenant data at any time, and
@@ -161,7 +176,7 @@ export default function Privacy() {
         required or permitted by law.
       </p>
 
-      <h2>14. Your rights and how to exercise them</h2>
+      <h2>15. Your rights and how to exercise them</h2>
       <p>Depending on your location, you may have rights to:</p>
       <ul>
         <li>Access and receive a copy of your data</li>
@@ -178,25 +193,25 @@ export default function Privacy() {
         local data-protection supervisory authority.
       </p>
 
-      <h2>15. Cookies</h2>
+      <h2>16. Cookies</h2>
       <p>
         We may use cookies and similar technologies to operate the website, keep you signed in, and
         understand usage. You can control cookies through your browser settings.
       </p>
 
-      <h2>16. Children's privacy</h2>
+      <h2>17. Children's privacy</h2>
       <p>
         The service is intended for business use by adults and is not directed to children. We do
         not knowingly collect personal information from anyone under 18.
       </p>
 
-      <h2>17. Changes to this policy</h2>
+      <h2>18. Changes to this policy</h2>
       <p>
         We may update this Privacy Policy from time to time. We will post the updated policy on this
         page and update the date above.
       </p>
 
-      <h2>18. Contact</h2>
+      <h2>19. Contact</h2>
       <p>
         For privacy questions or to exercise a right, email{" "}
         <a href={SITE.contact} className="text-foreground underline">

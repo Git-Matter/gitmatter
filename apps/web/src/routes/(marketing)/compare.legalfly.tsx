@@ -13,7 +13,7 @@ export const Route = createFileRoute("/(marketing)/compare/legalfly")({
     marketingHead({
       title: "gitmatter vs LegalFly · LegalFly alternative compared",
       description:
-        "An honest comparison of gitmatter and LegalFly. LegalFly leads on automatic anonymisation and built-in legal research; gitmatter adds a git-style audit trail, bring-your-own-agent over MCP, and a fully open-source backend you can self-host.",
+        "An honest comparison of gitmatter and LegalFly. Both offer legal research; gitmatter covers US case law and Australian IP search, while LegalFly leads on automatic anonymisation and regulatory scanning. gitmatter also adds a git-style audit trail, bring-your-own-agent over MCP, and a fully open-source backend you can self-host.",
       path: "/compare/legalfly",
       og: { title: "gitmatter vs LegalFly", eyebrow: "legalfly alternative" },
     }),

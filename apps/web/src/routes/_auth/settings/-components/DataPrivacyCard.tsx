@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Download } from "lucide-react";
+import { Download, FileCheck2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -40,6 +40,29 @@ export function DataPrivacyCard() {
           ) : (
             <p className="text-xs text-muted-foreground">
               Only organization admins can export tenant data.
+            </p>
+          )}
+        </div>
+        <div className="flex flex-col gap-2 border-t pt-stack">
+          <Label>Document storage evidence</Label>
+          <p className="text-sm text-muted-foreground">
+            Download the selected document-storage region and its audit event. Keep it with the
+            corresponding Cloudflare or AWS configuration evidence when making privacy claims.
+          </p>
+          {isAdmin ? (
+            <Button
+              variant="outline"
+              className="self-start"
+              onClick={() => {
+                window.location.href = api.tenantPrivacyEvidenceUrl();
+              }}
+            >
+              <FileCheck2 className="size-4" />
+              Download privacy evidence
+            </Button>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              Only organization admins can download privacy evidence.
             </p>
           )}
         </div>

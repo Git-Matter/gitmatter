@@ -76,6 +76,7 @@ Settings are read from environment variables. Copy `.env.example` to `.env` and 
 | `ENCRYPTION_KEY`                                                                                    | Any non-empty string. A scrypt KDF turns it into a 32-byte AES-256-GCM key, used to encrypt user secrets (LLM keys, MCP credentials) so they are stored scrambled. |
 | `COURTLISTENER_API_TOKEN`                                                                           | Enables the built-in legal-research tools.                                                                                                                         |
 | `S3_ENDPOINT`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_REGION`, `S3_BUCKET`, `S3_FORCE_PATH_STYLE`    | S3-compatible object storage (the file store for documents). The defaults target Cloudflare R2.                                                                    |
+| `S3_EU_*`, `S3_US_*`, `S3_AU_*`                                                                     | Optional region-aware storage targets used when organizations choose a document region during onboarding.                                                          |
 
 <Callout type="warn">
   Object storage is **required**. Set up an R2 bucket or any S3-compatible endpoint. There is no
@@ -100,6 +101,33 @@ Then map Cloudflare's values into `.env`:
 | `S3_REGION`           | `auto`                                          |
 | `S3_BUCKET`           | Bucket name, for example `gitmatter`            |
 | `S3_FORCE_PATH_STYLE` | `true`                                          |
+
+### Region-aware hybrid storage
+
+Hosted multi-tenant deployments can route each organization to one immutable storage target. A
+practical configuration uses Cloudflare R2's EU jurisdiction for EU organizations and regional AWS
+S3 buckets for US and Australian organizations:
+
+```bash
+S3_EU_ENDPOINT=https://<CLOUDFLARE_ACCOUNT_ID>.eu.r2.cloudflarestorage.com
+S3_EU_ACCESS_KEY=<EU_BUCKET_SCOPED_R2_ACCESS_KEY>
+S3_EU_SECRET_KEY=<EU_BUCKET_SCOPED_R2_SECRET_KEY>
+S3_EU_REGION=auto
+S3_EU_BUCKET=gitmatter-prod-eu
+S3_EU_FORCE_PATH_STYLE=true
+
+S3_US_REGION=us-east-2
+S3_US_BUCKET=gitmatter-prod-us-<AWS_ACCOUNT_ID>
+S3_AU_REGION=ap-southeast-2
+S3_AU_BUCKET=gitmatter-prod-au-<AWS_ACCOUNT_ID>
+```
+
+Create the R2 bucket with the EU jurisdiction and give its token access only to that bucket. The AWS
+targets use the SDK's normal credential chain. On a non-AWS host, provide a narrowly scoped IAM
+identity through `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`; do not use account-root credentials.
+Existing organizations remain on the legacy `S3_*` target. A new organization chooses EU, US, or
+Australia during onboarding, and all of its document versions use that target. Changing the region
+later requires an explicit object migration rather than a settings toggle.
 
 ### LLM provider keys
 

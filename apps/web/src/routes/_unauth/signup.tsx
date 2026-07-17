@@ -69,10 +69,10 @@ function Signup() {
     // A token in the response means auto sign-in happened (email verification not
     // required) — go straight to the app. No token means verification is needed.
     if (data?.token) {
-      window.location.href = "/assistant";
+      window.location.href = "/onboarding";
       return;
     }
-    const params = new URLSearchParams({ email: trimmedEmail, sent: "1", next: "/assistant" });
+    const params = new URLSearchParams({ email: trimmedEmail, sent: "1", next: "/onboarding" });
     window.location.href = `/verify-email?${params}`;
   }
 

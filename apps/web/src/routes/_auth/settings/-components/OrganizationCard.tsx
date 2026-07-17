@@ -13,6 +13,13 @@ import { useSession } from "@/lib/auth/auth-client";
 const GB = 1024 * 1024 * 1024;
 const MB = 1024 * 1024;
 
+const REGION_LABELS = {
+  legacy: "Legacy object storage",
+  eu: "European Union (Cloudflare R2)",
+  us: "United States (Ohio)",
+  au: "Australia (Sydney)",
+} as const;
+
 // Adaptive units: a tenant may sit at a few MB while the cap is in GB.
 function formatBytes(n: number): string {
   if (n >= GB) return `${(n / GB).toFixed(2)} GB`;
@@ -71,6 +78,13 @@ export function OrganizationCard() {
           {tenant ? tenant.name : "Your organization"}. Matters, reviews, and workflows can only be
           shared with people in this organization.
         </p>
+
+        {tenant?.storageRegion && (
+          <div className="flex items-baseline justify-between text-sm">
+            <span className="font-medium">Document region</span>
+            <span className="text-muted-foreground">{REGION_LABELS[tenant.storageRegion]}</span>
+          </div>
+        )}
 
         {storage && (
           <div className="flex flex-col gap-2">

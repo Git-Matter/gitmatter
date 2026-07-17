@@ -8,6 +8,9 @@ import { user } from "./auth.js";
 export const tenants = pgTable("tenants", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: text("name").notNull(),
+  // Immutable document-storage placement. Existing tenants are migrated to
+  // `legacy`; new organizations choose a region during onboarding.
+  storageRegion: text("storage_region").$type<StorageRegion>(),
   // user.id of the founder. No FK: the auth.user row may be created in the same
   // flow and lives in a separate Postgres schema — avoid a cross-schema cycle.
   createdBy: text("created_by"),
@@ -15,6 +18,7 @@ export const tenants = pgTable("tenants", {
 });
 
 export type TenantRole = "admin" | "member";
+export type StorageRegion = "legacy" | "eu" | "us" | "au";
 
 // Pending invitations to join a tenant. Accepted at signup when an email with a
 // matching unconsumed, unexpired invite signs up.

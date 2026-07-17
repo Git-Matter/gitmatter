@@ -19,6 +19,7 @@ import { Route as UnauthSignupRouteImport } from './routes/_unauth/signup'
 import { Route as UnauthResetPasswordRouteImport } from './routes/_unauth/reset-password'
 import { Route as UnauthLoginRouteImport } from './routes/_unauth/login'
 import { Route as UnauthForgotPasswordRouteImport } from './routes/_unauth/forgot-password'
+import { Route as AuthOnboardingRouteImport } from './routes/_auth/onboarding'
 import { Route as DotwellKnownSplatRouteImport } from './routes/[.]well-known/$'
 import { Route as marketingUseCasesRouteImport } from './routes/(marketing)/use-cases'
 import { Route as marketingTermsRouteImport } from './routes/(marketing)/terms'
@@ -103,6 +104,11 @@ const UnauthForgotPasswordRoute = UnauthForgotPasswordRouteImport.update({
   id: '/forgot-password',
   path: '/forgot-password',
   getParentRoute: () => UnauthRouteRoute,
+} as any)
+const AuthOnboardingRoute = AuthOnboardingRouteImport.update({
+  id: '/onboarding',
+  path: '/onboarding',
+  getParentRoute: () => AuthRouteRoute,
 } as any)
 const DotwellKnownSplatRoute = DotwellKnownSplatRouteImport.update({
   id: '/.well-known/$',
@@ -305,6 +311,7 @@ export interface FileRoutesByFullPath {
   '/terms': typeof marketingTermsRoute
   '/use-cases': typeof marketingUseCasesRoute
   '/.well-known/$': typeof DotwellKnownSplatRoute
+  '/onboarding': typeof AuthOnboardingRoute
   '/forgot-password': typeof UnauthForgotPasswordRoute
   '/login': typeof UnauthLoginRoute
   '/reset-password': typeof UnauthResetPasswordRoute
@@ -351,6 +358,7 @@ export interface FileRoutesByTo {
   '/terms': typeof marketingTermsRoute
   '/use-cases': typeof marketingUseCasesRoute
   '/.well-known/$': typeof DotwellKnownSplatRoute
+  '/onboarding': typeof AuthOnboardingRoute
   '/forgot-password': typeof UnauthForgotPasswordRoute
   '/login': typeof UnauthLoginRoute
   '/reset-password': typeof UnauthResetPasswordRoute
@@ -400,6 +408,7 @@ export interface FileRoutesById {
   '/(marketing)/terms': typeof marketingTermsRoute
   '/(marketing)/use-cases': typeof marketingUseCasesRoute
   '/.well-known/$': typeof DotwellKnownSplatRoute
+  '/_auth/onboarding': typeof AuthOnboardingRoute
   '/_unauth/forgot-password': typeof UnauthForgotPasswordRoute
   '/_unauth/login': typeof UnauthLoginRoute
   '/_unauth/reset-password': typeof UnauthResetPasswordRoute
@@ -449,6 +458,7 @@ export interface FileRouteTypes {
     | '/terms'
     | '/use-cases'
     | '/.well-known/$'
+    | '/onboarding'
     | '/forgot-password'
     | '/login'
     | '/reset-password'
@@ -495,6 +505,7 @@ export interface FileRouteTypes {
     | '/terms'
     | '/use-cases'
     | '/.well-known/$'
+    | '/onboarding'
     | '/forgot-password'
     | '/login'
     | '/reset-password'
@@ -543,6 +554,7 @@ export interface FileRouteTypes {
     | '/(marketing)/terms'
     | '/(marketing)/use-cases'
     | '/.well-known/$'
+    | '/_auth/onboarding'
     | '/_unauth/forgot-password'
     | '/_unauth/login'
     | '/_unauth/reset-password'
@@ -661,6 +673,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/forgot-password'
       preLoaderRoute: typeof UnauthForgotPasswordRouteImport
       parentRoute: typeof UnauthRouteRoute
+    }
+    '/_auth/onboarding': {
+      id: '/_auth/onboarding'
+      path: '/onboarding'
+      fullPath: '/onboarding'
+      preLoaderRoute: typeof AuthOnboardingRouteImport
+      parentRoute: typeof AuthRouteRoute
     }
     '/.well-known/$': {
       id: '/.well-known/$'
@@ -977,6 +996,7 @@ const marketingRouteRouteWithChildren = marketingRouteRoute._addFileChildren(
 )
 
 interface AuthRouteRouteChildren {
+  AuthOnboardingRoute: typeof AuthOnboardingRoute
   AuthAssistantIdRoute: typeof AuthAssistantIdRoute
   AuthDocumentsIdRoute: typeof AuthDocumentsIdRoute
   AuthReviewsIdRoute: typeof AuthReviewsIdRoute
@@ -996,6 +1016,7 @@ interface AuthRouteRouteChildren {
 }
 
 const AuthRouteRouteChildren: AuthRouteRouteChildren = {
+  AuthOnboardingRoute: AuthOnboardingRoute,
   AuthAssistantIdRoute: AuthAssistantIdRoute,
   AuthDocumentsIdRoute: AuthDocumentsIdRoute,
   AuthReviewsIdRoute: AuthReviewsIdRoute,

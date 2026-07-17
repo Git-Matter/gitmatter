@@ -44,10 +44,51 @@ export type Solution = {
   menuDesc: string;
 };
 
-const feature = (f: Omit<Feature, "slug">): Feature => ({ ...f, slug: slugify(f.tag) });
-const solution = (s: Omit<Solution, "slug">): Solution => ({ ...s, slug: slugify(s.tag) });
+const feature = (f: Omit<Feature, "slug">): Feature => ({
+  ...f,
+  slug: slugify(f.tag),
+});
+const solution = (s: Omit<Solution, "slug">): Solution => ({
+  ...s,
+  slug: slugify(s.tag),
+});
 
 export const FEATURES: Feature[] = [
+  feature({
+    tag: "Legal research",
+    title: "Research the law and Australian IP without leaving the matter.",
+    body: "Search US case law and Australian patents and trade marks in the assistant or through your connected MCP agent. In Australia, queries, IP Australia sources, and tool activity stay visible in the assistant session.",
+    menuDesc: "US case law and Australian IP search, in the assistant.",
+    clip: "/features/legal-research.mp4",
+    intro:
+      "Jurisdiction-aware research tools bring US case law and IP Australia patent and trade-mark search into the same assistant session as the matter work.",
+    sections: [
+      {
+        title: "Research for the selected jurisdiction",
+        lead: "The assistant and connected MCP agents receive the research tools available for the selected jurisdiction.",
+        points: [
+          {
+            name: "US case law",
+            desc: "Search US case law opinions and verify reporter citations through CourtListener.",
+          },
+          {
+            name: "Australian IP",
+            desc: "Search Australian trade marks and patents, use advanced trade-mark queries, and open individual records through IP Australia.",
+          },
+          {
+            name: "In the work session",
+            desc: "Research is read-only. The query, sources, and tool activity remain visible in the assistant session alongside the resulting answer.",
+          },
+        ],
+      },
+    ],
+    uses: [
+      "Check Australian trade marks before proposing a new brand",
+      "Search Australian patent records for a technology or application number",
+      "Find US case law relevant to a disputed contract term",
+      "Give a connected AI agent jurisdiction-appropriate research tools over MCP",
+    ],
+  }),
   feature({
     tag: "Matter workspace",
     title: "Every document for the matter, in one working space.",

@@ -86,11 +86,12 @@ export default function Platform() {
       {/* Feature tour — one platform, purpose-built tools. */}
       <section className="mx-auto w-full max-w-7xl px-6 pt-24">
         <h2 className="max-w-[24ch] font-heading text-4xl tracking-tight text-balance">
-          Eight tools. One history underneath.
+          Nine tools. One history underneath.
         </h2>
         <p className="mt-4 max-w-[52ch] leading-relaxed text-muted-foreground">
-          Each tool does one job well. All of them write to the same record, so the matter reads as
-          one story no matter who — or what — did the work.
+          Each tool does one job well. Research tools keep their queries, sources, and activity
+          visible in the assistant session; the tools that change the matter write to the same
+          record, so the work reads as one story no matter who — or what — did it.
         </p>
         <div className="mt-8 flex flex-col">
           {FEATURES.map((f, i) => (

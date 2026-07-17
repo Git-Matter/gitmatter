@@ -28,7 +28,10 @@ let matterId: string;
 let tenantId: string;
 
 beforeAll(async () => {
-  const [t] = await db.insert(tenants).values({ name: "Test Tenant" }).returning();
+  const [t] = await db
+    .insert(tenants)
+    .values({ name: "Test Tenant", storageRegion: "legacy" })
+    .returning();
   tenantId = t!.id;
   await db.insert(user).values({
     id: userId,

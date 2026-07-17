@@ -50,9 +50,9 @@ import {
  * Delete a stored object, tolerating "already gone" (idempotent purge) but
  * recording any genuine failure to the audit log instead of silently dropping it.
  */
-async function deleteObjectAudited(storagePath: string): Promise<void> {
+async function deleteObjectAudited(tenantId: string, storagePath: string): Promise<void> {
   try {
-    await deleteObject(storagePath);
+    await deleteObject(tenantId, storagePath);
   } catch (err) {
     if (isAlreadyDeleted(err)) return;
     void recordAudit({
@@ -334,7 +334,7 @@ export async function createGeneratedDocument(
     artifactId: docId,
     ext: "docx",
   });
-  await putObject(storagePath, bytes, DOCX_MIME);
+  await putObject(tenantId, storagePath, bytes, DOCX_MIME);
   await db.insert(documents).values({
     id: docId,
     userId: actor.userId,
@@ -413,7 +413,7 @@ export async function uploadDocument(
     artifactId: id,
     ext: input.fileType,
   });
-  await putObject(storagePath, input.bytes);
+  await putObject(tenantId, storagePath, input.bytes);
   const [row] = await db
     .insert(documents)
     .values({
@@ -526,12 +526,17 @@ const STAGED_ABANDON_HOURS = 24;
 
 /** Free a document's S3 bytes (every version) then hard-delete the row (cascades). */
 async function hardDelete(id: string): Promise<void> {
+  const [doc] = await db
+    .select({ tenantId: documents.tenantId })
+    .from(documents)
+    .where(eq(documents.id, id));
+  if (!doc) return;
   const versions = await db
     .select({ storagePath: documentVersions.storagePath })
     .from(documentVersions)
     .where(eq(documentVersions.documentId, id));
   for (const v of versions) {
-    if (v.storagePath) await deleteObjectAudited(v.storagePath);
+    if (v.storagePath) await deleteObjectAudited(doc.tenantId, v.storagePath);
   }
   await db.delete(documents).where(eq(documents.id, id));
 }
@@ -653,7 +658,7 @@ export async function addDocumentVersion(
     ext: input.fileType,
     version: versionNumber,
   });
-  await putObject(storagePath, input.bytes);
+  await putObject(doc.tenantId, storagePath, input.bytes);
   await recordCommit({
     artifactType: "document",
     artifactId: documentId,
@@ -715,7 +720,7 @@ export async function deleteDocumentVersion(actor: Actor, documentId: string, ve
   // soft-deleting the row while bytes remain orphaned.
   if (v.storagePath) {
     try {
-      await deleteObject(v.storagePath);
+      await deleteObject(doc.tenantId, v.storagePath);
     } catch (err) {
       if (!isAlreadyDeleted(err)) throw err;
     }
@@ -822,7 +827,7 @@ export async function processDocument(doc: Document): Promise<void> {
     return;
   }
   try {
-    const bytes = Buffer.from(await getObject(storagePath));
+    const bytes = Buffer.from(await getObject(doc.tenantId, storagePath));
     const { markdown, pageCount } = await extractMarkdown(bytes, doc.fileType as SupportedFileType);
     // Warn (passively) when a PDF came back too thin to be a real text layer —
     // likely a scan. DOCX always carries its text, so never flag it.
@@ -884,8 +889,8 @@ async function latestVersion(documentId: string) {
   return v ?? null;
 }
 
-async function loadDocxBytes(storagePath: string): Promise<Buffer> {
-  return Buffer.from(await getObject(storagePath));
+async function loadDocxBytes(tenantId: string, storagePath: string): Promise<Buffer> {
+  return Buffer.from(await getObject(tenantId, storagePath));
 }
 
 // One find->replace substitution the model (or a user) proposes. Context anchors
@@ -940,7 +945,7 @@ async function proposeDocxEdit(
   const v = await latestVersion(doc.id);
   if (!v?.storagePath) throw new Error("Document has no stored version");
   const result = await applyTrackedEdits(
-    await loadDocxBytes(v.storagePath),
+    await loadDocxBytes(doc.tenantId, v.storagePath),
     edits.map((e) => ({
       find: e.find,
       replace: e.replace,
@@ -966,7 +971,7 @@ async function proposeDocxEdit(
     ext: "docx",
     version: versionNumber,
   });
-  await putObject(storagePath, result.bytes, DOCX_MIME);
+  await putObject(doc.tenantId, storagePath, result.bytes, DOCX_MIME);
   const newMarkdown = await extractDocxBodyText(result.bytes);
 
   await recordCommit({
@@ -1049,7 +1054,7 @@ async function resolveDocxEdits(
   if (!v?.storagePath) throw new Error("Document has no stored version");
   const wIds = edits.flatMap((e) => [e.delWId, e.insWId]).filter((x): x is string => !!x);
   const { bytes: newBytes } = await resolveTrackedChange(
-    await loadDocxBytes(v.storagePath),
+    await loadDocxBytes(doc.tenantId, v.storagePath),
     wIds,
     decision
   );
@@ -1061,7 +1066,7 @@ async function resolveDocxEdits(
     ext: "docx",
     version: versionNumber,
   });
-  await putObject(storagePath, newBytes, DOCX_MIME);
+  await putObject(doc.tenantId, storagePath, newBytes, DOCX_MIME);
   const newMarkdown = await extractDocxBodyText(newBytes);
   const status = decision === "accept" ? "accepted" : "rejected";
   const source: VersionSource = decision === "accept" ? "user_accept" : "user_reject";

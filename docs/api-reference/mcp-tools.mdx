@@ -96,10 +96,22 @@ These two tools follow the ChatGPT company-knowledge schema.
 
 ## Legal research
 
-Jurisdiction-gated — present only when the user's jurisdiction includes CourtListener
-(US case law).
+Jurisdiction-gated — the available tools depend on the user's jurisdiction. US jurisdictions
+include CourtListener case-law tools; Australian jurisdictions include IP Australia patent and
+trade-mark tools.
 
 | Tool               | Purpose                                                                        | Key inputs                                                 |
 | ------------------ | ------------------------------------------------------------------------------ | ---------------------------------------------------------- |
 | `search_case_law`  | Search US case law opinions (CourtListener) by keyword, with optional filters. | `query`, `court?`, `filedAfter?`, `filedBefore?`, `limit?` |
 | `verify_citations` | Verify / normalize US reporter citations (e.g. `467 U.S. 837`).                | `citations`                                                |
+
+### Australia — IP Australia
+
+| Tool                         | Purpose                                                 | Key inputs                             |
+| ---------------------------- | ------------------------------------------------------- | -------------------------------------- |
+| `search_trademarks`          | Search Australian trade marks by word, name, or number. | `query`, `quickSearchType?`, `status?` |
+| `get_trademark`              | Read an Australian trade-mark record by number.         | `number`                               |
+| `search_trademarks_advanced` | Run an advanced Australian trade-mark search.           | `rows`, `changedSinceDate?`, `sort?`   |
+| `page_trademarks_advanced`   | Return full records from an advanced trade-mark search. | `rows`, `pageNumber?`, `pageSize?`     |
+| `search_patents`             | Search Australian patents by keyword.                   | `query`, `searchType?`, `searchMode?`  |
+| `get_patent`                 | Read an Australian patent record by application number. | `number`                               |
