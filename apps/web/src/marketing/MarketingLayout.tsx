@@ -19,6 +19,17 @@ import Wordmark from "@/marketing/components/Wordmark";
 // on hover to signal navigation.
 const itemClass = "group/item flex flex-col gap-1 py-1";
 
+function FooterSection({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <nav className="flex flex-col gap-3" aria-label={title}>
+      <p className="text-xs font-medium tracking-[0.16em] text-muted-foreground uppercase">
+        {title}
+      </p>
+      <div className="flex flex-col items-start gap-2.5 text-sm">{children}</div>
+    </nav>
+  );
+}
+
 function MenuItem({ item }: { item: NavMenuItem }) {
   const body = (
     <>
@@ -187,48 +198,88 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
       <main className="flex-1">{children}</main>
 
       <footer className="mt-section border-t border-border">
-        <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-6 py-10 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex flex-col gap-2">
+        <div className="mx-auto grid w-full max-w-7xl gap-x-12 gap-y-10 px-6 py-12 sm:grid-cols-2 lg:grid-cols-[minmax(12rem,1.4fr)_repeat(4,minmax(0,1fr))]">
+          <div className="flex flex-col gap-3">
             <Wordmark />
+            <p className="max-w-[26ch] text-sm leading-relaxed text-muted-foreground">
+              Legal work with every change on the record.
+            </p>
           </div>
-          <nav className="flex flex-wrap items-center gap-4">
-            <Link to="/platform" className="hover:text-foreground">
+
+          <FooterSection title="Platform">
+            <Link to="/platform" className="text-muted-foreground hover:text-foreground">
               Platform
             </Link>
-            <Link to="/solutions" className="hover:text-foreground">
+            <Link to="/solutions" className="text-muted-foreground hover:text-foreground">
               Solutions
             </Link>
-            <Link to="/compare" className="hover:text-foreground">
+            <Link to="/compare" className="text-muted-foreground hover:text-foreground">
               Compare
             </Link>
-            <Link to="/resources" className="hover:text-foreground">
+          </FooterSection>
+
+          <FooterSection title="For agents">
+            <a
+              href={`${SITE.docs}/ai-agents/connect-an-agent`}
+              className="text-muted-foreground hover:text-foreground"
+            >
+              Connect an agent
+            </a>
+            <a
+              href={`${SITE.docs}/ai-agents`}
+              className="text-muted-foreground hover:text-foreground"
+            >
+              Agent guide
+            </a>
+            <a
+              href={`${SITE.docs}/api-reference/mcp-tools`}
+              className="text-muted-foreground hover:text-foreground"
+            >
+              MCP tools
+            </a>
+            <a
+              href={`${SITE.docs}/ai-agents/connect-an-agent#codex-cli`}
+              className="text-muted-foreground hover:text-foreground"
+            >
+              Codex &amp; Claude setup
+            </a>
+          </FooterSection>
+
+          <FooterSection title="Resources">
+            <Link to="/resources" className="text-muted-foreground hover:text-foreground">
               Resources
             </Link>
-            <Link to="/blog" className="hover:text-foreground">
+            <Link to="/blog" className="text-muted-foreground hover:text-foreground">
               Blog
             </Link>
-            <a href={SITE.docs} className="hover:text-foreground">
+            <a href={SITE.docs} className="text-muted-foreground hover:text-foreground">
               Docs
             </a>
+          </FooterSection>
+
+          <FooterSection title="Company">
+            <Link to="/about" className="text-muted-foreground hover:text-foreground">
+              About
+            </Link>
             <a
               href={SITE.github}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center gap-1.5 hover:text-foreground"
+              className="inline-flex items-center gap-1.5 text-muted-foreground hover:text-foreground"
             >
               <GitBranch className="size-4" />
               GitHub
             </a>
-            <Link to="/privacy" className="hover:text-foreground">
+            <Link to="/privacy" className="text-muted-foreground hover:text-foreground">
               Privacy
             </Link>
-            <Link to="/terms" className="hover:text-foreground">
+            <Link to="/terms" className="text-muted-foreground hover:text-foreground">
               Terms
             </Link>
-            <Link to="/security" className="hover:text-foreground">
+            <Link to="/security" className="text-muted-foreground hover:text-foreground">
               Security
             </Link>
-          </nav>
+          </FooterSection>
         </div>
       </footer>
     </div>
