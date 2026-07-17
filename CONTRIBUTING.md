@@ -9,7 +9,8 @@ history, encryption, or data handling, it is not acceptable.
 ## Code of Conduct
 
 Be respectful, direct, and useful. Technical disagreement is welcome. Personal attacks, harassment,
-or bad-faith behavior are not.
+or bad-faith behavior are not. Everyone participating in the project must follow the
+[Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## Questions and Support
 
@@ -32,6 +33,9 @@ public place where answers can help other people later.
 ## Bugs
 
 Before opening a bug report, search existing issues.
+
+If the bug may be a security vulnerability, do not report it publicly. Follow the private
+reporting instructions in [SECURITY.md](SECURITY.md).
 
 A good bug report includes:
 

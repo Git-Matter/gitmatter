@@ -1,5 +1,8 @@
 blank_issues_enabled: false
 contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/Git-Matter/gitmatter/security/policy
+    about: Read the security policy and report suspected vulnerabilities privately.
   - name: Questions and support
     url: https://github.com/Git-Matter/gitmatter/discussions
     about: Ask setup questions, troubleshoot local development, or discuss ideas before filing an issue.
