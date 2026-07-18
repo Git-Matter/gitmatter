@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { hasMatterAccess, listMcpTokens, mintMcpToken, revokeMcpToken } from "@workspace/core";
 import { type AuthEnv } from "../middleware/auth.js";
+import { posthog } from "../../posthog.js";
 import { mintTokenSchema } from "../schemas/tokens.js";
 
 export const tokensRoute = new Hono<AuthEnv>();
@@ -23,6 +24,15 @@ tokensRoute.post("/api/mcp-tokens", zValidator("json", mintTokenSchema), async (
   const token = await mintMcpToken(userId, label, {
     allowedMatterIds: body.allowedMatterIds ?? null,
     maxRole: body.maxRole ?? null,
+  });
+  posthog.capture({
+    distinctId: userId,
+    event: "mcp token created",
+    properties: {
+      label,
+      scoped_matter_count: body.allowedMatterIds?.length ?? 0,
+      max_role: body.maxRole ?? undefined,
+    },
   });
   // Shown once; never retrievable again.
   return c.json({ token }, 201);

@@ -35,6 +35,7 @@ import { type AuthEnv, requireUser } from "./middleware/auth.js";
 import { ipKey, rateLimit, tokenOrIpKey } from "./middleware/rate-limit.js";
 import { requestLog } from "./middleware/request-log.js";
 import { initSentry, Sentry } from "../observability/sentry.js";
+import { posthog } from "../posthog.js";
 
 // Initialize error tracking first, so anything thrown during boot is captured.
 // No-op when SENTRY_DSN is unset.
@@ -86,6 +87,10 @@ app.onError((err, c) => {
   Sentry.captureException(err, {
     user: user ? { id: user.id } : undefined,
     tags: { method: c.req.method, path: c.req.routePath },
+  });
+  posthog.captureException(err, user?.id ?? "anonymous", {
+    path: c.req.path,
+    method: c.req.method,
   });
   logEvent(
     "error",

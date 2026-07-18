@@ -43,6 +43,7 @@ import {
 } from "@workspace/core";
 import { resolveJurisdiction } from "@workspace/registry";
 import { type AuthEnv } from "../middleware/auth.js";
+import { posthog } from "../../posthog.js";
 import { chatSchema, pinSchema } from "../schemas/chat.js";
 import {
   assistantToolCacheEnabled,
@@ -768,6 +769,21 @@ async function runAssistant(
       generatedDocumentCount: generated.length,
       ms: Math.round(performance.now() - runStarted),
     });
+    posthog.capture({
+      distinctId: user.id,
+      event: "chat message sent",
+      properties: {
+        chat_id: chatId,
+        matter_id: body.matterId ?? undefined,
+        model,
+        provider,
+        source: "cache",
+        tool_call_count: toolCalls.length,
+        edit_count: edits.length,
+        citation_count: citations.length,
+        attachment_count: body.attachments?.length ?? 0,
+      },
+    });
     return {
       chatId,
       text: displayText,
@@ -948,6 +964,22 @@ async function runAssistant(
     citationCount: citations.length,
     generatedDocumentCount: generated.length,
     ms: Math.round(performance.now() - runStarted),
+  });
+  posthog.capture({
+    distinctId: user.id,
+    event: "chat message sent",
+    properties: {
+      chat_id: chatId,
+      matter_id: body.matterId ?? prior?.matterId ?? undefined,
+      model,
+      provider,
+      source: "model",
+      tool_call_count: toolCalls.length,
+      edit_count: edits.length,
+      citation_count: citations.length,
+      attachment_count: body.attachments?.length ?? 0,
+      generated_document_count: generated.length,
+    },
   });
 
   return {

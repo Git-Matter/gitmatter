@@ -22,6 +22,7 @@ import {
   emailAllowed,
   trustedOriginsFromEnv,
 } from "./auth-options.js";
+import { posthog } from "../../posthog.js";
 
 const trustedOrigins = trustedOriginsFromEnv(getEnv);
 const allowedEmailDomains = allowedEmailDomainsFromEnv(getEnv);
@@ -133,6 +134,14 @@ export const auth = betterAuth({
             userAgent: s.userAgent ?? null,
             target: s.id,
           });
+          posthog.capture({
+            distinctId: s.userId,
+            event: "user logged in",
+            properties: {
+              $ip: s.ipAddress ?? undefined,
+              $user_agent: s.userAgent ?? undefined,
+            },
+          });
         },
       },
     },
@@ -152,6 +161,13 @@ export const auth = betterAuth({
         // matter. Idempotent.
         after: async (u) => {
           await provisionUserTenant({ id: u.id, name: u.name, email: u.email });
+          posthog.capture({
+            distinctId: u.id,
+            event: "user signed up",
+            properties: {
+              $set: { name: u.name, email: u.email },
+            },
+          });
         },
       },
     },

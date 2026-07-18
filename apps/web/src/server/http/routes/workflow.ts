@@ -19,6 +19,7 @@ import {
   updateWorkflow,
 } from "@workspace/core";
 import { type AuthEnv } from "../middleware/auth.js";
+import { posthog } from "../../posthog.js";
 import { resolveCreateMatter } from "../lib/matter.js";
 import { parsePageQuery } from "../lib/page-query.js";
 import {
@@ -85,6 +86,16 @@ workflowRoute.post("/api/workflows", zValidator("json", createWorkflowSchema), a
     }
   );
   const created = await getWorkflowForViewer(id, user.id, user.email);
+  posthog.capture({
+    distinctId: user.id,
+    event: "workflow created",
+    properties: {
+      workflow_id: id,
+      workflow_type: body.type,
+      practice: body.practice ?? undefined,
+      matter_id: matterId ?? undefined,
+    },
+  });
   return c.json(created, 201);
 });
 
@@ -155,6 +166,15 @@ workflowRoute.post(
         { type: "user", userId: user.id },
         { playbookId: id, documentIds: body.documentIds, matterId: body.matterId }
       );
+      posthog.capture({
+        distinctId: user.id,
+        event: "playbook run",
+        properties: {
+          playbook_id: id,
+          matter_id: body.matterId,
+          document_count: body.documentIds.length,
+        },
+      });
       return c.json(run, 201);
     } catch (err) {
       return c.json({ error: err instanceof Error ? err.message : "Failed" }, 400);
