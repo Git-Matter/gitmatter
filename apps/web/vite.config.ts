@@ -33,6 +33,9 @@ const PUBLIC_PRERENDER_PATHS = [
   "/terms",
   "/login",
   "/signup",
+  "/legal-ai",
+  "/legal-ai-audit-trail",
+  "/self-hosted-legal-ai",
   // Platform + solutions indexes and one path per catalog entry (slugs come
   // from src/marketing/catalog.ts). Keep in sync with public/sitemap.xml.
   "/platform",

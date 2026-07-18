@@ -23,8 +23,11 @@ import { Route as AuthOnboardingRouteImport } from './routes/_auth/onboarding'
 import { Route as DotwellKnownSplatRouteImport } from './routes/[.]well-known/$'
 import { Route as marketingUseCasesRouteImport } from './routes/(marketing)/use-cases'
 import { Route as marketingTermsRouteImport } from './routes/(marketing)/terms'
+import { Route as marketingSelfHostedLegalAiRouteImport } from './routes/(marketing)/self-hosted-legal-ai'
 import { Route as marketingSecurityRouteImport } from './routes/(marketing)/security'
 import { Route as marketingPrivacyRouteImport } from './routes/(marketing)/privacy'
+import { Route as marketingLegalAiAuditTrailRouteImport } from './routes/(marketing)/legal-ai-audit-trail'
+import { Route as marketingLegalAiRouteImport } from './routes/(marketing)/legal-ai'
 import { Route as marketingFeaturesRouteImport } from './routes/(marketing)/features'
 import { Route as marketingAboutRouteImport } from './routes/(marketing)/about'
 import { Route as AuthWorkflowsIndexRouteImport } from './routes/_auth/workflows/index'
@@ -125,6 +128,12 @@ const marketingTermsRoute = marketingTermsRouteImport.update({
   path: '/terms',
   getParentRoute: () => marketingRouteRoute,
 } as any)
+const marketingSelfHostedLegalAiRoute =
+  marketingSelfHostedLegalAiRouteImport.update({
+    id: '/self-hosted-legal-ai',
+    path: '/self-hosted-legal-ai',
+    getParentRoute: () => marketingRouteRoute,
+  } as any)
 const marketingSecurityRoute = marketingSecurityRouteImport.update({
   id: '/security',
   path: '/security',
@@ -133,6 +142,17 @@ const marketingSecurityRoute = marketingSecurityRouteImport.update({
 const marketingPrivacyRoute = marketingPrivacyRouteImport.update({
   id: '/privacy',
   path: '/privacy',
+  getParentRoute: () => marketingRouteRoute,
+} as any)
+const marketingLegalAiAuditTrailRoute =
+  marketingLegalAiAuditTrailRouteImport.update({
+    id: '/legal-ai-audit-trail',
+    path: '/legal-ai-audit-trail',
+    getParentRoute: () => marketingRouteRoute,
+  } as any)
+const marketingLegalAiRoute = marketingLegalAiRouteImport.update({
+  id: '/legal-ai',
+  path: '/legal-ai',
   getParentRoute: () => marketingRouteRoute,
 } as any)
 const marketingFeaturesRoute = marketingFeaturesRouteImport.update({
@@ -306,8 +326,11 @@ export interface FileRoutesByFullPath {
   '/': typeof marketingIndexRoute
   '/about': typeof marketingAboutRoute
   '/features': typeof marketingFeaturesRoute
+  '/legal-ai': typeof marketingLegalAiRoute
+  '/legal-ai-audit-trail': typeof marketingLegalAiAuditTrailRoute
   '/privacy': typeof marketingPrivacyRoute
   '/security': typeof marketingSecurityRoute
+  '/self-hosted-legal-ai': typeof marketingSelfHostedLegalAiRoute
   '/terms': typeof marketingTermsRoute
   '/use-cases': typeof marketingUseCasesRoute
   '/.well-known/$': typeof DotwellKnownSplatRoute
@@ -353,8 +376,11 @@ export interface FileRoutesByTo {
   '/': typeof marketingIndexRoute
   '/about': typeof marketingAboutRoute
   '/features': typeof marketingFeaturesRoute
+  '/legal-ai': typeof marketingLegalAiRoute
+  '/legal-ai-audit-trail': typeof marketingLegalAiAuditTrailRoute
   '/privacy': typeof marketingPrivacyRoute
   '/security': typeof marketingSecurityRoute
+  '/self-hosted-legal-ai': typeof marketingSelfHostedLegalAiRoute
   '/terms': typeof marketingTermsRoute
   '/use-cases': typeof marketingUseCasesRoute
   '/.well-known/$': typeof DotwellKnownSplatRoute
@@ -403,8 +429,11 @@ export interface FileRoutesById {
   '/_unauth': typeof UnauthRouteRouteWithChildren
   '/(marketing)/about': typeof marketingAboutRoute
   '/(marketing)/features': typeof marketingFeaturesRoute
+  '/(marketing)/legal-ai': typeof marketingLegalAiRoute
+  '/(marketing)/legal-ai-audit-trail': typeof marketingLegalAiAuditTrailRoute
   '/(marketing)/privacy': typeof marketingPrivacyRoute
   '/(marketing)/security': typeof marketingSecurityRoute
+  '/(marketing)/self-hosted-legal-ai': typeof marketingSelfHostedLegalAiRoute
   '/(marketing)/terms': typeof marketingTermsRoute
   '/(marketing)/use-cases': typeof marketingUseCasesRoute
   '/.well-known/$': typeof DotwellKnownSplatRoute
@@ -453,8 +482,11 @@ export interface FileRouteTypes {
     | '/'
     | '/about'
     | '/features'
+    | '/legal-ai'
+    | '/legal-ai-audit-trail'
     | '/privacy'
     | '/security'
+    | '/self-hosted-legal-ai'
     | '/terms'
     | '/use-cases'
     | '/.well-known/$'
@@ -500,8 +532,11 @@ export interface FileRouteTypes {
     | '/'
     | '/about'
     | '/features'
+    | '/legal-ai'
+    | '/legal-ai-audit-trail'
     | '/privacy'
     | '/security'
+    | '/self-hosted-legal-ai'
     | '/terms'
     | '/use-cases'
     | '/.well-known/$'
@@ -549,8 +584,11 @@ export interface FileRouteTypes {
     | '/_unauth'
     | '/(marketing)/about'
     | '/(marketing)/features'
+    | '/(marketing)/legal-ai'
+    | '/(marketing)/legal-ai-audit-trail'
     | '/(marketing)/privacy'
     | '/(marketing)/security'
+    | '/(marketing)/self-hosted-legal-ai'
     | '/(marketing)/terms'
     | '/(marketing)/use-cases'
     | '/.well-known/$'
@@ -702,6 +740,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof marketingTermsRouteImport
       parentRoute: typeof marketingRouteRoute
     }
+    '/(marketing)/self-hosted-legal-ai': {
+      id: '/(marketing)/self-hosted-legal-ai'
+      path: '/self-hosted-legal-ai'
+      fullPath: '/self-hosted-legal-ai'
+      preLoaderRoute: typeof marketingSelfHostedLegalAiRouteImport
+      parentRoute: typeof marketingRouteRoute
+    }
     '/(marketing)/security': {
       id: '/(marketing)/security'
       path: '/security'
@@ -714,6 +759,20 @@ declare module '@tanstack/react-router' {
       path: '/privacy'
       fullPath: '/privacy'
       preLoaderRoute: typeof marketingPrivacyRouteImport
+      parentRoute: typeof marketingRouteRoute
+    }
+    '/(marketing)/legal-ai-audit-trail': {
+      id: '/(marketing)/legal-ai-audit-trail'
+      path: '/legal-ai-audit-trail'
+      fullPath: '/legal-ai-audit-trail'
+      preLoaderRoute: typeof marketingLegalAiAuditTrailRouteImport
+      parentRoute: typeof marketingRouteRoute
+    }
+    '/(marketing)/legal-ai': {
+      id: '/(marketing)/legal-ai'
+      path: '/legal-ai'
+      fullPath: '/legal-ai'
+      preLoaderRoute: typeof marketingLegalAiRouteImport
       parentRoute: typeof marketingRouteRoute
     }
     '/(marketing)/features': {
@@ -946,8 +1005,11 @@ declare module '@tanstack/react-router' {
 interface marketingRouteRouteChildren {
   marketingAboutRoute: typeof marketingAboutRoute
   marketingFeaturesRoute: typeof marketingFeaturesRoute
+  marketingLegalAiRoute: typeof marketingLegalAiRoute
+  marketingLegalAiAuditTrailRoute: typeof marketingLegalAiAuditTrailRoute
   marketingPrivacyRoute: typeof marketingPrivacyRoute
   marketingSecurityRoute: typeof marketingSecurityRoute
+  marketingSelfHostedLegalAiRoute: typeof marketingSelfHostedLegalAiRoute
   marketingTermsRoute: typeof marketingTermsRoute
   marketingUseCasesRoute: typeof marketingUseCasesRoute
   marketingIndexRoute: typeof marketingIndexRoute
@@ -970,8 +1032,11 @@ interface marketingRouteRouteChildren {
 const marketingRouteRouteChildren: marketingRouteRouteChildren = {
   marketingAboutRoute: marketingAboutRoute,
   marketingFeaturesRoute: marketingFeaturesRoute,
+  marketingLegalAiRoute: marketingLegalAiRoute,
+  marketingLegalAiAuditTrailRoute: marketingLegalAiAuditTrailRoute,
   marketingPrivacyRoute: marketingPrivacyRoute,
   marketingSecurityRoute: marketingSecurityRoute,
+  marketingSelfHostedLegalAiRoute: marketingSelfHostedLegalAiRoute,
   marketingTermsRoute: marketingTermsRoute,
   marketingUseCasesRoute: marketingUseCasesRoute,
   marketingIndexRoute: marketingIndexRoute,
