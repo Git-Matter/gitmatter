@@ -1,6 +1,6 @@
 import { useRef, type RefObject } from "react";
 import { Link } from "@tanstack/react-router";
-import { ArrowRight, ChevronDown, GitBranch } from "lucide-react";
+import { ArrowRight, ChevronDown, GitBranch, Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SITE } from "@/marketing/site";
 import {
@@ -149,6 +149,39 @@ function NavDropdown({
   );
 }
 
+// The full navigation needs more horizontal room than a tablet viewport has.
+// Keep every top-level destination reachable there without letting the centered
+// desktop nav collide with the brand or primary action.
+function CompactNav() {
+  return (
+    <details className="relative lg:hidden">
+      <summary
+        aria-label="Open navigation"
+        className="flex size-8 cursor-pointer list-none items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground [&::-webkit-details-marker]:hidden"
+      >
+        <Menu className="size-5" />
+      </summary>
+      <nav
+        aria-label="Mobile navigation"
+        className="absolute top-full right-0 mt-2 flex w-48 flex-col rounded-lg border border-border bg-background p-2 shadow-lg"
+      >
+        <Link to="/platform" className="rounded-md px-3 py-2 text-sm hover:bg-muted">
+          Platform
+        </Link>
+        <Link to="/solutions" className="rounded-md px-3 py-2 text-sm hover:bg-muted">
+          Solutions
+        </Link>
+        <Link to="/resources" className="rounded-md px-3 py-2 text-sm hover:bg-muted">
+          Resources
+        </Link>
+        <Link to="/about" className="rounded-md px-3 py-2 text-sm hover:bg-muted">
+          About
+        </Link>
+      </nav>
+    </details>
+  );
+}
+
 // Shared chrome for the cloud-only marketing site: top nav + footer around the
 // page outlet. Cloud-only — bundled solely when DEPLOYMENT=cloud. The site is
 // pinned to light via forcedTheme in __root (pre-paint, no flash).
@@ -159,10 +192,10 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
     // gives every page a slight horizontal scroll.
     <div className="flex min-h-dvh flex-col overflow-x-clip">
       <header className="relative z-40 mx-auto flex w-full max-w-7xl items-center justify-between px-6 py-5">
-        <Link to="/" aria-label="gitmatter home">
+        <Link to="/" aria-label="gitmatter home" className="shrink-0">
           <Wordmark />
         </Link>
-        <nav className="absolute left-1/2 flex -translate-x-1/2 items-center gap-1 text-sm">
+        <nav className="absolute left-1/2 hidden -translate-x-1/2 items-center gap-1 text-sm lg:flex">
           <NavDropdown
             label="Platform"
             to="/platform"
@@ -190,9 +223,12 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
             About
           </Link>
         </nav>
-        <a href={SITE.bookDemo} target="_blank" rel="noreferrer">
-          <Button size="sm">Book demo</Button>
-        </a>
+        <div className="flex shrink-0 items-center gap-2">
+          <a href={SITE.bookDemo} target="_blank" rel="noreferrer">
+            <Button size="sm">Book demo</Button>
+          </a>
+          <CompactNav />
+        </div>
       </header>
 
       <main className="flex-1">{children}</main>

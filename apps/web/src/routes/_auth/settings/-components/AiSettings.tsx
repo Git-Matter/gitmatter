@@ -189,10 +189,16 @@ function ProviderRow({ status }: { status: ProviderKeyStatus }) {
         )}
       </div>
       {meta.note && <p className="text-xs text-muted-foreground">{meta.note}</p>}
+      {status.hasUserKey && (
+        <p className="text-xs text-muted-foreground">
+          Your key is encrypted and cannot be viewed or retrieved here. Enter a new key to replace
+          it.
+        </p>
+      )}
       <div className="flex gap-2">
         <Input
           type="password"
-          placeholder={meta.placeholder}
+          placeholder={status.hasUserKey ? "Enter a new key to replace it" : meta.placeholder}
           value={key}
           onChange={(e) => setKey(e.target.value)}
         />

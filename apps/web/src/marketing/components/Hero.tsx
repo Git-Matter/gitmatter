@@ -24,10 +24,14 @@ export default function Hero() {
           Download, install, and run.
         </p>
         <div className="mt-2 flex flex-wrap items-center justify-center gap-3">
-          <Button size="lg" render={<a href={SITE.bookDemo} target="_blank" rel="noreferrer" />}>
+          <Button
+            size="lg"
+            nativeButton={false}
+            render={<a href={SITE.bookDemo} target="_blank" rel="noreferrer" />}
+          >
             Book demo
           </Button>
-          <Button size="lg" variant="outline" render={<a href={SITE.docs} />}>
+          <Button size="lg" variant="outline" nativeButton={false} render={<a href={SITE.docs} />}>
             Install locally
           </Button>
         </div>
