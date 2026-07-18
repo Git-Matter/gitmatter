@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SITE } from "@/marketing/site";
 import { FEATURES } from "@/marketing/catalog";
@@ -33,11 +33,49 @@ const WORKS_WITH = {
   providers: ["Anthropic Claude", "Google Gemini", "OpenAI", "OpenRouter"],
 };
 
+function MobileTableOfContents() {
+  return (
+    <aside className="mx-auto w-full max-w-7xl px-6 pt-6 lg:hidden">
+      <details className="group rounded-lg border border-border bg-card">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-medium [&::-webkit-details-marker]:hidden">
+          On this page
+          <ChevronDown className="size-4 text-muted-foreground transition-transform duration-150 group-open:rotate-180" />
+        </summary>
+        <nav aria-label="Table of contents" className="border-t border-border p-2 text-sm">
+          <a href="#overview" className="block rounded-md px-3 py-2 hover:bg-muted">
+            Overview
+          </a>
+          <a href="#why-gitmatter" className="block rounded-md px-3 py-2 hover:bg-muted">
+            Why gitmatter
+          </a>
+          <a href="#platform-tools" className="block rounded-md px-3 py-2 hover:bg-muted">
+            Platform tools
+          </a>
+          <div className="ml-3 border-l border-border py-1">
+            {FEATURES.map((feature) => (
+              <a
+                key={feature.slug}
+                href={`#${feature.slug}`}
+                className="block rounded-md px-3 py-2 text-muted-foreground hover:bg-muted hover:text-foreground"
+              >
+                {feature.tag}
+              </a>
+            ))}
+          </div>
+          <a href="#works-with" className="block rounded-md px-3 py-2 hover:bg-muted">
+            Works with
+          </a>
+        </nav>
+      </details>
+    </aside>
+  );
+}
+
 export default function Platform() {
   return (
     <div className="flex flex-col">
       {/* Hero: oversized statement left, positioning + CTA right, demo below. */}
-      <header className="mx-auto w-full max-w-7xl px-6 pt-16">
+      <header id="overview" className="mx-auto w-full max-w-7xl scroll-mt-20 px-6 pt-16">
         <Eyebrow>platform overview</Eyebrow>
         <div className="grid gap-10 py-10 lg:grid-cols-[1.2fr_1fr] lg:gap-16">
           <h1 className="max-w-[14ch] font-heading text-5xl tracking-tight text-balance sm:text-6xl">
@@ -67,8 +105,10 @@ export default function Platform() {
         </figure>
       </header>
 
+      <MobileTableOfContents />
+
       {/* Why gitmatter — three value cards, all verifiable. */}
-      <section className="mx-auto w-full max-w-7xl px-6 pt-24">
+      <section id="why-gitmatter" className="mx-auto w-full max-w-7xl scroll-mt-20 px-6 pt-24">
         <Eyebrow>why gitmatter</Eyebrow>
         <h2 className="mt-stack max-w-[22ch] font-heading text-4xl tracking-tight text-balance">
           The questions a firm asks first, answered by the system itself.
@@ -84,7 +124,7 @@ export default function Platform() {
       </section>
 
       {/* Feature tour — one platform, purpose-built tools. */}
-      <section className="mx-auto w-full max-w-7xl px-6 pt-24">
+      <section id="platform-tools" className="mx-auto w-full max-w-7xl scroll-mt-20 px-6 pt-24">
         <h2 className="max-w-[24ch] font-heading text-4xl tracking-tight text-balance">
           Nine tools. One history underneath.
         </h2>
@@ -123,7 +163,7 @@ export default function Platform() {
       </section>
 
       {/* Works with the AI your team already uses. */}
-      <section className="border-y border-border bg-secondary/60">
+      <section id="works-with" className="scroll-mt-20 border-y border-border bg-secondary/60">
         <div className="mx-auto max-w-7xl px-6 py-20">
           <Eyebrow>works with</Eyebrow>
           <h2 className="mt-stack max-w-[22ch] font-heading text-4xl tracking-tight text-balance">

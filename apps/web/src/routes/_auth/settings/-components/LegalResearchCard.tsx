@@ -63,10 +63,16 @@ export function LegalResearchCard() {
           Powers US case-law search and citation checks. Get a free token from your CourtListener
           profile. Encrypted at rest.
         </p>
+        {hasUserKey && (
+          <p className="text-xs text-muted-foreground">
+            Your token is encrypted and cannot be viewed or retrieved here. Enter a new token to
+            replace it.
+          </p>
+        )}
         <div className="flex gap-2">
           <Input
             type="password"
-            placeholder="CourtListener API token"
+            placeholder={hasUserKey ? "Enter a new token to replace it" : "CourtListener API token"}
             value={key}
             onChange={(e) => setKey(e.target.value)}
           />
