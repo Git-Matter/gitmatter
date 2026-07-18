@@ -44,5 +44,8 @@
   "overrides": {
     "vite": "catalog:",
     "vitest": "catalog:"
+  },
+  "dependencies": {
+    "posthog-node": "^5.45.2"
   }
 }

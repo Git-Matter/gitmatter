@@ -23,6 +23,7 @@ import {
   updateReviewColumn,
 } from "@workspace/core";
 import { type AuthEnv } from "../middleware/auth.js";
+import { posthog } from "../../posthog.js";
 import { resolveCreateMatter } from "../lib/matter.js";
 import { parsePageQuery } from "../lib/page-query.js";
 import {
@@ -66,6 +67,16 @@ tabularRoute.post("/api/tabular/reviews", zValidator("json", createReviewSchema)
       matterId,
     }
   );
+  posthog.capture({
+    distinctId: user.id,
+    event: "tabular review created",
+    properties: {
+      review_id: reviewId,
+      matter_id: matterId,
+      document_count: body.documentIds.length,
+      column_count: body.columnsConfig?.length ?? 0,
+    },
+  });
   return c.json({ id: reviewId }, 201);
 });
 

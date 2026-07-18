@@ -41,6 +41,7 @@ import {
   uploadDocument,
 } from "@workspace/core";
 import { type AuthEnv } from "../middleware/auth.js";
+import { posthog } from "../../posthog.js";
 import { resolveCreateMatter, resolveUploadMatter } from "../lib/matter.js";
 import { parsePageQuery } from "../lib/page-query.js";
 import { clientMeta } from "../lib/request-meta.js";
@@ -181,6 +182,16 @@ documentsRoute.post("/api/documents/upload", async (c) => {
       target: doc.id,
       metadata: { title, fileType, matterId },
       ...clientMeta(c),
+    });
+    posthog.capture({
+      distinctId: user.id,
+      event: "document uploaded",
+      properties: {
+        document_id: doc.id,
+        file_type: fileType,
+        file_size_bytes: file.size,
+        matter_id: matterId ?? undefined,
+      },
     });
     return c.json(doc, 202);
   } catch (err) {
@@ -415,6 +426,15 @@ documentsRoute.post(
     } catch (e) {
       return c.json({ error: e instanceof Error ? e.message : "failed" }, 400);
     }
+    posthog.capture({
+      distinctId: user.id,
+      event: "document edit resolved",
+      properties: {
+        document_id: id,
+        decision,
+        change_count: changeIds.length,
+      },
+    });
     return c.json(await getDocumentDetail(id));
   }
 );

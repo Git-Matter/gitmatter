@@ -41,6 +41,7 @@ import {
   type ClientSelection,
 } from "@workspace/core";
 import { type AuthEnv } from "../middleware/auth.js";
+import { posthog } from "../../posthog.js";
 import { parsePageQuery } from "../lib/page-query.js";
 import {
   addMemberSchema,
@@ -76,6 +77,14 @@ mattersRoute.get("/api/clients", async (c) => {
 mattersRoute.post("/api/clients", zValidator("json", createClientSchema), async (c) => {
   const user = c.get("user");
   const client = await createClient(user.id, user.tenantId, c.req.valid("json"));
+  posthog.capture({
+    distinctId: user.id,
+    event: "client created",
+    properties: {
+      client_id: client.id,
+      client_type: client.type,
+    },
+  });
   return c.json(client, 201);
 });
 
@@ -208,7 +217,16 @@ mattersRoute.post(
 );
 
 mattersRoute.post("/api/matters", zValidator("json", createMatterSchema), async (c) => {
-  const matter = await createMatter(c.get("user").id, c.req.valid("json"));
+  const user = c.get("user");
+  const matter = await createMatter(user.id, c.req.valid("json"));
+  posthog.capture({
+    distinctId: user.id,
+    event: "matter created",
+    properties: {
+      matter_id: matter.id,
+      matter_name: matter.name,
+    },
+  });
   return c.json(matter, 201);
 });
 
@@ -291,9 +309,14 @@ mattersRoute.patch("/api/matters/:id", zValidator("json", updateMatterSchema), a
 
 mattersRoute.post("/api/matters/:id/close", async (c) => {
   const id = c.req.param("id");
-  if (!(await hasMatterAccess(c.get("user").id, id, "owner")))
-    return c.json({ error: "Forbidden" }, 403);
+  const user = c.get("user");
+  if (!(await hasMatterAccess(user.id, id, "owner"))) return c.json({ error: "Forbidden" }, 403);
   await closeMatter(id);
+  posthog.capture({
+    distinctId: user.id,
+    event: "matter closed",
+    properties: { matter_id: id },
+  });
   return c.body(null, 204);
 });
 
