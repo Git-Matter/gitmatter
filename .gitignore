@@ -15,6 +15,7 @@ dist-ssr
 next-env.d.ts
 __unconfig*
 todos.json
+tmp
 
 # turbo
 .turbo
