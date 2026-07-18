@@ -32,13 +32,13 @@ export const LLM_MODELS: LlmModel[] = [
     id: "claude-opus-4-8",
     label: "Claude Opus 4.8",
     provider: "anthropic",
-    capabilities: { vision: true, tools: true, reasoning: true, contextWindow: 200_000 },
+    capabilities: { vision: true, tools: true, reasoning: true, contextWindow: 1_000_000 },
   },
   {
-    id: "claude-sonnet-4-6",
-    label: "Claude Sonnet 4.6",
+    id: "claude-sonnet-5",
+    label: "Claude Sonnet 5",
     provider: "anthropic",
-    capabilities: { vision: true, tools: true, reasoning: true, contextWindow: 200_000 },
+    capabilities: { vision: true, tools: true, reasoning: true, contextWindow: 1_000_000 },
   },
   {
     id: "claude-haiku-4-5",
@@ -50,25 +50,31 @@ export const LLM_MODELS: LlmModel[] = [
     id: "claude-fable-5",
     label: "Claude Fable 5",
     provider: "anthropic",
-    capabilities: { vision: true, tools: true, reasoning: false, contextWindow: 200_000 },
+    capabilities: { vision: true, tools: true, reasoning: true, contextWindow: 1_000_000 },
   },
   // OpenAI
   {
-    id: "gpt-5.5",
-    label: "GPT-5.5",
+    id: "gpt-5.6-sol",
+    label: "GPT-5.6 Sol",
     provider: "openai",
-    capabilities: { vision: true, tools: true, reasoning: true, contextWindow: 400_000 },
+    capabilities: { vision: true, tools: true, reasoning: true, contextWindow: 1_050_000 },
   },
   {
-    id: "gpt-5.1",
-    label: "GPT-5.1",
+    id: "gpt-5.6-terra",
+    label: "GPT-5.6 Terra",
     provider: "openai",
-    capabilities: { vision: true, tools: true, reasoning: true, contextWindow: 400_000 },
+    capabilities: { vision: true, tools: true, reasoning: true, contextWindow: 1_050_000 },
+  },
+  {
+    id: "gpt-5.6-luna",
+    label: "GPT-5.6 Luna",
+    provider: "openai",
+    capabilities: { vision: true, tools: true, reasoning: true, contextWindow: 1_050_000 },
   },
   // Google Gemini
   {
-    id: "gemini-3.5-pro",
-    label: "Gemini 3.5 Pro",
+    id: "gemini-3.1-pro-preview",
+    label: "Gemini 3.1 Pro Preview",
     provider: "gemini",
     capabilities: { vision: true, tools: true, reasoning: true, contextWindow: 1_000_000 },
   },
@@ -77,6 +83,12 @@ export const LLM_MODELS: LlmModel[] = [
     label: "Gemini 3.5 Flash",
     provider: "gemini",
     capabilities: { vision: true, tools: true, reasoning: false, contextWindow: 1_000_000 },
+  },
+  {
+    id: "gemini-3.1-flash-lite",
+    label: "Gemini 3.1 Flash-Lite",
+    provider: "gemini",
+    capabilities: { vision: true, tools: true, reasoning: true, contextWindow: 1_000_000 },
   },
   {
     id: "gemini-2.5-pro",
@@ -88,11 +100,17 @@ export const LLM_MODELS: LlmModel[] = [
     id: "gemini-2.5-flash",
     label: "Gemini 2.5 Flash",
     provider: "gemini",
+    capabilities: { vision: true, tools: true, reasoning: true, contextWindow: 1_000_000 },
+  },
+  {
+    id: "gemini-2.5-flash-lite",
+    label: "Gemini 2.5 Flash-Lite",
+    provider: "gemini",
     capabilities: { vision: true, tools: true, reasoning: false, contextWindow: 1_000_000 },
   },
 ];
 
-export const DEFAULT_MODEL = "claude-sonnet-4-6";
+export const DEFAULT_MODEL = "claude-sonnet-5";
 
 /** Which provider serves a model id — by catalog, then by sensible prefix. */
 export function providerForModel(modelId: string): LlmProvider {

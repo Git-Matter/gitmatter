@@ -21,9 +21,9 @@ const convo: ChatMessage[] = [
 
 describe("providerForModel", () => {
   test("maps known + inferred ids", () => {
-    expect(providerForModel("claude-sonnet-4-6")).toBe("anthropic");
-    expect(providerForModel("gpt-5.1")).toBe("openai");
-    expect(providerForModel("gemini-2.5-flash")).toBe("gemini");
+    expect(providerForModel("claude-sonnet-5")).toBe("anthropic");
+    expect(providerForModel("gpt-5.6-sol")).toBe("openai");
+    expect(providerForModel("gemini-3.5-flash")).toBe("gemini");
     expect(providerForModel("anything/with-slash")).toBe("openrouter");
     expect(providerForModel("claude-unknown")).toBe("anthropic");
   });

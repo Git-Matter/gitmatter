@@ -53,13 +53,13 @@ describe("per-matter usage", () => {
     expect(sonnet?.calls).toBe(2);
     expect(sonnet?.inputTokens).toBe(1_500_000);
     expect(sonnet?.outputTokens).toBe(150_000);
-    // 1.5M in @ $3/M + 150k out @ $15/M = 4.5 + 2.25
-    expect(sonnet?.costUsd).toBeCloseTo(6.75, 5);
+    // 1.5M in @ $2/M + 150k out @ $10/M = 3 + 1.5
+    expect(sonnet?.costUsd).toBeCloseTo(4.5, 5);
 
     const unpriced = s.llm.find((r) => r.model === "some/unpriced-model");
     expect(unpriced?.costUsd).toBeNull();
     // Totals cost sums priced models only.
-    expect(s.totals.costUsd).toBeCloseTo(6.75, 5);
+    expect(s.totals.costUsd).toBeCloseTo(4.5, 5);
 
     const docTool = s.tools.find((t) => t.tool === "get_document");
     expect(docTool?.calls).toBe(2);
@@ -81,6 +81,8 @@ describe("per-matter usage", () => {
 describe("price table", () => {
   test("longest prefix wins and unknown models are null", () => {
     expect(priceForModel("claude-sonnet-5-20260101")?.prefix).toBe("claude-sonnet-5");
+    expect(priceForModel("gpt-5.6-terra")?.prefix).toBe("gpt-5.6-terra");
+    expect(priceForModel("gemini-3.1-flash-lite")?.prefix).toBe("gemini-3.1-flash-lite");
     expect(priceForModel("gpt-5-mini-2026")?.prefix).toBe("gpt-5-mini");
     expect(priceForModel("totally-unknown")).toBeNull();
     expect(estimateCostUsd("claude-haiku-4-5", 1_000_000, 1_000_000)).toBeCloseTo(6, 5);
