@@ -1,8 +1,7 @@
 import { Outlet, createFileRoute, redirect } from "@tanstack/react-router";
 import { Suspense, lazy } from "react";
 import { MattersProvider } from "../../lib/context/matters-context";
-import { getServerSession } from "../../lib/auth/session";
-import { getTenant } from "@workspace/core";
+import { getServerSession, getServerTenant } from "../../lib/auth/session";
 
 // Authed-only chrome, lazy-loaded so its weight (base-ui Popover, lucide icons,
 // the chats query, sonner) leaves the shared entry chunk — the logged-out /
@@ -22,7 +21,7 @@ export const Route = createFileRoute("/_auth")({
     if (!session) {
       throw redirect({ to: "/login", search: { next: location.href } });
     }
-    const tenant = session.user.tenantId ? await getTenant(session.user.tenantId) : null;
+    const tenant = await getServerTenant();
     if (tenant && !tenant.storageRegion && location.pathname !== "/onboarding") {
       throw redirect({ to: "/onboarding" });
     }
