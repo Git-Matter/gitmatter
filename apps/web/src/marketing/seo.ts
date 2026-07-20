@@ -13,6 +13,7 @@ export function marketingHead(opts: {
   jsonLd?: object[];
 }) {
   const url = `${SITE.url}${opts.path === "/" ? "" : opts.path}`;
+  const imageAlt = opts.og?.title ?? opts.title;
   const image = opts.og
     ? `${SITE.url}/api/og?title=${encodeURIComponent(opts.og.title)}` +
       (opts.og.eyebrow ? `&eyebrow=${encodeURIComponent(opts.og.eyebrow)}` : "")
@@ -27,10 +28,15 @@ export function marketingHead(opts: {
       { property: "og:description", content: opts.description },
       { property: "og:url", content: url },
       { property: "og:image", content: image },
+      { property: "og:image:type", content: "image/png" },
+      { property: "og:image:width", content: opts.og ? "1200" : "2400" },
+      { property: "og:image:height", content: opts.og ? "630" : "1260" },
+      { property: "og:image:alt", content: imageAlt },
       { name: "twitter:card", content: "summary_large_image" },
       { name: "twitter:title", content: opts.title },
       { name: "twitter:description", content: opts.description },
       { name: "twitter:image", content: image },
+      { name: "twitter:image:alt", content: imageAlt },
     ],
     links: [{ rel: "canonical", href: url }],
     ...(opts.jsonLd?.length
