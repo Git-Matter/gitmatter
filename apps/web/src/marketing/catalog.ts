@@ -193,12 +193,12 @@ export const FEATURES: Feature[] = [
   }),
   feature({
     tag: "Tabular review",
-    title: "A hundred contracts. One pass.",
-    body: "Ask the same questions of every document in a stack and get the answers back as a table. Each cell links to the spot it came from and to who ran it. The outliers surface themselves.",
+    title: "Know what could break the deal before signing.",
+    body: "Run one question set across a hundred customer contracts and see which consent rights put deal value at risk. Each finding links back to its source clause and to who ran the review.",
     menuDesc: "One set of questions across a whole stack.",
-    clip: "/features/review.mp4",
+    clip: "/blog/customer-contract-diligence-review.mp4",
     intro:
-      "Define the questions once, run them across every document in a stack, and get back a table where every cell can prove where it came from.",
+      "In acquisition diligence, define the questions once, run them across every customer contract, and focus counsel on the agreements that put material revenue at risk.",
     sections: [
       {
         title: "One question set, every document",
@@ -206,7 +206,7 @@ export const FEATURES: Feature[] = [
         points: [
           {
             name: "Reusable question sets",
-            desc: "Governing law, term, liability caps, change-of-control — define the columns once and reuse them on the next stack.",
+            desc: "Change of control, assignment consent, annual value, and renewal date — define the columns once and reuse them on the next data room.",
           },
           {
             name: "Answers as a table",
@@ -214,7 +214,7 @@ export const FEATURES: Feature[] = [
           },
           {
             name: "Outliers surface themselves",
-            desc: "When ninety-seven contracts say New York and three say something else, the table makes the three impossible to miss.",
+            desc: "When ninety-seven contracts permit the deal and three require customer consent, the table makes the three impossible to miss.",
           },
         ],
       },

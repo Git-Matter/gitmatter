@@ -40,6 +40,20 @@ export type VideoResource = {
 
 export const VIDEOS: VideoResource[] = [
   {
+    slug: "customer-contract-diligence",
+    title: "Customer contract diligence",
+    desc: "A 100-contract acquisition review surfaces the consent rights tied to material recurring revenue, with every finding linked to its source clause.",
+    media: "/blog/customer-contract-diligence-review.mp4",
+    poster: "/posters/customer-contract-diligence-review.jpg",
+    publishedAt: "2026-07-19T00:00:00+02:00",
+    duration: "PT22S",
+    points: [
+      "One tabular review across 100 customer contracts",
+      "Change-of-control consent risk viewed alongside annual contract value",
+      "The decisive clause, reasoning, and audit attribution opened in the real product",
+    ],
+  },
+  {
     slug: "platform-overview",
     title: "The platform in one pass",
     desc: "Every feature in a single reel: research, review, redline, extract, and the record underneath.",
