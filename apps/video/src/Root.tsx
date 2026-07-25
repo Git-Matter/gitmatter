@@ -29,6 +29,13 @@ import { TeaserLunch, TeaserBlame, TeaserAgent, TEASER_FRAMES } from "./Teasers"
 import { CompareTeaser, COMPARE_FRAMES } from "./CompareTeaser";
 import { Byok, BYOK_FRAMES } from "./Byok";
 import { WebinarInHouse, WebinarTransactional, WEBINAR_FRAMES } from "./WebinarOpen";
+import { AiTrainingReviewTutorial, AI_TRAINING_REVIEW_FRAMES } from "./AiTrainingReviewTutorial";
+import {
+  AcquisitionReviewDemo,
+  EmploymentReviewDemo,
+  LeaseReviewDemo,
+  TABULAR_REVIEW_DEMO_FRAMES,
+} from "./TabularReviewDemos";
 
 // Marketing videos (1920×1080 masters) — rendered into the private
 // Git-Matter/marketing repo. One entry per concept in that repo's
@@ -79,6 +86,38 @@ export const RemotionRoot: React.FC = () => {
         id="GitmatterDemo"
         component={GitmatterDemo}
         durationInFrames={DEMO_FRAMES}
+        fps={30}
+        width={1920}
+        height={1080}
+      />
+      <Composition
+        id="AiTrainingReviewTutorial"
+        component={AiTrainingReviewTutorial}
+        durationInFrames={AI_TRAINING_REVIEW_FRAMES}
+        fps={30}
+        width={1920}
+        height={1080}
+      />
+      <Composition
+        id="AcquisitionReviewDemo"
+        component={AcquisitionReviewDemo}
+        durationInFrames={TABULAR_REVIEW_DEMO_FRAMES}
+        fps={30}
+        width={1920}
+        height={1080}
+      />
+      <Composition
+        id="LeaseReviewDemo"
+        component={LeaseReviewDemo}
+        durationInFrames={TABULAR_REVIEW_DEMO_FRAMES}
+        fps={30}
+        width={1920}
+        height={1080}
+      />
+      <Composition
+        id="EmploymentReviewDemo"
+        component={EmploymentReviewDemo}
+        durationInFrames={TABULAR_REVIEW_DEMO_FRAMES}
         fps={30}
         width={1920}
         height={1080}

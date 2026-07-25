@@ -11,9 +11,9 @@ const Page: (props: object) => ReactNode =
 export const Route = createFileRoute("/(marketing)/")({
   head: () =>
     marketingHead({
-      title: "gitmatter — audited legal AI any agent plugs into",
+      title: "Legal AI for contract work with an audit trail · gitmatter",
       description:
-        "Contract redline, extraction, and drafting on a git-style audit spine — every change a commit with author, message, and blame. Open source, self-hostable, bring your own agent and LLM key.",
+        "Legal AI for contract review, redlining, extraction, drafting, and research — with human decisions and every change on a git-style audit trail. Open source and self-hostable.",
       path: "/",
       jsonLd: [
         {
