@@ -14,6 +14,7 @@ export function buildDiscoveryTools({ actor }: ToolContext): ToolSpec[] {
   return [
     {
       name: "search",
+      readOnly: true,
       description: "Search your reviews and documents by keyword. Returns ids to pass to `fetch`.",
       schema: { query: z.string() },
       handler: async ({ query }) => {
@@ -44,6 +45,7 @@ export function buildDiscoveryTools({ actor }: ToolContext): ToolSpec[] {
     },
     {
       name: "fetch",
+      readOnly: true,
       description: "Fetch the full content of a search result by its id.",
       schema: { id: z.string() },
       handler: async ({ id }) => {

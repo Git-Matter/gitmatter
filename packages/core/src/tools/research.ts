@@ -184,6 +184,8 @@ export function buildResearchTools(
     tools.push(
       {
         name: TOOL.searchCaseLaw,
+        readOnly: true,
+        openWorld: true,
         description:
           "Search US case law opinions (CourtListener) by keyword, with optional court/date filters.",
         schema: {
@@ -206,6 +208,8 @@ export function buildResearchTools(
       },
       {
         name: TOOL.verifyCitations,
+        readOnly: true,
+        openWorld: true,
         description:
           "Verify/normalize US reporter citations (e.g. '467 U.S. 837') against CourtListener.",
         schema: { citations: z.array(z.string()) },
@@ -227,6 +231,8 @@ export function buildResearchTools(
     tools.push(
       {
         name: TOOL.searchTrademarks,
+        readOnly: true,
+        openWorld: true,
         description:
           "Search Australian trade marks (IP Australia) by word/name/number. Returns matching trade mark numbers.",
         schema: {
@@ -248,6 +254,8 @@ export function buildResearchTools(
       },
       {
         name: TOOL.getTrademark,
+        readOnly: true,
+        openWorld: true,
         description: "Get a single Australian trade mark (IP Australia) by its trade mark number.",
         schema: { number: z.string() },
         handler: async ({ number }) => {
@@ -262,6 +270,8 @@ export function buildResearchTools(
       },
       {
         name: TOOL.searchTrademarksAdvanced,
+        readOnly: true,
+        openWorld: true,
         description:
           "Advanced Australian trade mark search (IP Australia). Supports word, phrase, owner, goods/services, class, date, number, IR number, ABN/ACN/ARBN, address for service, parties, image, kind, status, flags, and AND/OR/AND_NOT rows. Returns trade mark numbers.",
         schema: {
@@ -281,6 +291,8 @@ export function buildResearchTools(
       },
       {
         name: TOOL.pageTrademarksAdvanced,
+        readOnly: true,
+        openWorld: true,
         description:
           "Paged advanced Australian trade mark search (IP Australia). Same query shape as search_trademarks_advanced, but returns full trade mark records. Use pageSize <= 100.",
         schema: {
@@ -302,6 +314,8 @@ export function buildResearchTools(
       },
       {
         name: TOOL.searchPatents,
+        readOnly: true,
+        openWorld: true,
         description:
           "Search Australian patents (IP Australia) by keyword. searchType 'ID' returns application numbers; 'DETAILS' returns basic records. Supports sort fields and searchMode from the IP Australia Patent Search API.",
         schema: {
@@ -331,6 +345,8 @@ export function buildResearchTools(
       },
       {
         name: TOOL.getPatent,
+        readOnly: true,
+        openWorld: true,
         description:
           "Get a single Australian patent (IP Australia) by its Australian application number.",
         schema: { number: z.string() },

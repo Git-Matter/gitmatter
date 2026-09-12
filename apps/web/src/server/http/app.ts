@@ -266,6 +266,7 @@ app.all("/api/mcp", async (c) => {
   // for static tokens, or carried in the signed OAuth token) — no extra reads.
   const jurisdiction = resolveJurisdiction(null, account.jurisdiction);
   const server = buildMcpServer({
+    origin: serverOrigin(c),
     userId: account.userId,
     label: account.label,
     tokenId: account.tokenId,

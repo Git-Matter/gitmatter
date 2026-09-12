@@ -10,6 +10,11 @@ export type ToolSpec = {
   name: string;
   description: string;
   schema: z.ZodRawShape;
+  /** Provider inference needs separately billed API access; subscription agents supply their own analysis. */
+  execution?: "provider";
+  humanOnly?: boolean;
+  readOnly?: boolean;
+  openWorld?: boolean;
   handler: (input: Record<string, unknown>) => Promise<unknown>;
 };
 
