@@ -12,6 +12,9 @@ mean the feature is implemented, browser-verified, deployed, or used by a real f
 
 ## Supporting architecture
 
+[`evidence/2026-09-13-subscription-agent.md`](evidence/2026-09-13-subscription-agent.md) records
+the implemented subscription-agent workflow, local validation and staging deployment blockers.
+
 [`../PLANS.md`](../PLANS.md) contains the deeper candidate-feature designs for the audit spine,
 approval gates, agent review queue, search, notifications, and branching. Use those sections as
 architecture input. The real-usage roadmap decides product order and release gates.

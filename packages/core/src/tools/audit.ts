@@ -25,6 +25,7 @@ export function buildAuditTools({ actor }: { actor: Actor }): ToolSpec[] {
   return [
     {
       name: "history",
+      readOnly: true,
       description:
         "List an artifact's commit history (newest first): seq, actor (user or agent + label), op, and message. artifactType: tabular_review | workflow | document.",
       schema: { artifactType, artifactId: z.string() },
@@ -35,6 +36,7 @@ export function buildAuditTools({ actor }: { actor: Actor }): ToolSpec[] {
     },
     {
       name: "diff",
+      readOnly: true,
       description: "Field-level diff of an artifact between two commit sequence numbers.",
       schema: {
         artifactType,
@@ -54,6 +56,7 @@ export function buildAuditTools({ actor }: { actor: Actor }): ToolSpec[] {
     },
     {
       name: "blame",
+      readOnly: true,
       description:
         "Which commit last set a given field path — who did it, when, and how. Path examples: cell/<documentId>/<columnIndex> (review), field/prompt_md (workflow), markdown (document).",
       schema: { artifactType, artifactId: z.string(), path: z.string() },
@@ -64,6 +67,7 @@ export function buildAuditTools({ actor }: { actor: Actor }): ToolSpec[] {
     },
     {
       name: "export_audit",
+      readOnly: true,
       description:
         "Export a matter's complete audit trail as CSV: every commit on every artifact in the matter, one row per field change, with actor attribution.",
       schema: { matterId: z.string() },
@@ -87,6 +91,7 @@ export function buildAuditTools({ actor }: { actor: Actor }): ToolSpec[] {
     },
     {
       name: "show_commit",
+      readOnly: true,
       description:
         "Full detail of one commit: the actor (user or agent + label), op, message, and every field change (before → after). The complete 'who did what, exactly, with what'.",
       schema: { commitId: z.string() },

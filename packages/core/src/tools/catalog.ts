@@ -174,7 +174,12 @@ function withToolLogging(spec: ToolSpec, actor: Actor): ToolSpec {
  */
 export function buildToolCatalog(
   actor: Actor,
-  opts: { jurisdiction: string; defaultMatterLabel: string; sourceIds?: ProviderId[] }
+  opts: {
+    jurisdiction: string;
+    defaultMatterLabel: string;
+    sourceIds?: ProviderId[];
+    executionMode?: "subscription";
+  }
 ): ToolSpec[] {
   const allowedSourceIds = opts.sourceIds ? new Set(opts.sourceIds) : null;
   const providerIds = new Set<ProviderId>(
@@ -210,5 +215,8 @@ export function buildToolCatalog(
     ...buildWorkflowTools(ctx),
     ...buildClauseTools(ctx),
     ...buildResearchTools(ctx, providerIds),
-  ].map((t) => withToolLogging(t, actor));
+  ]
+    .filter((t) => !(actor.type === "agent" && t.humanOnly))
+    .filter((t) => !(opts.executionMode === "subscription" && t.execution === "provider"))
+    .map((t) => withToolLogging(t, actor));
 }

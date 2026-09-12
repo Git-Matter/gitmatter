@@ -22,12 +22,16 @@ This path needs no code. You add gitmatter inside your AI tool, sign in, and app
 access. "Connector" below just means the feature in your AI tool for adding outside
 services.
 
-### ChatGPT (Developer Mode, paid plans)
+### ChatGPT web (custom app)
 
-In ChatGPT, go to **Settings → Connectors** and add a custom connector. For the
+In ChatGPT, add a custom app from its app settings. For the
 address, use gitmatter's connection address: `https://<host>/api/mcp` (replace
 `<host>` with your gitmatter web address). ChatGPT then takes you to a gitmatter
 sign-in and approval page. Approve it, and you are connected. There is nothing to copy.
+
+Write actions depend on your ChatGPT plan and workspace permissions. Check
+[OpenAI's current custom MCP availability](https://help.openai.com/en/articles/12584461)
+before choosing a plan for editing documents; access to search alone is not enough.
 
 ### Claude Desktop / web (custom connector)
 
@@ -42,6 +46,28 @@ takes you through the same sign-in and approval. Approve it, and you are connect
   then use that address in place of `http://localhost:4280`. If you are using a normal hosted
   gitmatter, this does not affect you.
 </Callout>
+
+## Your first review with an existing AI subscription
+
+1. Open a matter in GitMatter and upload a sample contract.
+2. Expand **Review with your own AI** and copy the review prompt.
+3. Paste it into a conversation with your connected assistant.
+4. The assistant reads the source and saves its own cited findings and proposed edits.
+5. Open the returned GitMatter links. Accept or reject document edits in the document UI.
+
+This connector does not launch GitMatter's separately billed LLM calls. Your assistant
+supplies the reasoning; GitMatter stores the work and its history. Hosting and external
+research services may have separate costs. The built-in assistant remains available
+for workflows using an LLM API key.
+
+After GitMatter changes its tools, refresh the connector's catalog. If tools are
+missing or sign-in repeats, reconnect from your AI client's settings and start a new
+conversation. This version removes provider-run tools and agent edit resolution from
+the connector; clients with a saved catalog need to refresh.
+
+For self-hosted servers behind a proxy, set `BETTER_AUTH_URL` to the public HTTPS
+origin. The discovery endpoints must advertise that same HTTPS origin, not an
+internal HTTP address. Correct the public origin before reconnecting a client.
 
 ## For technical users
 

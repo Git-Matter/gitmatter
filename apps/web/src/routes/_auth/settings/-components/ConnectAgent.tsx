@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { SUBSCRIPTION_WORKFLOW } from "@workspace/registry";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -26,13 +27,12 @@ export function ConnectAgent() {
   });
   const [label, setLabel] = useState("");
   const [fresh, setFresh] = useState<string | null>(null);
-  const [tab, setTab] = useState<ConnectTab>("ChatGPT");
+  const [tab, setTab] = useState<ConnectTab>("Claude");
   // Scope: null maxRole = full access; empty matter set = all matters.
   const [maxRole, setMaxRole] = useState<MatterRole | null>(null);
   const [matterIds, setMatterIds] = useState<string[]>([]);
 
   const mcpUrl = typeof window !== "undefined" ? `${window.location.origin}/api/mcp` : "/api/mcp";
-  const usesOAuth = tab === "ChatGPT" || tab === "Claude";
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ["tokens"] });
 
@@ -63,16 +63,42 @@ export function ConnectAgent() {
         <CardTitle>Connect an agent</CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
-        <p className="text-sm text-muted-foreground">
-          gitmatter exposes an MCP server at <code className="text-xs">{mcpUrl}</code>. Connect your
-          own AI client - every action it takes is recorded in the same commit history, attributed
-          as an agent. It can drive product features but never your account settings.
-        </p>
+        <p className="text-sm text-muted-foreground">{SUBSCRIPTION_WORKFLOW}</p>
 
         <AgentClientTabs tab={tab} onChange={setTab} />
         <AgentSetupGuide tab={tab} mcpUrl={mcpUrl} />
+        <Button
+          size="sm"
+          variant="outline"
+          className="self-start"
+          onClick={async () => {
+            try {
+              await navigator.clipboard.writeText(mcpUrl);
+              toast.success("Connection address copied.");
+            } catch {
+              toast.error("Couldn't copy. Select the address above and copy it manually.");
+            }
+          }}
+        >
+          Copy connection address
+        </Button>
 
-        {!usesOAuth || tab === "Claude" ? (
+        <div className="rounded-lg bg-muted/50 p-4 text-sm">
+          <p className="font-medium">Start with one matter</p>
+          <p className="mt-1 text-muted-foreground">
+            Open a matter, upload a sample contract, then use “Review with your own AI” to copy a
+            prompt for your connected assistant. Its findings and proposed edits appear in the same
+            workspace.
+          </p>
+          <p className="mt-2 text-xs text-muted-foreground">
+            After a GitMatter update, refresh the connector’s tools. If tools are missing or sign-in
+            repeats, reconnect in your AI client and start a new conversation.
+          </p>
+        </div>
+        <details>
+          <summary className="cursor-pointer text-sm text-muted-foreground">
+            Advanced access and existing connections
+          </summary>
           <TokenMintForm
             label={label}
             fresh={fresh}
@@ -86,11 +112,7 @@ export function ConnectAgent() {
             onMint={() => mintMutation.mutate()}
             onRevoke={(id) => revokeMutation.mutate(id)}
           />
-        ) : (
-          <p className="text-xs text-muted-foreground">
-            ChatGPT connects over OAuth - no token needed here.
-          </p>
-        )}
+        </details>
       </CardContent>
     </Card>
   );
@@ -124,10 +146,12 @@ function AgentSetupGuide({ tab, mcpUrl }: { tab: ConnectTab; mcpUrl: string }) {
     <div className="rounded-md border border-border bg-muted/30 p-3 text-sm">
       {tab === "ChatGPT" && (
         <div className="flex flex-col gap-1">
-          <p className="font-medium">ChatGPT - Developer Mode (paid plans)</p>
+          <p className="font-medium">ChatGPT web - custom app</p>
           <p className="text-muted-foreground">
-            Settings, Connectors, add a custom connector with the server URL below. ChatGPT runs the
-            OAuth login and approval page - no token to paste. Needs the server on public HTTPS.
+            Add a custom app using the address below and approve the GitMatter connection. Write
+            actions depend on your plan and workspace permissions. Check ChatGPT’s current
+            custom-app availability before choosing it for document editing. A public HTTPS address
+            is required.
           </p>
           <CodeBlock>{mcpUrl}</CodeBlock>
         </div>
@@ -136,28 +160,25 @@ function AgentSetupGuide({ tab, mcpUrl }: { tab: ConnectTab; mcpUrl: string }) {
         <div className="flex flex-col gap-1">
           <p className="font-medium">Claude Desktop / web - custom connector</p>
           <p className="text-muted-foreground">
-            Add a connector with the URL below for the OAuth login + approval. Prefer a static token
-            instead? Mint one below and use the <code className="text-xs">mcp-remote</code> bridge
-            with an <code className="text-xs">Authorization: Bearer</code> header.
+            In Claude’s connector settings, add a custom connector using the address below. Sign in
+            to GitMatter and approve the connection, then enable it in your conversation. A public
+            HTTPS address is required.
           </p>
           <CodeBlock>{mcpUrl}</CodeBlock>
         </div>
       )}
       {tab === "Claude Code" && (
         <div className="flex flex-col gap-1">
-          <p className="font-medium">Claude Code CLI - static token</p>
-          <p className="text-muted-foreground">Mint a token below, then run:</p>
-          <CodeBlock>{`claude mcp add --transport http gitmatter ${mcpUrl} \\\n  --header "Authorization: Bearer <token>"`}</CodeBlock>
+          <p className="font-medium">Claude Code CLI</p>
+          <p className="text-muted-foreground">Add GitMatter, then follow the sign-in prompt:</p>
+          <CodeBlock>{`claude mcp add --transport http gitmatter ${mcpUrl}`}</CodeBlock>
         </div>
       )}
       {tab === "Codex" && (
         <div className="flex flex-col gap-1">
-          <p className="font-medium">Codex CLI - static token</p>
-          <p className="text-muted-foreground">
-            Mint a token below, set <code className="text-xs">GITMATTER_TOKEN</code>, then add to{" "}
-            <code className="text-xs">~/.codex/config.toml</code>:
-          </p>
-          <CodeBlock>{`[mcp_servers.gitmatter]\nurl = "${mcpUrl}"\nbearer_token_env_var = "GITMATTER_TOKEN"`}</CodeBlock>
+          <p className="font-medium">Codex CLI</p>
+          <p className="text-muted-foreground">Add GitMatter and sign in through your browser:</p>
+          <CodeBlock>{`codex mcp add gitmatter --url ${mcpUrl}\ncodex mcp login gitmatter`}</CodeBlock>
         </div>
       )}
     </div>

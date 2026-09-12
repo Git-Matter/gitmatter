@@ -48,8 +48,14 @@ jobs:
       - name: Lint (format, lint, types)
         run: bun run check
 
+      - name: Typecheck
+        run: bun run typecheck
+
+      - name: Check generated MCP reference
+        run: bun run docs:tools:check
+
       - name: Migrate test database
         run: cd packages/db && bun run migrate
 
       - name: Test
-        run: bun run test
+        run: bun run test:ci
