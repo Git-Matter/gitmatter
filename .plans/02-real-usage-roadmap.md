@@ -47,15 +47,21 @@ Already implemented:
 - Playbook drafting, approval, execution through the tabular runner, and seeded playbook support.
 - Human and agent audit history, field-level diff/blame, matter audit export, and scoped MCP tokens.
 - Per-matter usage metering and multi-provider BYO-key support.
+- Native subscription-agent flow: a matter "review with your own AI" handoff, agents read documents,
+  save cited cells, and propose tracked edits, with structured tool results, artifact links, and
+  partial-failure signals; agents cannot accept or reject document edits.
+- Generated and pasted documents appear in the matter with readable content and creation audit
+  records. The MCP tools reference is generated from the runtime catalog with a CI drift check.
 
 Important gaps:
 
 - Playbook findings do not yet form a complete handoff into approved-clause redlines.
-- No matter-level approval policy or unified queue for pending agent work.
+- No configurable matter-level approval policy or unified queue for pending agent work. Accepting or
+  rejecting document edits is already human-only, but red/yellow findings, cell writes, and workflow
+  changes are not governed by policy.
 - Document extraction uses an in-memory queue; a process restart can leave work needing manual retry.
 - Search only matches review and document titles, not document text, clauses, or review cells.
 - Budgets warn and log but do not stop excessive spend.
-- Tool documentation can drift from the catalog because it is maintained manually.
 - Automated checks are strong at module level, but the critical lawyer journey lacks a repeatable
   browser-level acceptance suite.
 
@@ -64,6 +70,11 @@ Important gaps:
 ### Milestone 0 — establish product truth
 
 Purpose: create a trustworthy baseline before changing the workflow.
+
+Status (2026-09-16): the MCP tools reference item is done — generated from the runtime catalog
+(`scripts/generate-mcp-docs.ts` → `docs/api-reference/mcp-tools.mdx`, CI drift check in
+`.github/workflows/ci.yml`). The fixture pack, browser acceptance script, and funnel events are not
+started.
 
 Work:
 
@@ -145,6 +156,10 @@ Exit gate:
 ### Milestone 3 — human approval and agent review queue
 
 Purpose: make agent-assisted work acceptable under firm supervision.
+
+Status (2026-09-16): resolution of document edits is already human-only — `resolveEdits` refuses
+`actor.type === "agent"` (`packages/core/src/content/documents.ts`). The configurable policy,
+append-only approvals, and Agent activity queue are not started.
 
 Work:
 

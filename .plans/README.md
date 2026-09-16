@@ -6,14 +6,16 @@ mean the feature is implemented, browser-verified, deployed, or used by a real f
 ## Active sequence
 
 1. [`02-real-usage-roadmap.md`](02-real-usage-roadmap.md) — product roadmap for turning the current
-   feature set into one reliable, pilot-ready legal workflow.
+   feature set into one reliable, pilot-ready legal workflow. Milestone 0 is partly implemented on
+   branch `feat/native-agent-workflow` (draft PR #10); nothing in the roadmap is merged into `dev`.
 2. [`01-mfa-better-auth.md`](01-mfa-better-auth.md) — security plan for opt-in TOTP and backup-code
    MFA. Schedule alongside the roadmap when a pilot or security review requires it.
 
 ## Supporting architecture
 
 [`evidence/2026-09-13-subscription-agent.md`](evidence/2026-09-13-subscription-agent.md) records
-the implemented subscription-agent workflow, local validation and staging deployment blockers.
+the implemented subscription-agent workflow, local validation and staging deployment blockers. The
+implementation is on branch `feat/native-agent-workflow` (draft PR #10).
 
 [`../PLANS.md`](../PLANS.md) contains the deeper candidate-feature designs for the audit spine,
 approval gates, agent review queue, search, notifications, and branching. Use those sections as
