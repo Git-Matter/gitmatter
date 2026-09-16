@@ -1,5 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "vite-plus/test";
 import { randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { CallToolResultSchema } from "@modelcontextprotocol/sdk/types.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
@@ -8,10 +10,13 @@ import { tenants, user } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 import {
   buildToolCatalog,
-  resolveEdit,
-  listVersions,
-  getObject,
   extractMarkdown,
+  getObject,
+  listVersions,
+  processDocument,
+  resolveEdit,
+  updateWorkflow,
+  uploadDocument,
 } from "@workspace/core";
 import { buildMcpServer, toolResult } from "./server";
 
@@ -215,4 +220,112 @@ const hasStorage = !!process.env.S3_ACCESS_KEY;
     });
     expect(missing.isError).toBe(true);
   }, 30_000);
+
+  test("an agent redlines an uploaded document; only a person accepts", async () => {
+    const createdClient = await call("create_client", { name: "Uploaded redline client" });
+    const matter = await call("create_matter", {
+      clientId: createdClient.structuredContent!.clientId,
+      name: "Uploaded redline matter",
+    });
+    const matterId = matter.structuredContent!.matterId as string;
+    const bytes = readFileSync(
+      fileURLToPath(
+        new URL("../../../../../packages/core/test/fixtures/single-paragraph.docx", import.meta.url)
+      )
+    );
+    // Uploads queue extraction; run it inline so the document is readable now.
+    const uploaded = await uploadDocument(userId, {
+      title: "Uploaded NDA",
+      fileType: "docx",
+      bytes,
+      matterId,
+      tenantId,
+    });
+    await processDocument(uploaded);
+    const documentId = uploaded.id;
+
+    const listed = await call("list_matter_documents", { matterId });
+    expect(listed.structuredContent!.documents).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: documentId })])
+    );
+    const read = await call("get_document", { documentId });
+    expect((read.structuredContent!.document as { markdown: string }).markdown).toContain(
+      "imported"
+    );
+
+    const proposed = await call("propose_document_edit", {
+      documentId,
+      edits: [{ find: "imported", replace: "global", reason: "Synthetic fixture redline" }],
+    });
+    const changeId = (proposed.structuredContent!.changeIds as string[])[0]!;
+    await expect(
+      resolveEdit({ type: "agent", userId, agentLabel: label }, documentId, changeId, "accept")
+    ).rejects.toThrow("A person must");
+    await resolveEdit({ type: "user", userId }, documentId, changeId, "accept");
+    const versions = await listVersions(documentId);
+    const acceptedBytes = Buffer.from(await getObject(tenantId, versions[0]!.storagePath!));
+    const { markdown: accepted } = await extractMarkdown(acceptedBytes, "docx");
+    expect(accepted).toContain("global");
+    expect(accepted).not.toContain("imported");
+    const audit = await call("export_audit", { matterId });
+    expect(audit.structuredContent!.csv).toContain("propose_edit");
+    expect(audit.structuredContent!.csv).toContain("resolve_edit");
+  }, 60_000);
+
+  test("an agent runs an approved playbook and files its own cited findings", async () => {
+    const createdClient = await call("create_client", { name: "Playbook client" });
+    const matter = await call("create_matter", {
+      clientId: createdClient.structuredContent!.clientId,
+      name: "Playbook matter",
+    });
+    const matterId = matter.structuredContent!.matterId as string;
+    const source = "Confidentiality lasts five years.";
+    const generated = await call("generate_docx", {
+      matterId,
+      title: "Playbook NDA",
+      blocks: [{ type: "paragraph", text: source }],
+    });
+    const documentId = generated.structuredContent!.documentId as string;
+
+    const drafted = await call("write_workflow", {
+      title: "Term playbook",
+      type: "playbook",
+      rules: [{ clauseType: "Term", standardPosition: "Three years.", severity: "yellow" }],
+    });
+    const playbookId = drafted.structuredContent!.workflowId as string;
+    const readBack = await call("read_workflow", { workflowId: playbookId });
+    expect((readBack.structuredContent!.workflow as { status: string }).status).toBe("draft");
+
+    // An agent cannot approve the draft — that stays a firm-admin UI action.
+    const tooEarly = await client.callTool({
+      name: "run_playbook",
+      arguments: { playbookId, documentIds: [documentId], matterId },
+    });
+    expect(tooEarly.isError).toBe(true);
+
+    await updateWorkflow({ type: "user", userId }, playbookId, { status: "approved" });
+    const run = await call("run_playbook", { playbookId, documentIds: [documentId], matterId });
+    expect(run.structuredContent!.ruleCount).toBe(1);
+    const reviewId = run.structuredContent!.reviewId as string;
+
+    await call("write_cell", {
+      reviewId,
+      documentId,
+      columnIndex: 0,
+      summary: "Five years",
+      flag: "yellow",
+      reasoning: "Exceeds the synthetic three-year policy.",
+      citations: [{ quote: source }],
+    });
+    const cells = await call("read_review_cells", { reviewId });
+    expect(cells.structuredContent!.cells).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ summary: "Five years", citations: [{ quote: source }] }),
+      ])
+    );
+    const workflows = await call("list_workflows", {});
+    expect(workflows.structuredContent!.items).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: playbookId, status: "approved" })])
+    );
+  }, 60_000);
 });
