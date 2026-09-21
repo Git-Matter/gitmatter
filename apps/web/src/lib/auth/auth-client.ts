@@ -1,8 +1,17 @@
 import { createAuthClient } from "better-auth/react";
 import { passkeyClient } from "@better-auth/passkey/client";
+import { twoFactorClient } from "better-auth/client/plugins";
 
 export const authClient = createAuthClient({
-  plugins: [passkeyClient()],
+  plugins: [
+    passkeyClient(),
+    twoFactorClient({
+      onTwoFactorRedirect() {
+        const search = window.location.pathname === "/login" ? window.location.search : "";
+        window.location.href = `/2fa${search}`;
+      },
+    }),
+  ],
 });
 export const {
   signIn,
@@ -17,4 +26,5 @@ export const {
   resetPassword,
   sendVerificationEmail,
   useListPasskeys,
+  twoFactor,
 } = authClient;

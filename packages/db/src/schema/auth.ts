@@ -19,6 +19,7 @@ export const user = authSchema.table(
     // Registered as a better-auth `additionalField`.
     tenantId: text("tenant_id"),
     tenantRole: text("tenant_role").$type<"admin" | "member">().default("member").notNull(),
+    twoFactorEnabled: boolean("two_factor_enabled").default(false).notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
@@ -64,6 +65,22 @@ export const verification = authSchema.table("verification", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
+
+export const twoFactor = authSchema.table(
+  "two_factor",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    secret: text("secret").notNull(),
+    backupCodes: text("backup_codes").notNull(),
+    verified: boolean("verified").default(false).notNull(),
+    failedVerificationCount: integer("failed_verification_count").default(0),
+    lockedUntil: timestamp("locked_until"),
+  },
+  (t) => [index("two_factor_user_id_idx").on(t.userId)]
+);
 
 export const passkey = authSchema.table(
   "passkey",

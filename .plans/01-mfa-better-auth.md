@@ -3,8 +3,11 @@
 Add multi-factor authentication to gitmatter using better-auth's `twoFactor` plugin. TOTP
 (authenticator app) as the primary second factor, with backup codes for recovery. No SMS.
 
-Today login is email + password only (`emailAndPassword`). The Security marketing page lists MFA as
-"on our roadmap" — this delivers it.
+Today login supports email + password and passkeys, but password login has no second factor. The
+Security marketing page lists MFA as "on our roadmap" — this delivers it.
+
+**Status: Runtime-verified** (local implementation and acceptance completed 2026-09-21; not yet
+deployed or production-verified).
 
 ## Why
 
@@ -32,8 +35,12 @@ Out of scope (note explicitly, do not silently drop):
 
 ## Library
 
-`better-auth@^1.6.15` (already a dependency). Plugin: `twoFactor` (server) +
+`better-auth@1.7.5`. Plugin: `twoFactor` (server) +
 `twoFactorClient` (client). Verified against current better-auth 2FA docs.
+
+TOTP and backup codes do not depend on transactional email. Gitmatter's existing Resend transport
+continues to serve verification, password-reset, account-deletion, and invite emails. Email OTP is
+not enabled as a second factor in this scope.
 
 ## Changes
 
@@ -62,7 +69,7 @@ Out of scope (note explicitly, do not silently drop):
 The plugin requires:
 
 - New `twoFactor` table in the `auth` Postgres schema: `id`, `userId` (FK → user.id),
-  `secret`, `backupCodes`, `verified`.
+  `secret`, `backupCodes`, `verified`, `failedVerificationCount`, `lockedUntil`.
 - New field on `user`: `twoFactorEnabled` (boolean).
 
 Steps:
@@ -122,6 +129,19 @@ Steps:
 5. Backup code: verify one logs in and cannot be reused. → check: one-time use enforced.
 6. Disable (password-gated) clears 2FA. → check: `twoFactorEnabled = false`, row removed.
 7. Audit log shows enable / disable / failed-verification events.
+
+Local verification evidence (2026-09-21): migration applied successfully; `vp check`,
+`vp run typecheck`, the web production build, and all 168 `vp test` tests passed. A disposable local
+account completed enrollment, rejected an incorrect TOTP, completed TOTP and backup-code logins,
+rejected reuse of a consumed backup code, disabled MFA cleanly, and produced the expected MFA audit
+events. The `/2fa` authenticator and backup-code states were also browser-checked. Production claims
+and the Security marketing copy remain unchanged until the feature is deployed and verified there.
+
+Upgrade verification (2026-09-21): aligned Better Auth and passkey packages at `1.7.5`, upgraded
+the shared Drizzle ORM dependency to `0.45.2`, added the 1.7 two-factor lockout fields in migration
+`0010_watery_major_mapleleaf.sql`, and confirmed the database has no duplicate account keys or
+1.7.0-1.7.2 `issuer` column. A fresh local account then completed TOTP enrollment, TOTP login, and
+backup-code recovery on Better Auth 1.7.5.
 
 ## Open questions
 

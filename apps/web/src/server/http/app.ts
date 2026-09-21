@@ -189,18 +189,22 @@ app.use(
 );
 
 // better-auth owns /api/auth/* (sign-up, sign-in, session, etc.). We wrap it to
-// record the two security events better-auth has no DB hook for: a failed
-// sign-in (401) and a sign-out. Login is captured via the session-create hook.
+// record security events that need the final HTTP outcome: failed sign-in,
+// sign-out, and two-factor lifecycle events. Ordinary login is captured by the
+// session-create hook; MFA login is recorded here only after verification.
 app.on(["GET", "POST"], "/api/auth/*", async (c) => {
   const path = c.req.path;
   const isSignIn = path.includes("/sign-in");
   const isSignOut = path.includes("/sign-out");
+  const isTwoFactorVerify =
+    path.endsWith("/two-factor/verify-totp") || path.endsWith("/two-factor/verify-backup-code");
+  const isTwoFactorDisable = path.endsWith("/two-factor/disable");
+  const observesSession = isSignOut || isTwoFactorVerify || isTwoFactorDisable;
   // Capture the actor before sign-out clears the session.
-  let actorId: string | null = null;
-  if (isSignOut) {
-    const session = await auth.api.getSession({ headers: c.req.raw.headers }).catch(() => null);
-    actorId = session?.user?.id ?? null;
-  }
+  const currentSession = observesSession
+    ? await auth.api.getSession({ headers: c.req.raw.headers }).catch(() => null)
+    : null;
+  const actorId = currentSession?.user?.id ?? null;
   // Clone so we can read the attempted email on a failed sign-in without
   // consuming the body better-auth needs.
   const probe = isSignIn ? c.req.raw.clone() : null;
@@ -215,6 +219,53 @@ app.on(["GET", "POST"], "/api/auth/*", async (c) => {
       .then((b: { email?: string }) => b?.email ?? null)
       .catch(() => null);
     void recordAudit({ eventType: "auth.failed", target: email, ...clientMeta(c) });
+  } else if (isTwoFactorDisable && res.ok) {
+    void recordAudit({ eventType: "auth.2fa.disabled", actorId, ...clientMeta(c) });
+  } else if (isTwoFactorVerify && !res.ok) {
+    void recordAudit({
+      eventType: "auth.2fa.failed",
+      actorId,
+      target: path.endsWith("verify-backup-code") ? "backup_code" : "totp",
+      ...clientMeta(c),
+    });
+  } else if (isTwoFactorVerify && res.ok) {
+    const verified = await res
+      .clone()
+      .json()
+      .catch(() => null);
+    const verifiedUserId =
+      verified &&
+      typeof verified === "object" &&
+      "user" in verified &&
+      verified.user &&
+      typeof verified.user === "object" &&
+      "id" in verified.user &&
+      typeof verified.user.id === "string"
+        ? verified.user.id
+        : actorId;
+    const wasEnabled =
+      currentSession &&
+      "twoFactorEnabled" in currentSession.user &&
+      currentSession.user.twoFactorEnabled === true;
+    if (currentSession && !wasEnabled) {
+      void recordAudit({
+        eventType: "auth.2fa.enabled",
+        actorId: verifiedUserId,
+        ...clientMeta(c),
+      });
+    } else if (!currentSession && verifiedUserId) {
+      void recordAudit({
+        eventType: "auth.login",
+        actorId: verifiedUserId,
+        target: "two_factor",
+        ...clientMeta(c),
+      });
+      posthog.capture({
+        distinctId: verifiedUserId,
+        event: "user logged in",
+        properties: { $ip: clientMeta(c).ip ?? undefined, method: "two_factor" },
+      });
+    }
   }
   return res;
 });

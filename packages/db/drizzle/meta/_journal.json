@@ -64,6 +64,20 @@
       "when": 1784319144443,
       "tag": "0008_noisy_hardball",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1789973878863,
+      "tag": "0009_slim_maelstrom",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1789976527687,
+      "tag": "0010_watery_major_mapleleaf",
+      "breakpoints": true
     }
   ]
 }
