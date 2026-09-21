@@ -24,6 +24,7 @@ import {
   useListPasskeys,
 } from "@/lib/auth/auth-client";
 import type { ServerSession } from "@/lib/auth/session";
+import { TwoFactorCard } from "./TwoFactorCard";
 
 type Session = NonNullable<ServerSession>;
 
@@ -31,6 +32,9 @@ export function AccountSettings({ session }: { session: Session }) {
   return (
     <>
       <AccountCard session={session} />
+      <TwoFactorCard
+        enabled={"twoFactorEnabled" in session.user && session.user.twoFactorEnabled === true}
+      />
       <PasskeysCard />
       <AppearanceCard />
       <DangerZoneCard />

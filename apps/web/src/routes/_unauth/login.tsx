@@ -32,7 +32,7 @@ function Login() {
     defaultValues: { email: "", password: "" },
     onSubmit: async ({ value }) => {
       setError(null);
-      const { error: signInError } = await signIn.email(
+      const { data, error: signInError } = await signIn.email(
         { email: value.email, password: value.password },
         captchaToken ? { headers: { "x-captcha-response": captchaToken } } : undefined
       );
@@ -48,6 +48,9 @@ function Login() {
         setError(signInError.message ?? "Sign in failed");
         return;
       }
+      // The two-factor client has already started the full-page redirect. Do not
+      // overwrite it with the normal post-login destination.
+      if (data && "twoFactorRedirect" in data && data.twoFactorRedirect) return;
       // Full reload (not a client nav) so the server beforeLoad re-resolves the
       // now-authenticated session and SSRs the app shell. Bounce to a local
       // `next` (gated route or OAuth /authorize); only local paths, to avoid an

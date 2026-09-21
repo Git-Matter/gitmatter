@@ -36,6 +36,7 @@ export function buildClauseTools({ actor }: ToolContext): ToolSpec[] {
   return [
     {
       name: "list_clauses",
+      readOnly: true,
       description:
         "List the firm's clause library (approved language + negotiation positions), standard positions only. Filter by category. Use get_clause for a clause's full body and fallback ladder.",
       schema: {
@@ -63,6 +64,7 @@ export function buildClauseTools({ actor }: ToolContext): ToolSpec[] {
     },
     {
       name: "get_clause",
+      readOnly: true,
       description:
         "Fetch one clause with its full body, guidance, and fallback ladder (standard position first, then concessions in retreat order).",
       schema: { clauseId: z.string() },
@@ -76,6 +78,7 @@ export function buildClauseTools({ actor }: ToolContext): ToolSpec[] {
     },
     {
       name: "suggest_clauses",
+      readOnly: true,
       description:
         "Approved clauses relevant to a category and jurisdiction — pass matterId when drafting or reviewing a matter so its matter and client exceptions override the firm standard. Cite the clause id.",
       schema: {

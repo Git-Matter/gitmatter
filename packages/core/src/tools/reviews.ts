@@ -10,6 +10,7 @@ export function buildReviewTools({ actor, resolveMatter }: ToolContext): ToolSpe
   return [
     {
       name: "list_reviews",
+      readOnly: true,
       description: "List the user's tabular reviews.",
       schema: {},
       handler: async () => {
@@ -23,6 +24,7 @@ export function buildReviewTools({ actor, resolveMatter }: ToolContext): ToolSpe
     },
     {
       name: "get_review",
+      readOnly: true,
       description:
         "Get a tabular review's columns, cells, and per-cell blame (who last set each cell).",
       schema: { reviewId: z.string() },
@@ -35,6 +37,7 @@ export function buildReviewTools({ actor, resolveMatter }: ToolContext): ToolSpe
     },
     {
       name: "read_review_cells",
+      readOnly: true,
       description:
         "Read specific cells of a tabular review, filtered by column indices and/or document ids. Returns each cell's extracted value, flag, reasoning, and grounding citations with column + document names. Prefer this over get_review when answering a focused question (e.g. why a cell is flagged, what one column found) instead of dumping the whole grid.",
       schema: {
@@ -118,6 +121,7 @@ export function buildReviewTools({ actor, resolveMatter }: ToolContext): ToolSpe
     },
     {
       name: "run_cell",
+      execution: "provider",
       description: "Extract (or re-extract) one cell with the chosen model and commit the change.",
       schema: {
         reviewId: z.string(),
@@ -144,7 +148,7 @@ export function buildReviewTools({ actor, resolveMatter }: ToolContext): ToolSpe
     {
       name: "write_cell",
       description:
-        "Write your own extracted value into one review cell — for when you have read the document yourself and produced the answer. Committed under your name. Use run_cell instead to have gitmatter run its own model. flag is the RAG status: green=ok, yellow=caution, red=problem, grey=n/a.",
+        "Write your own extracted value into one review cell — for when you have read the document yourself and produced the answer. Committed under your name. This does not run a GitMatter model or require an LLM API key. flag is the RAG status: green=ok, yellow=caution, red=problem, grey=n/a.",
       schema: {
         reviewId: z.string(),
         documentId: z.string(),

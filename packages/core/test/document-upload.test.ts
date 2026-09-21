@@ -9,6 +9,8 @@ import { canAccessArtifact } from "../src/core/access.js";
 import { ensureDefaultMatter } from "../src/platform/matters.js";
 import {
   addDocumentVersion,
+  createDocument,
+  listMatterDocuments,
   deleteDocumentVersion,
   getDocument,
   listVersions,
@@ -17,6 +19,7 @@ import {
   uploadDocument,
 } from "../src/content/documents.js";
 import { getObject } from "../src/core/storage.js";
+import { listCommits } from "../src/core/commit.js";
 
 const ownerId = `up-owner-${randomUUID()}`;
 const outsiderId = `up-out-${randomUUID()}`;
@@ -64,6 +67,20 @@ afterAll(async () => {
   await db.delete(user).where(eq(user.id, ownerId));
   await db.delete(user).where(eq(user.id, outsiderId));
   await sql.end();
+});
+
+test("pasted text is discoverable in its matter and its creation is audited", async () => {
+  const document = await createDocument(ownerId, {
+    title: "Pasted fixture",
+    markdown: "Synthetic confidentiality terms.",
+    matterId: matterA,
+  });
+  expect(await listMatterDocuments(matterA)).toEqual(
+    expect.arrayContaining([expect.objectContaining({ id: document.id })])
+  );
+  expect(await listCommits("document", document.id)).toEqual([
+    expect.objectContaining({ op: "create", actorType: "user", actorId: ownerId }),
+  ]);
 });
 
 // Real object storage (bytes -> S3/R2). Skip without credentials, like the

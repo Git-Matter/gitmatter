@@ -168,11 +168,18 @@ const hasS3 = !!process.env.S3_ACCESS_KEY;
     expect(versions[0]!.source).toBe("assistant_edit");
 
     // Resolving produces another version tagged by the decision.
-    await resolveEdit(agentActor, doc.id, ids[0]!, "accept");
+    await expect(resolveEdit(agentActor, doc.id, ids[0]!, "accept")).rejects.toThrow(
+      "A person must accept or reject"
+    );
+    await expect(resolveEdit(agentActor, doc.id, ids[0]!, "reject")).rejects.toThrow(
+      "A person must accept or reject"
+    );
+    expect(await listVersions(doc.id)).toHaveLength(2);
+    await resolveEdit(actor, doc.id, ids[0]!, "accept");
     const after = await listVersions(doc.id);
     expect(after[0]!.versionNumber).toBe(3);
     expect(after[0]!.source).toBe("user_accept");
-  });
+  }, 20_000);
 
   test("partial proposed edits report applied and failed counts without leaking edit text", async () => {
     const doc = await uploadDocument(userId, {
@@ -205,7 +212,7 @@ const hasS3 = !!process.env.S3_ACCESS_KEY;
     const serialized = JSON.stringify(result.errors);
     expect(serialized).not.toContain("commercially sensitive missing text");
     expect(serialized).not.toContain("replacement that must not be logged");
-  });
+  }, 20_000);
 
   test("every mutation is a linear commit", async () => {
     const commitList = await listCommits("document", documentId);

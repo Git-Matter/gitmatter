@@ -39,6 +39,7 @@ import { useTableState } from "@/lib/hooks/table/useTableState";
 import { useSession } from "@/lib/auth/auth-client";
 import { useMatters } from "@/lib/context/matters-context";
 import { formatShortDate } from "@/lib/format/format";
+import { AgentHandoff } from "@/routes/_auth/matters/-components/AgentHandoff";
 
 export const Route = createFileRoute("/_auth/matters/$id/")({ component: MatterWorkspace });
 
@@ -166,6 +167,7 @@ function MatterWorkspace() {
         />
       }
     >
+      <AgentHandoff matter={matter} />
       <ToolbarTabs
         tabs={[
           { id: "documents" as const, label: "Documents" },

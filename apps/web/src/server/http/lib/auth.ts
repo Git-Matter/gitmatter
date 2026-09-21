@@ -2,7 +2,7 @@ import { betterAuth } from "better-auth";
 import { APIError, createAuthMiddleware } from "better-auth/api";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { passkey as passkeyPlugin } from "@better-auth/passkey";
-import { captcha } from "better-auth/plugins";
+import { captcha, twoFactor as twoFactorPlugin } from "better-auth/plugins";
 import { tanstackStartCookies } from "better-auth/tanstack-start";
 import { eq } from "drizzle-orm";
 import {
@@ -15,7 +15,7 @@ import {
   sendVerificationEmail,
 } from "@workspace/core";
 import { db } from "@workspace/db/client";
-import { account, passkey, session, user, verification } from "@workspace/db/schema";
+import { account, passkey, session, twoFactor, user, verification } from "@workspace/db/schema";
 import {
   allowedEmailDomainsFromEnv,
   authRateLimitFromEnv,
@@ -57,7 +57,7 @@ export const auth = betterAuth({
   database: drizzleAdapter(db, {
     provider: "pg",
     // Auth tables live in the `auth` Postgres schema; pass them explicitly.
-    schema: { user, session, account, verification, passkey },
+    schema: { user, session, account, verification, passkey, twoFactor },
   }),
   emailAndPassword: {
     enabled: true,
@@ -126,7 +126,19 @@ export const auth = betterAuth({
           return { data: s };
         },
         // A new session = a successful login. Capture it for the audit log.
-        after: async (s) => {
+        after: async (s, context) => {
+          // Email/password creates a short-lived session before the 2FA plugin
+          // removes it. The auth HTTP wrapper records the real login only after
+          // the second factor succeeds, avoiding a false and duplicate login.
+          if (context?.path.startsWith("/two-factor/verify-")) return;
+          if (context?.path === "/sign-in/email") {
+            const [accountOwner] = await db
+              .select({ twoFactorEnabled: user.twoFactorEnabled })
+              .from(user)
+              .where(eq(user.id, s.userId))
+              .limit(1);
+            if (accountOwner?.twoFactorEnabled) return;
+          }
           void recordAudit({
             eventType: "auth.login",
             actorId: s.userId,
@@ -187,6 +199,11 @@ export const auth = betterAuth({
       : []),
     passkeyPlugin({
       rpName: "gitmatter",
+    }),
+    twoFactorPlugin({
+      issuer: "gitmatter",
+      // Enrollment is incomplete until the user proves their authenticator works.
+      skipVerificationOnEnable: false,
     }),
     // Ensures Set-Cookie survives TanStack Start server-fn responses.
     tanstackStartCookies(),

@@ -5,6 +5,8 @@
   "license": "MIT",
   "scripts": {
     "build": "turbo run build",
+    "docs:tools": "bun scripts/generate-mcp-docs.ts",
+    "docs:tools:check": "bun scripts/generate-mcp-docs.ts --check",
     "docs:build": "turbo run build --filter=docs",
     "docs:dev": "turbo run dev --filter=docs",
     "dev": "bun scripts/dev.ts",
@@ -12,6 +14,7 @@
     "format": "vp fmt",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
+    "test:ci": "vp test",
     "check": "vp check",
     "prepare": "vp config"
   },

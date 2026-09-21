@@ -46,6 +46,7 @@ export function buildDocumentTools({ actor, resolveMatter }: ToolContext): ToolS
     },
     {
       name: "get_document",
+      readOnly: true,
       description:
         "Get a document's text (markdown) and its tracked edits (with status and blame).",
       schema: { documentId: z.string() },
@@ -53,7 +54,7 @@ export function buildDocumentTools({ actor, resolveMatter }: ToolContext): ToolS
         const result = await getDocumentDetail(documentId as string);
         if (!result || !(await canAccessArtifact(actor, "document", documentId as string)))
           return { error: "Not found" };
-        return result;
+        return { ...result, documentId };
       },
     },
     {
@@ -78,7 +79,10 @@ export function buildDocumentTools({ actor, resolveMatter }: ToolContext): ToolS
         if (!(await canAccessArtifact(actor, "document", documentId as string, "editor")))
           return { error: "Not found" };
         try {
-          return await proposeEditDetail(actor, documentId as string, edits as EditSpec[]);
+          return {
+            ...(await proposeEditDetail(actor, documentId as string, edits as EditSpec[])),
+            documentId,
+          };
         } catch (e) {
           return { error: e instanceof Error ? e.message : "failed" };
         }
@@ -86,6 +90,7 @@ export function buildDocumentTools({ actor, resolveMatter }: ToolContext): ToolS
     },
     {
       name: "resolve_document_edit",
+      humanOnly: true,
       description: "Accept (apply to the document) or reject a tracked change.",
       schema: {
         documentId: z.string(),

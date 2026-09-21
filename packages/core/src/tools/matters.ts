@@ -1,11 +1,11 @@
 import { z } from "zod";
-import { getUserTenant } from "../core/index.js";
+import { getUserTenant, hasMatterAccess } from "../core/index.js";
 import { listMatterDocuments } from "../content/index.js";
 import { createClient, createMatter, listClients, listMattersForUser } from "../platform/index.js";
 import type { ToolContext, ToolSpec } from "./types.js";
 
 // Clients, matters, and a matter's filed documents — the Client → Matter spine.
-export function buildMatterTools({ actor, resolveMatter }: ToolContext): ToolSpec[] {
+export function buildMatterTools({ actor }: ToolContext): ToolSpec[] {
   // A matter-scoped token sees only its matters (and their clients), and cannot
   // create clients or matters — creation would exceed the minted scope.
   const scope = actor.type === "agent" ? (actor.scope ?? null) : null;
@@ -16,6 +16,7 @@ export function buildMatterTools({ actor, resolveMatter }: ToolContext): ToolSpe
   return [
     {
       name: "list_clients",
+      readOnly: true,
       description: "List the clients you have access to.",
       schema: {},
       handler: async () => {
@@ -50,6 +51,7 @@ export function buildMatterTools({ actor, resolveMatter }: ToolContext): ToolSpe
     },
     {
       name: "list_matters",
+      readOnly: true,
       description: "List the matters you're staffed on, with client and your role.",
       schema: {},
       handler: async () => {
@@ -77,13 +79,14 @@ export function buildMatterTools({ actor, resolveMatter }: ToolContext): ToolSpe
     },
     {
       name: "list_matter_documents",
+      readOnly: true,
       description:
         "List the documents filed under a matter (newest first), with title, type, and extraction status. Use this to find a matter's documents — `search` only matches titles.",
       schema: { matterId: z.string() },
       handler: async ({ matterId }) => {
-        const resolved = await resolveMatter(matterId as string | undefined);
-        if (!resolved) return { error: "Forbidden: no access to that matter" };
-        const docs = await listMatterDocuments(resolved);
+        if (!(await hasMatterAccess(actor, matterId as string)))
+          return { error: "Forbidden: no access to that matter" };
+        const docs = await listMatterDocuments(matterId as string);
         return {
           documents: docs.map((d) => ({
             id: d.id,

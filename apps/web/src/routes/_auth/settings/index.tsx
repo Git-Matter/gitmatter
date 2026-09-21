@@ -8,15 +8,22 @@ import { ConnectAgent } from "./-components/ConnectAgent";
 import { DataPrivacyCard } from "./-components/DataPrivacyCard";
 import { LegalResearchCard } from "./-components/LegalResearchCard";
 import { OrganizationCard } from "./-components/OrganizationCard";
+import { z } from "zod";
 
-export const Route = createFileRoute("/_auth/settings/")({ component: Settings });
+export const Route = createFileRoute("/_auth/settings/")({
+  component: Settings,
+  validateSearch: z.object({
+    tab: z.enum(["account", "organization", "ai", "agents", "data"]).optional().catch(undefined),
+  }),
+});
 
 function Settings() {
   const { session } = Route.useRouteContext();
+  const { tab } = Route.useSearch();
 
   return (
     <PageShell header={<PageHeader title="Settings" />}>
-      <Tabs defaultValue="account" className="flex max-w-2xl flex-col gap-section">
+      <Tabs defaultValue={tab ?? "account"} className="flex max-w-2xl flex-col gap-section">
         <TabsList>
           <TabsTrigger value="account">Account</TabsTrigger>
           <TabsTrigger value="organization">Organization</TabsTrigger>

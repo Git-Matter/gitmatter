@@ -311,7 +311,27 @@ export async function createDocument(
       status: "ready",
     })
     .returning();
-  return doc;
+  await recordCommit({
+    artifactType: "document",
+    artifactId: doc.id,
+    actor: { type: "user", userId },
+    op: "create",
+    message: `Created ${input.title}`,
+    apply: async ({ tx }) => {
+      await tx.insert(matterDocuments).values({
+        matterId: input.matterId,
+        documentId: doc.id,
+        folderId: input.folderId ?? null,
+      });
+      return {
+        changes: [
+          { path: "markdown", before: null, after: input.markdown },
+          { path: "matterId", before: null, after: input.matterId },
+        ],
+      };
+    },
+  });
+  return (await getDocument(doc.id))!;
 }
 
 /**
@@ -324,6 +344,7 @@ export async function createGeneratedDocument(
   input: { matterId: string; spec: DocxSpec }
 ): Promise<Document> {
   const bytes = Buffer.from(await generateDocx(input.spec));
+  const { markdown, pageCount } = await extractMarkdown(bytes, "docx");
   const tenantId = await matterTenant(input.matterId);
   await assertStorageWithinQuota(tenantId, bytes.length);
   const docId = randomUUID();
@@ -362,11 +383,19 @@ export async function createGeneratedDocument(
     op: "create",
     message: `Generated ${input.spec.title}`,
     apply: async ({ tx, commitId }) => {
+      await tx.insert(matterDocuments).values({ matterId: input.matterId, documentId: docId });
+      await tx.update(documents).set({ markdown, pageCount }).where(eq(documents.id, docId));
       await tx
         .update(documentVersions)
         .set({ lastCommitId: commitId })
         .where(eq(documentVersions.id, versionId));
-      return { changes: [{ path: "file", before: null, after: storagePath }] };
+      return {
+        changes: [
+          { path: "file", before: null, after: storagePath },
+          { path: "markdown", before: null, after: markdown },
+          { path: "matterId", before: null, after: input.matterId },
+        ],
+      };
     },
   });
   const [final] = await db.select().from(documents).where(eq(documents.id, docId));
@@ -1248,6 +1277,9 @@ export async function resolveEdits(
   changeIds: string[],
   decision: "accept" | "reject"
 ) {
+  if (actor.type === "agent") {
+    throw new Error("A person must accept or reject document changes in the document review UI.");
+  }
   if (!changeIds.length) throw new Error("No edits to resolve");
   const started = performance.now();
   const base = {

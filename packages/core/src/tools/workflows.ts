@@ -27,6 +27,7 @@ export function buildWorkflowTools({ actor, resolveMatter }: ToolContext): ToolS
   return [
     {
       name: "list_workflows",
+      readOnly: true,
       description: "List available workflow templates and playbooks (system + user).",
       schema: {},
       handler: async () =>
@@ -40,6 +41,7 @@ export function buildWorkflowTools({ actor, resolveMatter }: ToolContext): ToolS
     },
     {
       name: "read_workflow",
+      readOnly: true,
       description: "Read a workflow template or playbook and its per-field blame.",
       schema: { workflowId: z.string() },
       handler: async ({ workflowId }) => {
@@ -107,6 +109,7 @@ export function buildWorkflowTools({ actor, resolveMatter }: ToolContext): ToolS
     },
     {
       name: "draft_playbook",
+      execution: "provider",
       description:
         "Draft playbook rules from a document — the firm's standard template or a written negotiation guide. Returns rules to review, edit, and save with write_workflow (type playbook).",
       schema: {
@@ -132,7 +135,7 @@ export function buildWorkflowTools({ actor, resolveMatter }: ToolContext): ToolS
     {
       name: "run_playbook",
       description:
-        "Run a playbook against documents in a matter: creates a tabular review with one verdict column per rule (green = meets standard, yellow = fallback/needs review, red = crosses a red line), then extraction runs per cell. Returns the reviewId — read results with read_review_cells.",
+        "Prepare a review from an approved playbook with one verdict column per rule. This creates pending cells; it does not run a model. Read each document with get_document, analyse it yourself, then save cited findings with write_cell. Read results with read_review_cells.",
       schema: {
         playbookId: z.string(),
         documentIds: z.array(z.string()).min(1),
@@ -159,7 +162,7 @@ export function buildWorkflowTools({ actor, resolveMatter }: ToolContext): ToolS
           });
           return {
             ...result,
-            note: "Review created with pending cells. Run cells with run_cell, or open the review in the UI and press Run.",
+            note: "Review created with pending cells. Read documents with get_document and populate each cell with write_cell using your own analysis and exact source quotes. No GitMatter model call is needed.",
           };
         } catch (e) {
           return { error: e instanceof Error ? e.message : "run failed" };
