@@ -243,7 +243,12 @@ function ReviewView() {
       running,
       cellOf,
       preview: (docId: string) => setPreview({ docId }),
-      openDetail: (docId: string, columnIndex: number) => setDetail({ docId, columnIndex }),
+      openDetail: (docId: string, columnIndex: number) => {
+        setDetail({ docId, columnIndex });
+        void fetch(`/api/tabular/reviews/${id}/findings/${docId}/${columnIndex}/opened`, {
+          method: "POST",
+        }).catch(() => {});
+      },
     } satisfies ReviewMeta,
   });
 

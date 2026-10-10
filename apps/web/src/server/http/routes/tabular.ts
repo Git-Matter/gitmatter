@@ -1,3 +1,4 @@
+import { recordFunnel } from "@workspace/core";
 import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import { zValidator } from "@hono/zod-validator";
@@ -276,3 +277,26 @@ tabularRoute.delete("/api/tabular/reviews/:id/shares/:userId", async (c) => {
   await removeArtifactShare("tabular_review", id, c.req.param("userId"));
   return c.body(null, 204);
 });
+
+// Only an authorized cell view may emit this event; the browser sends no legal text.
+tabularRoute.post(
+  "/api/tabular/reviews/:id/findings/:documentId/:columnIndex/opened",
+  async (c) => {
+    const reviewId = c.req.param("id");
+    const result = await access(c.get("user").id, reviewId);
+    if (!result) return c.json({ error: "Not found" }, 404);
+    const documentId = c.req.param("documentId");
+    const columnIndex = Number(c.req.param("columnIndex"));
+    if (
+      !result.cells.some(
+        (cell) =>
+          cell.documentId === documentId &&
+          cell.columnIndex === columnIndex &&
+          cell.status === "done"
+      )
+    )
+      return c.json({ error: "Not found" }, 404);
+    recordFunnel("finding_opened", { actorType: "user", reviewId, documentId, columnIndex });
+    return c.body(null, 204);
+  }
+);

@@ -3,3 +3,5 @@
 // one source of truth for the API wire shapes. Grouped by domain.
 
 export * from "./llmProvider/index.js";
+
+export * from "./funnel.js";

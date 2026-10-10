@@ -44,3 +44,7 @@ test-results/
 # …except the shipped agent-plugin MCP configs (no secrets — public OAuth URL)
 !plugins/*/.mcp.json
 .env
+
+# Local browser acceptance artifacts
+.playwright-cli/
+output/playwright/

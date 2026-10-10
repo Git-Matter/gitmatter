@@ -65,6 +65,9 @@ jobs:
       - name: Check generated MCP reference
         run: bun run docs:tools:check
 
+      - name: Check synthetic NDA source
+        run: bun run fixtures:nda:check
+
       # Not a service container: the MinIO image needs a `server /data` argument,
       # and service containers cannot pass one. Images now live on quay.io (MinIO
       # pulled them from Docker Hub), so pin the release tag. `mc` creates the

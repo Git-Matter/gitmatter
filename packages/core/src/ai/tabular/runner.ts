@@ -1,8 +1,10 @@
+import { recordFunnel } from "../../core/funnel.js";
 import { and, eq } from "drizzle-orm";
 import { db } from "@workspace/db/client";
 import {
   type CellCitation,
   type CellContent,
+  type TabularReview,
   documents,
   tabularCells,
   tabularReviews,
@@ -21,15 +23,84 @@ import { coerceCitations, coerceFlag, queryCell, queryRow } from "./extract.js";
  *  tabular runs bill to the matter the review is filed under. Fire-and-forget. */
 function meterFor(
   actor: Actor,
-  review: { tenantId: string | null; matterId: string | null }
+  review: { id: string; tenantId: string | null; matterId: string | null }
 ): (u: { provider: string; model: string; inputTokens: number; outputTokens: number }) => void {
-  return (u) =>
+  return (u) => {
+    recordFunnel("review_usage", {
+      actorType: actor.type,
+      reviewId: review.id,
+      matterId: review.matterId ?? undefined,
+      provider: providerForModel(u.model),
+      model: u.model,
+      inputTokens: u.inputTokens,
+      outputTokens: u.outputTokens,
+    });
     void recordLlmUsage({
       userId: actor.userId,
       tenantId: review.tenantId,
       matterId: review.matterId,
       ...u,
     });
+  };
+}
+
+// Observe every cell/row execution through one shared boundary. Reading telemetry
+// state is best effort; it can never turn a successful audited mutation into an error.
+async function observePlaybookOperation<T>(
+  actor: Actor,
+  review: TabularReview,
+  work: () => Promise<T>
+): Promise<T> {
+  if (!review.workflowId) return work();
+  const started = performance.now();
+  const funnel = {
+    actorType: actor.type,
+    reviewId: review.id,
+    matterId: review.matterId ?? undefined,
+    workflowId: review.workflowId,
+  };
+  try {
+    const cells = await db
+      .select({ status: tabularCells.status })
+      .from(tabularCells)
+      .where(eq(tabularCells.reviewId, review.id));
+    if (
+      cells.every((cell) => cell.status === "pending") ||
+      cells.every((cell) => cell.status === "done")
+    )
+      recordFunnel("playbook_started", funnel);
+  } catch {
+    /* best effort observation */
+  }
+  let result: T;
+  try {
+    result = await work();
+  } catch (error) {
+    recordFunnel("playbook_failed", {
+      ...funnel,
+      durationMs: performance.now() - started,
+      outcome: "failed",
+      failureCategory: "unknown",
+    });
+    throw error;
+  }
+  try {
+    const cells = await db
+      .select({ status: tabularCells.status })
+      .from(tabularCells)
+      .where(eq(tabularCells.reviewId, review.id));
+    const expected = review.documentIds.length * review.columnsConfig.length;
+    if (expected > 0 && cells.length === expected && cells.every((cell) => cell.status === "done"))
+      recordFunnel("playbook_completed", {
+        ...funnel,
+        durationMs: performance.now() - started,
+        cellCount: expected,
+        outcome: "succeeded",
+      });
+  } catch {
+    /* committed work remains successful */
+  }
+  return result;
 }
 
 // The run-and-commit engine: extract cell values (via extract.ts) and persist
@@ -126,34 +197,36 @@ export async function runCell(
     .from(tabularReviews)
     .where(eq(tabularReviews.id, params.reviewId));
   if (!review) throw new Error("Review not found");
-  const col = review.columnsConfig.find((c) => c.index === params.columnIndex);
-  if (!col) throw new Error("Column not found");
+  return observePlaybookOperation(actor, review, async () => {
+    const col = review.columnsConfig.find((c) => c.index === params.columnIndex);
+    if (!col) throw new Error("Column not found");
 
-  const [doc] = await db.select().from(documents).where(eq(documents.id, params.documentId));
-  if (!doc) throw new Error("Document not found");
+    const [doc] = await db.select().from(documents).where(eq(documents.id, params.documentId));
+    if (!doc) throw new Error("Document not found");
 
-  const { model, key } = await resolveRunModel(actor.userId, params.model);
+    const { model, key } = await resolveRunModel(actor.userId, params.model);
 
-  const { content, citations } = await queryCell({
-    model,
-    filename: doc.title,
-    documentText: doc.markdown ?? "",
-    columnPrompt: col.prompt,
-    format: col.format,
-    tags: col.tags,
-    apiKey: key,
-    onUsage: meterFor(actor, review),
-  });
+    const { content, citations } = await queryCell({
+      model,
+      filename: doc.title,
+      documentText: doc.markdown ?? "",
+      columnPrompt: col.prompt,
+      format: col.format,
+      tags: col.tags,
+      apiKey: key,
+      onUsage: meterFor(actor, review),
+    });
 
-  return commitCell(actor, {
-    reviewId: params.reviewId,
-    documentId: params.documentId,
-    columnIndex: params.columnIndex,
-    columnName: col.name,
-    docTitle: doc.title,
-    model,
-    content,
-    citations,
+    return commitCell(actor, {
+      reviewId: params.reviewId,
+      documentId: params.documentId,
+      columnIndex: params.columnIndex,
+      columnName: col.name,
+      docTitle: doc.title,
+      model,
+      content,
+      citations,
+    });
   });
 }
 
@@ -193,15 +266,18 @@ export async function writeCell(
     reasoning: params.reasoning,
   };
 
-  return commitCell(actor, {
-    reviewId: params.reviewId,
-    documentId: params.documentId,
-    columnIndex: params.columnIndex,
-    columnName: col.name,
-    docTitle: doc.title,
-    op: "write_cell",
-    content,
-    citations: coerceCitations(params.citations),
+  return observePlaybookOperation(actor, review, async () => {
+    const result = await commitCell(actor, {
+      reviewId: params.reviewId,
+      documentId: params.documentId,
+      columnIndex: params.columnIndex,
+      columnName: col.name,
+      docTitle: doc.title,
+      op: "write_cell",
+      content,
+      citations: coerceCitations(params.citations),
+    });
+    return result;
   });
 }
 
@@ -218,76 +294,78 @@ export async function runDocument(
     .from(tabularReviews)
     .where(eq(tabularReviews.id, params.reviewId));
   if (!review) throw new Error("Review not found");
-  if (!review.columnsConfig.length) throw new Error("Review has no columns");
+  return observePlaybookOperation(actor, review, async () => {
+    if (!review.columnsConfig.length) throw new Error("Review has no columns");
 
-  const [doc] = await db.select().from(documents).where(eq(documents.id, params.documentId));
-  if (!doc) throw new Error("Document not found");
+    const [doc] = await db.select().from(documents).where(eq(documents.id, params.documentId));
+    if (!doc) throw new Error("Document not found");
 
-  const model = params.model ?? DEFAULT_MODEL;
-  const { key } = await resolveLlmKey(actor.userId, providerForModel(model));
-  if (!key) throw new Error(`No API key for ${providerForModel(model)}`);
+    const model = params.model ?? DEFAULT_MODEL;
+    const { key } = await resolveLlmKey(actor.userId, providerForModel(model));
+    if (!key) throw new Error(`No API key for ${providerForModel(model)}`);
 
-  const results = await queryRow({
-    model,
-    filename: doc.title,
-    documentText: doc.markdown ?? "",
-    columns: review.columnsConfig,
-    apiKey: key,
-    onUsage: meterFor(actor, review),
-  });
+    const results = await queryRow({
+      model,
+      filename: doc.title,
+      documentText: doc.markdown ?? "",
+      columns: review.columnsConfig,
+      apiKey: key,
+      onUsage: meterFor(actor, review),
+    });
 
-  return recordCommit({
-    artifactType: "tabular_review",
-    artifactId: params.reviewId,
-    actor,
-    op: "run_cell",
-    message: `Ran ${results.size} column(s) on ${doc.title} with ${model}`,
-    apply: async ({ tx, commitId }) => {
-      const existing = await tx
-        .select()
-        .from(tabularCells)
-        .where(
-          and(
-            eq(tabularCells.reviewId, params.reviewId),
-            eq(tabularCells.documentId, params.documentId)
-          )
-        );
-      const oldByIndex = new Map(existing.map((c) => [c.columnIndex, c.content ?? null]));
-      const changes: Array<{ path: string; before: unknown; after: unknown }> = [];
+    return recordCommit({
+      artifactType: "tabular_review",
+      artifactId: params.reviewId,
+      actor,
+      op: "run_cell",
+      message: `Ran ${results.size} column(s) on ${doc.title} with ${model}`,
+      apply: async ({ tx, commitId }) => {
+        const existing = await tx
+          .select()
+          .from(tabularCells)
+          .where(
+            and(
+              eq(tabularCells.reviewId, params.reviewId),
+              eq(tabularCells.documentId, params.documentId)
+            )
+          );
+        const oldByIndex = new Map(existing.map((c) => [c.columnIndex, c.content ?? null]));
+        const changes: Array<{ path: string; before: unknown; after: unknown }> = [];
 
-      for (const [columnIndex, { content, citations }] of results) {
-        await tx
-          .insert(tabularCells)
-          .values({
-            reviewId: params.reviewId,
-            documentId: params.documentId,
-            columnIndex,
-            content,
-            citations,
-            status: "done",
-            createdBy: actor.userId,
-            lastCommitId: commitId,
-            updatedAt: new Date(),
-          })
-          .onConflictDoUpdate({
-            target: [tabularCells.reviewId, tabularCells.documentId, tabularCells.columnIndex],
-            set: {
+        for (const [columnIndex, { content, citations }] of results) {
+          await tx
+            .insert(tabularCells)
+            .values({
+              reviewId: params.reviewId,
+              documentId: params.documentId,
+              columnIndex,
               content,
               citations,
               status: "done",
               createdBy: actor.userId,
               lastCommitId: commitId,
               updatedAt: new Date(),
-            },
+            })
+            .onConflictDoUpdate({
+              target: [tabularCells.reviewId, tabularCells.documentId, tabularCells.columnIndex],
+              set: {
+                content,
+                citations,
+                status: "done",
+                createdBy: actor.userId,
+                lastCommitId: commitId,
+                updatedAt: new Date(),
+              },
+            });
+          changes.push({
+            path: `cell/${params.documentId}/${columnIndex}`,
+            before: oldByIndex.get(columnIndex) ?? null,
+            after: content,
           });
-        changes.push({
-          path: `cell/${params.documentId}/${columnIndex}`,
-          before: oldByIndex.get(columnIndex) ?? null,
-          after: content,
-        });
-      }
-      return { changes };
-    },
+        }
+        return { changes };
+      },
+    });
   });
 }
 
@@ -321,84 +399,117 @@ export async function runReviewStreaming(
     .from(tabularReviews)
     .where(eq(tabularReviews.id, params.reviewId));
   if (!review) throw new Error("Review not found");
-  const columns = review.columnsConfig;
-  if (!columns.length) throw new Error("Review has no columns");
-
-  const docIds = review.documentIds;
-  const model = params.model ?? DEFAULT_MODEL;
-  const concurrency = Math.max(1, Math.min(params.concurrency ?? 4, 8));
-  const { key } = await resolveLlmKey(actor.userId, providerForModel(model));
-  if (!key) throw new Error(`No API key for ${providerForModel(model)}`);
-
-  const markStatus = (documentId: string, columnIndex: number, status: "generating" | "error") =>
-    db
-      .update(tabularCells)
-      .set({ status, updatedAt: new Date() })
-      .where(
-        and(
-          eq(tabularCells.reviewId, params.reviewId),
-          eq(tabularCells.documentId, documentId),
-          eq(tabularCells.columnIndex, columnIndex)
-        )
-      );
-
-  const runDoc = async (documentId: string) => {
-    const [doc] = await db.select().from(documents).where(eq(documents.id, documentId));
-    if (!doc) {
-      for (const col of columns) handlers.onError(documentId, col.index, "Document not found");
-      return;
-    }
-    // Same key for every column of this document → the doc's cached prefix is hit.
-    // documentId alone is unique; prompt_cache_key max length is 64 chars.
-    const cacheKey = `doc:${documentId}`;
-    for (const col of columns) {
-      handlers.onCellStart(documentId, col.index);
-      await markStatus(documentId, col.index, "generating");
-      try {
-        const { content, citations } = await queryCell({
-          model,
-          filename: doc.title,
-          documentText: doc.markdown ?? "",
-          columnPrompt: col.prompt,
-          format: col.format,
-          tags: col.tags,
-          apiKey: key,
-          cache: true,
-          cacheKey,
-          onUsage: meterFor(actor, review),
-        });
-        await commitCell(actor, {
-          reviewId: params.reviewId,
-          documentId,
-          columnIndex: col.index,
-          columnName: col.name,
-          docTitle: doc.title,
-          model,
-          content,
-          citations,
-        });
-        handlers.onCell(documentId, col.index, {
-          documentId,
-          columnIndex: col.index,
-          content,
-          citations,
-          status: "done",
-        });
-      } catch (e) {
-        await markStatus(documentId, col.index, "error");
-        handlers.onError(documentId, col.index, e instanceof Error ? e.message : "run failed");
-      }
-    }
+  const started = performance.now();
+  let failedCount = 0;
+  const funnel = {
+    actorType: actor.type,
+    reviewId: review.id,
+    matterId: review.matterId ?? undefined,
+    workflowId: review.workflowId ?? undefined,
   };
+  if (review.workflowId) recordFunnel("playbook_started", funnel);
+  try {
+    const columns = review.columnsConfig;
+    if (!columns.length) throw new Error("Review has no columns");
 
-  // Bounded pool: `concurrency` workers pull from the document list.
-  let next = 0;
-  await Promise.all(
-    Array.from({ length: Math.min(concurrency, docIds.length) }, async () => {
-      while (next < docIds.length) {
-        const documentId = docIds[next++];
-        if (documentId) await runDoc(documentId);
+    const docIds = review.documentIds;
+    const model = params.model ?? DEFAULT_MODEL;
+    const concurrency = Math.max(1, Math.min(params.concurrency ?? 4, 8));
+    const { key } = await resolveLlmKey(actor.userId, providerForModel(model));
+    if (!key) throw new Error(`No API key for ${providerForModel(model)}`);
+
+    const markStatus = (documentId: string, columnIndex: number, status: "generating" | "error") =>
+      db
+        .update(tabularCells)
+        .set({ status, updatedAt: new Date() })
+        .where(
+          and(
+            eq(tabularCells.reviewId, params.reviewId),
+            eq(tabularCells.documentId, documentId),
+            eq(tabularCells.columnIndex, columnIndex)
+          )
+        );
+
+    const runDoc = async (documentId: string) => {
+      const [doc] = await db.select().from(documents).where(eq(documents.id, documentId));
+      if (!doc) {
+        failedCount += columns.length;
+        for (const col of columns) handlers.onError(documentId, col.index, "Document not found");
+        return;
       }
-    })
-  );
+      // Same key for every column of this document → the doc's cached prefix is hit.
+      // documentId alone is unique; prompt_cache_key max length is 64 chars.
+      const cacheKey = `doc:${documentId}`;
+      for (const col of columns) {
+        handlers.onCellStart(documentId, col.index);
+        await markStatus(documentId, col.index, "generating");
+        try {
+          const { content, citations } = await queryCell({
+            model,
+            filename: doc.title,
+            documentText: doc.markdown ?? "",
+            columnPrompt: col.prompt,
+            format: col.format,
+            tags: col.tags,
+            apiKey: key,
+            cache: true,
+            cacheKey,
+            onUsage: meterFor(actor, review),
+          });
+          await commitCell(actor, {
+            reviewId: params.reviewId,
+            documentId,
+            columnIndex: col.index,
+            columnName: col.name,
+            docTitle: doc.title,
+            model,
+            content,
+            citations,
+          });
+          handlers.onCell(documentId, col.index, {
+            documentId,
+            columnIndex: col.index,
+            content,
+            citations,
+            status: "done",
+          });
+        } catch (e) {
+          failedCount++;
+          await markStatus(documentId, col.index, "error");
+          handlers.onError(documentId, col.index, e instanceof Error ? e.message : "run failed");
+        }
+      }
+    };
+
+    // Bounded pool: `concurrency` workers pull from the document list.
+    let next = 0;
+    await Promise.all(
+      Array.from({ length: Math.min(concurrency, docIds.length) }, async () => {
+        while (next < docIds.length) {
+          const documentId = docIds[next++];
+          if (documentId) await runDoc(documentId);
+        }
+      })
+    );
+    if (review.workflowId)
+      recordFunnel(failedCount ? "playbook_failed" : "playbook_completed", {
+        ...funnel,
+        durationMs: performance.now() - started,
+        model,
+        provider: providerForModel(model),
+        cellCount: docIds.length * columns.length,
+        failedCount,
+        outcome: failedCount ? "partial" : "succeeded",
+        ...(failedCount ? { failureCategory: "provider" as const } : {}),
+      });
+  } catch (error) {
+    if (review.workflowId)
+      recordFunnel("playbook_failed", {
+        ...funnel,
+        durationMs: performance.now() - started,
+        outcome: "failed",
+        failureCategory: "unknown",
+      });
+    throw error;
+  }
 }

@@ -1,3 +1,4 @@
+import { recordFunnel } from "../core/funnel.js";
 import { randomUUID } from "node:crypto";
 import {
   and,
@@ -425,59 +426,70 @@ export async function uploadDocument(
     staged?: boolean;
   }
 ) {
-  // Store the file BEFORE the row is visible to the extraction worker.
-  // Inserting as `pending` first lets a worker claim it in the gap before the
-  // object exists, which fails the doc with "no stored file to extract". So we
-  // pre-generate the id, write the object, then insert the row already complete.
-  const tenantId = input.matterId ? await matterTenant(input.matterId) : input.tenantId;
-  if (!tenantId) throw new Error("uploadDocument: tenantId is required when matterId is null");
-  // Folders live inside a matter; an unfiled document can't sit in one.
-  const folderId = input.matterId ? (input.folderId ?? null) : null;
-  await assertStorageWithinQuota(tenantId, input.bytes.length);
-  const id = randomUUID();
-  const versionId = randomUUID();
-  const storagePath = buildStoragePath({
-    tenantId,
-    userId,
-    artifactId: id,
-    ext: input.fileType,
-  });
-  await putObject(tenantId, storagePath, input.bytes);
-  const [row] = await db
-    .insert(documents)
-    .values({
-      id,
-      userId,
+  recordFunnel("upload_started", { actorType: "user", matterId: input.matterId ?? undefined });
+  try {
+    // Store the file BEFORE the row is visible to the extraction worker.
+    // Inserting as `pending` first lets a worker claim it in the gap before the
+    // object exists, which fails the doc with "no stored file to extract". So we
+    // pre-generate the id, write the object, then insert the row already complete.
+    const tenantId = input.matterId ? await matterTenant(input.matterId) : input.tenantId;
+    if (!tenantId) throw new Error("uploadDocument: tenantId is required when matterId is null");
+    // Folders live inside a matter; an unfiled document can't sit in one.
+    const folderId = input.matterId ? (input.folderId ?? null) : null;
+    await assertStorageWithinQuota(tenantId, input.bytes.length);
+    const id = randomUUID();
+    const versionId = randomUUID();
+    const storagePath = buildStoragePath({
       tenantId,
-      matterId: input.matterId,
-      folderId,
-      title: input.title,
-      fileType: input.fileType,
-      sizeBytes: input.bytes.length,
-      currentVersionId: versionId,
-      status: "pending",
-      staged: input.staged ?? false,
-    })
-    .returning();
-  await db.insert(documentVersions).values({
-    id: versionId,
-    documentId: id,
-    versionNumber: 1,
-    storagePath,
-    source: "upload",
-    sizeBytes: input.bytes.length,
-    fileType: input.fileType,
-  });
-  // Self-link to the origin matter so it lists there (source of truth for which
-  // matters a doc appears in). Unfiled documents have no matter, so no link.
-  if (input.matterId) {
-    await db.insert(matterDocuments).values({
-      matterId: input.matterId,
-      documentId: id,
-      folderId,
+      userId,
+      artifactId: id,
+      ext: input.fileType,
     });
+    await putObject(tenantId, storagePath, input.bytes);
+    const [row] = await db
+      .insert(documents)
+      .values({
+        id,
+        userId,
+        tenantId,
+        matterId: input.matterId,
+        folderId,
+        title: input.title,
+        fileType: input.fileType,
+        sizeBytes: input.bytes.length,
+        currentVersionId: versionId,
+        status: "pending",
+        staged: input.staged ?? false,
+      })
+      .returning();
+    await db.insert(documentVersions).values({
+      id: versionId,
+      documentId: id,
+      versionNumber: 1,
+      storagePath,
+      source: "upload",
+      sizeBytes: input.bytes.length,
+      fileType: input.fileType,
+    });
+    // Self-link to the origin matter so it lists there (source of truth for which
+    // matters a doc appears in). Unfiled documents have no matter, so no link.
+    if (input.matterId) {
+      await db.insert(matterDocuments).values({
+        matterId: input.matterId,
+        documentId: id,
+        folderId,
+      });
+    }
+    return row;
+  } catch (error) {
+    recordFunnel("upload_failed", {
+      actorType: "user",
+      matterId: input.matterId ?? undefined,
+      outcome: "failed",
+      failureCategory: "storage",
+    });
+    throw error;
   }
-  return row;
 }
 
 /**
@@ -819,6 +831,12 @@ function looksThinForOcr(markdown: string, pageCount: number | null): boolean {
 }
 
 export async function processDocument(doc: Document): Promise<void> {
+  const started = performance.now();
+  const funnel = {
+    actorType: "agent" as const,
+    documentId: doc.id,
+    matterId: doc.matterId ?? undefined,
+  };
   // Flip to `processing` first: drives the UI badge and leaves a recoverable
   // (stale) row if the server dies mid-extract. Emit every transition so the
   // SSE stream can push it to the browser.
@@ -834,6 +852,12 @@ export async function processDocument(doc: Document): Promise<void> {
   emitDocStatus({ userId: doc.userId, id: doc.id, status: "processing", extractionError: null });
 
   const fail = async (message: string, err?: unknown) => {
+    recordFunnel("extraction_failed", {
+      ...funnel,
+      durationMs: performance.now() - started,
+      outcome: "failed",
+      failureCategory: "extraction",
+    });
     // Log with context so a failed extraction is debuggable from server logs,
     // not just the truncated message stored on the row.
     logEvent("error", "extract.failed", {
@@ -884,6 +908,13 @@ export async function processDocument(doc: Document): Promise<void> {
         return { changes: [{ path: "markdown", before: null, after: markdown }] };
       },
     });
+    recordFunnel("extraction_ready", {
+      ...funnel,
+      durationMs: performance.now() - started,
+      pageCount: pageCount ?? undefined,
+      characterCount: markdown.length,
+      outcome: "succeeded",
+    });
     logEvent("info", "extract.ready", { documentId: doc.id, pageCount: pageCount ?? null });
     emitDocStatus({
       userId: doc.userId,
@@ -894,6 +925,36 @@ export async function processDocument(doc: Document): Promise<void> {
     });
   } catch (err) {
     await fail(err instanceof Error ? err.message : "extraction failed", err);
+  }
+}
+
+/** Read a stored export only after caller access checks; preview is not a funnel conversion. */
+export async function downloadDocumentBytes(
+  doc: Document,
+  storagePath: string,
+  actor: Actor,
+  preview = false
+) {
+  const started = performance.now();
+  const funnel = { actorType: actor.type, documentId: doc.id, matterId: doc.matterId ?? undefined };
+  try {
+    const bytes = await getObject(doc.tenantId, storagePath);
+    if (!preview)
+      recordFunnel("document_exported", {
+        ...funnel,
+        durationMs: performance.now() - started,
+        outcome: "succeeded",
+      });
+    return bytes;
+  } catch (error) {
+    if (!preview)
+      recordFunnel("document_export_failed", {
+        ...funnel,
+        durationMs: performance.now() - started,
+        outcome: "failed",
+        failureCategory: "storage",
+      });
+    throw error;
   }
 }
 
@@ -1186,6 +1247,14 @@ export async function proposeEditDetail(
         failed: result.failed,
         ms: Math.round(performance.now() - started),
       });
+      recordFunnel("redline_proposed", {
+        actorType: actor.type,
+        documentId,
+        matterId: doc.matterId ?? undefined,
+        durationMs: performance.now() - started,
+        failedCount: result.failed,
+        outcome: result.failed ? "partial" : "succeeded",
+      });
       return result;
     }
     if (doc.markdown === null) throw new Error("Document has no text to edit yet");
@@ -1245,8 +1314,22 @@ export async function proposeEditDetail(
       failed: result.failed,
       ms: Math.round(performance.now() - started),
     });
+    recordFunnel("redline_proposed", {
+      actorType: actor.type,
+      documentId,
+      matterId: doc.matterId ?? undefined,
+      durationMs: performance.now() - started,
+      outcome: "succeeded",
+    });
     return result;
   } catch (e) {
+    recordFunnel("redline_failed", {
+      actorType: actor.type,
+      documentId,
+      durationMs: performance.now() - started,
+      outcome: "failed",
+      failureCategory: "validation",
+    });
     logEvent("warn", "redline.propose.failed", {
       ...base,
       applied: e instanceof RedlineApplyError ? 0 : undefined,
@@ -1360,8 +1443,23 @@ export async function resolveEdits(
       committed: result.commit?.seq ?? null,
       ms: Math.round(performance.now() - started),
     });
+    recordFunnel("redline_resolved", {
+      actorType: actor.type,
+      documentId,
+      matterId: doc.matterId ?? undefined,
+      durationMs: performance.now() - started,
+      decision,
+      outcome: "succeeded",
+    });
     return result;
   } catch (e) {
+    recordFunnel("redline_failed", {
+      actorType: actor.type,
+      documentId,
+      durationMs: performance.now() - started,
+      outcome: "failed",
+      failureCategory: "validation",
+    });
     logEvent("warn", "redline.resolve.failed", {
       ...base,
       error: e instanceof Error ? e.message : "failed",

@@ -13,6 +13,7 @@ import {
   purgeOldChats,
   recordAudit,
   seedBuiltinWorkflows,
+  setFunnelSink,
 } from "@workspace/core";
 import { resolveJurisdiction } from "@workspace/registry";
 import { chatRoute } from "./routes/chat.js";
@@ -40,6 +41,16 @@ import { posthog } from "../posthog.js";
 // Initialize error tracking first, so anything thrown during boot is captured.
 // No-op when SENTRY_DSN is unset.
 initSentry();
+setFunnelSink((event, properties) => {
+  // An opaque matter/document/review id groups the journey without user identity.
+  const distinctId = properties.matterId ?? properties.reviewId ?? properties.documentId;
+  if (!distinctId || !getEnv("POSTHOG_API_KEY")) return;
+  posthog.capture({
+    distinctId,
+    event,
+    properties: { ...properties, $process_person_profile: false, $geoip_disable: true },
+  });
+});
 
 // Probe which AI providers have a server env key at boot, so the model catalog
 // can mark unavailable ones. Logs the result for ops visibility.

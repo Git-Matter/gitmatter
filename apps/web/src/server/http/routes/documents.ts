@@ -1,3 +1,4 @@
+import { downloadDocumentBytes } from "@workspace/core";
 import { type Context, Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import { zValidator } from "@hono/zod-validator";
@@ -22,7 +23,6 @@ import {
   fileTypeFromName,
   getDocument,
   getDocumentDetail,
-  getObject,
   hasMatterAccess,
   listCommits,
   linkDocumentsToMatter,
@@ -243,7 +243,12 @@ documentsRoute.get("/api/documents/:id/download", async (c) => {
   if (!doc) return c.json({ error: "no stored file" }, 404);
   const storagePath = await activeStoragePath(doc);
   if (!storagePath) return c.json({ error: "no stored file" }, 404);
-  const bytes = await getObject(doc.tenantId, storagePath);
+  const bytes = await downloadDocumentBytes(
+    doc,
+    storagePath,
+    { type: "user", userId: c.get("user").id },
+    !!c.req.query("inline")
+  );
   void recordAudit({
     eventType: "document.download",
     actorId: c.get("user").id,
@@ -309,7 +314,10 @@ documentsRoute.get("/api/documents/:id/versions/:versionId/download", async (c) 
   if (!version?.storagePath) return c.json({ error: "no stored file" }, 404);
   const doc = await getDocument(id);
   if (!doc) return c.json({ error: "Not found" }, 404);
-  const bytes = await getObject(doc.tenantId, version.storagePath);
+  const bytes = await downloadDocumentBytes(doc, version.storagePath, {
+    type: "user",
+    userId: c.get("user").id,
+  });
   const base = doc?.title ?? "document";
   const filename = base.endsWith(`.${version.fileType}`) ? base : `${base}.${version.fileType}`;
   return new Response(bytes as BodyInit, {

@@ -8,3 +8,5 @@ export * from "./keys.js";
 export * from "./log.js";
 export * from "./net.js";
 export * from "./storage.js";
+
+export * from "./funnel.js";
