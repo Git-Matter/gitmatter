@@ -14,7 +14,7 @@ import {
   or,
   sql,
 } from "drizzle-orm";
-import { db } from "@workspace/db/client";
+import { db, type Tx } from "@workspace/db/client";
 import {
   commits,
   hiddenWorkflows,
@@ -33,7 +33,12 @@ import type {
   WorkflowStep,
 } from "@workspace/db/schema";
 import { type Actor, recordCommit } from "../core/commit.js";
-import { canAccessArtifact, getUserTenant } from "../core/access.js";
+import {
+  canAccessArtifact,
+  getUserTenant,
+  hasMatterAccessInTransaction,
+  scopeAllowsMatter,
+} from "../core/access.js";
 
 type WorkflowInput = {
   title: string;
@@ -59,6 +64,47 @@ export type WorkflowAccess = {
 
 export type EnrichedWorkflow = Workflow & WorkflowAccess & { hidden: boolean };
 
+async function guardWorkflowWrite(
+  tx: Tx,
+  actor: Actor,
+  workflow: Pick<Workflow, "tenantId" | "matterId" | "isSystem" | "status" | "type"> & {
+    id?: string;
+  },
+  nextStatus: WorkflowStatus | undefined,
+  creating: boolean
+) {
+  const scope = actor.type === "agent" ? (actor.scope ?? null) : null;
+  if (
+    workflow.isSystem ||
+    !scopeAllowsMatter(scope, workflow.matterId) ||
+    scope?.maxRole === "viewer"
+  )
+    throw new Error("access_denied");
+  const [account] = await tx
+    .select({ tenantId: user.tenantId, tenantRole: user.tenantRole })
+    .from(user)
+    .where(eq(user.id, actor.userId))
+    .for("share");
+  if (!account || account.tenantId !== workflow.tenantId) throw new Error("access_denied");
+  if (workflow.matterId) {
+    if (!(await hasMatterAccessInTransaction(tx, actor, workflow.matterId, "editor")))
+      throw new Error("access_denied");
+  } else {
+    if (
+      !creating &&
+      (!workflow.id || !(await canAccessArtifact(actor, "workflow", workflow.id, "editor", tx)))
+    )
+      throw new Error("access_denied");
+    // Publication and edits to a published/retired firm item retain the admin human gate.
+    const publishing = nextStatus === "approved" || nextStatus === "deprecated";
+    if (
+      (publishing || (!creating && workflow.status !== "draft")) &&
+      (actor.type !== "user" || account.tenantRole !== "admin")
+    )
+      throw new Error("Only a human firm admin can publish or edit approved Library playbooks.");
+  }
+}
+
 export async function createWorkflow(
   actor: Actor,
   input: WorkflowInput & { matterId?: string | null; tenantId?: string }
@@ -72,13 +118,14 @@ export async function createWorkflow(
           .where(eq(matters.id, input.matterId))
           .then((rows) => rows[0] ?? null)
       : Promise.resolve(null),
-    input.matterId ? Promise.resolve(null) : getUserTenant(actor.userId),
+    getUserTenant(actor.userId),
   ]);
   if (input.matterId && !matter) throw new Error("Matter not found");
   const tenantId = matter?.tenantId ?? input.tenantId ?? actorTenantId;
-  if (!tenantId) throw new Error("No tenant");
+  if (!tenantId || tenantId !== actorTenantId) throw new Error("access_denied");
   if (input.type !== "playbook" && !input.matterId)
     throw new Error("Only playbooks can be created in the firm library");
+  const initialStatus = input.status ?? (input.type === "playbook" ? "draft" : "approved");
   await recordCommit({
     artifactType: "workflow",
     artifactId: workflowId,
@@ -86,6 +133,19 @@ export async function createWorkflow(
     op: "create",
     message: `Created workflow "${input.title}"`,
     apply: async ({ tx, commitId }) => {
+      await guardWorkflowWrite(
+        tx,
+        actor,
+        {
+          tenantId,
+          matterId: input.matterId ?? null,
+          isSystem: false,
+          status: "draft",
+          type: input.type,
+        },
+        input.status,
+        true
+      );
       const fieldCommits: Record<string, string> = {
         "field/title": commitId,
         "field/type": commitId,
@@ -110,7 +170,7 @@ export async function createWorkflow(
         rules: input.rules ?? null,
         // Playbooks join the library lifecycle as drafts; other workflow types
         // keep the pre-lifecycle behavior (immediately usable).
-        status: input.status ?? (input.type === "playbook" ? "draft" : "approved"),
+        status: initialStatus,
         practice: input.practice ?? null,
         fieldCommits,
       });
@@ -122,7 +182,7 @@ export async function createWorkflow(
           { path: "field/steps", before: null, after: input.steps ?? null },
           { path: "field/columns_config", before: null, after: input.columnsConfig ?? null },
           { path: "field/rules", before: null, after: input.rules ?? null },
-          { path: "field/status", before: null, after: input.status ?? null },
+          { path: "field/status", before: null, after: initialStatus },
           { path: "field/practice", before: null, after: input.practice ?? null },
         ],
       };
@@ -136,61 +196,68 @@ export async function updateWorkflow(
   workflowId: string,
   patch: Partial<WorkflowInput>
 ) {
-  const [wf] = await db.select().from(workflows).where(eq(workflows.id, workflowId));
-  if (!wf) throw new Error("Workflow not found");
-
-  const fields: Array<{ key: string; col: keyof typeof wf; before: unknown; after: unknown }> = [];
-  if (patch.title !== undefined && patch.title !== wf.title)
-    fields.push({ key: "field/title", col: "title", before: wf.title, after: patch.title });
-  if (patch.type !== undefined && patch.type !== wf.type)
-    fields.push({ key: "field/type", col: "type", before: wf.type, after: patch.type });
-  if (patch.promptMd !== undefined && patch.promptMd !== wf.promptMd)
-    fields.push({
-      key: "field/prompt_md",
-      col: "promptMd",
-      before: wf.promptMd,
-      after: patch.promptMd,
-    });
-  if (patch.steps !== undefined)
-    fields.push({
-      key: "field/steps",
-      col: "steps",
-      before: wf.steps,
-      after: patch.steps,
-    });
-  if (patch.columnsConfig !== undefined)
-    fields.push({
-      key: "field/columns_config",
-      col: "columnsConfig",
-      before: wf.columnsConfig,
-      after: patch.columnsConfig,
-    });
-  if (patch.rules !== undefined)
-    fields.push({
-      key: "field/rules",
-      col: "rules",
-      before: wf.rules,
-      after: patch.rules,
-    });
-  if (patch.status !== undefined && patch.status !== wf.status)
-    fields.push({ key: "field/status", col: "status", before: wf.status, after: patch.status });
-  if (patch.practice !== undefined && patch.practice !== wf.practice)
-    fields.push({
-      key: "field/practice",
-      col: "practice",
-      before: wf.practice,
-      after: patch.practice,
-    });
-
-  if (!fields.length) return { commit: null, changes: [] };
-
   return recordCommit({
     artifactType: "workflow",
     artifactId: workflowId,
     actor,
     op: "update",
-    message: `Updated ${fields.map((f) => f.key.replace("field/", "")).join(", ")}`,
+    message: "Updated workflow fields",
+    skipIfNoChanges: true,
     apply: async ({ tx, commitId }) => {
+      const [wf] = await tx
+        .select()
+        .from(workflows)
+        .where(eq(workflows.id, workflowId))
+        .for("update");
+      if (!wf) throw new Error("Workflow not found");
+      await guardWorkflowWrite(tx, actor, wf, patch.status, false);
+      if (!wf.matterId && patch.type !== undefined && patch.type !== "playbook")
+        throw new Error("Only playbooks can be stored in the firm library");
+      const fields: Array<{ key: string; col: keyof typeof wf; before: unknown; after: unknown }> =
+        [];
+      if (patch.title !== undefined && patch.title !== wf.title)
+        fields.push({ key: "field/title", col: "title", before: wf.title, after: patch.title });
+      if (patch.type !== undefined && patch.type !== wf.type)
+        fields.push({ key: "field/type", col: "type", before: wf.type, after: patch.type });
+      if (patch.promptMd !== undefined && patch.promptMd !== wf.promptMd)
+        fields.push({
+          key: "field/prompt_md",
+          col: "promptMd",
+          before: wf.promptMd,
+          after: patch.promptMd,
+        });
+      if (patch.steps !== undefined)
+        fields.push({
+          key: "field/steps",
+          col: "steps",
+          before: wf.steps,
+          after: patch.steps,
+        });
+      if (patch.columnsConfig !== undefined)
+        fields.push({
+          key: "field/columns_config",
+          col: "columnsConfig",
+          before: wf.columnsConfig,
+          after: patch.columnsConfig,
+        });
+      if (patch.rules !== undefined)
+        fields.push({
+          key: "field/rules",
+          col: "rules",
+          before: wf.rules,
+          after: patch.rules,
+        });
+      if (patch.status !== undefined && patch.status !== wf.status)
+        fields.push({ key: "field/status", col: "status", before: wf.status, after: patch.status });
+      if (patch.practice !== undefined && patch.practice !== wf.practice)
+        fields.push({
+          key: "field/practice",
+          col: "practice",
+          before: wf.practice,
+          after: patch.practice,
+        });
+
+      if (!fields.length) return { changes: [] };
       const set: Record<string, unknown> = { updatedAt: new Date() };
       const fieldCommits = { ...wf.fieldCommits };
       for (const f of fields) {

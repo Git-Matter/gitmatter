@@ -99,6 +99,7 @@ export class OpenAIResponsesClient implements LlmClient {
   async complete(req: CompleteRequest): Promise<CompleteResult> {
     const openai = new OpenAI({
       apiKey: this.apiKey,
+      ...(req.maxRetries !== undefined ? { maxRetries: req.maxRetries } : {}),
       ...(llmTimeoutMs() ? { timeout: llmTimeoutMs() } : {}),
     });
     return this.finalize(await openai.responses.create(this.buildParams(req)));
@@ -107,6 +108,7 @@ export class OpenAIResponsesClient implements LlmClient {
   async stream(req: CompleteRequest, handlers: StreamHandlers): Promise<CompleteResult> {
     const openai = new OpenAI({
       apiKey: this.apiKey,
+      ...(req.maxRetries !== undefined ? { maxRetries: req.maxRetries } : {}),
       ...(llmTimeoutMs() ? { timeout: llmTimeoutMs() } : {}),
     });
     // buildParams returns the NonStreaming shape; stream() takes the same fields

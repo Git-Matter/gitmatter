@@ -9,7 +9,7 @@ The connector at `/api/mcp` uses your assistant's own reasoning. It does not lau
 
 Read source documents, create a review (or prepare one with `run_playbook`), then populate findings with `write_cell` and exact source quotes. Document edits remain proposals until a person accepts or rejects them in GitMatter. Review cells record agent findings; they are not human approvals.
 
-The combined catalog below contains 36 tools. Legal research availability depends on jurisdiction. After an update, refresh your client's tool catalog or reconnect if it still shows removed tools. `run_cell` and `draft_playbook` are available through the built-in assistant, not this subscription-only connector. `resolve_document_edit` is reserved for people in the UI.
+The combined catalog below contains 42 tools. Legal research availability depends on jurisdiction. After an update, refresh your client's tool catalog or reconnect if it still shows removed tools. `run_cell` and `draft_playbook` are available through the built-in assistant, not this subscription-only connector. `resolve_document_edit` is reserved for people in the UI.
 
 ## `blame`
 
@@ -61,7 +61,7 @@ Reads existing data.
 
 ## `fetch`
 
-Fetch the full content of a search result by its id.
+Fetch the authorized content of a search result by its complete id, including any matter-context suffix.
 
 Inputs: `id`.
 
@@ -74,6 +74,14 @@ Generate a downloadable Word (.docx) document from structured blocks and file it
 Inputs: `title`, `blocks`, `matterId?`.
 
 Changes workspace data; recorded under the acting account.
+
+## `get_approval_policy`
+
+Read the matter's currently enforced agent-cell approval policy.
+
+Inputs: `matterId`.
+
+Reads existing data.
 
 ## `get_clause`
 
@@ -99,9 +107,25 @@ Inputs: `number`.
 
 Reads existing data. Uses an external research service.
 
+## `get_proposal`
+
+Inspect exact proposed cell content, source binding, policy, and decision history.
+
+Inputs: `proposalId`.
+
+Reads existing data.
+
 ## `get_review`
 
 Get a tabular review's columns, cells, and per-cell blame (who last set each cell).
+
+Inputs: `reviewId`.
+
+Reads existing data.
+
+## `get_review_completion`
+
+Get version-bound finding decisions, approved clause snapshots and server-derived export readiness for a contract review.
 
 Inputs: `reviewId`.
 
@@ -117,7 +141,7 @@ Reads existing data. Uses an external research service.
 
 ## `history`
 
-List an artifact's commit history (newest first): seq, actor (user or agent + label), op, and message. artifactType: tabular_review | workflow | document.
+List an artifact's commit history (newest first): seq, actor (user or agent + label), op, and message. artifactType: tabular_review | workflow | document | clause | matter.
 
 Inputs: `artifactType`, `artifactId`.
 
@@ -155,6 +179,14 @@ Inputs: none.
 
 Reads existing data.
 
+## `list_proposals`
+
+Read authorized cell proposals in one matter. Pending inference results are not approved content.
+
+Inputs: `matterId`, `status?`, `afterId?`, `limit?`.
+
+Reads existing data.
+
 ## `list_reviews`
 
 List the user's tabular reviews.
@@ -187,6 +219,14 @@ Inputs: `documentId`, `edits`.
 
 Changes workspace data; recorded under the acting account.
 
+## `propose_finding_redline`
+
+Propose one tracked DOCX change using an exact verified finding quote and approved clause snapshot. Supply current document head from get_review_completion. Human acceptance is separate.
+
+Inputs: `reviewId`, `requestId`, `documentId`, `columnIndex`, `revisionId`, `expectedHeadCommitId`, `clauseId`, `find`, `contextBefore?`, `contextAfter?`.
+
+Changes workspace data; recorded under the acting account.
+
 ## `read_review_cells`
 
 Read specific cells of a tabular review, filtered by column indices and/or document ids. Returns each cell's extracted value, flag, reasoning, and grounding citations with column + document names. Prefer this over get_review when answering a focused question (e.g. why a cell is flagged, what one column found) instead of dumping the whole grid.
@@ -207,15 +247,15 @@ Reads existing data.
 
 Prepare a review from an approved playbook with one verdict column per rule. This creates pending cells; it does not run a model. Read each document with get_document, analyse it yourself, then save cited findings with write_cell. Read results with read_review_cells.
 
-Inputs: `playbookId`, `documentIds`, `matterId?`.
+Inputs: `playbookId`, `requestId?`, `documentIds`, `matterId?`.
 
 Changes workspace data; recorded under the acting account.
 
 ## `search`
 
-Search your reviews and documents by keyword. Returns ids to pass to `fetch`.
+Search authorized document text, saved review values, clauses, playbooks and matter metadata. Ranked snippets and exact links; no hidden-matter counts.
 
-Inputs: `query`.
+Inputs: `query`, `matterId?`, `type?`, `page?`.
 
 Reads existing data.
 
@@ -275,11 +315,19 @@ Inputs: `citations`.
 
 Reads existing data. Uses an external research service.
 
+## `withdraw_proposal`
+
+Withdraw your own authorized cell proposal, retaining an audited reason and unchanged accepted content.
+
+Inputs: `requestId`, `proposalId`, `revision`, `contentHash`, `policyRevision`, `note`.
+
+Changes workspace data; recorded under the acting account.
+
 ## `write_cell`
 
 Write your own extracted value into one review cell — for when you have read the document yourself and produced the answer. Committed under your name. This does not run a GitMatter model or require an LLM API key. flag is the RAG status: green=ok, yellow=caution, red=problem, grey=n/a.
 
-Inputs: `reviewId`, `documentId`, `columnIndex`, `summary`, `flag`, `reasoning`, `citations?`.
+Inputs: `reviewId`, `documentId`, `columnIndex`, `summary`, `flag`, `outcome?`, `reasoning`, `citations?`.
 
 Changes workspace data; recorded under the acting account.
 

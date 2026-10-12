@@ -152,6 +152,7 @@ export class AnthropicClient implements LlmClient {
   async complete(req: CompleteRequest): Promise<CompleteResult> {
     const anthropic = new Anthropic({
       apiKey: this.apiKey,
+      ...(req.maxRetries !== undefined ? { maxRetries: req.maxRetries } : {}),
       ...(llmTimeoutMs() ? { timeout: llmTimeoutMs() } : {}),
     });
     const res = await anthropic.messages.create(this.buildParams(req));
@@ -163,6 +164,7 @@ export class AnthropicClient implements LlmClient {
   async stream(req: CompleteRequest, handlers: StreamHandlers): Promise<CompleteResult> {
     const anthropic = new Anthropic({
       apiKey: this.apiKey,
+      ...(req.maxRetries !== undefined ? { maxRetries: req.maxRetries } : {}),
       ...(llmTimeoutMs() ? { timeout: llmTimeoutMs() } : {}),
     });
     const s = anthropic.messages.stream(this.buildParams(req));

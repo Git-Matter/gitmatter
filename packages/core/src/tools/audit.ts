@@ -16,7 +16,7 @@ import type { ToolSpec } from "./types.js";
 // route or agent tool) is a commit attributed to an actor (a user, or an agent
 // with its label — e.g. "mcp:<token>" or "chat"). These tools let an inbound
 // agent see who changed what, exactly, and with what.
-const ARTIFACT_TYPES = ["tabular_review", "workflow", "document", "clause"] as const;
+const ARTIFACT_TYPES = ["tabular_review", "workflow", "document", "clause", "matter"] as const;
 const artifactType = z.enum(ARTIFACT_TYPES);
 type ArtifactKind = (typeof ARTIFACT_TYPES)[number];
 
@@ -27,7 +27,7 @@ export function buildAuditTools({ actor }: { actor: Actor }): ToolSpec[] {
       name: "history",
       readOnly: true,
       description:
-        "List an artifact's commit history (newest first): seq, actor (user or agent + label), op, and message. artifactType: tabular_review | workflow | document.",
+        "List an artifact's commit history (newest first): seq, actor (user or agent + label), op, and message. artifactType: tabular_review | workflow | document | clause | matter.",
       schema: { artifactType, artifactId: z.string() },
       handler: async ({ artifactType: kind, artifactId }) =>
         (await canRead(kind as ArtifactKind, artifactId as string))

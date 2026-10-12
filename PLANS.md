@@ -46,20 +46,25 @@ Status (2026-09-16, verified against source): **5** (scoped tokens — `mcp_acce
 
 ## 2. Signed commits / approval gates
 
+**Implementation contract:** [plan 05](.plans/05-approval-and-agent-queue.md) and the
+[shared workflow contracts](.plans/workflow-contracts.md), deepened 2026-10-11, refine this candidate
+design. Approval binds exact proposal/content/source/policy revisions; decision and application
+commit atomically. Human-only enforcement lives in core and applies to every transport.
+
 **Goal.** Partner sign-off is recorded in the spine; "who approved this change" is answerable from history.
 
 **Design.**
 
-- New table `commit_approvals`: `id`, `commitId` FK, `approverId` (user FK), `decision` (`approved|rejected`), `note`, `createdAt`, unique(`commitId`, `approverId`). Append-only.
-- Approval itself is _also_ a commit: `recordCommit` with `op: "approve"`, zero field changes (`skipIfNoChanges` bypassed via explicit flag), `summary: { targetCommitId, decision }`. That way approvals show up in `history` / `show_commit` without new read paths.
-- Gate policy per matter: `matters` gains `approvalPolicy` (jsonb, e.g. `{ resolveEdits: "owner" }`). Enforcement point: `resolveEdits`/`resolveDocxEdits` in `packages/core/src/content/documents.ts` — before accepting a tracked change created by an agent, require an `approved` row from a user with matter role ≥ policy role.
+- New table `commit_approvals`: append-only proposal-bound decisions with target/decision commit references, proposal revision/content hash, source/base revision, captured/current policy, approver, note, and timestamp. One terminal outcome per proposal revision; request idempotency prevents duplicate application.
+- Approval itself is _also_ a commit: `recordCommit` with a decision operation, proposal/policy references in summary, and explicit lifecycle field changes or a deliberate zero-content-change commit (`skipIfNoChanges` disabled). Decisions appear in `history` / `show_commit`; application and decision share the transaction.
+- Gate policy per matter: `matters` gains versioned `approvalPolicy`, with audited policy commits. Enforce at every governed mutation/export path; document edit resolution remains human-only in all modes. Require current eligible human authority and validate the exact proposal before applying.
 - Cryptographic signing is optional phase 2 (sign commit hash with a per-user key); start with DB-attributed approvals — the audit story firms need first.
 
 **Steps.**
 
 1. Schema: `commit_approvals`, `matters.approvalPolicy`. Migrate.
 2. Core: `approveCommit()` in `commit.ts` (writes approval row + approve-commit atomically); policy check helper in `access.ts`; wire into `resolveEdits`.
-3. Tools: `approve_commit`, `list_pending_approvals`; extend `show_commit` output with approvals.
+3. Tools: agent-readable `list_proposals`; any decision operation is human-only and excluded from agent catalogs. Extend `show_commit` output with approvals. Use plan 05's typed decision contract rather than approving an arbitrary commit id.
 4. UI: approval badge in history view, approve/reject buttons on tracked-change cards (`ChatEditCards` / document viewer), matter settings toggle for policy.
 5. Verify: test that agent-created edit cannot be resolved without approval when policy set; approval visible via `history` tool.
 
@@ -140,21 +145,25 @@ Status (2026-09-16, verified against source): **5** (scoped tokens — `mcp_acce
 
 ## 6. Agent action review queue
 
+**Implementation contract:** [plan 05](.plans/05-approval-and-agent-queue.md) settles typed staging,
+exact revision binding, human application attribution, durable rejection, and compatible batch
+decisions. No generic pending commit may enter the approved-content fold.
+
 **Goal.** Agent mutations land as proposals; a human approves or discards in batch. Turns the spine into a human-in-the-loop gate.
 
 **Design — extend the pattern that already exists, don't generalize commits.** Documents already do this: `propose_document_edit` creates `document_edits` rows with `status: "pending"` and humans resolve them. Generalizing a "proposed commit" would break the linear fold (a rejected commit can't be un-folded). So:
 
-- Tabular: `tabular_cells.status` gains `proposed`. Agent `write_cell`/`run_cell` with matter policy "review required" writes content to a new `proposedContent` jsonb column (head content untouched), status `proposed`. Approve = commit moving proposedContent → content; reject = clear.
-- Workflows: `write_workflow` under policy writes to a new `workflow_proposals` table (`workflowId`, `fields` jsonb, `proposedBy`, `status`); approve applies via the normal `recordCommit` path attributed `op: "apply_proposal"` with the agent as actor and the approver in `summary`.
-- Policy lives on the matter: reuse `matters.approvalPolicy` from Plan 2 (`{ agentMutations: "review" | "direct" }`). One policy object serves both features.
+- Tabular: agent writes under review-required policy stage typed proposed content/citations separately from accepted fields. Execution and approval states are distinct. Apply moves validated content through `recordCommit`; rejection retains proposal evidence and records lifecycle history.
+- Workflows: `write_workflow` under policy stages typed `workflow_proposals` with base revision, fields, actor, and lifecycle. Apply uses normal `recordCommit` with the human approver as actor, retaining original agent/proposal references in metadata.
+- Policy lives on the matter: reuse the versioned per-action `matters.approvalPolicy` from section 2. One policy model serves document resolution, findings, cell/workflow staging and export gates.
 - Review queue UI: per-matter "Agent activity" tab listing pending document edits + proposed cells + workflow proposals, batch approve/reject. MCP tools: `list_proposals`, nothing else — approval is human-only (UI), by design.
 
 **Steps.**
 
-1. Schema: `tabular_cells.proposedContent` + status value; `workflow_proposals` table; (approvalPolicy from Plan 2). Migrate.
+1. Schema: typed cell/workflow proposals with separate lifecycle, immutable decisions, and audited approvalPolicy from section 2. Add approved document baseline semantics per plan 05. Migrate.
 2. Core: policy check at the top of agent-actor mutation paths (`runner.ts`, `platform/workflow.ts`); approve/reject functions committing through `recordCommit`.
 3. UI queue tab + notification count badge.
-4. Verify: agent write under policy leaves head state unchanged; approve produces commit attributed to agent with approver recorded; reject leaves no commit.
+4. Verify: agent proposal leaves approved content unchanged; approval applies atomically as the human actor with agent provenance; rejection creates a durable lifecycle commit without changing approved content. Audit head may advance for proposal/decision history.
 
 **Touched.** `packages/db/src/schema/{tabular,workflow}.ts`, `packages/core/src/ai/tabular/runner.ts`, `packages/core/src/platform/workflow.ts`, matter UI. Depends on Plan 2's policy column (or ship the column here first).
 

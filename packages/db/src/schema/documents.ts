@@ -1,8 +1,11 @@
+import { sql } from "drizzle-orm";
+import type { FindingEditProvenance } from "@workspace/contracts";
 import {
   type AnyPgColumn,
   boolean,
   index,
   integer,
+  jsonb,
   pgTable,
   primaryKey,
   text,
@@ -98,6 +101,10 @@ export const documents = pgTable(
     deletedBy: text("deleted_by").references(() => user.id, { onDelete: "set null" }),
   },
   (t) => [
+    index("documents_search_idx").using(
+      "gin",
+      sql`to_tsvector('english', coalesce(${t.title}, '') || ' ' || coalesce(${t.markdown}, ''))`
+    ),
     index("documents_matter_idx").on(t.matterId),
     index("documents_tenant_idx").on(t.tenantId),
   ]
@@ -179,6 +186,7 @@ export const documentEdits = pgTable("document_edits", {
   contextBefore: text("context_before"),
   contextAfter: text("context_after"),
   reason: text("reason"),
+  findingProvenance: jsonb("finding_provenance").$type<FindingEditProvenance>(),
   status: text("status").$type<"pending" | "accepted" | "rejected">().default("pending").notNull(),
   createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
   resolvedBy: text("resolved_by").references(() => user.id, { onDelete: "set null" }),

@@ -99,6 +99,7 @@ const hasStorage = !!process.env.S3_ACCESS_KEY;
       email: `${userId}@example.com`,
       emailVerified: true,
       tenantId,
+      tenantRole: "admin",
     });
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
     await server.connect(serverTransport);

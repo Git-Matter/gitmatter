@@ -80,6 +80,10 @@ Important gaps, each owned by a plan:
 
 ## Pilot program
 
+Use [`../test/acceptance/pilot-review.md`](../test/acceptance/pilot-review.md) for a session record,
+rule-level quality evaluation, Word round-trip, repeated-use observations, and integration selection.
+It is a template; no pilot outcomes or metrics have been recorded by adding it.
+
 Run with a small design-partner cohort and representative, sanitized documents before calling the
 workflow production-ready.
 

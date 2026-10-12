@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import {
   boolean,
   index,
@@ -69,7 +70,13 @@ export const workflows = pgTable(
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
-  (t) => [index("workflows_tenant_idx").on(t.tenantId)]
+  (t) => [
+    index("workflows_tenant_idx").on(t.tenantId),
+    index("workflows_search_idx").using(
+      "gin",
+      sql`to_tsvector('english', coalesce(${t.title}, '') || ' ' || coalesce(${t.rules}::text, ''))`
+    ),
+  ]
 );
 
 export type Workflow = typeof workflows.$inferSelect;

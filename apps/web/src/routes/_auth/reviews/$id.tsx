@@ -1,3 +1,7 @@
+import {
+  ContractReviewActions,
+  ContractReviewCompletion,
+} from "./-components/ContractReviewActions";
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -31,7 +35,15 @@ import { useSelectedModel } from "@/lib/hooks/state/useSelectedModel";
 import { DocumentDrawer } from "@/routes/_auth/documents/-components/DocumentDrawer";
 import { CellDetailDrawer } from "./-components/CellDetailDrawer";
 
-export const Route = createFileRoute("/_auth/reviews/$id")({ component: ReviewView });
+export const Route = createFileRoute("/_auth/reviews/$id")({
+  component: ReviewView,
+  validateSearch: (input: Record<string, unknown>): { finding?: string } => ({
+    finding:
+      typeof input.finding === "string" && /^[0-9a-f-]{36}$/i.test(input.finding)
+        ? input.finding
+        : undefined,
+  }),
+});
 
 const FLAG_COLOR: Record<string, string> = {
   green: "bg-emerald-500",
@@ -45,10 +57,22 @@ function ReviewView() {
   // data changes, so it skips the re-render that fills the table. Opt out.
   "use no memo";
   const { id } = Route.useParams();
+  const searchParams = Route.useSearch();
   const qc = useQueryClient();
   const { data: session } = useSession();
   const reviewKey = ["review", id];
-  const { data } = useQuery({ queryKey: reviewKey, queryFn: () => api.getReview(id) });
+  const { data, dataUpdatedAt } = useQuery({
+    queryKey: reviewKey,
+    queryFn: () => api.getReview(id),
+  });
+  const { data: completion } = useQuery({
+    queryKey: ["review-completion", id],
+    queryFn: () => api.getReviewCompletion(id),
+    refetchInterval: 5000,
+  });
+  useEffect(() => {
+    void qc.invalidateQueries({ queryKey: ["review-completion", id] });
+  }, [qc, id, dataUpdatedAt]);
   const { data: history = [] } = useQuery({
     queryKey: ["review-history", id],
     queryFn: () => api.history(id),
@@ -58,11 +82,20 @@ function ReviewView() {
   const runAllAbort = useRef<AbortController | null>(null);
   useEffect(() => () => runAllAbort.current?.abort(), []);
   const [model, setModel] = useSelectedModel();
+  const { data: estimate, error: estimateError } = useQuery({
+    queryKey: ["review-estimate", id, model, dataUpdatedAt],
+    queryFn: () => api.getReviewEstimate(id, model || undefined),
+    enabled: !!data,
+  });
   const [historyCollapsed, setHistoryCollapsed] = useState(false);
   // Source document preview (optionally jumped to a cited page).
   const [preview, setPreview] = useState<{ docId: string; page?: number } | null>(null);
   // The cell whose full detail panel is open.
   const [detail, setDetail] = useState<{ docId: string; columnIndex: number } | null>(null);
+  useEffect(() => {
+    const cell = data?.cells.find((c) => c.id === searchParams.finding);
+    if (cell) setDetail({ docId: cell.documentId, columnIndex: cell.columnIndex });
+  }, [data?.cells, searchParams.finding]);
   useEffect(() => {
     const saved = localStorage.getItem("reviewHistoryCollapsed");
     if (saved !== null) setHistoryCollapsed(saved === "true");
@@ -306,6 +339,24 @@ function ReviewView() {
           />
         </div>
 
+        {estimate && (
+          <p className="mb-4 max-w-prose text-xs text-muted-foreground">
+            Run estimate: {estimate.cells} remaining rules · up to{" "}
+            {estimate.inputTokenUpperEstimate.toLocaleString()} input tokens and{" "}
+            {estimate.outputTokenLimit.toLocaleString()} output tokens ·{" "}
+            {estimate.costUsd === null
+              ? "price unavailable for this model"
+              : `estimated $${estimate.costUsd.toFixed(2)} USD`}
+            . Durable review limits apply before dispatch; this is an estimate, not a provider
+            invoice.
+          </p>
+        )}
+        {estimateError && (
+          <p className="mb-4 text-xs text-muted-foreground">
+            Run estimate unavailable. Check model access before starting.
+          </p>
+        )}
+        {completion && <ContractReviewCompletion completion={completion} />}
         <DataTable
           table={table}
           estimateSize={72}
@@ -355,6 +406,33 @@ function ReviewView() {
           onRun={() => run(detail.docId, detail.columnIndex)}
           onClose={() => setDetail(null)}
           onOpenSource={(page) => setPreview({ docId: detail.docId, page })}
+          sourceVersionChanged={completion?.documents.some(
+            (d) =>
+              d.documentId === detail.docId &&
+              (d.reviewedVersionId !== d.currentVersionId || d.sourceChanged)
+          )}
+          reviewedSourceUrl={(() => {
+            const doc = completion?.documents.find((d) => d.documentId === detail.docId);
+            return doc?.reviewedVersionId
+              ? api.versionDownloadUrl(doc.documentId, doc.reviewedVersionId)
+              : undefined;
+          })()}
+          decisions={(() => {
+            const document = completion?.documents.find((d) => d.documentId === detail.docId);
+            const finding = document?.findings.find((f) => f.columnIndex === detail.columnIndex);
+            return completion && document && finding ? (
+              <ContractReviewActions
+                key={finding.finding?.revisionId ?? "pending"}
+                reviewId={id}
+                document={document}
+                finding={finding}
+                cell={cellOf(detail.docId, detail.columnIndex)}
+                canDecide={completion.canDecide}
+                canEscalate={completion.canEscalate}
+                policyRevision={completion.policyRevision}
+              />
+            ) : undefined;
+          })()}
         />
       )}
     </div>

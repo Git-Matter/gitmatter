@@ -3,7 +3,13 @@ import { randomUUID } from "node:crypto";
 import { db, sql } from "@workspace/db/client";
 import { tabularReviews, tenants, user } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
-import { deriveBlame, diffCommits, listCommits, recordCommit } from "../src/core/commit.js";
+import {
+  deriveBlame,
+  diffCommits,
+  listCommits,
+  recordCommit,
+  recordCommitInTransaction,
+} from "../src/core/commit.js";
 import { ensureDefaultMatter } from "../src/platform/matters.js";
 
 const userId = `test-user-${randomUUID()}`;
@@ -44,6 +50,38 @@ afterAll(async () => {
 });
 
 describe("recordCommit", () => {
+  test("caller transaction rolls back artifact content, commit, diff and head together", async () => {
+    const [before] = await db.select().from(tabularReviews).where(eq(tabularReviews.id, reviewId));
+    const historyBefore = await listCommits("tabular_review", reviewId);
+    await expect(
+      db.transaction(async (tx) => {
+        await recordCommitInTransaction(tx, {
+          artifactType: "tabular_review",
+          artifactId: reviewId,
+          actor: { type: "user", userId },
+          op: "atomic_result",
+          message: "This result must roll back with its checkpoint",
+          apply: async ({ tx: commitTx }) => {
+            await commitTx
+              .update(tabularReviews)
+              .set({ title: "Must not survive" })
+              .where(eq(tabularReviews.id, reviewId));
+            return {
+              changes: [{ path: "meta/title", before: before!.title, after: "Must not survive" }],
+            };
+          },
+        });
+        throw new Error("checkpoint publication failed");
+      })
+    ).rejects.toThrow("checkpoint publication failed");
+    const [after] = await db.select().from(tabularReviews).where(eq(tabularReviews.id, reviewId));
+    expect(after!.title).toBe(before!.title);
+    expect(after!.headCommitId).toBe(before!.headCommitId);
+    expect((await listCommits("tabular_review", reviewId)).map((c) => c.id)).toEqual(
+      historyBefore.map((c) => c.id)
+    );
+  });
+
   test("seq is monotonic, parent links, head pointer updates", async () => {
     const r1 = await recordCommit({
       artifactType: "tabular_review",

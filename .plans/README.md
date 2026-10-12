@@ -39,13 +39,21 @@ it.
 
 ## Supporting architecture
 
+Plans 03–05 were deepened on 2026-10-11 with user journeys, state models, proposed data/core
+contracts, permission/audit rules, failure handling, delivery slices, and acceptance scenarios.
+[`workflow-contracts.md`](workflow-contracts.md) defines their shared version, actor, transaction,
+presentation, and measurement requirements. This specification work did not change release status. Source/local implementation slices added
+on 2026-10-12 are recorded separately in plans 03–07 and the roadmap; none closes a release gate
+merely by passing module tests.
+
 [`evidence/2026-09-13-subscription-agent.md`](evidence/2026-09-13-subscription-agent.md) records the
 implemented subscription-agent workflow, local validation and staging deployment blockers. The
 implementation is on branch `feat/native-agent-workflow` (draft PR #10).
 
 [`../PLANS.md`](../PLANS.md) contains the deeper candidate-feature designs for the audit spine,
 approval gates, agent review queue, search, notifications, and branching. Use those sections as
-architecture input. These plans decide product order and release gates.
+architecture input. These plans decide product order and release gates; the detailed 03–05 contracts
+take precedence where the older candidate approval designs differ.
 
 ## Status language
 

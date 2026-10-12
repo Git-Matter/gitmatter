@@ -1,3 +1,8 @@
+import type { RunEstimate } from "@workspace/core";
+import type { SearchResult } from "@workspace/core";
+import type { FindingProvenance, FindingDisposition } from "@workspace/contracts";
+import type { getReviewCompletion } from "@workspace/core";
+export type ReviewCompletion = NonNullable<Awaited<ReturnType<typeof getReviewCompletion>>>;
 export type {
   LlmModel,
   LlmProvider,
@@ -43,6 +48,8 @@ export type Cell = {
   columnIndex: number;
   content: CellContent | null;
   citations: CellCitation[] | null;
+  finding?: FindingProvenance | null;
+  disposition?: FindingDisposition | null;
   status: "pending" | "generating" | "done" | "error";
   lastCommitId: string | null;
   blame: Blame | null;
@@ -397,6 +404,15 @@ async function upload<T>(path: string, form: FormData): Promise<T> {
 }
 
 export const api = {
+  searchWork: (input: {
+    query: string;
+    matterId?: string;
+    type?: SearchResult["type"];
+    page?: number;
+  }) =>
+    req<{ results: SearchResult[]; rowCount: number }>(
+      `/api/search?${new URLSearchParams({ q: input.query, ...(input.matterId ? { matterId: input.matterId } : {}), ...(input.type ? { type: input.type } : {}), page: String(input.page ?? 0) })}`
+    ),
   getKeys: () => req<{ providers: ProviderKeyStatus[] }>("/api/keys"),
   setKey: (provider: LlmProvider, key: string) =>
     req<{ ok: true }>("/api/keys", { method: "PUT", body: JSON.stringify({ provider, key }) }),
@@ -606,9 +622,15 @@ export const api = {
   discardStagedDocument: (id: string) =>
     req<null>(`/api/documents/${id}/staged`, { method: "DELETE" }),
   listReviews: () =>
-    req<Array<{ id: string; title: string; documentIds: string[]; createdAt: string }>>(
-      "/api/tabular/reviews"
-    ),
+    req<
+      Array<{
+        id: string;
+        title: string;
+        matterId: string;
+        documentIds: string[];
+        createdAt: string;
+      }>
+    >("/api/tabular/reviews"),
   listReviewsPage: (params: ListPageParams) =>
     req<PageResult<ReviewListItem>>(`/api/tabular/reviews?${listQuery(params)}`),
   createReview: (d: {
@@ -618,6 +640,45 @@ export const api = {
     matterId?: string;
   }) => req<{ id: string }>("/api/tabular/reviews", { method: "POST", body: JSON.stringify(d) }),
   getReview: (id: string) => req<ReviewDetail>(`/api/tabular/reviews/${id}`),
+  getReviewEstimate: (id: string, model?: string) =>
+    req<RunEstimate>(
+      `/api/tabular/reviews/${id}/estimate${model ? `?model=${encodeURIComponent(model)}` : ""}`
+    ),
+  getReviewCompletion: (id: string) =>
+    req<ReviewCompletion | null>(`/api/tabular/reviews/${id}/completion`),
+  setFindingDisposition: (
+    id: string,
+    body: {
+      documentId: string;
+      columnIndex: number;
+      revisionId: string;
+      status: "left_unchanged" | "escalated";
+      rationale: string;
+      policyRevision?: number;
+    }
+  ) =>
+    req<{ ok: true }>(`/api/tabular/reviews/${id}/disposition`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  proposeFindingRedline: (
+    id: string,
+    body: {
+      requestId: string;
+      documentId: string;
+      columnIndex: number;
+      revisionId: string;
+      expectedHeadCommitId: string | null;
+      clauseId: string;
+      find: string;
+      contextBefore?: string;
+      contextAfter?: string;
+    }
+  ) =>
+    req<{ changeIds: string[] }>(`/api/tabular/reviews/${id}/redline`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
   // Edit a column's config (e.g. its prompt); returns the refreshed review.
   updateReviewColumn: (
     id: string,
@@ -766,7 +827,10 @@ export const api = {
     }
   ) =>
     req<WorkflowDetail>(`/api/workflows/${id}`, { method: "PATCH", body: JSON.stringify(patch) }),
-  runPlaybook: (id: string, body: { matterId: string; documentIds: string[] }) =>
+  runPlaybook: (
+    id: string,
+    body: { matterId: string; documentIds: string[]; requestId?: string }
+  ) =>
     req<{ reviewId: string; ruleCount: number }>(`/api/workflows/${id}/run-playbook`, {
       method: "POST",
       body: JSON.stringify(body),

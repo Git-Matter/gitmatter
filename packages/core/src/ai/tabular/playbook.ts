@@ -1,8 +1,18 @@
-import { randomUUID } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { canReadApprovedLibrary } from "../../core/library-access.js";
+import { createHash, randomUUID } from "node:crypto";
+import { and, eq } from "drizzle-orm";
 import { db } from "@workspace/db/client";
-import { type PlaybookRule, type TabularColumn, workflows } from "@workspace/db/schema";
+import type { ContractReviewSnapshot, ReviewRuleSnapshot } from "@workspace/contracts";
+import {
+  type PlaybookRule,
+  type TabularColumn,
+  documents,
+  matterDocuments,
+  tabularReviews,
+  workflows,
+} from "@workspace/db/schema";
 import type { Actor } from "../../core/commit.js";
+import { canAccessArtifact, canReadDocument, hasMatterAccess } from "../../core/access.js";
 import { resolveClause } from "../../content/clauses.js";
 import { completeText } from "../provider/index.js";
 import { stripJsonFence } from "./extract.js";
@@ -64,6 +74,7 @@ export async function rulePrompt(
     `- flag green if the language matches our standard position or better,`,
     `- flag yellow if it matches a listed fallback or needs lawyer review,`,
     `- flag ${rule.severity === "red" ? "red" : "yellow"} if it crosses the red line or the clause is missing entirely.`,
+    `Return outcome: conforms, deviates, not_found (only after searching the prepared document), or inconclusive. Absence has no quotation; do not fabricate one.`,
     `Quote the operative language in your citations and say which position (standard / fallback N / non-compliant / absent) it matches.`,
   ]
     .filter(Boolean)
@@ -92,27 +103,143 @@ export async function playbookColumns(
  */
 export async function runPlaybook(
   actor: Actor,
-  params: { playbookId: string; documentIds: string[]; matterId: string }
+  params: { playbookId: string; documentIds: string[]; matterId: string; requestId?: string }
 ): Promise<{ reviewId: string; ruleCount: number }> {
+  if (!(await hasMatterAccess(actor, params.matterId, "editor"))) throw new Error("access_denied");
+  const documentIds = [...new Set(params.documentIds)];
+  const fingerprint = createHash("sha256")
+    .update(
+      JSON.stringify({ playbookId: params.playbookId, matterId: params.matterId, documentIds })
+    )
+    .digest("hex");
+  const requestKey = params.requestId
+    ? createHash("sha256")
+        .update(JSON.stringify({ actor, requestId: params.requestId, command: "run_playbook" }))
+        .digest("hex")
+    : undefined;
+  if (requestKey) {
+    const [prior] = await db
+      .select()
+      .from(tabularReviews)
+      .where(eq(tabularReviews.requestKey, requestKey));
+    if (prior) {
+      if (prior.requestFingerprint !== fingerprint) throw new Error("request_conflict");
+      if (!(await canAccessArtifact(actor, "tabular_review", prior.id)))
+        throw new Error("access_denied");
+      return { reviewId: prior.id, ruleCount: prior.columnsConfig.length };
+    }
+  }
   const [wf] = await db.select().from(workflows).where(eq(workflows.id, params.playbookId));
-  if (!wf || wf.type !== "playbook") throw new Error("Playbook not found");
+  if (
+    !wf ||
+    wf.type !== "playbook" ||
+    (!(await canReadApprovedLibrary(actor, "workflow", wf.id, params.matterId)) &&
+      !(await canAccessArtifact(actor, "workflow", wf.id)))
+  )
+    throw new Error("Playbook not found");
   if (wf.status === "deprecated") throw new Error("Playbook is deprecated");
   if (wf.status !== "approved") throw new Error("Playbook must be approved before it can run");
   const rules = wf.rules ?? [];
   if (!rules.length) throw new Error("Playbook has no rules");
-  if (!params.documentIds.length) throw new Error("No documents given");
-
-  const reviewId = await createReview(actor, {
-    title: `${wf.title} — playbook review`,
-    columnsConfig: await playbookColumns(rules, {
-      tenantId: wf.tenantId,
+  if (!documentIds.length) throw new Error("No documents given");
+  const sources: ContractReviewSnapshot["documents"] = [];
+  for (const id of documentIds) {
+    if (!(await canReadDocument(actor, id))) throw new Error("access_denied");
+    const [link] = await db
+      .select()
+      .from(matterDocuments)
+      .where(
+        and(eq(matterDocuments.documentId, id), eq(matterDocuments.matterId, params.matterId))
+      );
+    const [doc] = await db.select().from(documents).where(eq(documents.id, id));
+    if (
+      !link ||
+      !doc ||
+      doc.deletedAt ||
+      doc.staged ||
+      doc.status !== "ready" ||
+      !doc.markdown?.trim()
+    )
+      throw new Error("input_not_ready");
+    if (doc.markdown.length > 120000)
+      throw new Error(
+        "Source exceeds the whole-document review limit; split the document before review"
+      );
+    sources.push({
+      id,
+      title: doc.title,
+      versionId: doc.currentVersionId,
+      headCommitId: doc.headCommitId,
+      text: doc.markdown,
+    });
+  }
+  const snapshotRules: ReviewRuleSnapshot[] = [];
+  const frozenRules: PlaybookRule[] = [];
+  for (const [columnIndex, rule] of rules.entries()) {
+    const captured: ReviewRuleSnapshot["clauses"] = [];
+    const captureClause = async (id: string) => {
+      if (!wf.tenantId) throw new Error("Playbook has no firm library");
+      const clause = await resolveClause(wf.tenantId, id, { matterId: params.matterId });
+      if (!clause || !(await canReadApprovedLibrary(actor, "clause", clause.id, params.matterId)))
+        throw new Error("Approved clause unavailable");
+      captured.push({
+        id: clause.id,
+        title: clause.title,
+        body: clause.body,
+        revision:
+          clause.headCommitId ??
+          `seed:${clause.id}:${createHash("sha256").update(clause.body).digest("hex")}`,
+      });
+      return clause.body;
+    };
+    const standardPosition = rule.standardClauseId
+      ? await captureClause(rule.standardClauseId)
+      : rule.standardPosition;
+    const fallbacks = [];
+    for (const fallback of rule.fallbacks ?? [])
+      fallbacks.push(
+        typeof fallback === "string" ? fallback : await captureClause(fallback.clauseId)
+      );
+    frozenRules.push({ ...rule, standardClauseId: undefined, standardPosition, fallbacks });
+    snapshotRules.push({
+      id: rule.id,
+      columnIndex,
+      name: rule.clauseType,
+      severity: rule.severity,
+      standardPosition,
+      clauses: captured,
+    });
+  }
+  const inputSnapshot: ContractReviewSnapshot = {
+    revision: 1,
+    createdAt: new Date().toISOString(),
+    playbookId: wf.id,
+    playbookRevision:
+      wf.headCommitId ??
+      `seed:${wf.id}:${createHash("sha256").update(JSON.stringify(rules)).digest("hex")}`,
+    rules: snapshotRules,
+    documents: sources,
+  };
+  try {
+    const reviewId = await createReview(actor, {
+      title: `${wf.title} — playbook review`,
+      columnsConfig: await playbookColumns(frozenRules, {
+        tenantId: wf.tenantId,
+        matterId: params.matterId,
+      }),
+      documentIds,
+      workflowId: wf.id,
       matterId: params.matterId,
-    }),
-    documentIds: params.documentIds,
-    workflowId: wf.id,
-    matterId: params.matterId,
-  });
-  return { reviewId, ruleCount: rules.length };
+      inputSnapshot,
+      requestKey,
+      requestFingerprint: requestKey ? fingerprint : undefined,
+    });
+    return { reviewId, ruleCount: rules.length };
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith("review_replay:"))
+      return { reviewId: error.message.slice("review_replay:".length), ruleCount: rules.length };
+    throw error;
+  }
 }
 
 const RULES_SCHEMA = {

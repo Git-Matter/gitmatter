@@ -155,6 +155,7 @@ export function buildReviewTools({ actor, resolveMatter }: ToolContext): ToolSpe
         columnIndex: z.number(),
         summary: z.string(),
         flag: z.enum(["green", "yellow", "red", "grey"]),
+        outcome: z.enum(["conforms", "deviates", "not_found", "inconclusive"]).optional(),
         reasoning: z.string(),
         citations: z.array(z.object({ page: z.number().optional(), quote: z.string() })).optional(),
       },
@@ -165,6 +166,7 @@ export function buildReviewTools({ actor, resolveMatter }: ToolContext): ToolSpe
         summary,
         flag,
         reasoning,
+        outcome,
         citations,
       }) => {
         if (!(await canAccessArtifact(actor, "tabular_review", reviewId as string, "editor")))
@@ -176,6 +178,7 @@ export function buildReviewTools({ actor, resolveMatter }: ToolContext): ToolSpe
             columnIndex: columnIndex as number,
             summary: summary as string,
             flag: flag as string,
+            outcome: outcome as "conforms" | "deviates" | "not_found" | "inconclusive" | undefined,
             reasoning: reasoning as string,
             citations: citations as { page?: number; quote: string }[] | undefined,
           });

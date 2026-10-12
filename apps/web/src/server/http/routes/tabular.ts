@@ -1,3 +1,10 @@
+import {
+  getReviewCompletion,
+  setFindingDisposition,
+  proposeFindingRedline,
+  findingDispositionSchema,
+  findingRedlineSchema,
+} from "@workspace/core";
 import { recordFunnel } from "@workspace/core";
 import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
@@ -164,8 +171,9 @@ tabularRoute.post(
       try {
         await runReviewStreaming(
           { type: "user", userId: user.id },
-          { reviewId, model: body.model },
+          { reviewId, model: body.model, requestId: body.requestId },
           {
+            shouldStop: () => stream.aborted,
             onCellStart: (documentId, columnIndex) =>
               void stream.writeSSE({
                 event: "cell-start",
@@ -298,5 +306,51 @@ tabularRoute.post(
       return c.json({ error: "Not found" }, 404);
     recordFunnel("finding_opened", { actorType: "user", reviewId, documentId, columnIndex });
     return c.body(null, 204);
+  }
+);
+
+// Contract-review decisions share the same engine as the MCP connector.
+tabularRoute.get("/api/tabular/reviews/:id/completion", async (c) => {
+  if (!(await access(c.get("user").id, c.req.param("id"))))
+    return c.json({ error: "Not found" }, 404);
+  return c.json(
+    await getReviewCompletion({ type: "user", userId: c.get("user").id }, c.req.param("id"))
+  );
+});
+tabularRoute.post(
+  "/api/tabular/reviews/:id/disposition",
+  zValidator("json", findingDispositionSchema),
+  async (c) => {
+    if (!(await access(c.get("user").id, c.req.param("id"), "editor")))
+      return c.json({ error: "Not found" }, 404);
+    try {
+      await setFindingDisposition(
+        { type: "user", userId: c.get("user").id },
+        c.req.param("id"),
+        c.req.valid("json")
+      );
+      return c.json({ ok: true });
+    } catch (e) {
+      return c.json({ error: e instanceof Error ? e.message : "Decision failed" }, 409);
+    }
+  }
+);
+tabularRoute.post(
+  "/api/tabular/reviews/:id/redline",
+  zValidator("json", findingRedlineSchema),
+  async (c) => {
+    if (!(await access(c.get("user").id, c.req.param("id"), "editor")))
+      return c.json({ error: "Not found" }, 404);
+    try {
+      return c.json(
+        await proposeFindingRedline(
+          { type: "user", userId: c.get("user").id },
+          c.req.param("id"),
+          c.req.valid("json")
+        )
+      );
+    } catch (e) {
+      return c.json({ error: e instanceof Error ? e.message : "Proposal failed" }, 409);
+    }
   }
 );

@@ -30,6 +30,9 @@ export function CellDetailDrawer({
   onRun,
   onClose,
   onOpenSource,
+  decisions,
+  sourceVersionChanged,
+  reviewedSourceUrl,
 }: {
   open: boolean;
   columnName: string;
@@ -39,6 +42,9 @@ export function CellDetailDrawer({
   onRun: () => void;
   onClose: () => void;
   onOpenSource: (page?: number) => void;
+  decisions?: ReactNode;
+  sourceVersionChanged?: boolean;
+  reviewedSourceUrl?: string;
 }) {
   const content = cell?.content;
   const citations = cell?.citations ?? [];
@@ -104,6 +110,20 @@ export function CellDetailDrawer({
 
                   <section>
                     <Label>Sources{citations.length ? ` (${citations.length})` : ""}</Label>
+                    {sourceVersionChanged && (
+                      <p className="mb-3 text-sm text-muted-foreground">
+                        These quotations refer to the captured review source. The current draft is a
+                        different version; its locations may differ.
+                      </p>
+                    )}
+                    {reviewedSourceUrl && (
+                      <a
+                        href={reviewedSourceUrl}
+                        className="mb-3 block text-sm underline underline-offset-4"
+                      >
+                        Download the reviewed source version
+                      </a>
+                    )}
                     {citations.length === 0 ? (
                       <p className="text-sm text-muted-foreground">No citations.</p>
                     ) : (
@@ -111,7 +131,9 @@ export function CellDetailDrawer({
                         {citations.map((c, i) => (
                           <li key={i}>
                             <button
-                              onClick={() => onOpenSource(c.page)}
+                              onClick={() =>
+                                onOpenSource(sourceVersionChanged ? undefined : c.page)
+                              }
                               className="block w-full rounded-md border border-border p-2 text-start transition-colors hover:border-bronze hover:bg-bronze-tint/40"
                             >
                               {c.page != null && (
@@ -122,12 +144,17 @@ export function CellDetailDrawer({
                               <span className="block text-xs text-muted-foreground italic">
                                 "{c.quote}"
                               </span>
+                              {sourceVersionChanged && (
+                                <span className="mt-2 block text-xs">Open current draft</span>
+                              )}
                             </button>
                           </li>
                         ))}
                       </ul>
                     )}
                   </section>
+
+                  {decisions}
 
                   {cell?.blame && (
                     <section>

@@ -112,7 +112,16 @@ export class GeminiClient implements LlmClient {
   async complete(req: CompleteRequest): Promise<CompleteResult> {
     const ai = new GoogleGenAI({
       apiKey: this.apiKey,
-      ...(llmTimeoutMs() ? { httpOptions: { timeout: llmTimeoutMs() } } : {}),
+      ...(llmTimeoutMs() || req.maxRetries !== undefined
+        ? {
+            httpOptions: {
+              ...(llmTimeoutMs() ? { timeout: llmTimeoutMs() } : {}),
+              ...(req.maxRetries !== undefined
+                ? { retryOptions: { attempts: req.maxRetries + 1 } }
+                : {}),
+            },
+          }
+        : {}),
     });
     const res = await ai.models.generateContent(this.buildRequest(req));
     const out = this.finalize(res.candidates?.[0]?.content?.parts ?? []);
@@ -123,7 +132,16 @@ export class GeminiClient implements LlmClient {
   async stream(req: CompleteRequest, handlers: StreamHandlers): Promise<CompleteResult> {
     const ai = new GoogleGenAI({
       apiKey: this.apiKey,
-      ...(llmTimeoutMs() ? { httpOptions: { timeout: llmTimeoutMs() } } : {}),
+      ...(llmTimeoutMs() || req.maxRetries !== undefined
+        ? {
+            httpOptions: {
+              ...(llmTimeoutMs() ? { timeout: llmTimeoutMs() } : {}),
+              ...(req.maxRetries !== undefined
+                ? { retryOptions: { attempts: req.maxRetries + 1 } }
+                : {}),
+            },
+          }
+        : {}),
     });
     const gen = await ai.models.generateContentStream(this.buildRequest(req));
     const parts: Part[] = [];

@@ -14,9 +14,13 @@ import {
   recordAudit,
   seedBuiltinWorkflows,
   setFunnelSink,
+  startExtractionWorker,
 } from "@workspace/core";
 import { resolveJurisdiction } from "@workspace/registry";
 import { chatRoute } from "./routes/chat.js";
+import { approvalRoute } from "./routes/approval.js";
+import { jobsRoute } from "./routes/jobs.js";
+import { searchRoute } from "./routes/search.js";
 import { clausesRoute } from "./routes/clauses.js";
 import { documentsRoute } from "./routes/documents.js";
 import { keysRoute } from "./routes/keys.js";
@@ -64,6 +68,7 @@ setFunnelSink((event, properties) => {
 
 // Seed system workflows once on boot (idempotent).
 void seedBuiltinWorkflows().catch(() => {});
+startExtractionWorker();
 
 // Retention sweeps. No scheduler here, so boot is the periodic sweep: hard-delete
 // documents past their soft-delete window, dead auth/MCP tokens, old audit events,
@@ -310,6 +315,9 @@ app.route("/", workflowRoute);
 app.route("/", chatRoute);
 app.route("/", tokensRoute);
 app.route("/", clausesRoute);
+app.route("/", approvalRoute);
+app.route("/", jobsRoute);
+app.route("/", searchRoute);
 
 // Exposed MCP server for Claude Desktop / CLI / Cowork. Authenticated by a
 // gitmatter access token; a fresh stateless server/transport per request.

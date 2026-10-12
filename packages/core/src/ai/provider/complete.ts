@@ -12,6 +12,7 @@ export async function completeText(params: {
   systemPrompt?: string;
   user: string;
   maxTokens?: number;
+  maxRetries?: number;
   apiKey?: string | null;
   provider?: LlmProvider;
   temperature?: number;
@@ -38,6 +39,7 @@ export async function completeText(params: {
     system: params.systemPrompt,
     messages: [{ role: "user", content: params.user }],
     maxTokens: params.maxTokens,
+    maxRetries: params.maxRetries,
     temperature: params.temperature,
     jsonSchema: params.jsonSchema,
     cache: params.cache,

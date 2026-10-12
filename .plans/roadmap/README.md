@@ -10,7 +10,10 @@ This epic tracks progress. It is not a plan itself; each concern has its own pla
 - Goal, product hierarchy, current baseline, measures, and release-proof tiers:
   [`../08-pilot-program-and-release-proof.md`](../08-pilot-program-and-release-proof.md)
 - Plan index and status vocabulary: [`../README.md`](../README.md)
-- Status reviewed: 2026-10-11 for plans 01–02; other plan statuses retain their 2026-09-16 evidence.
+- Status reviewed: 2026-10-12 for source/local slices in 03–07; 01–02 retain their
+  2026-10-11 sign-off review and open authenticated/staging gates.
+- Specifications deepened: 2026-10-11 for plans 03–05 and their
+  [shared contracts](../workflow-contracts.md); no additional implementation or release claim.
 
 ## Plan status
 
@@ -20,11 +23,11 @@ Numbers are delivery order, not progress rank — a low number is not further al
 | ------------------------------------------------ | ----------------------------------------------------------------------- | ------------------------ |
 | [`01`](../01-mfa-better-auth.md)                 | Opt-in TOTP and backup-code MFA                                         | Runtime-verified (local) |
 | [`02`](../02-establish-product-truth.md)         | NDA fixture pack, browser acceptance, MCP reference, funnel events      | In progress              |
-| [`03`](../03-review-to-redline-loop.md)          | Review contract → cited findings → proposed redline → export            | Planned                  |
-| [`04`](../04-durable-background-work.md)         | Database-backed job/outbox replacing the in-memory extraction queue     | Planned                  |
+| [`03`](../03-review-to-redline-loop.md)          | Review contract → cited findings → proposed redline → export            | In progress              |
+| [`04`](../04-durable-background-work.md)         | Database-backed job/outbox replacing the in-memory extraction queue     | In progress              |
 | [`05`](../05-approval-and-agent-queue.md)        | Matter approval policy, append-only approvals, Agent activity queue     | In progress              |
-| [`06`](../06-matter-workspace-and-search.md)     | Job-led matter page and permission-filtered full-text search            | Planned                  |
-| [`07`](../07-operational-controls.md)            | Cost estimates, hard caps, admin reporting, notifications, integrations | Planned                  |
+| [`06`](../06-matter-workspace-and-search.md)     | Job-led matter page and permission-filtered full-text search            | In progress              |
+| [`07`](../07-operational-controls.md)            | Cost estimates, hard caps, admin reporting, notifications, integrations | In progress              |
 | [`08`](../08-pilot-program-and-release-proof.md) | Shared framing, measures, release-proof tiers                           | Reference                |
 
 ## In progress
@@ -44,14 +47,31 @@ Numbers are delivery order, not progress rank — a low number is not further al
 - **Where:** branch `feat/native-agent-workflow`, draft
   [PR #10](https://github.com/Git-Matter/gitmatter/pull/10).
 
+### 03–07 Team implementation
+
+- **03:** immutable review inputs, validated findings, approved-clause redline provenance,
+  dispositions, completion/export gates, and connected matter/review actions.
+- **04:** durable extraction/bulk-review work, fenced leases, transactional receipts/checkpoints,
+  cancellation/retry/reconnect, and immutable source checks.
+- **05:** audited cell and finding policy, staged cells, exact human decisions, atomic batches,
+  queue/settings UI, and shared Library publication guards.
+- **06:** indexed permission-filtered retrieval, scoped Library context, exact links and matter
+  search UI. The broader job-led overview remains open.
+- **07:** indicative run estimates and spend reservations for durable review. All-application caps,
+  reporting, notifications and a pilot integration remain open.
+- **08:** pilot/quality/Word/repeat-use record template prepared; no real pilot or release claimed.
+- Details and precise remaining source/proof gates live in each numbered plan and the
+  [durable-work evidence](../evidence/2026-10-12-durable-work-and-controls.md).
+
 ### 05 Approval and agent queue
 
 - **Done:** accepting or rejecting document edits is human-only — `resolveEdits` refuses
   `actor.type === "agent"` (`packages/core/src/content/documents.ts`).
-- **Remaining:** configurable matter approval policy, append-only commit approvals, Agent activity
-  queue.
-- **Where:** the human-only guard is on branch `feat/native-agent-workflow` (draft PR #10); the rest
-  is unstarted.
+- **Implemented initial slices:** audited cell/finding policy, immutable cell decisions, queue,
+  core publication authority and compatible batch API.
+- **Remaining:** workflow proposals, approved document baseline/owner gate, export approvals,
+  legacy migration, batch UI and authenticated staging/pilot acceptance.
+- **Where:** branch `feat/native-agent-workflow` (draft PR #10); implementation remains in progress.
 
 ## MFA sign-off review
 

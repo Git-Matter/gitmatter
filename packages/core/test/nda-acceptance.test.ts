@@ -52,6 +52,7 @@ describe("synthetic NDA baseline", () => {
       email: `${userId}@example.com`,
       emailVerified: true,
       tenantId,
+      tenantRole: "admin",
     });
     const client = await createClient(userId, tenantId, { name: "Synthetic Alpha" });
     matterId = (await createMatter(userId, { clientId: client.id, name: fixture.title })).id;
@@ -124,6 +125,7 @@ describe("synthetic NDA baseline", () => {
         summary: finding.summary,
         flag: finding.flag,
         reasoning: finding.reasoning,
+        outcome: finding.quote ? undefined : "not_found",
         citations: finding.quote ? [{ quote: finding.quote }] : [],
       });
     }

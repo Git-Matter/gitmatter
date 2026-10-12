@@ -3,10 +3,22 @@
 Give firm administrators enough control to permit sustained use: cost estimates before a run, hard
 spend caps, admin usage reporting, notifications, and integrations chosen from pilot evidence.
 
-**Status: Planned** (verified 2026-09-16).
+**Status: In progress** (source/local slices reviewed 2026-10-12; release gates open).
 
-Per-matter usage is metered (`usage_events.matterId`, `GET /api/matters/:id/usage`), but budgets only
-warn and log; they do not stop spend.
+Per-matter usage is metered (`usage_events.matterId`, `GET /api/matters/:id/usage`), and durable review now has dispatch reservations/caps. Legacy paths still warn without universally
+stopping spend; the supported limit scope must stay explicit.
+
+## Implementation progress (2026-10-12)
+
+- **Implemented source/local slices:** indicative pre-run bulk estimates; serialized tenant/user/
+  matter/token/run token reservations for durable review; extraction acceptance limit; a priced-dollar
+  cap explicitly scoped to durable review; known usage settlement and visible uncertain paid attempts.
+- **Remaining source:** caps across legacy synchronous/chat/generation paths, configurable firm/admin
+  budget UI and reporting, reconciliation of uncertain provider charges, and durable notifications.
+  Existing warning-only paths are not presented as protected by a universal spend limit.
+- **External gates:** representative pricing/provider validation, a pilot-selected integration and its
+  authorized end-to-end test, staging/production operation. No email or integration was sent/exercised
+  merely by implementing these controls.
 
 ## Purpose
 

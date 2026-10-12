@@ -1,3 +1,6 @@
+import { canAccessArtifact } from "../core/access.js";
+import { validateFindingProposal } from "../ai/tabular/finding.js";
+import type { FindingEditProvenance } from "@workspace/contracts";
 import { recordFunnel } from "../core/funnel.js";
 import { randomUUID } from "node:crypto";
 import {
@@ -14,6 +17,7 @@ import {
   sql,
 } from "drizzle-orm";
 import { db } from "@workspace/db/client";
+import { acceptExtractionJob } from "../core/jobs.js";
 import {
   commits,
   documentEdits,
@@ -28,10 +32,9 @@ import {
 import { recordAudit } from "../platform/audit.js";
 import { assertStorageWithinQuota } from "../platform/usage.js";
 import { accessCountSql, accessSummaryByArtifact, sharedArtifactIds } from "../platform/shares.js";
-import { type Actor, recordCommit } from "../core/commit.js";
+import { type Actor, recordCommit, recordCommitInTransaction } from "../core/commit.js";
 import { logEvent } from "../core/log.js";
 import { extractMarkdown, type SupportedFileType } from "./extract.js";
-import { emitDocStatus } from "./extractionEvents.js";
 import { generateDocx, type DocxSpec } from "./docx/generate.js";
 import {
   applyTrackedEdits,
@@ -446,40 +449,64 @@ export async function uploadDocument(
       ext: input.fileType,
     });
     await putObject(tenantId, storagePath, input.bytes);
-    const [row] = await db
-      .insert(documents)
-      .values({
-        id,
-        userId,
-        tenantId,
-        matterId: input.matterId,
-        folderId,
-        title: input.title,
-        fileType: input.fileType,
-        sizeBytes: input.bytes.length,
-        currentVersionId: versionId,
-        status: "pending",
-        staged: input.staged ?? false,
-      })
-      .returning();
-    await db.insert(documentVersions).values({
-      id: versionId,
-      documentId: id,
-      versionNumber: 1,
-      storagePath,
-      source: "upload",
-      sizeBytes: input.bytes.length,
-      fileType: input.fileType,
-    });
-    // Self-link to the origin matter so it lists there (source of truth for which
-    // matters a doc appears in). Unfiled documents have no matter, so no link.
-    if (input.matterId) {
-      await db.insert(matterDocuments).values({
-        matterId: input.matterId,
-        documentId: id,
-        folderId,
+    const row = await db.transaction(async (tx) => {
+      const [created] = await tx
+        .insert(documents)
+        .values({
+          id,
+          userId,
+          tenantId,
+          matterId: input.matterId,
+          folderId,
+          title: input.title,
+          fileType: input.fileType,
+          sizeBytes: input.bytes.length,
+          currentVersionId: versionId,
+          status: "pending",
+          staged: input.staged ?? false,
+        })
+        .returning();
+      await recordCommitInTransaction(tx, {
+        artifactType: "document",
+        artifactId: id,
+        actor: { type: "user", userId },
+        op: "upload",
+        message: `Uploaded ${input.title}`,
+        apply: async ({ tx: commitTx, commitId }) => {
+          await commitTx.insert(documentVersions).values({
+            id: versionId,
+            documentId: id,
+            versionNumber: 1,
+            storagePath,
+            source: "upload",
+            sizeBytes: input.bytes.length,
+            fileType: input.fileType,
+            lastCommitId: commitId,
+          });
+          if (input.matterId)
+            await commitTx.insert(matterDocuments).values({
+              matterId: input.matterId,
+              documentId: id,
+              folderId,
+            });
+          await acceptExtractionJob(commitTx, {
+            actor: { type: "user", userId },
+            tenantId,
+            matterId: input.matterId,
+            documentId: id,
+            versionId,
+          });
+          return {
+            changes: [
+              { path: "version", before: null, after: 1 },
+              { path: "matterId", before: null, after: input.matterId },
+              { path: "status", before: null, after: "pending" },
+            ],
+          };
+        },
       });
-    }
+      return created!;
+    });
     return row;
   } catch (error) {
     recordFunnel("upload_failed", {
@@ -692,12 +719,12 @@ export async function addDocumentVersion(
   await assertStorageWithinQuota(doc.tenantId, input.bytes.length);
   const latest = await latestVersion(documentId);
   const versionNumber = (latest?.versionNumber ?? 0) + 1;
+  const versionId = randomUUID();
   const storagePath = buildStoragePath({
     tenantId: doc.tenantId,
-    userId: doc.userId,
-    artifactId: doc.id,
+    userId: actor.userId,
+    artifactId: versionId,
     ext: input.fileType,
-    version: versionNumber,
   });
   await putObject(doc.tenantId, storagePath, input.bytes);
   await recordCommit({
@@ -709,9 +736,16 @@ export async function addDocumentVersion(
       ? `Replaced active file with version ${versionNumber} (superseded version ${latest.versionNumber})`
       : `Uploaded version ${versionNumber}`,
     apply: async ({ tx, commitId }) => {
+      const [current] = await tx.select().from(documents).where(eq(documents.id, documentId));
+      if (
+        current?.headCommitId !== doc.headCommitId ||
+        current?.currentVersionId !== doc.currentVersionId
+      )
+        throw new Error("stale_source");
       const [nv] = await tx
         .insert(documentVersions)
         .values({
+          id: versionId,
           documentId,
           versionNumber,
           storagePath,
@@ -733,6 +767,13 @@ export async function addDocumentVersion(
           claimedAt: null,
         })
         .where(eq(documents.id, documentId));
+      await acceptExtractionJob(tx, {
+        actor,
+        tenantId: doc.tenantId,
+        matterId: doc.matterId,
+        documentId,
+        versionId,
+      });
       return {
         changes: [{ path: "version", before: latest?.versionNumber ?? null, after: versionNumber }],
       };
@@ -794,138 +835,105 @@ export async function deleteDocumentVersion(actor: Actor, documentId: string, ve
  * whose run was lost (claimed > 5 min ago, e.g. a server restart). Returns the
  * reset row so the caller can re-enqueue it; null if the doc isn't retryable.
  */
-export async function retryDocument(id: string) {
-  const [row] = await db
-    .update(documents)
-    .set({ status: "pending", extractionError: null, attempts: 0, claimedAt: null })
-    .where(
-      and(
-        eq(documents.id, id),
-        or(
-          eq(documents.status, "failed"),
-          and(
-            eq(documents.status, "processing"),
-            sql`${documents.claimedAt} < now() - interval '5 minutes'`
-          )
-        )
-      )
-    )
-    .returning();
-  return row ?? null;
-}
-
-/**
- * Extract markdown for a document and record the result as a system-authored
- * ("extractor" agent) commit on the document artifact. Drives the row through
- * `processing` -> `ready`/`failed` and emits each transition. On failure the
- * row is marked `failed` for the manual retry button (no auto-requeue).
- */
-// A PDF text-layer extraction with very little text per page is usually a
-// scanned/image-only PDF (we don't OCR) or a broken text layer. ~40 chars/page
-// is roughly a line of text; below that there's effectively nothing to read, so
-// the UI shows a passive "little text — may be scanned" warning.
-function looksThinForOcr(markdown: string, pageCount: number | null): boolean {
-  const chars = markdown.trim().length;
-  if (pageCount && pageCount > 0) return chars / pageCount < 40;
-  return chars < 40;
-}
-
-export async function processDocument(doc: Document): Promise<void> {
-  const started = performance.now();
-  const funnel = {
-    actorType: "agent" as const,
-    documentId: doc.id,
-    matterId: doc.matterId ?? undefined,
-  };
-  // Flip to `processing` first: drives the UI badge and leaves a recoverable
-  // (stale) row if the server dies mid-extract. Emit every transition so the
-  // SSE stream can push it to the browser.
-  logEvent("info", "extract.start", {
-    documentId: doc.id,
-    fileType: doc.fileType,
-    attempt: doc.attempts + 1,
-  });
-  await db
-    .update(documents)
-    .set({ status: "processing", claimedAt: new Date(), attempts: doc.attempts + 1 })
-    .where(eq(documents.id, doc.id));
-  emitDocStatus({ userId: doc.userId, id: doc.id, status: "processing", extractionError: null });
-
-  const fail = async (message: string, err?: unknown) => {
-    recordFunnel("extraction_failed", {
-      ...funnel,
-      durationMs: performance.now() - started,
-      outcome: "failed",
-      failureCategory: "extraction",
-    });
-    // Log with context so a failed extraction is debuggable from server logs,
-    // not just the truncated message stored on the row.
-    logEvent("error", "extract.failed", {
-      documentId: doc.id,
-      fileType: doc.fileType,
-      attempt: doc.attempts + 1,
-      error: message,
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    await db
-      .update(documents)
-      .set({ status: "failed", extractionError: message, claimedAt: null })
-      .where(eq(documents.id, doc.id));
-    emitDocStatus({ userId: doc.userId, id: doc.id, status: "failed", extractionError: message });
-  };
-
-  const storagePath = await activeStoragePath(doc);
-  if (!storagePath) {
-    await fail("no stored file to extract");
-    return;
-  }
-  try {
-    const bytes = Buffer.from(await getObject(doc.tenantId, storagePath));
-    const { markdown, pageCount } = await extractMarkdown(bytes, doc.fileType as SupportedFileType);
-    // Warn (passively) when a PDF came back too thin to be a real text layer —
-    // likely a scan. DOCX always carries its text, so never flag it.
-    const ocrSuggested = doc.fileType === "pdf" && looksThinForOcr(markdown, pageCount);
-
+export async function retryDocument(id: string, actor?: Actor) {
+  const { JobError, listDocumentJobs, retryJob, authorizeJobInTransaction } =
+    await import("../core/jobs.js");
+  if (!actor) throw new Error("access_denied");
+  if (!(await canAccessArtifact(actor, "document", id, "editor")))
+    throw new JobError("access_denied");
+  const currentJobs = await listDocumentJobs(actor, id);
+  const latest = currentJobs[0];
+  if (!latest) {
+    // A deploy can inherit a failed/pending source from the old volatile queue.
+    // Only an explicit current human request establishes new durable authority.
+    if (actor.type !== "user") throw new JobError("access_denied");
+    const doc = await getDocument(id);
+    if (!doc || !doc.currentVersionId || doc.status === "ready") return null;
+    if (doc.status === "processing") {
+      const [age] = await db
+        .select({ stale: sql<boolean>`${documents.claimedAt} < now() - interval '5 minutes'` })
+        .from(documents)
+        .where(eq(documents.id, id));
+      if (!age?.stale) return null;
+    }
+    const [version] = await db
+      .select()
+      .from(documentVersions)
+      .where(
+        and(eq(documentVersions.id, doc.currentVersionId), eq(documentVersions.documentId, id))
+      );
+    if (!version?.storagePath || version.deletedAt) throw new JobError("input_not_ready");
+    try {
+      await getObject(doc.tenantId, version.storagePath);
+    } catch {
+      throw new JobError("input_not_ready");
+    }
     await recordCommit({
+      actor,
       artifactType: "document",
-      artifactId: doc.id,
-      actor: { type: "agent", userId: doc.userId, agentLabel: "extractor" },
-      op: "extract",
-      message: `Extracted markdown (${doc.fileType})`,
-      // recordCommit stamps head_commit_id on the document row itself.
+      artifactId: id,
+      op: "extraction_retried",
+      message: "Accepted legacy source extraction for durable retry",
       apply: async ({ tx }) => {
+        const [current] = await tx.select().from(documents).where(eq(documents.id, id));
+        if (
+          !current ||
+          current.deletedAt ||
+          current.currentVersionId !== doc.currentVersionId ||
+          current.headCommitId !== doc.headCommitId
+        )
+          throw new JobError("stale_source");
+        if (!(await canAccessArtifact(actor, "document", id, "editor", tx)))
+          throw new JobError("access_denied");
+        if (current.status === "ready") throw new JobError("input_not_ready");
+        if (current.status === "processing") {
+          const [age] = await tx
+            .select({ stale: sql<boolean>`${documents.claimedAt} < now() - interval '5 minutes'` })
+            .from(documents)
+            .where(eq(documents.id, id));
+          if (!age?.stale) throw new JobError("input_not_ready");
+        }
+        const [currentVersion] = await tx
+          .select()
+          .from(documentVersions)
+          .where(eq(documentVersions.id, version.id))
+          .for("share");
+        if (
+          !currentVersion?.storagePath ||
+          currentVersion.deletedAt ||
+          currentVersion.storagePath !== version.storagePath
+        )
+          throw new JobError("input_not_ready");
+        const job = await acceptExtractionJob(tx, {
+          actor,
+          tenantId: doc.tenantId,
+          matterId: doc.matterId,
+          documentId: id,
+          versionId: doc.currentVersionId!,
+          requestId: `legacy-extract:${id}:${doc.currentVersionId}`,
+        });
+        await authorizeJobInTransaction(tx, job);
         await tx
           .update(documents)
-          .set({
-            markdown,
-            pageCount,
-            status: "ready",
-            extractionError: null,
-            claimedAt: null,
-            ocrSuggested,
-          })
-          .where(eq(documents.id, doc.id));
-        return { changes: [{ path: "markdown", before: null, after: markdown }] };
+          .set({ status: "pending", extractionError: null, claimedAt: null })
+          .where(eq(documents.id, id));
+        return {
+          changes: [{ path: "status", before: current.status, after: "pending" }],
+          summary: { jobId: job.id, compatibility: "explicit_human_retry" },
+        };
       },
     });
-    recordFunnel("extraction_ready", {
-      ...funnel,
-      durationMs: performance.now() - started,
-      pageCount: pageCount ?? undefined,
-      characterCount: markdown.length,
-      outcome: "succeeded",
-    });
-    logEvent("info", "extract.ready", { documentId: doc.id, pageCount: pageCount ?? null });
-    emitDocStatus({
-      userId: doc.userId,
-      id: doc.id,
-      status: "ready",
-      extractionError: null,
-      ocrSuggested,
-    });
-  } catch (err) {
-    await fail(err instanceof Error ? err.message : "extraction failed", err);
+    return getDocument(id);
   }
+  if (latest.state !== "failed") return null;
+  await retryJob(actor, latest.id);
+  return getDocument(id);
+}
+
+/** Synchronous acceptance-test adapter over the same durable extraction worker. */
+export async function processDocument(doc: Document): Promise<void> {
+  const { runExtractionOnce } = await import("./extractionQueue.js");
+  await runExtractionOnce(doc.id);
 }
 
 /** Read a stored export only after caller access checks; preview is not a funnel conversion. */
@@ -1030,7 +1038,8 @@ async function proposeDocxEdit(
   actor: Actor,
   doc: Document,
   edits: EditSpec[],
-  source: VersionSource
+  source: VersionSource,
+  options: { expectedHeadCommitId?: string | null; provenance?: FindingEditProvenance } = {}
 ): Promise<ProposeEditResult> {
   const v = await latestVersion(doc.id);
   if (!v?.storagePath) throw new Error("Document has no stored version");
@@ -1057,7 +1066,7 @@ async function proposeDocxEdit(
   const storagePath = buildStoragePath({
     tenantId: doc.tenantId,
     userId: doc.userId,
-    artifactId: doc.id,
+    artifactId: `${doc.id}/staged-${randomUUID()}`,
     ext: "docx",
     version: versionNumber,
   });
@@ -1074,6 +1083,19 @@ async function proposeDocxEdit(
         ? `Proposed edit: "${applied[0]!.deletedText.slice(0, 40)}" → "${applied[0]!.insertedText.slice(0, 40)}"`
         : `Proposed ${applied.length} edits`,
     apply: async ({ tx, commitId }) => {
+      if (!(await canAccessArtifact(actor, "document", doc.id, "editor", tx)))
+        throw new Error("access_denied");
+      const [current] = await tx.select().from(documents).where(eq(documents.id, doc.id));
+      if (
+        !current ||
+        current.deletedAt ||
+        current.headCommitId !==
+          (options.expectedHeadCommitId === undefined
+            ? doc.headCommitId
+            : options.expectedHeadCommitId)
+      )
+        throw new Error("stale_source");
+      if (options.provenance) await validateFindingProposal(tx, actor, options.provenance);
       const [nv] = await tx
         .insert(documentVersions)
         .values({
@@ -1098,6 +1120,7 @@ async function proposeDocxEdit(
           contextBefore: a.contextBefore,
           contextAfter: a.contextAfter,
           reason: a.reason ?? null,
+          findingProvenance: options.provenance ?? null,
           status: "pending" as const,
           createdBy: actor.userId,
           lastCommitId: commitId,
@@ -1117,6 +1140,7 @@ async function proposeDocxEdit(
               replace: a.insertedText,
               reason: a.reason ?? null,
               status: "pending",
+              ...(options.provenance ? { findingProvenance: options.provenance } : {}),
             },
           })),
           { path: "version", before: v.versionNumber, after: versionNumber },
@@ -1172,6 +1196,8 @@ async function resolveDocxEdits(
         ? `${status} edit ${edits[0]!.changeId.slice(0, 8)}`
         : `${status} ${edits.length} edits`,
     apply: async ({ tx, commitId }) => {
+      if (!(await canAccessArtifact(actor, "document", doc.id, "editor", tx)))
+        throw new Error("access_denied");
       const [nv] = await tx
         .insert(documentVersions)
         .values({
@@ -1214,12 +1240,22 @@ async function resolveDocxEdits(
 export async function proposeEditDetail(
   actor: Actor,
   documentId: string,
-  edits: EditSpec[]
+  edits: EditSpec[],
+  options: { expectedHeadCommitId?: string | null; provenance?: FindingEditProvenance } = {}
 ): Promise<ProposeEditResult> {
   if (!edits.length) throw new Error("No edits to propose");
+  if (!(await canAccessArtifact(actor, "document", documentId, "editor")))
+    throw new Error("access_denied");
   const started = performance.now();
   const doc = await getDocument(documentId);
   if (!doc) throw new Error("Document not found");
+  if (
+    options.expectedHeadCommitId !== undefined &&
+    doc.headCommitId !== options.expectedHeadCommitId
+  )
+    throw new Error("stale_source");
+  if (options.provenance && !isDocxMode(doc))
+    throw new Error("Finding redlines require editable DOCX");
   const source: VersionSource = actor.type === "agent" ? "assistant_edit" : "user_edit";
   const mode = isDocxMode(doc) ? "docx" : "markdown";
   const base = {
@@ -1233,7 +1269,7 @@ export async function proposeEditDetail(
   logEvent("info", "redline.propose.start", base);
   try {
     if (isDocxMode(doc)) {
-      const result = await proposeDocxEdit(actor, doc, edits, source);
+      const result = await proposeDocxEdit(actor, doc, edits, source, options);
       if (result.failed > 0)
         logEvent("warn", "redline.propose.partial", {
           ...base,
@@ -1364,6 +1400,8 @@ export async function resolveEdits(
     throw new Error("A person must accept or reject document changes in the document review UI.");
   }
   if (!changeIds.length) throw new Error("No edits to resolve");
+  if (!(await canAccessArtifact(actor, "document", documentId, "editor")))
+    throw new Error("access_denied");
   const started = performance.now();
   const base = {
     documentId,

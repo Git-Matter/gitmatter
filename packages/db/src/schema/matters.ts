@@ -1,4 +1,16 @@
-import { boolean, index, jsonb, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import {
+  boolean,
+  index,
+  integer,
+  jsonb,
+  pgTable,
+  text,
+  timestamp,
+  unique,
+  uuid,
+} from "drizzle-orm/pg-core";
+import type { ApprovalPolicy } from "./approval.js";
 import { user } from "./auth.js";
 import { clients } from "./clients.js";
 import { tenants } from "./tenants.js";
@@ -20,6 +32,12 @@ export const matters = pgTable(
       .notNull()
       .references(() => clients.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
+    approvalPolicy: jsonb("approval_policy")
+      .$type<ApprovalPolicy>()
+      .notNull()
+      .default({ agentCells: "direct" }),
+    approvalPolicyRevision: integer("approval_policy_revision").notNull().default(0),
+    headCommitId: uuid("head_commit_id"),
     practiceArea: text("practice_area"),
     // Governing-law jurisdiction for the matter (registry code, e.g. "US-NY").
     jurisdiction: text("jurisdiction"),
@@ -36,7 +54,14 @@ export const matters = pgTable(
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
-  (t) => [index("matters_client_idx").on(t.clientId), index("matters_tenant_idx").on(t.tenantId)]
+  (t) => [
+    index("matters_client_idx").on(t.clientId),
+    index("matters_tenant_idx").on(t.tenantId),
+    index("matters_search_idx").using(
+      "gin",
+      sql`to_tsvector('english', coalesce(${t.name}, '') || ' ' || coalesce(${t.practiceArea}, '') || ' ' || coalesce(${t.jurisdiction}, ''))`
+    ),
+  ]
 );
 
 export const matterMembers = pgTable(

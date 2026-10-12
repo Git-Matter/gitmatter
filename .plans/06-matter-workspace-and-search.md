@@ -4,10 +4,21 @@ Reduce navigation cost and make prior work reusable: a matter landing page organ
 plus permission-filtered Postgres full-text search across documents, cells, clauses, playbooks, and
 matter metadata.
 
-**Status: Planned** (verified 2026-09-16).
+**Status: In progress** (source/local slices reviewed 2026-10-12; release gates open).
 
-The `search` tool matches review and document titles by keyword only
-(`packages/core/src/tools/discovery.ts`); there are no full-text indexes.
+The former title-only search baseline is now extended with permission-filtered full-text retrieval
+and GIN indexes; the broader matter overview remains incomplete.
+
+## Implementation progress (2026-10-12)
+
+- **Implemented source/local slices:** Postgres full-text search/indexes for documents, accepted cell
+  values, clauses, playbooks, and matter metadata; SQL authorization before ranking/count/pagination;
+  scoped contextual approved Library reads; MCP search/fetch parity; matter/all-authorized filters,
+  type filters, and exact artifact links. Matter Review contract entry reuses plan 03.
+- **Remaining source:** complete job-led overview with recent work, failed jobs, pending approval and
+  escalation aggregation; formal timing side-channel analysis and representative query/load tuning.
+- **Proof still open:** authenticated browser, staging permission matrix, and uncoached first-user
+  usability. Negative result/count tests do not establish constant-time behavior.
 
 ## Purpose
 

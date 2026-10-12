@@ -1,7 +1,15 @@
+import { hasMatterAccess } from "../../core/access.js";
 import { randomUUID } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { db } from "@workspace/db/client";
-import { type TabularColumn, matters, tabularCells, tabularReviews } from "@workspace/db/schema";
+import type { ContractReviewSnapshot } from "@workspace/contracts";
+import {
+  type TabularColumn,
+  documents,
+  matters,
+  tabularCells,
+  tabularReviews,
+} from "@workspace/db/schema";
 import { type Actor, recordCommit } from "../../core/commit.js";
 import { DEFAULT_MODEL, completeText, providerForModel, resolveLlmKey } from "../provider/index.js";
 import { stripJsonFence } from "./extract.js";
@@ -14,6 +22,9 @@ export async function createReview(
   actor: Actor,
   input: {
     title: string;
+    inputSnapshot?: ContractReviewSnapshot;
+    requestKey?: string;
+    requestFingerprint?: string;
     columnsConfig: TabularColumn[];
     documentIds: string[];
     workflowId?: string;
@@ -34,6 +45,33 @@ export async function createReview(
     op: "create",
     message: `Created review "${input.title}"`,
     apply: async ({ tx }) => {
+      if (!(await hasMatterAccess(actor, input.matterId, "editor", tx)))
+        throw new Error("access_denied");
+      if (input.requestKey) {
+        await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${input.requestKey}))`);
+        const [prior] = await tx
+          .select()
+          .from(tabularReviews)
+          .where(eq(tabularReviews.requestKey, input.requestKey));
+        if (prior)
+          throw new Error(
+            prior.requestFingerprint === input.requestFingerprint
+              ? `review_replay:${prior.id}`
+              : "request_conflict"
+          );
+      }
+      for (const source of input.inputSnapshot?.documents ?? []) {
+        const [current] = await tx.select().from(documents).where(eq(documents.id, source.id));
+        if (
+          !current ||
+          current.deletedAt ||
+          current.status !== "ready" ||
+          current.headCommitId !== source.headCommitId ||
+          current.currentVersionId !== source.versionId ||
+          current.markdown !== source.text
+        )
+          throw new Error("stale_source");
+      }
       await tx.insert(tabularReviews).values({
         id: reviewId,
         userId: actor.userId,
@@ -41,6 +79,9 @@ export async function createReview(
         matterId: input.matterId,
         createdBy: actor.userId,
         title: input.title,
+        inputSnapshot: input.inputSnapshot ?? null,
+        requestKey: input.requestKey ?? null,
+        requestFingerprint: input.requestFingerprint ?? null,
         columnsConfig: input.columnsConfig,
         documentIds: input.documentIds,
         workflowId: input.workflowId ?? null,
@@ -59,6 +100,9 @@ export async function createReview(
         changes: [
           { path: "meta/title", before: null, after: input.title },
           { path: "document_ids", before: null, after: input.documentIds },
+          ...(input.inputSnapshot
+            ? [{ path: "review/input_snapshot", before: null, after: input.inputSnapshot }]
+            : []),
           ...input.columnsConfig.map((col) => ({
             path: `column/${col.index}`,
             before: null,
@@ -89,6 +133,8 @@ export async function updateReviewColumn(
     .from(tabularReviews)
     .where(eq(tabularReviews.id, params.reviewId));
   if (!review) throw new Error("Review not found");
+  if (review.inputSnapshot)
+    throw new Error("Review inputs are immutable; start a new review to change rules");
   const cols = review.columnsConfig;
   const idx = cols.findIndex((c) => c.index === params.columnIndex);
   if (idx === -1) throw new Error("Column not found");

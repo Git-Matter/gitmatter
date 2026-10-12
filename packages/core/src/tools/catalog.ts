@@ -1,7 +1,9 @@
 import { type ProviderId, providersFor } from "@workspace/registry";
 import { type Actor, getUserTenant, hasMatterAccess, logEvent } from "../core/index.js";
 import { ensureDefaultMatter } from "../platform/index.js";
+import { buildApprovalTools } from "./approval.js";
 import { buildAuditTools } from "./audit.js";
+import { buildContractReviewTools } from "./contract-review.js";
 import { buildClauseTools } from "./clauses.js";
 import { buildDiscoveryTools } from "./discovery.js";
 import { buildDocumentTools } from "./documents.js";
@@ -208,7 +210,9 @@ export function buildToolCatalog(
 
   return [
     ...buildReviewTools(ctx),
+    ...buildContractReviewTools(ctx),
     ...buildAuditTools(ctx),
+    ...buildApprovalTools(ctx),
     ...buildMatterTools(ctx),
     ...buildDocumentTools(ctx),
     ...buildDiscoveryTools(ctx),

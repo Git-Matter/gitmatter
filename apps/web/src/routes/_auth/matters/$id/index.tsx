@@ -1,3 +1,6 @@
+import { MatterWorkSearch } from "../-components/MatterWorkSearch";
+import { ContractReviewSetup } from "../-components/ContractReviewSetup";
+import { AgentActivity } from "../-components/AgentActivity";
 import { createFileRoute, Link, useNavigate, useParams } from "@tanstack/react-router";
 import { useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -43,7 +46,7 @@ import { AgentHandoff } from "@/routes/_auth/matters/-components/AgentHandoff";
 
 export const Route = createFileRoute("/_auth/matters/$id/")({ component: MatterWorkspace });
 
-type Tab = "documents" | "chats" | "reviews" | "usage";
+type Tab = "documents" | "chats" | "reviews" | "usage" | "activity" | "search";
 
 function MatterWorkspace() {
   const { id } = useParams({ from: "/_auth/matters/$id/" });
@@ -52,6 +55,7 @@ function MatterWorkspace() {
   const { data: session } = useSession();
   const { refresh: refreshMatters, setCurrent } = useMatters();
   const [tab, setTab] = useState<Tab>("documents");
+  const [reviewSetupOpen, setReviewSetupOpen] = useState(false);
   const [peopleOpen, setPeopleOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
 
@@ -167,6 +171,27 @@ function MatterWorkspace() {
         />
       }
     >
+      <div className="flex flex-wrap items-center gap-2" aria-label="Matter tasks">
+        {myRole !== "viewer" && (
+          <Button size="sm" onClick={() => setReviewSetupOpen((v) => !v)}>
+            Review contract
+          </Button>
+        )}
+        <Button size="sm" variant="ghost" onClick={openMatterChat}>
+          Ask documents
+        </Button>
+        {myRole !== "viewer" && (
+          <Button size="sm" variant="ghost" onClick={() => openInMatter("/reviews")}>
+            Bulk extraction
+          </Button>
+        )}
+        <Button size="sm" variant="ghost" onClick={() => setTab("reviews")}>
+          Export work
+        </Button>
+      </div>
+      {reviewSetupOpen && (
+        <ContractReviewSetup matterId={id} onClose={() => setReviewSetupOpen(false)} />
+      )}
       <AgentHandoff matter={matter} />
       <ToolbarTabs
         tabs={[
@@ -174,6 +199,8 @@ function MatterWorkspace() {
           { id: "chats" as const, label: "Assistant Chats" },
           { id: "reviews" as const, label: "Tabular Reviews" },
           { id: "usage" as const, label: "Usage" },
+          { id: "activity" as const, label: "Agent activity" },
+          { id: "search" as const, label: "Find prior work" },
         ]}
         active={tab}
         onChange={setTab}
@@ -183,6 +210,8 @@ function MatterWorkspace() {
       {tab === "chats" && <ChatsTab matterId={id} />}
       {tab === "reviews" && <ReviewsTab matterId={id} />}
       {tab === "usage" && <UsageTab matterId={id} />}
+      {tab === "activity" && <AgentActivity matterId={id} isOwner={isOwner} />}
+      {tab === "search" && <MatterWorkSearch matterId={id} />}
 
       <PeopleModal
         matterId={id}
@@ -657,8 +686,10 @@ function ReviewsTab({ matterId }: { matterId: string }) {
     void navigate({ to: "/reviews" });
   };
 
-  const filtered = reviews.filter((r) =>
-    (r.title || "Untitled review").toLowerCase().includes(search.toLowerCase())
+  const filtered = reviews.filter(
+    (r) =>
+      r.matterId === matterId &&
+      (r.title || "Untitled review").toLowerCase().includes(search.toLowerCase())
   );
 
   const { table } = useDataTable({

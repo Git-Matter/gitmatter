@@ -216,8 +216,9 @@ const hasS3 = !!process.env.S3_ACCESS_KEY;
 
   test("every mutation is a linear commit", async () => {
     const commitList = await listCommits("document", documentId);
-    // propose + resolve (upload does not record a commit)
-    expect(commitList).toHaveLength(2);
-    expect(commitList.map((c) => c.op)).toEqual(["resolve_edit", "propose_edit"]);
+    // The initial upload is now audited in the same transaction as its durable job.
+    expect(commitList.map((c) => c.op)).toEqual(["resolve_edit", "propose_edit", "upload"]);
+    expect(commitList[0]!.parentCommitId).toBe(commitList[1]!.id);
+    expect(commitList[1]!.parentCommitId).toBe(commitList[2]!.id);
   });
 });

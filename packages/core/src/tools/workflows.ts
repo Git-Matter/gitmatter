@@ -138,10 +138,11 @@ export function buildWorkflowTools({ actor, resolveMatter }: ToolContext): ToolS
         "Prepare a review from an approved playbook with one verdict column per rule. This creates pending cells; it does not run a model. Read each document with get_document, analyse it yourself, then save cited findings with write_cell. Read results with read_review_cells.",
       schema: {
         playbookId: z.string(),
+        requestId: z.uuid().optional(),
         documentIds: z.array(z.string()).min(1),
         matterId: z.string().optional(),
       },
-      handler: async ({ playbookId, documentIds, matterId }) => {
+      handler: async ({ playbookId, documentIds, matterId, requestId }) => {
         const wf = await getWorkflow(playbookId as string);
         if (
           !wf ||
@@ -157,6 +158,7 @@ export function buildWorkflowTools({ actor, resolveMatter }: ToolContext): ToolS
         try {
           const result = await runPlaybook(actor, {
             playbookId: playbookId as string,
+            requestId: requestId as string | undefined,
             documentIds: documentIds as string[],
             matterId: resolved,
           });
