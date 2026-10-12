@@ -1,6 +1,6 @@
 # Team implementation: source and local evidence
 
-Date: 2026-10-12 (Australia/Sydney). Branch: `feat/native-agent-workflow`, draft PR #10.
+Date: 2026-10-12 (Australia/Sydney). Branch: `feat/native-agent-workflow`, [draft PR #12](https://github.com/Git-Matter/gitmatter/pull/12).
 This is a development increment across the numbered plans, not sign-off that any plan is complete.
 
 ## Delivered slices

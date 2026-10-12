@@ -48,7 +48,9 @@ merely by passing module tests.
 
 [`evidence/2026-09-13-subscription-agent.md`](evidence/2026-09-13-subscription-agent.md) records the
 implemented subscription-agent workflow, local validation and staging deployment blockers. The
-implementation is on branch `feat/native-agent-workflow` (draft PR #10).
+implementation was merged through [PR #10](https://github.com/Git-Matter/gitmatter/pull/10).
+The current increment continues on `feat/native-agent-workflow` in
+[draft PR #12](https://github.com/Git-Matter/gitmatter/pull/12).
 
 [`../PLANS.md`](../PLANS.md) contains the deeper candidate-feature designs for the audit spine,
 approval gates, agent review queue, search, notifications, and branching. Use those sections as

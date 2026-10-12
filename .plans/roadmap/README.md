@@ -45,7 +45,7 @@ Numbers are delivery order, not progress rank — a low number is not further al
 - **Remaining:** execute full authenticated browser script locally and on staging, verify actual
   analytics delivery, and record Word/provider/pilot evidence separately.
 - **Where:** branch `feat/native-agent-workflow`, draft
-  [PR #10](https://github.com/Git-Matter/gitmatter/pull/10).
+  [draft PR #12](https://github.com/Git-Matter/gitmatter/pull/12).
 
 ### 03–07 Team implementation
 
@@ -71,7 +71,7 @@ Numbers are delivery order, not progress rank — a low number is not further al
   core publication authority and compatible batch API.
 - **Remaining:** workflow proposals, approved document baseline/owner gate, export approvals,
   legacy migration, batch UI and authenticated staging/pilot acceptance.
-- **Where:** branch `feat/native-agent-workflow` (draft PR #10); implementation remains in progress.
+- **Where:** branch `feat/native-agent-workflow` ([draft PR #12](https://github.com/Git-Matter/gitmatter/pull/12)); implementation remains in progress.
 
 ## MFA sign-off review
 
