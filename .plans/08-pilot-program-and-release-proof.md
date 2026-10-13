@@ -7,7 +7,8 @@ This file replaces the single `02-real-usage-roadmap.md` document, split into on
 (`02`–`07`) on 2026-09-16. The `(M0)`–`(M5)` labels in the plan titles keep the original delivery
 order: `02` → `03` → `04` → `05` → `06` → `07`.
 
-**Status: Reference** (verified 2026-09-16) — shared framing and gates; no delivery work of its own.
+**Status: Reference** (source baseline reviewed 2026-10-13) — shared framing and gates; no delivery
+work of its own.
 
 ## Outcome
 
@@ -62,21 +63,19 @@ Already implemented:
 - Generated and pasted documents appear in the matter with readable content and creation audit
   records. The MCP tools reference is generated from the runtime catalog with a CI drift check.
 
-Important gaps, each owned by a plan:
+The current feature branch adds immutable review inputs and approved-clause redline handoff;
+responsive captured-source/findings and report/manifest views; durable extraction/bulk review with
+paid-expiry recovery; cell, workflow and document approval policy with a separate accepted baseline;
+exact single-DOCX clean-export authorization; permission-filtered full-text search; a bounded job-led
+matter overview; application LLM admission and tenant-admin controls; a replayable in-app job inbox;
+and staged-object reservation/reclamation. These are implemented source paths, not released behavior.
+Precise scope and proof appear in plans 02–07 and [MVP delivery](mvp-delivery.md).
 
-- Playbook findings do not yet form a complete handoff into approved-clause redlines
-  ([`03-review-to-redline-loop.md`](03-review-to-redline-loop.md)).
-- No configurable matter-level approval policy or unified queue for pending agent work. Accepting or
-  rejecting document edits is already human-only, but red/yellow findings, cell writes, and workflow
-  changes are not governed by policy ([`05-approval-and-agent-queue.md`](05-approval-and-agent-queue.md)).
-- Document extraction uses an in-memory queue; a process restart can leave work needing manual retry
-  ([`04-durable-background-work.md`](04-durable-background-work.md)).
-- Search only matches review and document titles, not document text, clauses, or review cells
-  ([`06-matter-workspace-and-search.md`](06-matter-workspace-and-search.md)).
-- Budgets warn and log but do not stop excessive spend
-  ([`07-operational-controls.md`](07-operational-controls.md)).
-- Automated checks are strong at module level, but the critical lawyer journey lacks a repeatable
-  browser-level acceptance suite ([`02-establish-product-truth.md`](02-establish-product-truth.md)).
+Final integrated repository checks, authenticated browser and scoped MCP acceptance, staging
+restart/reconnect/revocation tests, actual provider findings/billing, Microsoft Word round-trip,
+legal review and repeat-use pilot evidence remain open. The authored UI fixture is separate from
+authenticated application behavior. Large-export jobs, broader export ceilings, external
+notifications and a pilot-selected integration remain outside the implemented NDA slice.
 
 ## Pilot program
 

@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from "vite-plus/test";
-import { queryCell } from "../src/ai/tabular/extract.js";
+import { getLlmClient } from "../src/ai/provider/factory.js";
 
 const constructors = vi.hoisted(() => ({
   anthropic: [] as Array<Record<string, unknown>>,
@@ -63,7 +63,7 @@ vi.mock("@openrouter/sdk", () => ({
   },
 }));
 
-describe("durable query forwards retry ownership through installed adapter contracts", () => {
+describe("protected request forwards retry ownership through installed adapter contracts", () => {
   for (const [provider, model] of [
     ["anthropic", "claude-sonnet-5"],
     ["openai", "gpt-5.6-sol"],
@@ -73,19 +73,17 @@ describe("durable query forwards retry ownership through installed adapter contr
     test(`${provider} disables internal retries only when requested`, async () => {
       const input = {
         model,
-        filename: "Synthetic",
-        documentText: "Term is two years.",
-        columnPrompt: "Find term",
-        apiKey: "synthetic-sdk-fixture",
+        messages: [{ role: "user" as const, content: "Find the term: Term is two years." }],
       };
-      await queryCell({ ...input, maxRetries: 0 });
+      const client = getLlmClient(provider, "synthetic-sdk-fixture");
+      await client.complete({ ...input, maxRetries: 0 });
       const controlled = constructors[provider].at(-1)!;
       if (provider === "gemini")
         expect(controlled.httpOptions).toMatchObject({ retryOptions: { attempts: 1 } });
       else if (provider === "openrouter")
         expect(controlled.retryConfig).toEqual({ strategy: "none" });
       else expect(controlled.maxRetries).toBe(0);
-      await queryCell(input);
+      await client.complete(input);
       const normal = constructors[provider].at(-1)!;
       if (provider === "gemini")
         expect(

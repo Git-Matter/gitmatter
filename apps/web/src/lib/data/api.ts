@@ -1,6 +1,19 @@
+import type { DocumentApprovalContext, DocumentResolutionInput } from "@workspace/contracts";
 import type { RunEstimate } from "@workspace/core";
+import type {
+  JobControlPolicy,
+  JobControlsSnapshot,
+  JobUsageAttribution,
+} from "@workspace/contracts";
 import type { SearchResult } from "@workspace/core";
-import type { FindingProvenance, FindingDisposition } from "@workspace/contracts";
+import type {
+  FindingProvenance,
+  FindingDisposition,
+  MatterJobsSummary,
+  JobSnapshot,
+  ApprovalProposal,
+  JobNotificationPage,
+} from "@workspace/contracts";
 import type { getReviewCompletion } from "@workspace/core";
 export type ReviewCompletion = NonNullable<Awaited<ReturnType<typeof getReviewCompletion>>>;
 export type {
@@ -391,9 +404,22 @@ function shareBase(scope: ArtifactShareScope): string {
 }
 
 // statusText is empty over HTTP/2, so always fall back to the status code.
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    public status: number,
+    public code?: string
+  ) {
+    super(message);
+  }
+}
 async function httpError(r: Response): Promise<Error> {
-  const body = (await r.json().catch(() => ({}))) as { error?: string };
-  return new Error(body.error || r.statusText || `Request failed (${r.status})`);
+  const body = (await r.json().catch(() => ({}))) as { error?: string; code?: unknown };
+  return new ApiError(
+    body.error || r.statusText || `Request failed (${r.status})`,
+    r.status,
+    typeof body.code === "string" ? body.code : undefined
+  );
 }
 
 // Multipart upload — let the browser set the multipart boundary (no JSON header).
@@ -404,6 +430,13 @@ async function upload<T>(path: string, form: FormData): Promise<T> {
 }
 
 export const api = {
+  getJobControls: () => req<JobControlsSnapshot>("/api/admin/job-controls"),
+  getJobUsageAttribution: () => req<JobUsageAttribution[]>("/api/admin/job-controls/usage"),
+  setJobControls: (input: { expectedRevision: number; reason: string; policy: JobControlPolicy }) =>
+    req<JobControlsSnapshot>("/api/admin/job-controls", {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    }),
   searchWork: (input: {
     query: string;
     matterId?: string;
@@ -646,6 +679,19 @@ export const api = {
     ),
   getReviewCompletion: (id: string) =>
     req<ReviewCompletion | null>(`/api/tabular/reviews/${id}/completion`),
+  queueFailedReviewRules: (
+    id: string,
+    requestId: string,
+    model?: string,
+    acknowledgeUnknown?: boolean
+  ) =>
+    req<{ jobIds: string[] }>(`/api/tabular/reviews/${id}/queue`, {
+      method: "POST",
+      body: JSON.stringify({ mode: "failed", requestId, model, acknowledgeUnknown }),
+    }),
+  listReviewJobs: (id: string) => req<JobSnapshot[]>(`/api/tabular/reviews/${id}/jobs`),
+  reviewReportUrl: (id: string) => `/api/tabular/reviews/${id}/report`,
+  reviewReportManifestUrl: (id: string) => `/api/tabular/reviews/${id}/report?format=json`,
   setFindingDisposition: (
     id: string,
     body: {
@@ -707,7 +753,26 @@ export const api = {
   matterAuditExportUrl: (id: string, format: "csv" | "docx") =>
     `/api/matters/${id}/audit-export?format=${format}`,
   getMatterUsage: (id: string) => req<MatterUsageSummary>(`/api/matters/${id}/usage`),
+  getMatterJobs: (id: string) => req<MatterJobsSummary>(`/api/matters/${id}/jobs`),
+  getMatterJobEvents: (id: string, cursor?: string) =>
+    req<JobNotificationPage>(
+      `/api/matters/${id}/job-events${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`
+    ),
+  markJobEventRead: (id: string) =>
+    req<{ ok: true }>(`/api/job-events/${id}/read`, { method: "POST" }),
+  retryJob: (id: string) => req<JobSnapshot>(`/api/jobs/${id}/retry`, { method: "POST" }),
+  cancelJob: (id: string) => req<JobSnapshot>(`/api/jobs/${id}/cancel`, { method: "POST" }),
+  getMatterPendingProposals: (id: string) =>
+    req<{ items: ApprovalProposal[]; nextCursor: string | null }>(
+      `/api/matters/${id}/proposals?status=pending`
+    ),
   matterUsageExportUrl: (id: string) => `/api/matters/${id}/usage?format=csv`,
+  requestCleanReviewExport: (documentId: string, reviewId: string, requestId: string) =>
+    req<{ approvalRequired: boolean; proposal: ApprovalProposal | null; replayed: boolean }>(
+      `/api/documents/${documentId}/clean-export-requests`,
+      { method: "POST", body: JSON.stringify({ requestId, reviewId }) }
+    ),
+  getApprovalProposal: (id: string) => req<ApprovalProposal>(`/api/proposals/${id}`),
 
   // Clause library
   listClauses: (opts?: {
@@ -770,20 +835,30 @@ export const api = {
     }),
   proposeEdit: (id: string, d: { find: string; replace: string; reason?: string }) =>
     req<DocumentDetail>(`/api/documents/${id}/edits`, { method: "POST", body: JSON.stringify(d) }),
-  resolveEdit: (id: string, changeId: string, decision: "accept" | "reject") =>
+  resolveEdit: (
+    id: string,
+    changeId: string,
+    decision: "accept" | "reject",
+    context?: DocumentResolutionInput
+  ) =>
     req<DocumentDetail>(`/api/documents/${id}/edits/${changeId}/resolve`, {
       method: "POST",
-      body: JSON.stringify({ decision }),
+      body: JSON.stringify({ decision, ...context }),
     }),
-  resolveAllEdits: (id: string, decision: "accept" | "reject") =>
+  resolveAllEdits: (id: string, decision: "accept" | "reject", context?: DocumentResolutionInput) =>
     req<DocumentDetail>(`/api/documents/${id}/edits/resolve-all`, {
       method: "POST",
-      body: JSON.stringify({ decision }),
+      body: JSON.stringify({ decision, ...context }),
     }),
-  resolveBatch: (id: string, changeIds: string[], decision: "accept" | "reject") =>
+  resolveBatch: (
+    id: string,
+    changeIds: string[],
+    decision: "accept" | "reject",
+    context?: DocumentResolutionInput
+  ) =>
     req<DocumentDetail>(`/api/documents/${id}/edits/resolve-batch`, {
       method: "POST",
-      body: JSON.stringify({ changeIds, decision }),
+      body: JSON.stringify({ changeIds, decision, ...context }),
     }),
   documentHistory: (id: string) => req<Blame[]>(`/api/documents/${id}/history`),
 
@@ -1160,6 +1235,8 @@ export type DocumentDetail = {
     status: DocStatus;
     headCommitId: string | null;
     currentVersionId: string | null;
+    approvedVersionId: string | null;
+    approvedMarkdown: string | null;
     sizeBytes: number | null;
     pageCount: number | null;
     createdAt: string;
@@ -1167,6 +1244,13 @@ export type DocumentDetail = {
     ownerEmail: string | null;
   };
   edits: DocEdit[];
+  resolutionPolicy?: {
+    approvalContext: DocumentApprovalContext | null;
+    mayResolve: boolean;
+    mayPropose: boolean;
+    requiredRole: "editor" | "owner" | null;
+    blockedReason: string | null;
+  };
 };
 
 // A row in the workflows library list (built-ins + own + shared), tagged with

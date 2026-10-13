@@ -1,8 +1,16 @@
 import { index, integer, jsonb, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
 import { matters } from "./matters.js";
 import { user } from "./auth.js";
-import type { CellProposalPayload } from "@workspace/contracts";
-export type { ApprovalPolicy, CellProposalPayload } from "@workspace/contracts";
+import type {
+  CellProposalPayload,
+  WorkflowProposalPayload,
+  ExportProposalPayload,
+} from "@workspace/contracts";
+export type {
+  ApprovalPolicy,
+  CellProposalPayload,
+  WorkflowProposalPayload,
+} from "@workspace/contracts";
 
 // Content is immutable. Only lifecycle state and its last commit advance.
 export const approvalProposals = pgTable(
@@ -12,7 +20,7 @@ export const approvalProposals = pgTable(
     matterId: uuid("matter_id")
       .notNull()
       .references(() => matters.id, { onDelete: "cascade" }),
-    kind: text("kind").$type<"cell">().notNull(),
+    kind: text("kind").$type<"cell" | "workflow" | "export">().notNull(),
     artifactId: uuid("artifact_id").notNull(),
     revision: integer("revision").notNull().default(1),
     proposalCommitId: uuid("proposal_commit_id").notNull(),
@@ -23,7 +31,9 @@ export const approvalProposals = pgTable(
       .notNull()
       .references(() => user.id),
     agentLabel: text("agent_label"),
-    payload: jsonb("payload").$type<CellProposalPayload>().notNull(),
+    payload: jsonb("payload")
+      .$type<CellProposalPayload | WorkflowProposalPayload | ExportProposalPayload>()
+      .notNull(),
     status: text("status")
       .$type<"pending" | "applied" | "rejected" | "withdrawn">()
       .notNull()

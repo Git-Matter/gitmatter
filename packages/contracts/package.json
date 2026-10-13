@@ -3,6 +3,9 @@
   "version": "0.0.0",
   "type": "module",
   "private": true,
+  "dependencies": {
+    "zod": "4.4.3"
+  },
   "scripts": {
     "test": "vp test --passWithNoTests",
     "typecheck": "tsc --noEmit"

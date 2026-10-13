@@ -11,8 +11,14 @@ import {
 } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 import { createClient, createMatter } from "../src/platform/matters.js";
-import { prepareReviewExport } from "../src/content/reviewExport.js";
-import { setApprovalPolicy } from "../src/core/approval.js";
+import { createWorkflow, getWorkflow } from "../src/platform/workflow.js";
+import { prepareReviewExport, requestCleanReviewExport } from "../src/content/reviewExport.js";
+import {
+  setApprovalPolicy,
+  getApprovalPolicy,
+  getProposal,
+  decideProposal,
+} from "../src/core/approval.js";
 import { writeCell } from "../src/ai/tabular/runner.js";
 
 const userId = `export-review-${randomUUID()}`;
@@ -43,6 +49,8 @@ beforeAll(async () => {
       status: "ready",
       markdown: "Synthetic source",
       currentVersionId: versionId,
+      approvedVersionId: versionId,
+      approvedMarkdown: "Synthetic source",
     })
     .returning();
   documentId = doc!.id;
@@ -54,6 +62,22 @@ beforeAll(async () => {
     storagePath: "synthetic-immutable-reference.docx",
     source: "upload",
   });
+  const playbookId = await createWorkflow(human, {
+    matterId,
+    title: "Synthetic export playbook",
+    type: "playbook",
+    promptMd: "",
+    status: "approved",
+    rules: [
+      {
+        id: "synthetic-rule",
+        clauseType: "Synthetic rule",
+        standardPosition: "Synthetic source",
+        severity: "red",
+      },
+    ],
+  });
+  const playbookRevision = (await getWorkflow(playbookId))!.workflow.headCommitId!;
   const [review] = await db
     .insert(tabularReviews)
     .values({
@@ -67,8 +91,8 @@ beforeAll(async () => {
       inputSnapshot: {
         revision: 1,
         createdAt: new Date().toISOString(),
-        playbookId: randomUUID(),
-        playbookRevision: "synthetic-seed",
+        playbookId,
+        playbookRevision,
         documents: [
           {
             id: documentId,
@@ -135,13 +159,131 @@ describe("clean export snapshot", () => {
       )
     ).rejects.toThrow("access_denied");
   });
+
+  test("exact clean export authorization is human-only, request-idempotent and bound to current policy/heads", async () => {
+    await setApprovalPolicy(human, matterId, {
+      policy: {
+        agentCells: "direct",
+        cleanExports: {
+          approvalAboveDocuments: 0,
+          approvalAboveProviderCostMicros: 0,
+          requiredRole: "owner",
+        },
+      },
+      expectedRevision: (await getApprovalPolicy(human, matterId)).revision,
+      reason: "Synthetic exact output gate",
+    });
+    await expect(prepareReviewExport(human, reviewId, documentId)).rejects.toMatchObject({
+      code: "approval_required",
+    });
+    const input = { requestId: randomUUID(), reviewId, documentId };
+    const requested = await requestCleanReviewExport(human, input);
+    expect(requested.approvalRequired).toBe(true);
+    const proposal = requested.proposal!;
+    expect(proposal.kind).toBe("export");
+    expect((await requestCleanReviewExport(human, input)).replayed).toBe(true);
+    await expect(
+      prepareReviewExport(human, reviewId, documentId, { proposalId: proposal.id })
+    ).rejects.toMatchObject({ code: "stale_proposal" });
+    const decision = {
+      requestId: randomUUID(),
+      proposalId: proposal.id,
+      revision: proposal.revision,
+      contentHash: proposal.contentHash,
+      policyRevision: proposal.policyRevision,
+      decision: "approve" as const,
+    };
+    await expect(
+      decideProposal({ type: "agent", userId, agentLabel: "Synthetic approval bypass" }, decision)
+    ).rejects.toMatchObject({ code: "access_denied" });
+    await decideProposal(human, decision);
+    const exported = await prepareReviewExport(human, reviewId, documentId, {
+      proposalId: proposal.id,
+    });
+    expect(exported.versionId).toBe(versionId);
+    expect(
+      (await prepareReviewExport(human, reviewId, documentId, { proposalId: proposal.id }))
+        .storagePath
+    ).toBe(exported.storagePath);
+    await expect(
+      requestCleanReviewExport(human, { ...input, documentId: randomUUID() })
+    ).rejects.toMatchObject({ code: "request_conflict" });
+    await setApprovalPolicy(human, matterId, {
+      policy: {
+        agentCells: "direct",
+        cleanExports: {
+          approvalAboveDocuments: 1,
+          approvalAboveProviderCostMicros: 0,
+          requiredRole: "owner",
+        },
+      },
+      expectedRevision: (await getApprovalPolicy(human, matterId)).revision,
+      reason: "Synthetic policy drift",
+    });
+    await expect(
+      prepareReviewExport(human, reviewId, documentId, { proposalId: proposal.id })
+    ).rejects.toMatchObject({ code: "stale_proposal" });
+    expect((await getProposal(human, proposal.id)).policyChanged).toBe(true);
+  });
+  test("authorized source/review changes invalidate an applied output manifest", async () => {
+    await setApprovalPolicy(human, matterId, {
+      policy: {
+        agentCells: "direct",
+        cleanExports: {
+          approvalAboveDocuments: 0,
+          approvalAboveProviderCostMicros: 0,
+          requiredRole: "owner",
+        },
+      },
+      expectedRevision: (await getApprovalPolicy(human, matterId)).revision,
+      reason: "Synthetic review cutoff",
+    });
+    const { proposal } = await requestCleanReviewExport(human, {
+      requestId: randomUUID(),
+      reviewId,
+      documentId,
+    });
+    await decideProposal(human, {
+      requestId: randomUUID(),
+      proposalId: proposal!.id,
+      revision: proposal!.revision,
+      contentHash: proposal!.contentHash,
+      policyRevision: proposal!.policyRevision,
+      decision: "approve",
+    });
+    await writeCell(human, {
+      reviewId,
+      documentId,
+      columnIndex: 0,
+      summary: "Still conforms but changed review",
+      flag: "green",
+      reasoning: "Synthetic changed review",
+      citations: [{ quote: "Synthetic source" }],
+    });
+    await expect(
+      prepareReviewExport(human, reviewId, documentId, { proposalId: proposal!.id })
+    ).rejects.toMatchObject({ code: "stale_proposal" });
+    expect((await getProposal(human, proposal!.id)).stale).toBe(true);
+    await setApprovalPolicy(human, matterId, {
+      policy: {
+        agentCells: "direct",
+        cleanExports: {
+          approvalAboveDocuments: 1,
+          approvalAboveProviderCostMicros: 0,
+          requiredRole: "owner",
+        },
+      },
+      expectedRevision: (await getApprovalPolicy(human, matterId)).revision,
+      reason: "Restore direct one-document output",
+    });
+  });
   test("pending governed content blocks export even when the old accepted finding conforms", async () => {
     await setApprovalPolicy(human, matterId, {
       policy: { agentCells: "owner" },
-      expectedRevision: 0,
+      expectedRevision: (await getApprovalPolicy(human, matterId)).revision,
       reason: "Synthetic owner gate",
     });
-    await writeCell(
+    const proposed = await writeCell(
       { type: "agent", userId, agentLabel: "mcp:synthetic" },
       {
         reviewId,
@@ -153,6 +295,7 @@ describe("clean export snapshot", () => {
         citations: [{ quote: "Synthetic source" }],
       }
     );
+    expect(proposed.commit?.summary).toMatchObject({ outcome: "proposed" });
     const [cell] = await db.select().from(tabularCells).where(eq(tabularCells.reviewId, reviewId));
     expect(cell!.content!.flag).toBe("green");
     await expect(prepareReviewExport(human, reviewId, documentId)).rejects.toThrow(

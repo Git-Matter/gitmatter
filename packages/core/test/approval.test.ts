@@ -63,7 +63,9 @@ const stage = async (columnIndex: number, summary: string) => {
   const result = await write(agent, columnIndex, summary);
   const receipt = result.commit?.summary as { outcome?: string; proposalId?: string } | null;
   expect(receipt?.outcome).toBe("proposed");
-  return getProposal(owner, receipt!.proposalId!);
+  const proposal = await getProposal(owner, receipt!.proposalId!);
+  if (proposal.kind !== "cell") throw new Error("Expected cell proposal");
+  return proposal;
 };
 const decision = (
   p: Awaited<ReturnType<typeof getProposal>>,

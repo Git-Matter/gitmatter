@@ -270,6 +270,7 @@ const RULES_SCHEMA = {
  * result, they don't fill in a blank form.
  */
 export async function generatePlaybookRules(params: {
+  spendContext?: Parameters<typeof completeText>[0]["spendContext"];
   documentText: string;
   filename: string;
   contractType?: string;
@@ -278,6 +279,7 @@ export async function generatePlaybookRules(params: {
   onUsage?: Parameters<typeof completeText>[0]["onUsage"];
 }): Promise<PlaybookRule[]> {
   const raw = await completeText({
+    spendContext: params.spendContext,
     model: params.model,
     systemPrompt: [
       `You convert legal documents into contract-review playbook rules.`,

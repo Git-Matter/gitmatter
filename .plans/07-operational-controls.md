@@ -3,19 +3,25 @@
 Give firm administrators enough control to permit sustained use: cost estimates before a run, hard
 spend caps, admin usage reporting, notifications, and integrations chosen from pilot evidence.
 
-**Status: In progress** (source/local slices reviewed 2026-10-12; release gates open).
+**Status: In progress** (source coverage reviewed 2026-10-13; final integrated checks and release
+gates open).
 
-Per-matter usage is metered (`usage_events.matterId`, `GET /api/matters/:id/usage`), and durable review now has dispatch reservations/caps. Legacy paths still warn without universally
-stopping spend; the supported limit scope must stay explicit.
+Per-matter usage is metered (`usage_events.matterId`, `GET /api/matters/:id/usage`). Existing application
+buffered and streaming LLM calls now share authoritative dispatch admission, capacity and spend
+reservations. External subscription-agent provider spend is outside this ledger.
 
-## Implementation progress (2026-10-12)
+## Implementation progress (2026-10-13)
 
-- **Implemented source/local slices:** indicative pre-run bulk estimates; serialized tenant/user/
-  matter/token/run token reservations for durable review; extraction acceptance limit; a priced-dollar
-  cap explicitly scoped to durable review; known usage settlement and visible uncertain paid attempts.
-- **Remaining source:** caps across legacy synchronous/chat/generation paths, configurable firm/admin
-  budget UI and reporting, reconciliation of uncertain provider charges, and durable notifications.
-  Existing warning-only paths are not presented as protected by a universal spend limit.
+- **Implemented source:** indicative pre-run bulk estimates; serialized tenant/user/matter/token/run
+  token reservations and priced-dollar admission for existing application LLM paths; extraction
+  acceptance limit; tenant-admin budget/capacity settings; attributed matter/account/agent/model/day
+  reporting and CSV; replayable in-app terminal-job notifications. SDK retries are disabled inside
+  admitted calls. Complete known usage settles once, including cache/thinking tokens; incomplete or
+  ambiguous paid outcomes remain held. Dollar values are catalog estimates, not provider invoices.
+- **Remaining source:** reconciliation of uncertain charges against provider records; email/digest
+  notifications for pending approvals, budget thresholds and repeated authentication failures;
+  integrations selected from pilot evidence. In-app job delivery does not establish external
+  notification delivery.
 - **External gates:** representative pricing/provider validation, a pilot-selected integration and its
   authorized end-to-end test, staging/production operation. No email or integration was sent/exercised
   merely by implementing these controls.

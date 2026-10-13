@@ -89,7 +89,8 @@ export async function putObject(
   tenantId: string,
   key: string,
   body: Buffer,
-  contentType?: string
+  contentType?: string,
+  options?: { signal?: AbortSignal }
 ): Promise<void> {
   const { client, bucket } = await storage(tenantId);
   await client.send(
@@ -98,7 +99,8 @@ export async function putObject(
       Key: key,
       Body: body as PutObjectCommandInput["Body"],
       ContentType: contentType,
-    })
+    }),
+    { abortSignal: options?.signal }
   );
 }
 
@@ -108,9 +110,15 @@ export async function getObject(tenantId: string, key: string): Promise<Uint8Arr
   return res.Body!.transformToByteArray();
 }
 
-export async function deleteObject(tenantId: string, key: string): Promise<void> {
+export async function deleteObject(
+  tenantId: string,
+  key: string,
+  options?: { signal?: AbortSignal }
+): Promise<void> {
   const { client, bucket } = await storage(tenantId);
-  await client.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
+  await client.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }), {
+    abortSignal: options?.signal,
+  });
 }
 
 /**

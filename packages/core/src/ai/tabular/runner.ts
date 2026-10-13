@@ -1,6 +1,13 @@
 import { stageCellProposal } from "../../core/approval.js";
 import { recordFindingRevision, findingRevisionChanges, validateFinding } from "./finding.js";
-import { canAccessArtifact, canReadDocument } from "../../core/access.js";
+import {
+  canAccessArtifact,
+  canReadDocument,
+  hasMatterAccessInTransaction,
+} from "../../core/access.js";
+import { refreshProviderActor } from "../../core/jobs.js";
+import { canonicalFingerprint } from "../../core/fingerprint.js";
+import { reviewPolicySnapshotCurrent } from "../../core/review-policy.js";
 import { recordFunnel } from "../../core/funnel.js";
 import { and, eq } from "drizzle-orm";
 import { db, type Tx } from "@workspace/db/client";
@@ -8,12 +15,13 @@ import {
   type CellCitation,
   type CellContent,
   type TabularReview,
+  type Document,
   documents,
   tabularCells,
   tabularReviews,
+  mcpAccessTokens,
 } from "@workspace/db/schema";
 import { type Actor, recordCommit, recordCommitInTransaction } from "../../core/commit.js";
-import { recordLlmUsage } from "../../platform/usage.js";
 import {
   DEFAULT_MODEL,
   providerForModel,
@@ -37,12 +45,6 @@ function meterFor(
       model: u.model,
       inputTokens: u.inputTokens,
       outputTokens: u.outputTokens,
-    });
-    void recordLlmUsage({
-      userId: actor.userId,
-      tenantId: review.tenantId,
-      matterId: review.matterId,
-      ...u,
     });
   };
 }
@@ -118,6 +120,96 @@ function providerActor(actor: Actor): Actor {
     : { type: "agent", userId: actor.userId, agentLabel: "review-runner" };
 }
 
+type FrozenRunInput = {
+  reviewFingerprint: string;
+  documentId: string;
+  sourceVersionId: string | null;
+  sourceText: string;
+  cells: Array<{ index: number; commitId: string | null }>;
+  credentialId?: string;
+};
+const runFingerprint = (review: TabularReview) =>
+  canonicalFingerprint({
+    columns: review.columnsConfig,
+    inputSnapshot: review.inputSnapshot,
+    documentIds: review.documentIds,
+  });
+
+async function freezeRunInput(
+  actor: Actor,
+  review: TabularReview,
+  doc: Document,
+  credentialId?: string,
+  columnIndex?: number
+): Promise<FrozenRunInput> {
+  const source = review.inputSnapshot?.documents.find((s) => s.id === doc.id);
+  if (
+    doc.deletedAt ||
+    doc.status !== "ready" ||
+    (source && (source.versionId !== doc.currentVersionId || source.text !== (doc.markdown ?? "")))
+  )
+    throw new Error("stale_source");
+  if (!(await reviewPolicySnapshotCurrent(actor, review))) throw new Error("stale_source");
+  const cells = await db
+    .select({ index: tabularCells.columnIndex, commitId: tabularCells.lastCommitId })
+    .from(tabularCells)
+    .where(and(eq(tabularCells.reviewId, review.id), eq(tabularCells.documentId, doc.id)));
+  return {
+    reviewFingerprint: runFingerprint(review),
+    documentId: doc.id,
+    sourceVersionId: doc.currentVersionId,
+    sourceText: doc.markdown ?? "",
+    cells: review.columnsConfig
+      .filter((c) => columnIndex === undefined || c.index === columnIndex)
+      .map((c) => ({
+        index: c.index,
+        commitId: cells.find((cell) => cell.index === c.index)?.commitId ?? null,
+      })),
+    credentialId,
+  };
+}
+
+async function verifyRunInput(tx: Tx, actor: Actor, reviewId: string, frozen: FrozenRunInput) {
+  if (frozen.credentialId)
+    await tx
+      .select({ id: mcpAccessTokens.id })
+      .from(mcpAccessTokens)
+      .where(eq(mcpAccessTokens.id, frozen.credentialId))
+      .for("share");
+  const currentActor = await refreshProviderActor(actor, frozen.credentialId, tx);
+  const [review] = await tx.select().from(tabularReviews).where(eq(tabularReviews.id, reviewId));
+  if (
+    !review ||
+    runFingerprint(review) !== frozen.reviewFingerprint ||
+    !(await hasMatterAccessInTransaction(tx, currentActor, review.matterId, "editor"))
+  )
+    throw new Error("stale_source");
+  const [doc] = await tx
+    .select()
+    .from(documents)
+    .where(eq(documents.id, frozen.documentId))
+    .for("share");
+  if (
+    !doc ||
+    doc.deletedAt ||
+    doc.status !== "ready" ||
+    doc.currentVersionId !== frozen.sourceVersionId ||
+    (doc.markdown ?? "") !== frozen.sourceText ||
+    !(await canReadDocument(currentActor, doc.id, tx))
+  )
+    throw new Error("stale_source");
+  const cells = await tx
+    .select({ index: tabularCells.columnIndex, commitId: tabularCells.lastCommitId })
+    .from(tabularCells)
+    .where(and(eq(tabularCells.reviewId, reviewId), eq(tabularCells.documentId, doc.id)));
+  for (const expected of frozen.cells)
+    if (
+      (cells.find((cell) => cell.index === expected.index)?.commitId ?? null) !== expected.commitId
+    )
+      throw new Error("stale_source");
+  return currentActor;
+}
+
 /** Upsert one cell as a commit on the audit spine. Shared by the model runner
  *  (single-cell + streaming run, which pass `model`) and the agent-written path
  *  (write_cell, which passes none), so all three persist + blame identically. */
@@ -139,6 +231,7 @@ export function commitCell(
     expectedCellCommitId?: string | null;
     initiatingActor?: Actor;
     jobId?: string;
+    preparedInput?: FrozenRunInput;
   },
   transaction?: Tx
 ) {
@@ -156,6 +249,11 @@ export function commitCell(
       ? `Ran "${p.columnName}" on ${p.docTitle} with ${p.model}`
       : `Wrote "${p.columnName}" on ${p.docTitle}`,
     apply: async ({ tx, commitId }) => {
+      const currentActor = p.preparedInput
+        ? providerActor(
+            await verifyRunInput(tx, p.initiatingActor ?? actor, p.reviewId, p.preparedInput)
+          )
+        : actor;
       if (p.expectedCellCommitId !== undefined) {
         const [current] = await tx
           .select({ commitId: tabularCells.lastCommitId })
@@ -171,16 +269,19 @@ export function commitCell(
       }
 
       const proposal = await stageCellProposal(tx, {
-        actor,
+        actor: currentActor,
         commitId,
         reviewId: p.reviewId,
         documentId: p.documentId,
         columnIndex: p.columnIndex,
         content: p.content,
         citations: p.citations,
-        sourceVersionId:
-          p.review.inputSnapshot?.documents.find((d) => d.id === p.documentId)?.versionId ??
-          undefined,
+        requireCurrentSource: !!p.model,
+        sourceVersionId: p.preparedInput
+          ? p.preparedInput.sourceVersionId
+          : source
+            ? source.versionId
+            : undefined,
       });
       if (proposal)
         return {
@@ -266,6 +367,7 @@ export async function runCell(
     documentId: string;
     columnIndex: number;
     model?: string;
+    credentialId?: string;
   }
 ) {
   const [review] = await db
@@ -284,8 +386,15 @@ export async function runCell(
       throw new Error("Document not found");
 
     const { model, key } = await resolveRunModel(actor.userId, params.model);
+    const preparedInput = await freezeRunInput(actor, review, doc, params.credentialId, col.index);
 
     const { content, citations } = await queryCell({
+      spendContext: {
+        actor,
+        matterId: review.matterId,
+        credentialId: params.credentialId,
+        sourceKind: "sync_review",
+      },
       model,
       filename: doc.title,
       documentText:
@@ -308,6 +417,9 @@ export async function runCell(
       model,
       content,
       citations,
+      preparedInput,
+      expectedCellCommitId:
+        preparedInput.cells.find((cell) => cell.index === col.index)?.commitId ?? null,
     });
   });
 }
@@ -375,7 +487,7 @@ export async function writeCell(
  */
 export async function runDocument(
   actor: Actor,
-  params: { reviewId: string; documentId: string; model?: string }
+  params: { reviewId: string; documentId: string; model?: string; credentialId?: string }
 ) {
   const [review] = await db
     .select()
@@ -392,10 +504,17 @@ export async function runDocument(
       throw new Error("Document not found");
 
     const model = params.model ?? DEFAULT_MODEL;
+    const preparedInput = await freezeRunInput(actor, review, doc, params.credentialId);
     const { key } = await resolveLlmKey(actor.userId, providerForModel(model));
     if (!key) throw new Error(`No API key for ${providerForModel(model)}`);
 
     const results = await queryRow({
+      spendContext: {
+        actor,
+        matterId: review.matterId,
+        credentialId: params.credentialId,
+        sourceKind: "sync_review",
+      },
       model,
       filename: doc.title,
       documentText:
@@ -412,6 +531,9 @@ export async function runDocument(
       op: "run_cell",
       message: `Ran ${results.size} column(s) on ${doc.title} with ${model}`,
       apply: async ({ tx, commitId }) => {
+        const currentActor = providerActor(
+          await verifyRunInput(tx, actor, review.id, preparedInput)
+        );
         const existing = await tx
           .select()
           .from(tabularCells)
@@ -431,14 +553,15 @@ export async function runDocument(
             ? validateFinding(source.text, result.content, result.citations)
             : result;
           const proposal = await stageCellProposal(tx, {
-            actor: providerActor(actor),
+            actor: currentActor,
             commitId,
             reviewId: params.reviewId,
             documentId: params.documentId,
             columnIndex,
             content,
             citations,
-            sourceVersionId: source?.versionId ?? undefined,
+            requireCurrentSource: true,
+            sourceVersionId: preparedInput.sourceVersionId,
           });
           if (proposal) {
             changes.push(...proposal.changes);

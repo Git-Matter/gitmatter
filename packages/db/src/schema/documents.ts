@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import type { FindingEditProvenance } from "@workspace/contracts";
+import type { DocumentApprovalContext, FindingEditProvenance } from "@workspace/contracts";
 import {
   type AnyPgColumn,
   boolean,
@@ -70,6 +70,10 @@ export const documents = pgTable(
     // Extracted text (pdf/text) AND the editable draft body. Redlines on a
     // non-docx document operate as find->replace on this field.
     markdown: text("markdown"),
+    // Accepted source baseline, separate from the latest tracked draft. This is
+    // a content pointer, never a claim that a lawyer approved the uploaded file.
+    approvedVersionId: uuid("approved_version_id"),
+    approvedMarkdown: text("approved_markdown"),
     sizeBytes: integer("size_bytes"),
     // Page count of the active file when extraction can determine it (PDF via
     // pdf.js, DOCX via docProps/app.xml). Null when unknown.
@@ -187,12 +191,37 @@ export const documentEdits = pgTable("document_edits", {
   contextAfter: text("context_after"),
   reason: text("reason"),
   findingProvenance: jsonb("finding_provenance").$type<FindingEditProvenance>(),
+  approvalContext: jsonb("approval_context").$type<DocumentApprovalContext>(),
   status: text("status").$type<"pending" | "accepted" | "rejected">().default("pending").notNull(),
   createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
   resolvedBy: text("resolved_by").references(() => user.id, { onDelete: "set null" }),
   lastCommitId: uuid("last_commit_id"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   resolvedAt: timestamp("resolved_at"),
+});
+
+// One append-only exact human decision per tracked change. Legacy proposals bind
+// the current draft and current policy when reviewed, without inventing history.
+export const documentEditDecisions = pgTable("document_edit_decisions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  editId: uuid("edit_id")
+    .notNull()
+    .unique()
+    .references(() => documentEdits.id, { onDelete: "cascade" }),
+  documentId: uuid("document_id")
+    .notNull()
+    .references(() => documents.id, { onDelete: "cascade" }),
+  proposedVersionId: uuid("proposed_version_id"),
+  reviewedVersionId: uuid("reviewed_version_id"),
+  contentHash: text("content_hash").notNull(),
+  policyContext: jsonb("policy_context").$type<DocumentApprovalContext>().notNull(),
+  legacy: boolean("legacy").notNull(),
+  actorId: text("actor_id")
+    .notNull()
+    .references(() => user.id),
+  decision: text("decision").$type<"accept" | "reject">().notNull(),
+  applicationCommitId: uuid("application_commit_id").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
 export type DocumentFolder = typeof documentFolders.$inferSelect;

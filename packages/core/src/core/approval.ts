@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, asc, eq, gt, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, or, sql } from "drizzle-orm";
 import { db, type Tx } from "@workspace/db/client";
 import {
   type ApprovalPolicy,
@@ -12,7 +12,15 @@ import {
   matters,
   tabularCells,
   tabularReviews,
+  workflows,
 } from "@workspace/db/schema";
+import type {
+  WorkflowProposalFields,
+  WorkflowProposalPayload,
+  ExportProposalPayload,
+} from "@workspace/contracts";
+import { workflowFields, workflowFieldChanges } from "./workflow-fields.js";
+import { reviewPolicySnapshotCurrent } from "./review-policy.js";
 import { z } from "zod";
 import { recordFindingRevision } from "../ai/tabular/finding.js";
 import {
@@ -28,6 +36,16 @@ export const approvalPolicySchema = z
   .object({
     agentCells: z.enum(["direct", "editor", "owner"]),
     escalationDecisions: z.enum(["editor", "owner"]).optional(),
+    documentEdits: z.enum(["editor", "owner"]).optional(),
+    agentWorkflows: z.enum(["direct", "editor", "owner"]).optional(),
+    cleanExports: z
+      .object({
+        approvalAboveDocuments: z.union([z.literal(0), z.literal(1)]),
+        approvalAboveProviderCostMicros: z.number().int().nonnegative(),
+        requiredRole: z.enum(["editor", "owner"]),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 export const proposalDecisionSchema = z
@@ -50,7 +68,8 @@ export class ApprovalError extends Error {
       | "stale_proposal"
       | "policy_changed"
       | "invalid_input"
-      | "request_conflict",
+      | "request_conflict"
+      | "approval_required",
     message: string
   ) {
     super(message);
@@ -87,6 +106,8 @@ export async function getApprovalPolicy(actor: Actor, matterId: string, reader: 
     policy: {
       ...matter.approvalPolicy,
       escalationDecisions: matter.approvalPolicy.escalationDecisions ?? "editor",
+      documentEdits: matter.approvalPolicy.documentEdits ?? "editor",
+      agentWorkflows: matter.approvalPolicy.agentWorkflows ?? "direct",
     },
     revision: matter.approvalPolicyRevision,
   };
@@ -121,6 +142,13 @@ export async function setApprovalPolicy(
           requestedPolicy.escalationDecisions ??
           matter.approvalPolicy.escalationDecisions ??
           "editor",
+        documentEdits:
+          requestedPolicy.documentEdits ?? matter.approvalPolicy.documentEdits ?? "editor",
+        agentWorkflows:
+          requestedPolicy.agentWorkflows ?? matter.approvalPolicy.agentWorkflows ?? "direct",
+        ...(requestedPolicy.cleanExports || matter.approvalPolicy.cleanExports
+          ? { cleanExports: requestedPolicy.cleanExports ?? matter.approvalPolicy.cleanExports }
+          : {}),
       };
       const revision = matter.approvalPolicyRevision + 1;
       await tx
@@ -212,6 +240,7 @@ export async function stageCellProposal(
     content: CellContent;
     citations: CellCitation[];
     sourceVersionId?: string | null;
+    requireCurrentSource?: boolean;
   }
 ) {
   const { actor } = input;
@@ -230,7 +259,6 @@ export async function stageCellProposal(
   if (!column) throw new ApprovalError("invalid_input", "Column is not in this review.");
   await requireRoleInTransaction(tx, actor, review.matterId, "editor");
   const matter = await policyInTransaction(tx, actor, review.matterId);
-  if (actor.type !== "agent" || matter.approvalPolicy.agentCells === "direct") return null;
   const [doc] = await tx
     .select()
     .from(documents)
@@ -238,8 +266,22 @@ export async function stageCellProposal(
     .for("share");
   if (!doc || doc.deletedAt !== null)
     throw new ApprovalError("invalid_input", "Document not found.");
-  if (input.sourceVersionId !== undefined && doc.currentVersionId !== input.sourceVersionId)
+  const gated = actor.type === "agent" && matter.approvalPolicy.agentCells !== "direct";
+  if (
+    (input.requireCurrentSource || gated) &&
+    input.sourceVersionId !== undefined &&
+    doc.currentVersionId !== input.sourceVersionId
+  )
     throw new ApprovalError("stale_proposal", "Source changed; rerun the review.");
+  if (
+    (input.requireCurrentSource || gated) &&
+    (doc.status !== "ready" || !(await reviewPolicySnapshotCurrent(actor, review, tx)))
+  )
+    throw new ApprovalError(
+      "stale_proposal",
+      "Source or approved playbook positions changed; prepare a current review."
+    );
+  if (!gated) return null;
   const [old] = await tx
     .select()
     .from(tabularCells)
@@ -271,7 +313,7 @@ export async function stageCellProposal(
     proposalCommitId: input.commitId,
     contentHash: approvalHash(payload),
     policyRevision: matter.approvalPolicyRevision,
-    requiredRole: matter.approvalPolicy.agentCells,
+    requiredRole: matter.approvalPolicy.agentCells === "owner" ? "owner" : "editor",
     proposerId: actor.userId,
     agentLabel: actor.agentLabel,
     payload,
@@ -301,17 +343,101 @@ export async function stageCellProposal(
   };
 }
 
+/** Matter workflow proposals keep exact content separate from accepted workflow fields.
+ * Creating a gated workflow records a proposal on its future artifact id; no usable
+ * workflow exists until its human application transaction inserts it. */
+export async function stageWorkflowProposal(
+  tx: Tx,
+  input: {
+    actor: Actor;
+    commitId: string;
+    workflowId: string;
+    matterId: string;
+    tenantId: string;
+    before: WorkflowProposalFields | null;
+    after: WorkflowProposalFields;
+  }
+) {
+  await requireRoleInTransaction(tx, input.actor, input.matterId, "editor");
+  const matter = await policyInTransaction(tx, input.actor, input.matterId);
+  if (
+    input.actor.type !== "agent" ||
+    (matter.approvalPolicy.agentWorkflows ?? "direct") === "direct"
+  )
+    return null;
+  if (matter.tenantId !== input.tenantId)
+    throw new ApprovalError("access_denied", "Workflow access required.");
+  const payload: WorkflowProposalPayload = {
+    action: input.before ? "update" : "create",
+    workflowId: input.workflowId,
+    tenantId: input.tenantId,
+    before: input.before,
+    after: input.after,
+    baseContentHash: input.before ? approvalHash(input.before) : null,
+  };
+  const proposalId = randomUUID();
+  await tx.insert(approvalProposals).values({
+    id: proposalId,
+    matterId: input.matterId,
+    kind: "workflow",
+    artifactId: input.workflowId,
+    proposalCommitId: input.commitId,
+    contentHash: approvalHash(payload),
+    policyRevision: matter.approvalPolicyRevision,
+    requiredRole: matter.approvalPolicy.agentWorkflows === "owner" ? "owner" : "editor",
+    proposerId: input.actor.userId,
+    agentLabel: input.actor.agentLabel,
+    payload,
+    lastCommitId: input.commitId,
+  });
+  return {
+    changes: [
+      {
+        path: `proposal/${proposalId}`,
+        before: null,
+        after: {
+          kind: "workflow",
+          status: "pending",
+          payload,
+          policyRevision: matter.approvalPolicyRevision,
+        },
+      },
+    ],
+    summary: { outcome: "proposed", proposalId },
+  };
+}
+
 async function readable(
   actor: Actor,
   proposal: typeof approvalProposals.$inferSelect,
   reader: AccessReader = db
 ) {
+  if (!(await hasMatterAccess(actor, proposal.matterId, "viewer", reader))) return false;
+  if (proposal.kind === "export") {
+    const p = proposal.payload as ExportProposalPayload;
+    return (
+      (await canAccessArtifact(actor, "tabular_review", p.reviewId, "viewer", reader)) &&
+      (await canReadDocument(actor, p.documentId, reader))
+    );
+  }
+  if (proposal.kind === "workflow") {
+    const p = proposal.payload as WorkflowProposalPayload;
+    if (p.action === "create") {
+      const [matter] = await reader
+        .select({ tenantId: matters.tenantId })
+        .from(matters)
+        .where(eq(matters.id, proposal.matterId));
+      return matter?.tenantId === p.tenantId;
+    }
+    return canAccessArtifact(actor, "workflow", proposal.artifactId, "viewer", reader);
+  }
+  const p = proposal.payload as CellProposalPayload;
   return (
-    (await hasMatterAccess(actor, proposal.matterId, "viewer", reader)) &&
     (await canAccessArtifact(actor, "tabular_review", proposal.artifactId, "viewer", reader)) &&
-    (await canReadDocument(actor, proposal.payload.documentId, reader))
+    (await canReadDocument(actor, p.documentId, reader))
   );
 }
+
 export async function getProposal(actor: Actor, proposalId: string, reader: AccessReader = db) {
   const [proposal] = await reader
     .select()
@@ -320,11 +446,70 @@ export async function getProposal(actor: Actor, proposalId: string, reader: Acce
   if (!proposal || !(await readable(actor, proposal, reader)))
     throw new ApprovalError("access_denied", "Proposal access required.");
   const policy = await getApprovalPolicy(actor, proposal.matterId, reader);
-  const mayDecide =
+  const roleAllowed =
     actor.type === "user" &&
-    (await hasMatterAccess(actor, proposal.matterId, proposal.requiredRole, reader)) &&
-    (await canAccessArtifact(actor, "tabular_review", proposal.artifactId, "editor", reader));
-  const p = proposal.payload;
+    (await hasMatterAccess(actor, proposal.matterId, proposal.requiredRole, reader));
+  const decisions = await reader
+    .select()
+    .from(commitApprovals)
+    .where(eq(commitApprovals.proposalId, proposalId));
+  if (proposal.kind === "export") {
+    const p = proposal.payload as ExportProposalPayload;
+    const [doc] = await reader.select().from(documents).where(eq(documents.id, p.documentId));
+    const [review] = await reader
+      .select()
+      .from(tabularReviews)
+      .where(eq(tabularReviews.id, p.reviewId));
+    const stale =
+      !doc ||
+      doc.deletedAt !== null ||
+      !review ||
+      review.matterId !== proposal.matterId ||
+      doc.currentVersionId !== p.versionId ||
+      doc.approvedVersionId !== p.versionId ||
+      doc.headCommitId !== p.documentCommitId ||
+      review.headCommitId !== p.reviewCommitId;
+    return {
+      ...proposal,
+      kind: "export" as const,
+      payload: p,
+      policyChanged: policy.revision !== proposal.policyRevision,
+      mayDecide: roleAllowed,
+      stale,
+      mayRetrieve:
+        proposal.status === "applied" &&
+        !stale &&
+        policy.revision === proposal.policyRevision &&
+        actor.userId === proposal.proposerId,
+      decisions,
+    };
+  }
+  if (proposal.kind === "workflow") {
+    const p = proposal.payload as WorkflowProposalPayload;
+    const [workflow] = await reader.select().from(workflows).where(eq(workflows.id, p.workflowId));
+    const stale =
+      proposal.status === "pending" &&
+      (p.action === "create"
+        ? !!workflow
+        : !workflow ||
+          workflow.isSystem ||
+          workflow.matterId !== proposal.matterId ||
+          workflow.tenantId !== p.tenantId ||
+          approvalHash(workflowFields(workflow)) !== p.baseContentHash);
+    return {
+      ...proposal,
+      kind: "workflow" as const,
+      payload: p,
+      policyChanged: policy.revision !== proposal.policyRevision,
+      stale,
+      mayDecide:
+        roleAllowed &&
+        (p.action === "create" ||
+          (await canAccessArtifact(actor, "workflow", proposal.artifactId, "editor", reader))),
+      decisions,
+    };
+  }
+  const p = proposal.payload as CellProposalPayload;
   const [review] = await reader
     .select()
     .from(tabularReviews)
@@ -350,18 +535,37 @@ export async function getProposal(actor: Actor, proposalId: string, reader: Acce
       (cell?.lastCommitId ?? null) !== p.baseCellCommitId ||
       doc.currentVersionId !== p.sourceVersionId ||
       approvalHash({ markdown: doc.markdown, version: doc.currentVersionId }) !== p.sourceHash ||
-      approvalHash(col) !== p.columnHash);
-  const decisions = await reader
-    .select()
-    .from(commitApprovals)
-    .where(eq(commitApprovals.proposalId, proposalId));
+      approvalHash(col) !== p.columnHash ||
+      !(await reviewPolicySnapshotCurrent(actor, review, reader)));
   return {
     ...proposal,
+    kind: "cell" as const,
+    payload: p,
     policyChanged: policy.revision !== proposal.policyRevision,
-    mayDecide,
+    mayDecide:
+      roleAllowed &&
+      (await canAccessArtifact(actor, "tabular_review", proposal.artifactId, "editor", reader)),
     stale,
     decisions,
   };
+}
+/** Exact artifact receipt lookup for newly staged creations, independent of queue pagination. */
+export async function getPendingWorkflowProposal(actor: Actor, workflowId: string) {
+  const [proposal] = await db
+    .select()
+    .from(approvalProposals)
+    .where(
+      and(
+        eq(approvalProposals.artifactId, workflowId),
+        eq(approvalProposals.kind, "workflow"),
+        eq(approvalProposals.status, "pending")
+      )
+    )
+    .orderBy(desc(approvalProposals.createdAt), desc(approvalProposals.id))
+    .limit(1);
+  if (!proposal || !(await readable(actor, proposal))) return null;
+  const result = await getProposal(actor, proposal.id);
+  return result.kind === "workflow" ? result : null;
 }
 export async function listProposals(
   actor: Actor,
@@ -434,9 +638,16 @@ async function decideProposalInTransaction(tx: Tx, actor: Actor, input: Proposal
   const fingerprint = approvalHash({ actor, input: parsed });
 
   // Consistent artifact-before-policy lock order with all cell mutations.
-  await tx.execute(
-    sql`select pg_advisory_xact_lock(hashtext(${`tabular_review:${proposal.artifactId}`}))`
-  );
+  const artifactLocks =
+    proposal.kind === "export"
+      ? [
+          `document:${proposal.payload.documentId}`,
+          `tabular_review:${proposal.payload.reviewId}`,
+          `matter:${proposal.matterId}`,
+        ].sort()
+      : [`${proposal.kind === "cell" ? "tabular_review" : "workflow"}:${proposal.artifactId}`];
+  for (const key of artifactLocks)
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${key}))`);
   await tx.execute(
     sql`select pg_advisory_xact_lock(hashtext(${`approval-request:${actor.userId}:${parsed.requestId}`}))`
   );
@@ -465,11 +676,16 @@ async function decideProposalInTransaction(tx: Tx, actor: Actor, input: Proposal
     };
   }
   const result = await recordCommitInTransaction(tx, {
-    artifactType: "tabular_review",
-    artifactId: proposal.artifactId,
+    artifactType:
+      proposal.kind === "cell"
+        ? "tabular_review"
+        : proposal.kind === "workflow"
+          ? "workflow"
+          : "matter",
+    artifactId: proposal.kind === "export" ? proposal.matterId : proposal.artifactId,
     actor,
     op: "decide_proposal",
-    message: `${parsed.decision === "approve" ? "Applied" : parsed.decision === "reject" ? "Rejected" : "Withdrew"} cell proposal`,
+    message: `${parsed.decision === "approve" ? "Applied" : parsed.decision === "reject" ? "Rejected" : "Withdrew"} ${proposal.kind} proposal`,
     apply: async ({ commitId }) => {
       const [live] = await tx
         .select()
@@ -479,7 +695,18 @@ async function decideProposalInTransaction(tx: Tx, actor: Actor, input: Proposal
       if (
         !live ||
         !(await readable(actor, live, tx)) ||
-        !(await canAccessArtifact(actor, "tabular_review", live.artifactId, "editor", tx))
+        (live.kind !== "export" &&
+          !(
+            live.kind === "workflow" &&
+            (live.payload as WorkflowProposalPayload).action === "create"
+          ) &&
+          !(await canAccessArtifact(
+            actor,
+            live.kind === "cell" ? "tabular_review" : "workflow",
+            live.artifactId,
+            "editor",
+            tx
+          )))
       )
         throw new ApprovalError("access_denied", "Proposal decision access required.");
       if (parsed.decision === "withdraw") {
@@ -510,8 +737,8 @@ async function decideProposalInTransaction(tx: Tx, actor: Actor, input: Proposal
           "Policy changed; withdraw and create a revised proposal."
         );
       const changes = [];
-      if (parsed.decision === "approve") {
-        const p = live.payload;
+      if (parsed.decision === "approve" && live.kind === "cell") {
+        const p = live.payload as CellProposalPayload;
         const [review] = await tx
           .select()
           .from(tabularReviews)
@@ -542,7 +769,8 @@ async function decideProposalInTransaction(tx: Tx, actor: Actor, input: Proposal
           doc.currentVersionId !== p.sourceVersionId ||
           approvalHash({ markdown: doc.markdown, version: doc.currentVersionId }) !==
             p.sourceHash ||
-          approvalHash(col) !== p.columnHash
+          approvalHash(col) !== p.columnHash ||
+          !(await reviewPolicySnapshotCurrent(actor, review, tx))
         )
           throw new ApprovalError(
             "stale_proposal",
@@ -607,6 +835,76 @@ async function decideProposalInTransaction(tx: Tx, actor: Actor, input: Proposal
           after: applied?.disposition ?? null,
         });
       }
+      if (parsed.decision === "approve" && live.kind === "workflow") {
+        const p = live.payload as WorkflowProposalPayload;
+        const [existing] = await tx
+          .select()
+          .from(workflows)
+          .where(eq(workflows.id, p.workflowId))
+          .for("update");
+        if (
+          p.action === "create"
+            ? !!existing
+            : !existing ||
+              existing.isSystem ||
+              existing.matterId !== live.matterId ||
+              existing.tenantId !== p.tenantId ||
+              approvalHash(workflowFields(existing)) !== p.baseContentHash
+        )
+          throw new ApprovalError(
+            "stale_proposal",
+            "Accepted workflow changed; create a revised proposal."
+          );
+        if (matter.tenantId !== p.tenantId)
+          throw new ApprovalError("access_denied", "Workflow access required.");
+        const fields = workflowFieldChanges(existing ? workflowFields(existing) : null, p.after);
+        const fieldCommits = { ...existing?.fieldCommits };
+        for (const field of fields) fieldCommits[field.path] = commitId;
+        if (p.action === "create") {
+          await tx.insert(workflows).values({
+            id: p.workflowId,
+            userId: live.proposerId,
+            createdBy: live.proposerId,
+            tenantId: p.tenantId,
+            matterId: live.matterId,
+            ...p.after,
+            fieldCommits,
+            headCommitId: commitId,
+          });
+        } else {
+          await tx
+            .update(workflows)
+            .set({ ...p.after, fieldCommits, updatedAt: new Date() })
+            .where(eq(workflows.id, p.workflowId));
+        }
+        changes.push(
+          ...fields.map((field) => ({ path: field.path, before: field.before, after: field.after }))
+        );
+      }
+      if (parsed.decision === "approve" && live.kind === "export") {
+        const p = live.payload as ExportProposalPayload;
+        const checked = await getProposal(actor, live.id, tx);
+        if (
+          checked.stale ||
+          p.output !== "clean" ||
+          p.documentCount !== 1 ||
+          p.providerCostMicros !== 0
+        )
+          throw new ApprovalError(
+            "stale_proposal",
+            "The export manifest changed; request the current output again."
+          );
+        changes.push({
+          path: `exportAuthorization/${live.id}`,
+          before: null,
+          after: {
+            ...p,
+            contentHash: live.contentHash,
+            policyRevision: live.policyRevision,
+            approvedBy: actor.userId,
+          },
+        });
+      }
       const status =
         parsed.decision === "approve"
           ? "applied"
@@ -626,8 +924,14 @@ async function decideProposalInTransaction(tx: Tx, actor: Actor, input: Proposal
         contentHash: live.contentHash,
         capturedPolicyRevision: live.policyRevision,
         currentPolicyRevision: matter.approvalPolicyRevision,
-        sourceVersionId: live.payload.sourceVersionId,
-        baseCellCommitId: live.payload.baseCellCommitId,
+        sourceVersionId:
+          live.kind === "cell"
+            ? (live.payload as CellProposalPayload).sourceVersionId
+            : live.kind === "export"
+              ? (live.payload as ExportProposalPayload).versionId
+              : null,
+        baseCellCommitId:
+          live.kind === "cell" ? (live.payload as CellProposalPayload).baseCellCommitId : null,
         actorId: actor.userId,
         requestId: parsed.requestId,
         requestFingerprint: fingerprint,
@@ -651,8 +955,14 @@ async function decideProposalInTransaction(tx: Tx, actor: Actor, input: Proposal
           currentPolicyRevision: matter.approvalPolicyRevision,
           decisionId,
           note: parsed.note?.trim() ?? null,
-          sourceVersionId: live.payload.sourceVersionId,
-          baseCellCommitId: live.payload.baseCellCommitId,
+          sourceVersionId:
+            live.kind === "cell"
+              ? (live.payload as CellProposalPayload).sourceVersionId
+              : live.kind === "export"
+                ? (live.payload as ExportProposalPayload).versionId
+                : null,
+          baseCellCommitId:
+            live.kind === "cell" ? (live.payload as CellProposalPayload).baseCellCommitId : null,
         },
       };
     },
@@ -699,15 +1009,17 @@ export async function decideProposalBatch(actor: Actor, inputs: ProposalDecision
   if (inputs.some((i) => i.decision === "withdraw"))
     throw new ApprovalError("invalid_input", "Withdraw proposals individually.");
   const proposals = await Promise.all(inputs.map((i) => getProposal(actor, i.proposalId)));
+  if (proposals.some((p) => p.kind !== "cell"))
+    throw new ApprovalError("invalid_input", "Workflow proposals must be reviewed individually.");
   const context = (p: (typeof proposals)[number]) =>
     approvalHash({
       matterId: p.matterId,
       artifactId: p.artifactId,
       policyRevision: p.policyRevision,
       requiredRole: p.requiredRole,
-      sourceVersionId: p.payload.sourceVersionId,
-      sourceHash: p.payload.sourceHash,
-      documentId: p.payload.documentId,
+      sourceVersionId: (p.payload as CellProposalPayload).sourceVersionId,
+      sourceHash: (p.payload as CellProposalPayload).sourceHash,
+      documentId: (p.payload as CellProposalPayload).documentId,
     });
   if (
     new Set(proposals.map(context)).size !== 1 ||

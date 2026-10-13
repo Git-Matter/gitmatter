@@ -3,21 +3,26 @@
 Move extraction, bulk review, playbook execution, and large exports onto a database-backed job/outbox
 and worker loop so deploys, restarts, provider failures, or closed tabs cannot lose accepted work.
 
-**Status: In progress** (source/local slices reviewed 2026-10-12; release gates open).
+**Status: In progress** (source coverage reviewed 2026-10-13; final integrated checks and release
+gates open).
 
 The prior extraction baseline used an in-memory per-user chain in
 `packages/core/src/content/extractionQueue.ts`. A restart can leave work needing manual retry.
 Durable extraction now replaces that ownership model; broader work remains below. Apply the
 [shared contracts](workflow-contracts.md), especially transaction composition and actor scope.
 
-## Implementation progress (2026-10-12)
+## Implementation progress (2026-10-13)
 
-- **Implemented source/local slices:** accepted extraction and bulk-review cell work in Postgres;
+- **Implemented source:** accepted extraction and bulk-review cell work in Postgres;
   leases/heartbeats/fencing; atomic audit commit + checkpoint/receipt; current actor/membership checks;
   idempotent submissions; retry/cancel/status endpoints; reconnectable bulk progress; token/spend
-  reservations before provider dispatch. Paid outcomes without known usage remain explicitly uncertain.
-- **Remaining source:** large-export jobs, provider-specific concurrency, durable outbox delivery,
-  staged-object reservation/reclamation, and broader operational recovery tooling.
+  reservations before provider dispatch; provider-specific capacity shared with synchronous calls;
+  replayable terminal-job inbox with per-reader acknowledgement; immutable staged-object intents,
+  quota reservation and fenced orphan reclamation. Expired paid review attempts without a persisted
+  result stop for an acknowledged retry; committed receipts resume without another inference.
+  Paid outcomes without complete usage remain explicitly uncertain and reserved.
+- **Remaining source:** large-export jobs, external notification delivery and broader operator tools
+  for uncertain-charge reconciliation. The current inbox is in-app delivery, not email/webhook proof.
 - **Proof still open:** deployment restart/kill tests, staging reconnect and provider fault behavior,
   representative load, and production operation. Local DB tests are separate evidence.
 

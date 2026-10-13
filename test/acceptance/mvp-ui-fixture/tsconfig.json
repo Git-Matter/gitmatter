@@ -1,0 +1,21 @@
+{
+  "extends": "../../../apps/web/tsconfig.json",
+  "include": ["./*.ts", "./*.tsx", "../../../apps/web/src/routeTree.gen.ts"],
+  "exclude": [],
+  "compilerOptions": {
+    "resolveJsonModule": true,
+    "types": [
+      "../../../apps/web/node_modules/vite-plus/dist/client",
+      "../../../apps/web/node_modules/@types/node"
+    ],
+    "paths": {
+      "@/*": ["../../../apps/web/src/*"],
+      "react": ["../../../apps/web/node_modules/@types/react"],
+      "react/*": ["../../../apps/web/node_modules/@types/react/*"],
+      "react-dom/*": ["../../../apps/web/node_modules/@types/react-dom/*"],
+      "@tanstack/react-query": ["../../../apps/web/node_modules/@tanstack/react-query"],
+      "@tanstack/react-router": ["../../../apps/web/node_modules/@tanstack/react-router"],
+      "@workspace/contracts": ["../../../packages/contracts/src/index.ts"]
+    }
+  }
+}

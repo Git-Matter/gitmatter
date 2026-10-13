@@ -9,4 +9,3 @@ export * from "./review.js";
 export * from "./jobs.js";
 
 export * from "./approval.js";
-export * from "./approval.js";

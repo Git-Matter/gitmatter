@@ -29,6 +29,9 @@ which plans are done, in progress, or planned.
 
 Plan status lives in each plan's own status banner and in [`roadmap/README.md`](roadmap/README.md).
 
+[`mvp-delivery.md`](mvp-delivery.md) records the coordinated NDA MVP acceptance contract,
+engineering ownership and promotion gates.
+
 ## Delivery order
 
 `02` → `03` → `04` → `05` → `06` → `07`, matching the `(M0)`–`(M5)` labels in the plan titles.
@@ -42,9 +45,12 @@ it.
 Plans 03–05 were deepened on 2026-10-11 with user journeys, state models, proposed data/core
 contracts, permission/audit rules, failure handling, delivery slices, and acceptance scenarios.
 [`workflow-contracts.md`](workflow-contracts.md) defines their shared version, actor, transaction,
-presentation, and measurement requirements. This specification work did not change release status. Source/local implementation slices added
-on 2026-10-12 are recorded separately in plans 03–07 and the roadmap; none closes a release gate
-merely by passing module tests.
+presentation, and measurement requirements. This specification work did not change release status.
+Source implementation through 2026-10-13 is recorded separately in plans 03–07, the roadmap and
+[`mvp-delivery.md`](mvp-delivery.md). The connected workspace, approval, recovery, search and spending
+controls remain distinct from authenticated acceptance, provider/Word quality and release proof.
+The dated 2026-10-12 evidence is historical; final checks for the current increment are recorded
+separately. No plan closes a release gate merely by passing module tests.
 
 [`evidence/2026-09-13-subscription-agent.md`](evidence/2026-09-13-subscription-agent.md) records the
 implemented subscription-agent workflow, local validation and staging deployment blockers. The

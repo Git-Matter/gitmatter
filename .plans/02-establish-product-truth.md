@@ -4,8 +4,8 @@ Create a trustworthy baseline before changing the review workflow: a sanitized N
 browser acceptance script for the current path, generated MCP tool documentation, and funnel
 instrumentation that never records legal content or PII.
 
-**Status: In progress** (source and local engine verified 2026-10-11; authenticated browser and
-staging gates remain open).
+**Status: In progress** (source coverage reviewed 2026-10-13; local engine baseline verified
+2026-10-11; final integrated checks, authenticated browser and staging gates remain open).
 
 Implemented the fully synthetic NDA pack in `packages/core/test/fixtures/nda/`, including source
 DOCX, playbook rules, standards/fallbacks, cited findings, missing-clause outcome, expected redlines,
@@ -24,6 +24,12 @@ model ids are omitted rather than allowing arbitrary text into analytics. Previe
 The generated MCP reference and subscription-MCP CI journeys remain in place. Full authenticated
 browser execution, staging reproduction, live analytics delivery, Word round-trip, and representative
 provider/pilot quality have not been established by these checks. They remain release gates.
+
+The [synthetic MVP UI fixture](../test/acceptance/mvp-ui-fixture/README.md) now mounts production
+review, matter, approval and admin components using authored API responses. It loads no credentials
+or authenticated session. It supports separate interaction/responsive checks without claiming a real
+upload, provider run, Word transformation or staging acceptance. Final check results belong in the
+[coordinated MVP record](mvp-delivery.md).
 
 ## Purpose
 

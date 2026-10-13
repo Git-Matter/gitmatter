@@ -19,19 +19,21 @@ import {
   failJob,
   heartbeatJob,
   JobError,
+  retryJobInTransaction,
 } from "../../core/jobs.js";
 import {
   estimateReviewRun,
-  reserveJobSpend,
   settleJobSpend,
   releaseJobSpend,
+  applyTenantRunLimits,
 } from "../../core/job-spend.js";
-import { DEFAULT_MODEL, LLM_MODELS, resolveRunModel } from "../provider/index.js";
+import { DEFAULT_MODEL, LLM_MODELS, resolveRunModel, providerForModel } from "../provider/index.js";
 import { buildCellPrompt } from "../prompts/tabular.js";
 import { commitCell } from "./runner.js";
 import { queryCell } from "./extract.js";
 
 import { canonicalFingerprint as hash } from "../../core/fingerprint.js";
+import { reviewPolicySnapshotCurrent } from "../../core/review-policy.js";
 
 function cellInput(review: TabularReview, documentId: string, columnIndex: number) {
   const source = review.inputSnapshot?.documents.find((d) => d.id === documentId);
@@ -64,17 +66,25 @@ export async function estimateDurableReview(actor: Actor, reviewId: string, mode
         })
       );
   }
-  return estimateReviewRun(model, prompts);
+  return applyTenantRunLimits(review.tenantId, estimateReviewRun(model, prompts));
 }
 
 /** Accept all required cell units together. Closing a stream never owns work. */
 export async function queueReviewRun(
   actor: Actor,
-  params: { reviewId: string; model?: string; requestId?: string; credentialId?: string }
+  params: {
+    reviewId: string;
+    model?: string;
+    requestId?: string;
+    credentialId?: string;
+    mode?: "all" | "failed";
+    acknowledgeUnknown?: boolean;
+  }
 ) {
   if (actor.type === "agent" && !params.credentialId) throw new JobError("access_denied");
   if (!(await canAccessArtifact(actor, "tabular_review", params.reviewId, "editor")))
     throw new JobError("access_denied");
+  if (params.mode === "failed") return retryFailedReviewRun(actor, params);
   const model = params.model ?? DEFAULT_MODEL;
   const estimate = await estimateDurableReview(actor, params.reviewId, model);
   const total = estimate.inputTokenUpperEstimate + estimate.outputTokenLimit;
@@ -179,11 +189,13 @@ export async function queueReviewRun(
               .insert(jobs)
               .values({
                 kind: "review_cell",
+                schemaVersion: 2,
                 artifactType: "tabular_review",
                 artifactId: review.id,
                 sourceDocumentId: documentId,
                 columnIndex: column.index,
                 model,
+                provider: providerForModel(model),
                 snapshotFingerprint: input.fingerprint,
                 baseCellCommitId: cell?.lastCommitId,
                 runId,
@@ -233,6 +245,69 @@ export async function queueReviewRun(
   });
 }
 
+/** Retry only the latest failed rule jobs; preserve immutable inputs and lifetime attempts. */
+async function retryFailedReviewRun(
+  actor: Actor,
+  params: { reviewId: string; requestId?: string; acknowledgeUnknown?: boolean }
+) {
+  const requestId = params.requestId ?? randomUUID();
+  const accepted = await db.transaction(async (tx) => {
+    await tx.execute(
+      sql`select pg_advisory_xact_lock(hashtext(${`tabular_review:${params.reviewId}`}))`
+    );
+    if (!(await canAccessArtifact(actor, "tabular_review", params.reviewId, "editor", tx)))
+      throw new JobError("access_denied");
+    const [review] = await tx
+      .select()
+      .from(tabularReviews)
+      .where(eq(tabularReviews.id, params.reviewId));
+    if (!review?.inputSnapshot) throw new JobError("input_not_ready");
+    const rows = await tx
+      .select()
+      .from(jobs)
+      .where(and(eq(jobs.artifactId, review.id), eq(jobs.kind, "review_cell")))
+      .orderBy(sql`${jobs.createdAt} desc`, sql`${jobs.id} desc`)
+      .for("update");
+    const seen = new Set<string>();
+    const selected: DurableJob[] = [];
+    for (const job of rows) {
+      const key = `${job.sourceDocumentId}:${job.columnIndex}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      if (job.state !== "failed" && job.lastRetryRequestId !== `${requestId}:${job.id}`) continue;
+      await sourceStillCurrent(job, review, tx);
+      await retryJobInTransaction(tx, actor, job.id, {
+        requestId: `${requestId}:${job.id}`,
+        acknowledgeUnknown: params.acknowledgeUnknown,
+      });
+      selected.push(job);
+    }
+    if (!selected.length) throw new JobError("input_not_ready");
+    return { selected, review };
+  });
+  const model = accepted.selected[0]!.model ?? DEFAULT_MODEL;
+  const prompts = accepted.selected.map((job) => {
+    const { source, column } = cellInput(accepted.review, job.sourceDocumentId!, job.columnIndex!);
+    return buildCellPrompt({
+      filename: source.title,
+      documentText: source.text,
+      columnPrompt: column.prompt,
+      format: column.format,
+      tags: column.tags,
+    });
+  });
+  return {
+    outcome: "queued" as const,
+    runId: accepted.selected[0]!.runId!,
+    jobIds: accepted.selected.map((j) => j.id),
+    commitId: null,
+    estimate: await applyTenantRunLimits(
+      accepted.review.tenantId,
+      estimateReviewRun(model, prompts)
+    ),
+  };
+}
+
 async function sourceStillCurrent(job: DurableJob, review: TabularReview, reader: DB | Tx = db) {
   const input = cellInput(review, job.sourceDocumentId!, job.columnIndex!);
   if (input.fingerprint !== job.snapshotFingerprint) throw new JobError("stale_source");
@@ -280,20 +355,20 @@ export async function runReviewJobOnce(): Promise<boolean> {
       .where(eq(tabularReviews.id, job.artifactId));
     if (!review) throw new JobError("input_not_ready");
     const { source, column } = await sourceStillCurrent(job, review);
+    if (!(await reviewPolicySnapshotCurrent(authorized, review)))
+      throw new JobError("stale_source");
     const { model, key } = await resolveRunModel(job.userId, job.model!);
     if (model !== job.model) throw new JobError("stale_source");
-    const prompt = buildCellPrompt({
-      filename: source.title,
-      documentText: source.text,
-      columnPrompt: column.prompt,
-      format: column.format,
-      tags: column.tags,
-    });
-    await reserveJobSpend(job, Buffer.byteLength(prompt.system + prompt.user, "utf8") + 4096, 2048);
     await authorizeJob(job);
     if (!leaseAlive) throw new JobError("lease_lost");
     dispatched = true;
     const result = await queryCell({
+      spendContext: {
+        actor: authorized,
+        matterId: job.matterId,
+        sourceKind: "sync_review",
+        durableJob: job,
+      },
       maxRetries: 0,
       model,
       filename: source.title,

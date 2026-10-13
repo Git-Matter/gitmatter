@@ -1,7 +1,68 @@
-/** Enforced v1 gate. Broader document/workflow/export gates are not exposed yet. */
+/** Independently enforced matter gates. Missing optional gates retain legacy defaults. */
 export type ApprovalPolicy = {
   agentCells: "direct" | "editor" | "owner";
   escalationDecisions?: "editor" | "owner";
+  documentEdits?: "editor" | "owner";
+  agentWorkflows?: "direct" | "editor" | "owner";
+  cleanExports?: {
+    approvalAboveDocuments: 0 | 1;
+    approvalAboveProviderCostMicros: number;
+    requiredRole: "editor" | "owner";
+  };
+};
+export type DocumentApprovalContext = Array<{
+  matterId: string;
+  policyRevision: number;
+  requiredRole: "editor" | "owner";
+}>;
+export type DocumentResolutionInput = {
+  expectedHeadCommitId?: string | null;
+  approvalContext?: DocumentApprovalContext;
+};
+export type WorkflowProposalFields = {
+  title: string;
+  type: "assistant" | "tabular" | "playbook";
+  promptMd: string;
+  steps: Array<{ title?: string; promptMd: string }> | null;
+  columnsConfig: Array<{
+    index: number;
+    name: string;
+    prompt: string;
+    format?: string;
+    tags?: string[];
+  }> | null;
+  rules: Array<{
+    id: string;
+    clauseType: string;
+    standardClauseId?: string;
+    standardPosition: string;
+    fallbacks?: Array<string | { clauseId: string }>;
+    unacceptable?: string;
+    guidance?: string;
+    severity: "red" | "yellow";
+  }> | null;
+  status: "draft" | "approved" | "deprecated";
+  practice: string | null;
+};
+export type WorkflowProposalPayload = {
+  action: "create" | "update";
+  workflowId: string;
+  tenantId: string;
+  before: WorkflowProposalFields | null;
+  after: WorkflowProposalFields;
+  baseContentHash: string | null;
+};
+export type ExportProposalPayload = {
+  requestFingerprint: string;
+  reviewId: string;
+  documentId: string;
+  versionId: string;
+  documentCommitId: string | null;
+  reviewCommitId: string | null;
+  output: "clean";
+  documentCount: 1;
+  // No model call occurs in this renderer. This excludes hosting/storage fees.
+  providerCostMicros: 0;
 };
 export type ProposalStatus = "pending" | "applied" | "rejected" | "withdrawn";
 export type CellProposalPayload = {
@@ -20,10 +81,9 @@ export type CellProposalPayload = {
   sourceHash: string;
   columnHash: string;
 };
-export type CellProposal = {
+type ProposalBase = {
   id: string;
   matterId: string;
-  kind: "cell";
   artifactId: string;
   revision: number;
   proposalCommitId: string;
@@ -32,7 +92,6 @@ export type CellProposal = {
   requiredRole: "editor" | "owner";
   proposerId: string;
   agentLabel: string | null;
-  payload: CellProposalPayload;
   status: ProposalStatus;
   lastCommitId: string;
   createdAt: string;
@@ -48,6 +107,17 @@ export type CellProposal = {
     createdAt: string;
   }>;
 };
+export type CellProposal = ProposalBase & { kind: "cell"; payload: CellProposalPayload };
+export type WorkflowProposal = ProposalBase & {
+  kind: "workflow";
+  payload: WorkflowProposalPayload;
+};
+export type ExportProposal = ProposalBase & {
+  kind: "export";
+  payload: ExportProposalPayload;
+  mayRetrieve: boolean;
+};
+export type ApprovalProposal = CellProposal | WorkflowProposal | ExportProposal;
 export type ProposalDecisionInput = {
   requestId: string;
   proposalId: string;

@@ -33,6 +33,8 @@ import type {
   WorkflowStep,
 } from "@workspace/db/schema";
 import { type Actor, recordCommit } from "../core/commit.js";
+import { stageWorkflowProposal } from "../core/approval.js";
+import { workflowFields } from "../core/workflow-fields.js";
 import {
   canAccessArtifact,
   getUserTenant,
@@ -146,6 +148,27 @@ export async function createWorkflow(
         input.status,
         true
       );
+      if (input.matterId) {
+        const staged = await stageWorkflowProposal(tx, {
+          actor,
+          commitId,
+          workflowId,
+          matterId: input.matterId,
+          tenantId,
+          before: null,
+          after: {
+            title: input.title,
+            type: input.type,
+            promptMd: input.promptMd,
+            steps: input.steps ?? null,
+            columnsConfig: input.columnsConfig ?? null,
+            rules: input.rules ?? null,
+            status: initialStatus,
+            practice: input.practice ?? null,
+          },
+        });
+        if (staged) return staged;
+      }
       const fieldCommits: Record<string, string> = {
         "field/title": commitId,
         "field/type": commitId,
@@ -258,6 +281,21 @@ export async function updateWorkflow(
         });
 
       if (!fields.length) return { changes: [] };
+      if (wf.matterId && wf.tenantId) {
+        const staged = await stageWorkflowProposal(tx, {
+          actor,
+          commitId,
+          workflowId,
+          matterId: wf.matterId,
+          tenantId: wf.tenantId,
+          before: workflowFields(wf),
+          after: {
+            ...workflowFields(wf),
+            ...Object.fromEntries(fields.map((f) => [f.col, f.after])),
+          },
+        });
+        if (staged) return staged;
+      }
       const set: Record<string, unknown> = { updatedAt: new Date() };
       const fieldCommits = { ...wf.fieldCommits };
       for (const f of fields) {

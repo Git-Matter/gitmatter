@@ -3,23 +3,30 @@
 Make agent-assisted work acceptable under firm supervision: configurable matter approval policy,
 append-only decisions, and one Agent activity queue per matter.
 
-**Status: In progress** (source/local slices reviewed 2026-10-12; release gates open).
+**Status: In progress** (source coverage reviewed 2026-10-13; final integrated checks and release
+gates open).
 
 The existing document guard remains: `resolveEdits` rejects
 `actor.type === "agent"` in `packages/core/src/content/documents.ts`. Configurable policy,
-append-only cell decisions, and an initial Agent activity queue now have source/local slices. Apply the
+append-only decisions, and the Agent activity queue now have source implementation. Apply the
 [shared contracts](workflow-contracts.md). This specification refines sections 2 and 6 of
 [`../PLANS.md`](../PLANS.md); their candidate designs are not separate approval systems.
 
-## Implementation progress (2026-10-12)
+## Implementation progress (2026-10-13)
 
-- **Implemented source/local slices:** audited matter policy for agent cells and finding/escalation
+- **Implemented source:** audited matter policy for agent cells and finding/escalation
   decisions; staged cell content; exact append-only human decisions; actor-bound idempotency;
   concurrent decision protection; atomic compatible batches; queue/settings/decision diff UI; shared
-  core publication guards for firm playbooks. Document resolution remains human-only.
-- **Remaining source:** workflow proposal staging, owner document gate and approved baseline,
-  exact export approval/ceilings, legacy pending-edit migration, and batch selection UI. Those policy
-  controls are not exposed as enforced settings while their implementation is absent.
+  core publication guards for firm playbooks; typed matter-workflow create/update proposals;
+  document editor/owner decisions with a separate accepted baseline and append-only evidence;
+  compatible cell batch selection/confirmation; exact single-DOCX clean-export requests and
+  requester-bound approved retrieval. Document resolution remains human-only. Legacy pending edits
+  retain factual provenance and require current human resolution before becoming an accepted
+  baseline; migration does not fabricate historical approvals.
+- **Remaining source:** broader export manifests, document-count/provider-cost ceilings and large
+  export approval scheduling. The implemented renderer covers exactly one stored DOCX with zero
+  incremental model cost; its policy UI exposes that supported gate only. Expanded queue filters
+  and cross-matter coordinated approval remain outside the NDA slice.
 - **Proof still open:** authenticated browser/mobile/keyboard, staging/MCP matrix, upgrade/rollback,
   Word/provider and pilot acceptance. Cell approval tests do not prove the broader approval model.
 

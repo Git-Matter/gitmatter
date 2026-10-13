@@ -9,7 +9,15 @@ The connector at `/api/mcp` uses your assistant's own reasoning. It does not lau
 
 Read source documents, create a review (or prepare one with `run_playbook`), then populate findings with `write_cell` and exact source quotes. Document edits remain proposals until a person accepts or rejects them in GitMatter. Review cells record agent findings; they are not human approvals.
 
-The combined catalog below contains 42 tools. Legal research availability depends on jurisdiction. After an update, refresh your client's tool catalog or reconnect if it still shows removed tools. `run_cell` and `draft_playbook` are available through the built-in assistant, not this subscription-only connector. `resolve_document_edit` is reserved for people in the UI.
+The combined catalog below contains 52 tools. Legal research availability depends on jurisdiction. After an update, refresh your client's tool catalog or reconnect if it still shows removed tools. `run_cell` and `draft_playbook` are available through the built-in assistant, not this subscription-only connector. `resolve_document_edit` is reserved for people in the UI.
+
+## `acknowledge_job_event`
+
+Mark one authorized job event read for your account. Other team members retain their own unread state.
+
+Inputs: `eventId`.
+
+Changes workspace data; recorded under the acting account.
 
 ## `blame`
 
@@ -18,6 +26,14 @@ Which commit last set a given field path — who did it, when, and how. Path exa
 Inputs: `artifactType`, `artifactId`, `path`.
 
 Reads existing data.
+
+## `cancel_job`
+
+Request cancellation of an authorized job. Running work stops at a safe checkpoint; committed results and incurred provider charges remain.
+
+Inputs: `jobId`.
+
+Changes workspace data; recorded under the acting account.
 
 ## `create_client`
 
@@ -77,7 +93,7 @@ Changes workspace data; recorded under the acting account.
 
 ## `get_approval_policy`
 
-Read the matter's currently enforced agent-cell approval policy.
+Read the matter's currently enforced cell, workflow, document and clean-export approval policies.
 
 Inputs: `matterId`.
 
@@ -99,6 +115,14 @@ Inputs: `documentId`.
 
 Reads existing data.
 
+## `get_job`
+
+Read the current authorized durable job state, progress, safe failure code and usage uncertainty. A successful job is not a human approval.
+
+Inputs: `jobId`.
+
+Reads existing data.
+
 ## `get_patent`
 
 Get a single Australian patent (IP Australia) by its Australian application number.
@@ -109,7 +133,7 @@ Reads existing data. Uses an external research service.
 
 ## `get_proposal`
 
-Inspect exact proposed cell content, source binding, policy, and decision history.
+Inspect exact proposed cell/workflow content or export manifest, source binding, policy, and decision history.
 
 Inputs: `proposalId`.
 
@@ -126,6 +150,14 @@ Reads existing data.
 ## `get_review_completion`
 
 Get version-bound finding decisions, approved clause snapshots and server-derived export readiness for a contract review.
+
+Inputs: `reviewId`.
+
+Reads existing data.
+
+## `get_review_report`
+
+Capture an authorized review report with exact source/playbook/policy revisions, finding decisions and commit provenance. Its manifest describes this report and does not certify a later DOCX download or legal quality.
 
 Inputs: `reviewId`.
 
@@ -163,9 +195,25 @@ Inputs: none.
 
 Reads existing data.
 
+## `list_document_jobs`
+
+Read recent extraction jobs for an authorized document, including retained partial results.
+
+Inputs: `documentId`.
+
+Reads existing data.
+
 ## `list_matter_documents`
 
 List the documents filed under a matter (newest first), with title, type, and extraction status. Use this to find a matter's documents — `search` only matches titles.
+
+Inputs: `matterId`.
+
+Reads existing data.
+
+## `list_matter_jobs`
+
+Read authorized recent matter work, retained failures and bounded spend totals. Inspect truncation before treating the result as a complete history.
 
 Inputs: `matterId`.
 
@@ -181,9 +229,17 @@ Reads existing data.
 
 ## `list_proposals`
 
-Read authorized cell proposals in one matter. Pending inference results are not approved content.
+Read authorized cell, workflow and exact clean-export proposals in one matter. Pending results are separate from accepted content and approval grants.
 
 Inputs: `matterId`, `status?`, `afterId?`, `limit?`.
+
+Reads existing data.
+
+## `list_review_jobs`
+
+Read persisted review work after reconnecting. Completed cells and failed units remain separate.
+
+Inputs: `reviewId`.
 
 Reads existing data.
 
@@ -227,6 +283,14 @@ Inputs: `reviewId`, `requestId`, `documentId`, `columnIndex`, `revisionId`, `exp
 
 Changes workspace data; recorded under the acting account.
 
+## `read_job_events`
+
+Replay durable authorized matter job events after reconnecting. Pass the returned cursor to continue; job success remains distinct from human approval.
+
+Inputs: `matterId`, `cursor?`.
+
+Reads existing data.
+
 ## `read_review_cells`
 
 Read specific cells of a tabular review, filtered by column indices and/or document ids. Returns each cell's extracted value, flag, reasoning, and grounding citations with column + document names. Prefer this over get_review when answering a focused question (e.g. why a cell is flagged, what one column found) instead of dumping the whole grid.
@@ -242,6 +306,22 @@ Read a workflow template or playbook and its per-field blame.
 Inputs: `workflowId`.
 
 Reads existing data.
+
+## `request_clean_review_export`
+
+Request an exact clean DOCX export of one completed NDA review. Its current manifest pins source and audit cutoffs; when policy requires approval, an eligible person must approve this request before download. This operation makes no model call.
+
+Inputs: `requestId`, `reviewId`, `documentId`.
+
+Changes workspace data; recorded under the acting account.
+
+## `retry_job`
+
+Retry an eligible failed job against its original source and within its lifetime attempt limit. A retry can incur another provider charge; inspect the current job and uncertainty first.
+
+Inputs: `jobId`, `requestId`, `acknowledgeUnknown?`.
+
+Changes workspace data; recorded under the acting account.
 
 ## `run_playbook`
 
@@ -317,7 +397,7 @@ Reads existing data. Uses an external research service.
 
 ## `withdraw_proposal`
 
-Withdraw your own authorized cell proposal, retaining an audited reason and unchanged accepted content.
+Withdraw your own authorized proposal, retaining an audited reason and unchanged accepted content.
 
 Inputs: `requestId`, `proposalId`, `revision`, `contentHash`, `policyRevision`, `note`.
 

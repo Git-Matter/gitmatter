@@ -34,6 +34,7 @@ import { api, type Cell, type ReviewDetail, type ReviewStreamCell } from "@/lib/
 import { useSelectedModel } from "@/lib/hooks/state/useSelectedModel";
 import { DocumentDrawer } from "@/routes/_auth/documents/-components/DocumentDrawer";
 import { CellDetailDrawer } from "./-components/CellDetailDrawer";
+import { ContractReviewWorkspace } from "./-components/ContractReviewWorkspace";
 
 export const Route = createFileRoute("/_auth/reviews/$id")({
   component: ReviewView,
@@ -64,6 +65,12 @@ function ReviewView() {
   const { data, dataUpdatedAt } = useQuery({
     queryKey: reviewKey,
     queryFn: () => api.getReview(id),
+    refetchInterval: (query) =>
+      query.state.data?.cells.some(
+        (cell) => cell.status === "pending" || cell.status === "generating"
+      )
+        ? 2500
+        : false,
   });
   const { data: completion } = useQuery({
     queryKey: ["review-completion", id],
@@ -78,6 +85,23 @@ function ReviewView() {
     queryFn: () => api.history(id),
   });
   const [running, setRunning] = useState<Set<string>>(new Set());
+  const retryRequests = useRef(new Map<string, string>());
+  const retryFailed = useMutation({
+    mutationFn: (acknowledgeUnknown: boolean) => {
+      const key = `${model}:${acknowledgeUnknown}`;
+      const requestId = retryRequests.current.get(key) ?? crypto.randomUUID();
+      retryRequests.current.set(key, requestId);
+      return api.queueFailedReviewRules(id, requestId, model || undefined, acknowledgeUnknown);
+    },
+    onSuccess: (_result, acknowledgeUnknown) => {
+      retryRequests.current.delete(`${model}:${acknowledgeUnknown}`);
+      void qc.invalidateQueries({ queryKey: reviewKey });
+      void qc.invalidateQueries({ queryKey: ["review-history", id] });
+      toast.success("Failed rules queued. Completed findings are preserved.");
+    },
+    onError: (error) =>
+      toast.error(error instanceof Error ? error.message : "Retry could not be queued"),
+  });
   const [runningAll, setRunningAll] = useState(false);
   const runAllAbort = useRef<AbortController | null>(null);
   useEffect(() => () => runAllAbort.current?.abort(), []);
@@ -323,6 +347,11 @@ function ReviewView() {
                     }
                   />
                   <DropdownMenuContent align="end">
+                    {completion && (
+                      <DropdownMenuItem render={<a href={api.reviewReportUrl(id)} />}>
+                        Review report and manifest
+                      </DropdownMenuItem>
+                    )}
                     <DropdownMenuItem render={<a href={api.reviewExportUrl(id, "csv")} />}>
                       CSV
                     </DropdownMenuItem>
@@ -331,7 +360,11 @@ function ReviewView() {
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
-                <Button size="sm" onClick={runAll} disabled={runningAll}>
+                <Button
+                  size="sm"
+                  onClick={runAll}
+                  disabled={runningAll || completion?.canEscalate === false}
+                >
                   {runningAll ? "Running…" : "Run"}
                 </Button>
               </div>
@@ -357,13 +390,24 @@ function ReviewView() {
           </p>
         )}
         {completion && <ContractReviewCompletion completion={completion} />}
-        <DataTable
-          table={table}
-          estimateSize={72}
-          measureRows
-          cellClassName="align-top"
-          className="max-h-[70vh] flex-none rounded-md"
-        />
+        {completion?.documents.some((doc) => doc.findings.length > 0) ? (
+          <ContractReviewWorkspace
+            completion={completion}
+            cells={data.cells}
+            initialFindingId={searchParams.finding}
+            onOpenDraft={(docId) => setPreview({ docId })}
+            onRetry={(acknowledgeUnknown) => retryFailed.mutate(acknowledgeUnknown)}
+            retrying={retryFailed.isPending}
+          />
+        ) : (
+          <DataTable
+            table={table}
+            estimateSize={72}
+            measureRows
+            cellClassName="align-top"
+            className="max-h-[70vh] flex-none rounded-md"
+          />
+        )}
       </div>
 
       {historyCollapsed ? (

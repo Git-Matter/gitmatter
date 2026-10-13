@@ -131,6 +131,8 @@ describe("durable review and spend boundaries", () => {
       .from(approvalProposals)
       .where(eq(approvalProposals.artifactId, f.id));
     expect(proposal!.status).toBe("pending");
+    expect(proposal!.kind).toBe("cell");
+    if (!("content" in proposal!.payload)) throw new Error("Expected cell proposal");
     expect(proposal!.payload.content.summary).toBe("Proposed red");
     const completion = await getReviewCompletion(actor, f.id);
     expect(completion!.documents[0]!.pendingApprovals).toBe(1);
@@ -186,7 +188,7 @@ describe("durable review and spend boundaries", () => {
     ).toBeNull();
     expect(
       estimateReviewRun(DEFAULT_MODEL, [{ system: "source", user: "rule" }]).costLimitScope
-    ).toBe("durable_review");
+    ).toBe("application_llm");
     expect(
       classifyReviewFailure({ status: 429, headers: { get: () => "120" } }, true, false)
     ).toMatchObject({

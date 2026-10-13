@@ -6,3 +6,4 @@ export * from "./extract.js";
 export * from "./extractionEvents.js";
 export * from "./extractionQueue.js";
 export * from "./reviewExport.js";
+export * from "./reviewReport.js";

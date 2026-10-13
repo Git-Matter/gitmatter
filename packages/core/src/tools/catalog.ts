@@ -7,6 +7,7 @@ import { buildContractReviewTools } from "./contract-review.js";
 import { buildClauseTools } from "./clauses.js";
 import { buildDiscoveryTools } from "./discovery.js";
 import { buildDocumentTools } from "./documents.js";
+import { buildJobTools } from "./jobs.js";
 import { buildMatterTools } from "./matters.js";
 import { buildResearchTools } from "./research.js";
 import { buildReviewTools } from "./reviews.js";
@@ -181,6 +182,7 @@ export function buildToolCatalog(
     defaultMatterLabel: string;
     sourceIds?: ProviderId[];
     executionMode?: "subscription";
+    credentialId?: string;
   }
 ): ToolSpec[] {
   const allowedSourceIds = opts.sourceIds ? new Set(opts.sourceIds) : null;
@@ -206,7 +208,7 @@ export function buildToolCatalog(
     return ensureDefaultMatter(actor.userId, opts.defaultMatterLabel, tenantId);
   };
 
-  const ctx: ToolContext = { actor, resolveMatter };
+  const ctx: ToolContext = { actor, resolveMatter, credentialId: opts.credentialId };
 
   return [
     ...buildReviewTools(ctx),
@@ -215,6 +217,7 @@ export function buildToolCatalog(
     ...buildApprovalTools(ctx),
     ...buildMatterTools(ctx),
     ...buildDocumentTools(ctx),
+    ...buildJobTools(ctx),
     ...buildDiscoveryTools(ctx),
     ...buildWorkflowTools(ctx),
     ...buildClauseTools(ctx),

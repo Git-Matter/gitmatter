@@ -2,12 +2,14 @@ import type { LlmProvider } from "@workspace/contracts";
 import { getEnv } from "../../core/config.js";
 import { DEFAULT_MODEL, PROVIDERS, providerForModel } from "./catalog.js";
 import { getLlmClient } from "./factory.js";
+import { withProviderSpend, type ProviderCallContext } from "./spend.js";
 
 /**
  * Single-shot text completion across any provider — used by tabular extraction.
  * Resolves the provider from the model, the key from explicit > env.
  */
 export async function completeText(params: {
+  spendContext?: ProviderCallContext;
   model?: string;
   systemPrompt?: string;
   user: string;
@@ -34,17 +36,21 @@ export async function completeText(params: {
   const provider = params.provider ?? providerForModel(model);
   const key = params.apiKey ?? getEnv(PROVIDERS[provider].envKey);
   if (!key) throw new Error(`No API key for ${provider} (set one in account settings)`);
-  const res = await getLlmClient(provider, key).complete({
-    model,
-    system: params.systemPrompt,
-    messages: [{ role: "user", content: params.user }],
-    maxTokens: params.maxTokens,
-    maxRetries: params.maxRetries,
-    temperature: params.temperature,
-    jsonSchema: params.jsonSchema,
-    cache: params.cache,
-    cacheKey: params.cacheKey,
-  });
+  const res = await withProviderSpend(
+    params.spendContext,
+    {
+      model,
+      system: params.systemPrompt,
+      messages: [{ role: "user", content: params.user }],
+      maxTokens: params.maxTokens,
+      maxRetries: params.maxRetries,
+      temperature: params.temperature,
+      jsonSchema: params.jsonSchema,
+      cache: params.cache,
+      cacheKey: params.cacheKey,
+    },
+    (request) => getLlmClient(provider, key).complete(request)
+  );
   if (res.usage && params.onUsage)
     params.onUsage({
       provider,

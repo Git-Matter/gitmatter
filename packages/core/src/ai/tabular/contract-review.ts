@@ -2,7 +2,7 @@ import { normalizeEvidenceText } from "./finding.js";
 import { guardFindingDisposition } from "../../core/approval.js";
 import { canReadApprovedLibrary } from "../../core/library-access.js";
 import { createHash } from "node:crypto";
-import type { FindingEditProvenance } from "@workspace/contracts";
+import type { CellProposalPayload, FindingEditProvenance } from "@workspace/contracts";
 import { and, eq, gt, inArray } from "drizzle-orm";
 import { db } from "@workspace/db/client";
 import {
@@ -381,9 +381,11 @@ export async function getReviewCompletion(
           (linked.length === 0 && cell?.finding?.outcome === "conforms"));
       return {
         columnIndex: rule.columnIndex,
+        cellId: cell?.id ?? null,
         ruleId: rule.id,
         name: rule.name,
         severity: rule.severity,
+        standardPosition: rule.standardPosition,
         finding: cell?.finding ?? null,
         disposition,
         rationale: cell?.disposition?.rationale ?? null,
@@ -407,12 +409,23 @@ export async function getReviewCompletion(
         reader
       ));
     const pendingApprovals = pendingProposals.filter(
-      (p) => p.payload.documentId === source.id
+      (p) => p.kind === "cell" && (p.payload as CellProposalPayload).documentId === source.id
     ).length;
     const unfinished = cells.filter(
       (c) => c.documentId === source.id && c.status !== "done"
     ).length;
     const unresolved = findings.filter((f) => !f.addressed).length;
+    const approvedBaselineReady =
+      !!doc &&
+      (doc.currentVersionId
+        ? doc.approvedVersionId === doc.currentVersionId
+        : doc.approvedMarkdown === doc.markdown);
+    const decisionsComplete =
+      !sourceChanged &&
+      unfinished === 0 &&
+      unresolved === 0 &&
+      pendingEdits === 0 &&
+      pendingApprovals === 0;
     const canPropose =
       (await canAccessArtifact(actor, "tabular_review", reviewId, "editor", reader)) &&
       (await canAccessArtifact(actor, "document", source.id, "editor", reader));
@@ -421,8 +434,11 @@ export async function getReviewCompletion(
       reviewedText: source.text,
       documentId: source.id,
       title: source.title,
+      editableDocx: doc?.fileType === "docx",
       reviewedVersionId: source.versionId,
       currentVersionId: doc?.currentVersionId ?? null,
+      approvedVersionId: doc?.approvedVersionId ?? null,
+      approvedBaselineReady,
       currentHeadCommitId: doc?.headCommitId ?? null,
       sourceChanged,
       unfinished,
@@ -430,12 +446,8 @@ export async function getReviewCompletion(
       pendingEdits,
       pendingApprovals,
       findings,
-      cleanReady:
-        !sourceChanged &&
-        unfinished === 0 &&
-        unresolved === 0 &&
-        pendingEdits === 0 &&
-        pendingApprovals === 0,
+      decisionsComplete,
+      cleanReady: doc?.fileType === "docx" && approvedBaselineReady && decisionsComplete,
     });
   }
   return {
@@ -444,8 +456,13 @@ export async function getReviewCompletion(
     policyRevision,
     requiredFindingRole,
     reviewId,
+    matterId: review.matterId,
+    reviewCommitId: review.headCommitId,
+    playbookId: review.inputSnapshot.playbookId,
+    capturedAt: review.inputSnapshot.createdAt,
     playbookRevision: review.inputSnapshot.playbookRevision,
     documents: results,
     cleanReady: results.every((d) => d.cleanReady),
+    decisionsComplete: results.every((d) => d.decisionsComplete),
   };
 }

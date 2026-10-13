@@ -4,6 +4,8 @@ import {
   proposeFindingRedline,
   findingDispositionSchema,
   findingRedlineSchema,
+  captureReviewReport,
+  renderReviewReportMarkdown,
 } from "@workspace/core";
 import { recordFunnel } from "@workspace/core";
 import { Hono } from "hono";
@@ -316,6 +318,30 @@ tabularRoute.get("/api/tabular/reviews/:id/completion", async (c) => {
   return c.json(
     await getReviewCompletion({ type: "user", userId: c.get("user").id }, c.req.param("id"))
   );
+});
+tabularRoute.get("/api/tabular/reviews/:id/report", async (c) => {
+  try {
+    const report = await captureReviewReport(
+      { type: "user", userId: c.get("user").id },
+      c.req.param("id")
+    );
+    if (c.req.query("format") === "json") return c.json(report);
+    const name = report.title.replace(/[^\w.-]+/g, "_") || "review";
+    return new Response(renderReviewReportMarkdown(report), {
+      headers: {
+        "Content-Type": "text/markdown; charset=utf-8",
+        "Content-Disposition": `attachment; filename="${name}-review-report.md"`,
+        "Cache-Control": "private, no-store",
+        "X-Gitmatter-Review-Commit": report.manifest.reviewCommitId ?? "none",
+      },
+    });
+  } catch (error) {
+    if (error instanceof Error && error.message === "access_denied")
+      return c.json({ error: "Not found" }, 404);
+    if (error instanceof Error && error.message === "input_not_ready")
+      return c.json({ error: "Review inputs are not captured yet" }, 409);
+    throw error;
+  }
 });
 tabularRoute.post(
   "/api/tabular/reviews/:id/disposition",

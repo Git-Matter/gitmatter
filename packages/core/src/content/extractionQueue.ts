@@ -22,6 +22,7 @@ import {
 import { recordCommitInTransaction } from "../core/commit.js";
 import { getObject } from "../core/storage.js";
 import { getEnvNumber } from "../core/config.js";
+import { reconcileStagedObjects } from "../core/staged-objects.js";
 import { logEvent } from "../core/log.js";
 import { recordFunnel } from "../core/funnel.js";
 import { emitDocStatus } from "./extractionEvents.js";
@@ -41,10 +42,15 @@ export function startExtractionWorker(): WorkerControl {
   if (runtime[WORKER]) return runtime[WORKER];
   let stopped = false;
   let running = false;
+  let lastReconciliation = 0;
   const run = async () => {
     if (stopped || running) return;
     running = true;
     try {
+      if (Date.now() - lastReconciliation > 60_000) {
+        lastReconciliation = Date.now();
+        await reconcileStagedObjects();
+      }
       for (let n = 0; n < 8 && !stopped; n++) {
         if (!(await runExtractionOnce())) {
           const { runReviewJobOnce } = await import("../ai/tabular/jobs.js");
@@ -189,6 +195,9 @@ export async function runExtractionOnce(documentId?: string): Promise<boolean> {
             .update(documents)
             .set({
               markdown,
+              ...(current.approvedVersionId === job.inputVersionId
+                ? { approvedMarkdown: markdown }
+                : {}),
               pageCount,
               status: "ready",
               extractionError: null,
@@ -200,6 +209,19 @@ export async function runExtractionOnce(documentId?: string): Promise<boolean> {
             changes: [
               { path: "markdown", before: current.markdown, after: markdown },
               { path: "status", before: current.status, after: "ready" },
+              ...(current.approvedVersionId === job.inputVersionId &&
+              current.approvedMarkdown !== markdown
+                ? [
+                    {
+                      path: "approvedBaseline",
+                      before: {
+                        versionId: current.approvedVersionId,
+                        markdown: current.approvedMarkdown,
+                      },
+                      after: { versionId: current.approvedVersionId, markdown },
+                    },
+                  ]
+                : []),
             ],
             summary: { jobId: job.id, sourceVersionId: job.inputVersionId, initiatingActor: actor },
           };

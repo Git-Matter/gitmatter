@@ -6,7 +6,7 @@ import type { ToolContext, ToolSpec } from "./types.js";
 
 // Tabular review tools: list/read reviews and their cells, create reviews, and
 // run or hand-write a single cell (each cell write is a commit).
-export function buildReviewTools({ actor, resolveMatter }: ToolContext): ToolSpec[] {
+export function buildReviewTools({ actor, resolveMatter, credentialId }: ToolContext): ToolSpec[] {
   return [
     {
       name: "list_reviews",
@@ -138,6 +138,7 @@ export function buildReviewTools({ actor, resolveMatter }: ToolContext): ToolSpe
             documentId: documentId as string,
             columnIndex: columnIndex as number,
             model: model as string | undefined,
+            credentialId,
           });
           return { committed: result.commit?.seq, changes: result.changes };
         } catch (e) {

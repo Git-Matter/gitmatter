@@ -84,6 +84,7 @@ export function stripJsonFence(raw: string): string {
 
 /** Extract a single cell value from a document. */
 export async function queryCell(params: {
+  spendContext?: Parameters<typeof completeText>[0]["spendContext"];
   model?: string;
   filename: string;
   documentText: string;
@@ -101,6 +102,7 @@ export async function queryCell(params: {
 }): Promise<CellResult> {
   const { system, user } = buildCellPrompt(params);
   const raw = await completeText({
+    spendContext: params.spendContext,
     model: params.model ?? DEFAULT_MODEL,
     systemPrompt: system,
     user,
@@ -154,6 +156,7 @@ export async function queryCell(params: {
  * runDocument. Missing columns simply don't appear in the returned map.
  */
 export async function queryRow(params: {
+  spendContext?: Parameters<typeof completeText>[0]["spendContext"];
   model?: string;
   filename: string;
   documentText: string;
@@ -163,6 +166,7 @@ export async function queryRow(params: {
 }): Promise<Map<number, CellResult>> {
   const { system, user } = buildRowPrompt(params);
   const raw = await completeText({
+    spendContext: params.spendContext,
     model: params.model ?? DEFAULT_MODEL,
     systemPrompt: system,
     user,

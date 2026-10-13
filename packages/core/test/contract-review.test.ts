@@ -117,7 +117,9 @@ test("snapshots, quoted findings and decisions remain attributable after source 
     status: "left_unchanged",
     rationale: "Client accepts this position",
   });
-  expect((await getReviewCompletion(actor, run.reviewId))?.cleanReady).toBe(true);
+  const resolvedTextReview = (await getReviewCompletion(actor, run.reviewId))!;
+  expect(resolvedTextReview.decisionsComplete).toBe(true);
+  expect(resolvedTextReview.cleanReady).toBe(false); // text findings do not imply a clean DOCX
   await recordCommit({
     artifactType: "document",
     artifactId: docId,

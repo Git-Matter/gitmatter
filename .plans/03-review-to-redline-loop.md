@@ -4,21 +4,27 @@ Deliver the first complete legal outcome: open a matter, run the firm's approved
 third-party NDA, read cited findings, propose a tracked change using an approved clause or fallback,
 and export a redline with its audit trail.
 
-**Status: In progress** (source/local slices reviewed 2026-10-12; release gates open).
+**Status: In progress** (source coverage reviewed 2026-10-13; final integrated checks and release
+gates open).
 
 The subscription-agent handoff already supplies a matter “review with your own AI” entry point,
 cited cells, and proposed tracked edits. The connected Review contract action and finding-to-redline
-flow now have initial source/local slices below. Apply the [shared contracts](workflow-contracts.md) throughout.
+flow now have connected source implementation below. Apply the [shared contracts](workflow-contracts.md)
+throughout.
 
-## Implementation progress (2026-10-12)
+## Implementation progress (2026-10-13)
 
-- **Implemented source/local slices:** immutable playbook/document/clause snapshots; explicit finding
+- **Implemented source:** immutable playbook/document/clause snapshots; explicit finding
   outcomes and quotation checks; audited human dispositions; version-bound/idempotent approved-clause
   redlines including anchored insertion; completion/readiness; guarded clean export snapshots; matter
-  setup and finding actions. Scoped approved Library reads require a verified matter context.
-- **Remaining source:** complete responsive document/findings composition, failed-rule-specific retry,
-  review-report/export manifest UX, and remaining provenance presentation. Current-document links must
-  explicitly distinguish the reviewed source; recorded text/version remain available for comparison.
+  setup and finding actions. Responsive source/findings composition, quotation highlighting,
+  approved-language preview, failed-rule retry, review-report/manifest downloads and expandable
+  provenance are connected. Reviewed source and current draft are distinguished. Scoped approved
+  Library reads require a verified matter context. Synchronous provider output is bound to its
+  prepared source, rules and base cell revision before audited publication.
+- **Supported boundary:** exact clean export covers one completed DOCX and makes no model call.
+  Broader export scheduling/ceilings remain in plans 04–05. Final integrated checks and any findings
+  from authenticated acceptance must be resolved before calling this source path ready.
 - **Proof still open:** authenticated browser/staging, actual Word round-trip, representative provider
   quality, and pilot acceptance. Source/local integration does not close this plan.
 

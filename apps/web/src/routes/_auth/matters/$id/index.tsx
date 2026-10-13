@@ -1,4 +1,5 @@
 import { MatterWorkSearch } from "../-components/MatterWorkSearch";
+import { MatterOverview } from "../-components/MatterOverview";
 import { ContractReviewSetup } from "../-components/ContractReviewSetup";
 import { AgentActivity } from "../-components/AgentActivity";
 import { createFileRoute, Link, useNavigate, useParams } from "@tanstack/react-router";
@@ -44,9 +45,14 @@ import { useMatters } from "@/lib/context/matters-context";
 import { formatShortDate } from "@/lib/format/format";
 import { AgentHandoff } from "@/routes/_auth/matters/-components/AgentHandoff";
 
-export const Route = createFileRoute("/_auth/matters/$id/")({ component: MatterWorkspace });
+export const Route = createFileRoute("/_auth/matters/$id/")({
+  component: MatterWorkspace,
+  validateSearch: (input: Record<string, unknown>): { tab?: "activity" } => ({
+    tab: input.tab === "activity" ? "activity" : undefined,
+  }),
+});
 
-type Tab = "documents" | "chats" | "reviews" | "usage" | "activity" | "search";
+type Tab = "overview" | "documents" | "chats" | "reviews" | "usage" | "activity" | "search";
 
 function MatterWorkspace() {
   const { id } = useParams({ from: "/_auth/matters/$id/" });
@@ -54,7 +60,8 @@ function MatterWorkspace() {
   const navigate = useNavigate();
   const { data: session } = useSession();
   const { refresh: refreshMatters, setCurrent } = useMatters();
-  const [tab, setTab] = useState<Tab>("documents");
+  const searchParams = Route.useSearch();
+  const [tab, setTab] = useState<Tab>(searchParams.tab ?? "overview");
   const [reviewSetupOpen, setReviewSetupOpen] = useState(false);
   const [peopleOpen, setPeopleOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
@@ -94,6 +101,7 @@ function MatterWorkspace() {
 
   const myRole = members.find((m) => m.userId === session?.user.id)?.role;
   const isOwner = myRole === "owner";
+  const canEdit = myRole === "owner" || myRole === "editor";
 
   return (
     <PageShell
@@ -172,7 +180,7 @@ function MatterWorkspace() {
       }
     >
       <div className="flex flex-wrap items-center gap-2" aria-label="Matter tasks">
-        {myRole !== "viewer" && (
+        {canEdit && (
           <Button size="sm" onClick={() => setReviewSetupOpen((v) => !v)}>
             Review contract
           </Button>
@@ -180,7 +188,7 @@ function MatterWorkspace() {
         <Button size="sm" variant="ghost" onClick={openMatterChat}>
           Ask documents
         </Button>
-        {myRole !== "viewer" && (
+        {canEdit && (
           <Button size="sm" variant="ghost" onClick={() => openInMatter("/reviews")}>
             Bulk extraction
           </Button>
@@ -188,25 +196,42 @@ function MatterWorkspace() {
         <Button size="sm" variant="ghost" onClick={() => setTab("reviews")}>
           Export work
         </Button>
+        {canEdit && (
+          <Button size="sm" variant="ghost" onClick={openMatterChat}>
+            Draft document
+          </Button>
+        )}
       </div>
       {reviewSetupOpen && (
         <ContractReviewSetup matterId={id} onClose={() => setReviewSetupOpen(false)} />
       )}
       <AgentHandoff matter={matter} />
-      <ToolbarTabs
-        tabs={[
-          { id: "documents" as const, label: "Documents" },
-          { id: "chats" as const, label: "Assistant Chats" },
-          { id: "reviews" as const, label: "Tabular Reviews" },
-          { id: "usage" as const, label: "Usage" },
-          { id: "activity" as const, label: "Agent activity" },
-          { id: "search" as const, label: "Find prior work" },
-        ]}
-        active={tab}
-        onChange={setTab}
-      />
+      <div className="shrink-0 overflow-x-auto">
+        <ToolbarTabs
+          tabs={[
+            { id: "overview" as const, label: "Overview" },
+            { id: "documents" as const, label: "Documents" },
+            { id: "chats" as const, label: "Assistant Chats" },
+            { id: "reviews" as const, label: "Tabular Reviews" },
+            { id: "usage" as const, label: "Usage" },
+            { id: "activity" as const, label: "Agent activity" },
+            { id: "search" as const, label: "Find prior work" },
+          ]}
+          active={tab}
+          onChange={setTab}
+        />
+      </div>
 
-      {tab === "documents" && <DocumentsTab matterId={id} canEdit={myRole !== "viewer"} />}
+      {tab === "overview" && (
+        <MatterOverview
+          matterId={id}
+          canEdit={canEdit}
+          onOpenApprovals={() => setTab("activity")}
+          onOpenUsage={() => setTab("usage")}
+          onOpenDocuments={() => setTab("documents")}
+        />
+      )}
+      {tab === "documents" && <DocumentsTab matterId={id} canEdit={canEdit} />}
       {tab === "chats" && <ChatsTab matterId={id} />}
       {tab === "reviews" && <ReviewsTab matterId={id} />}
       {tab === "usage" && <UsageTab matterId={id} />}

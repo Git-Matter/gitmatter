@@ -199,6 +199,7 @@ export async function generateColumnPrompt(params: {
   );
 
   const raw = await completeText({
+    spendContext: { actor: { type: "user", userId: params.userId }, sourceKind: "generation" },
     model,
     systemPrompt:
       'You write high-quality column prompts for legal tabular review workflows. Return only valid JSON with a single field: {"prompt": string}. The prompt must focus only on what to extract, never on formatting.',

@@ -1,7 +1,13 @@
-import { downloadDocumentBytes, prepareReviewExport } from "@workspace/core";
+import {
+  ApprovalError,
+  downloadDocumentBytes,
+  prepareReviewExport,
+  requestCleanReviewExport,
+} from "@workspace/core";
 import { type Context, Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import { zValidator } from "@hono/zod-validator";
+import { z } from "zod";
 import {
   activeStoragePath,
   addArtifactShareByEmail,
@@ -257,12 +263,18 @@ documentsRoute.get("/api/documents/:id/download", async (c) => {
       const snapshot = await prepareReviewExport(
         { type: "user", userId: c.get("user").id },
         reviewId,
-        id
+        id,
+        { proposalId: c.req.query("approvalId") }
       );
       doc = snapshot.doc;
       pinnedStoragePath = snapshot.storagePath;
       reviewCommitId = snapshot.reviewCommitId;
     } catch (error) {
+      if (error instanceof ApprovalError)
+        return c.json(
+          { error: error.message, code: error.code },
+          error.code === "access_denied" ? 404 : 409
+        );
       return error instanceof Error && error.message === "input_not_ready"
         ? c.json({ error: "Resolve review findings and pending changes before clean export" }, 409)
         : c.json({ error: "Not found" }, 404);
@@ -274,7 +286,8 @@ documentsRoute.get("/api/documents/:id/download", async (c) => {
     doc,
     storagePath,
     { type: "user", userId: c.get("user").id },
-    !!c.req.query("inline")
+    !!c.req.query("inline"),
+    output === "clean"
   );
   void recordAudit({
     eventType: "document.download",
@@ -305,6 +318,34 @@ documentsRoute.get("/api/documents/:id/download", async (c) => {
     },
   });
 });
+
+documentsRoute.post(
+  "/api/documents/:id/clean-export-requests",
+  zValidator("json", z.object({ requestId: z.uuid(), reviewId: z.uuid() }).strict()),
+  async (c) => {
+    try {
+      return c.json(
+        await requestCleanReviewExport(
+          { type: "user", userId: c.get("user").id },
+          { ...c.req.valid("json"), documentId: c.req.param("id") }
+        )
+      );
+    } catch (error) {
+      if (error instanceof ApprovalError)
+        return c.json(
+          { error: error.message, code: error.code },
+          error.code === "access_denied" ? 404 : 409
+        );
+      return c.json(
+        {
+          error:
+            "Resolve current review findings and document changes before requesting clean export.",
+        },
+        409
+      );
+    }
+  }
+);
 
 // Version history for a document (newest first); viewer access is enough.
 documentsRoute.get("/api/documents/:id/versions", async (c) => {
@@ -404,7 +445,7 @@ documentsRoute.post("/api/documents/:id/retry", async (c) => {
 documentsRoute.get("/api/documents/:id", async (c) => {
   const id = c.req.param("id");
   if (!(await canReadDocument(c.get("user").id, id))) return c.json({ error: "Not found" }, 404);
-  const result = await getDocumentDetail(id);
+  const result = await getDocumentDetail(id, { type: "user", userId: c.get("user").id });
   if (!result) return c.json({ error: "Not found" }, 404);
   return c.json(result);
 });
@@ -441,7 +482,7 @@ documentsRoute.post(
     } catch (e) {
       return c.json({ error: e instanceof Error ? e.message : "failed" }, 400);
     }
-    return c.json(await getDocumentDetail(id));
+    return c.json(await getDocumentDetail(id, { type: "user", userId: c.get("user").id }));
   }
 );
 
@@ -455,11 +496,16 @@ documentsRoute.post(
     if (!(await canAccessArtifact(user.id, "document", id, "editor")))
       return c.json({ error: "Not found" }, 404);
     try {
-      await resolveAllEdits({ type: "user", userId: user.id }, id, c.req.valid("json").decision);
+      await resolveAllEdits(
+        { type: "user", userId: user.id },
+        id,
+        c.req.valid("json").decision,
+        c.req.valid("json")
+      );
     } catch (e) {
       return c.json({ error: e instanceof Error ? e.message : "failed" }, 400);
     }
-    return c.json(await getDocumentDetail(id));
+    return c.json(await getDocumentDetail(id, { type: "user", userId: c.get("user").id }));
   }
 );
 
@@ -474,7 +520,13 @@ documentsRoute.post(
       return c.json({ error: "Not found" }, 404);
     const { changeIds, decision } = c.req.valid("json");
     try {
-      await resolveEdits({ type: "user", userId: user.id }, id, changeIds, decision);
+      await resolveEdits(
+        { type: "user", userId: user.id },
+        id,
+        changeIds,
+        decision,
+        c.req.valid("json")
+      );
     } catch (e) {
       return c.json({ error: e instanceof Error ? e.message : "failed" }, 400);
     }
@@ -487,7 +539,7 @@ documentsRoute.post(
         change_count: changeIds.length,
       },
     });
-    return c.json(await getDocumentDetail(id));
+    return c.json(await getDocumentDetail(id, { type: "user", userId: c.get("user").id }));
   }
 );
 
@@ -504,12 +556,13 @@ documentsRoute.post(
         { type: "user", userId: user.id },
         id,
         c.req.param("changeId"),
-        c.req.valid("json").decision
+        c.req.valid("json").decision,
+        c.req.valid("json")
       );
     } catch (e) {
       return c.json({ error: e instanceof Error ? e.message : "failed" }, 400);
     }
-    return c.json(await getDocumentDetail(id));
+    return c.json(await getDocumentDetail(id, { type: "user", userId: c.get("user").id }));
   }
 );
 

@@ -1,7 +1,15 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, test } from "vite-plus/test";
 import { db } from "@workspace/db/client";
-import { documents, jobs, jobReceipts, jobUnits, tenants, user } from "@workspace/db/schema";
+import {
+  documents,
+  jobs,
+  jobReceipts,
+  jobUnits,
+  jobNotifications,
+  tenants,
+  user,
+} from "@workspace/db/schema";
 import { eq, sql } from "drizzle-orm";
 import {
   acceptExtractionJob,
@@ -116,6 +124,9 @@ describe("durable work boundaries (real Postgres)", () => {
       1
     );
     expect(await db.select().from(jobUnits).where(eq(jobUnits.jobId, job.id))).toHaveLength(1);
+    expect(
+      await db.select().from(jobNotifications).where(eq(jobNotifications.jobId, job.id))
+    ).toHaveLength(1);
     expect((await getJob(actor, job.id))?.state).toBe("succeeded");
   });
   test("failed publication rolls back artifact and receipt together", async () => {
@@ -133,6 +144,9 @@ describe("durable work boundaries (real Postgres)", () => {
     );
     const [current] = await db.select().from(documents).where(eq(documents.id, doc.id));
     expect(current!.markdown).toBeNull();
+    expect(
+      await db.select().from(jobNotifications).where(eq(jobNotifications.jobId, job.id))
+    ).toHaveLength(0);
     await completeJob(worker!, apply(doc.id));
   });
   test("running cancellation prevents apply; queued cancellation prevents claim", async () => {
