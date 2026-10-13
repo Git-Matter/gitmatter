@@ -105,6 +105,17 @@ Pilot expansion order:
 Do not expand because an engine can technically support a document type. Expand only after a firm
 supplies a playbook, expected outputs, and reviewer capacity.
 
+## Pilot purchasing evidence
+
+Confirm actual NDA frequency and the buying decision maker. Observe an unaided first review, real
+Word exchange, returned revision and repeat use on actual matters. Record explicit willingness to
+pay and the existing tool causing repeated re-entry or version confusion. A small cohort diagnoses
+workflow failures; it does not establish broad product-market fit or causal ROI.
+
+The [product research](research/2026-10-14-product-priorities.md) and
+[accepted implementation scope](review-setup-and-word-intake.md) define the immediate additions;
+named handoff, client briefs and integrations retain their separate plan gates.
+
 ## Measures
 
 Primary:

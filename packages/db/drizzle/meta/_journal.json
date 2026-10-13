@@ -127,6 +127,13 @@
       "when": 1791893303946,
       "tag": "0017_great_snowbird",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1791927314545,
+      "tag": "0018_warm_mauler",
+      "breakpoints": true
     }
   ]
 }

@@ -16,6 +16,23 @@ stale source, completed decisions and a viewer. Check Document/Findings switchin
 quotation highlighting, approved replacement previews, escalation/unchanged decisions,
 failed-only retry acknowledgement, report actions and export approval state.
 
+The guided-first-review view renders the production guide and review setup. Start with
+"First review — ready to prepare", choose Application model or Connected agent, optionally choose
+a model, then prepare the synthetic source and standard with explicit known or unknown instructions.
+Preparation saves only fixture memory, refreshes guide progress and opens pending findings; it never
+runs a provider. The saved-review URL mounts the actual production review controller, including
+connected-agent Run guards, model hints and estimates. Synthetic API counters show metadata and
+execution requests; execution endpoints are blocked and actual provider calls remain zero.
+Other guide scenarios cover missing configuration, approved standards and source
+extraction. No upload API is implemented, so uploads fail closed inside this fixture.
+
+Review scenarios also cover historical V1 instructions and explicit unknown V2 context. The Word
+inspection view and actual document/review components show safe, incoming, unsupported non-body
+and unavailable inspection states. Word counts, byte hashes, permissions and progress are fictional
+responses; the downloaded bytes remain the same fixed source in every scenario.
+
+Check fixture types with `vp exec tsc --project test/acceptance/mvp-ui-fixture/tsconfig.json`.
+
 The approval queue includes two compatible cell proposals for an atomic batch, a workflow
 change and an exact export request. Review limits render the production admin form. Document
 decisions mount the production document view in the isolated router; its session API returns null.

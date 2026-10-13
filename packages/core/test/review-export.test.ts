@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { afterAll, beforeAll, describe, expect, test } from "vite-plus/test";
+import { afterAll, beforeAll, describe, expect, test, vi } from "vite-plus/test";
 import { db, sql } from "@workspace/db/client";
 import {
   documents,
@@ -8,6 +8,7 @@ import {
   tabularReviews,
   tenants,
   user,
+  approvalProposals,
 } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 import { createClient, createMatter } from "../src/platform/matters.js";
@@ -20,15 +21,32 @@ import {
   decideProposal,
 } from "../src/core/approval.js";
 import { writeCell } from "../src/ai/tabular/runner.js";
+import { getReviewCompletion, setFindingDisposition } from "../src/ai/tabular/contract-review.js";
+import { generateDocx } from "../src/content/docx/generate.js";
+import { inspectDocx } from "../src/content/docx/inspection.js";
+import { applyTrackedEdits, extractDocxBodyText } from "../src/content/docx/trackedChanges.js";
+import * as storage from "../src/core/storage.js";
 
 const userId = `export-review-${randomUUID()}`;
 const human = { type: "user" as const, userId };
 let tenantId: string, matterId: string, documentId: string, reviewId: string;
 const versionId = randomUUID();
+const fixtureObjects = new Map<string, Buffer>();
+let sourceBytes: Buffer;
 
 beforeAll(async () => {
   const [tenant] = await db.insert(tenants).values({ name: "Synthetic clean export" }).returning();
   tenantId = tenant!.id;
+  sourceBytes = Buffer.from(await generateDocx({ title: "Synthetic source", blocks: [] }));
+  expect(await extractDocxBodyText(sourceBytes)).toBe("Synthetic source");
+  fixtureObjects.set("synthetic-immutable-reference.docx", sourceBytes);
+  // Exercise real DOCX inspection while keeping storage I/O isolated. All other
+  // storage exports retain their production implementation.
+  vi.spyOn(storage, "getObject").mockImplementation(async (requestedTenant, path) => {
+    const bytes = fixtureObjects.get(path);
+    if (requestedTenant !== tenantId || !bytes) throw new Error("Unexpected fixture storage read");
+    return Buffer.from(bytes);
+  });
   await db.insert(user).values({
     id: userId,
     name: "Synthetic reviewer",
@@ -61,6 +79,8 @@ beforeAll(async () => {
     fileType: "docx",
     storagePath: "synthetic-immutable-reference.docx",
     source: "upload",
+    wordInspection: await inspectDocx(sourceBytes),
+    sizeBytes: sourceBytes.length,
   });
   const playbookId = await createWorkflow(human, {
     matterId,
@@ -119,6 +139,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  vi.restoreAllMocks();
   await db.delete(tenants).where(eq(tenants.id, tenantId));
   await db.delete(user).where(eq(user.id, userId));
   await sql.end();
@@ -301,5 +322,110 @@ describe("clean export snapshot", () => {
     await expect(prepareReviewExport(human, reviewId, documentId)).rejects.toThrow(
       "input_not_ready"
     );
+  });
+  test("incoming Word revisions remain unsafe after human findings decisions and cannot create export approval", async () => {
+    const edited = await applyTrackedEdits(sourceBytes, [
+      {
+        find: "Synthetic source",
+        replace: "Synthetic revised source",
+        context_before: "",
+        context_after: "",
+      },
+    ]);
+    const capturedText = await extractDocxBodyText(edited.bytes);
+    expect(capturedText).toBe("Synthetic revised source");
+    const unsafeVersionId = randomUUID();
+    const storagePath = `synthetic-incoming-${unsafeVersionId}.docx`;
+    fixtureObjects.set(storagePath, Buffer.from(edited.bytes));
+    const [doc] = await db
+      .insert(documents)
+      .values({
+        userId,
+        tenantId,
+        matterId,
+        title: "Incoming counterparty draft",
+        fileType: "docx",
+        status: "ready",
+        markdown: capturedText,
+        currentVersionId: unsafeVersionId,
+        approvedVersionId: unsafeVersionId,
+        approvedMarkdown: capturedText,
+      })
+      .returning();
+    await db.insert(documentVersions).values({
+      id: unsafeVersionId,
+      documentId: doc!.id,
+      versionNumber: 1,
+      fileType: "docx",
+      storagePath,
+      source: "upload",
+      wordInspection: await inspectDocx(edited.bytes),
+      sizeBytes: edited.bytes.length,
+    });
+    const [original] = await db
+      .select()
+      .from(tabularReviews)
+      .where(eq(tabularReviews.id, reviewId));
+    if (!original?.inputSnapshot) throw new Error("Missing captured fixture inputs");
+    const [review] = await db
+      .insert(tabularReviews)
+      .values({
+        userId,
+        tenantId,
+        matterId,
+        createdBy: userId,
+        title: "Review with unresolved incoming Word changes",
+        columnsConfig: original.columnsConfig,
+        documentIds: [doc!.id],
+        inputSnapshot: {
+          ...original.inputSnapshot,
+          documents: [
+            {
+              id: doc!.id,
+              title: doc!.title,
+              versionId: unsafeVersionId,
+              headCommitId: null,
+              text: capturedText,
+            },
+          ],
+        },
+      })
+      .returning();
+    await writeCell(human, {
+      reviewId: review!.id,
+      documentId: doc!.id,
+      columnIndex: 0,
+      summary: "Needs human judgment",
+      flag: "red",
+      reasoning: "Synthetic counterparty source",
+      citations: [{ quote: capturedText }],
+    });
+    const before = (await getReviewCompletion(human, review!.id))!;
+    await setFindingDisposition(human, review!.id, {
+      documentId: doc!.id,
+      columnIndex: 0,
+      revisionId: before.documents[0]!.findings[0]!.finding!.revisionId,
+      status: "left_unchanged",
+      rationale:
+        "Synthetic human accepts the legal wording; Word revision markers remain unresolved.",
+    });
+    const after = (await getReviewCompletion(human, review!.id))!;
+    expect(after.decisionsComplete).toBe(true);
+    expect(after.cleanReady).toBe(false);
+    expect(after.documents[0]).toMatchObject({
+      canPropose: false,
+      wordInspection: { incomingRevisions: 1, safeClean: false },
+    });
+    const requestId = randomUUID();
+    await expect(
+      requestCleanReviewExport(human, { requestId, reviewId: review!.id, documentId: doc!.id })
+    ).rejects.toThrow("input_not_ready");
+    expect(
+      await db.select().from(approvalProposals).where(eq(approvalProposals.id, requestId))
+    ).toEqual([]);
+    await expect(prepareReviewExport(human, review!.id, doc!.id)).rejects.toThrow(
+      "input_not_ready"
+    );
+    expect(fixtureObjects.get(storagePath)?.equals(edited.bytes)).toBe(true);
   });
 });

@@ -32,6 +32,15 @@ Plan status lives in each plan's own status banner and in [`roadmap/README.md`](
 [`mvp-delivery.md`](mvp-delivery.md) records the coordinated NDA MVP acceptance contract,
 engineering ownership and promotion gates.
 
+## Accepted product research
+
+[Product priorities](research/2026-10-14-product-priorities.md) compare buyer evidence and current
+source gaps. [Review setup and Word intake](review-setup-and-word-intake.md) is the coordinated
+implementation of review instructions, guided first review and incoming Word inspection accepted
+on 2026-10-14. [Source and local proof](evidence/2026-10-14-review-setup-and-word-intake.md) is recorded
+separately from authenticated staging, Word and pilot proof. Named handoff and partner/client briefs
+are planned follow-ups in the existing plans.
+
 ## Delivery order
 
 `02` → `03` → `04` → `05` → `06` → `07`, matching the `(M0)`–`(M5)` labels in the plan titles.

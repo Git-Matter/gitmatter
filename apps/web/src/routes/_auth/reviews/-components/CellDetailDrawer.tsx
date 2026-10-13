@@ -27,6 +27,7 @@ export function CellDetailDrawer({
   docTitle,
   cell,
   busy,
+  canRun = true,
   onRun,
   onClose,
   onOpenSource,
@@ -39,6 +40,7 @@ export function CellDetailDrawer({
   docTitle: string;
   cell?: Cell;
   busy: boolean;
+  canRun?: boolean;
   onRun: () => void;
   onClose: () => void;
   onOpenSource: (page?: number) => void;
@@ -69,7 +71,7 @@ export function CellDetailDrawer({
               <h2 className="truncate text-base font-semibold">{columnName}</h2>
             </div>
             <div className="flex shrink-0 items-center gap-1">
-              <Button size="xs" variant="outline" disabled={busy} onClick={onRun}>
+              <Button size="xs" variant="outline" disabled={busy || !canRun} onClick={onRun}>
                 {busy ? "…" : "Re-run"}
               </Button>
               <Button size="icon-sm" variant="ghost" onClick={onClose} aria-label="Close">

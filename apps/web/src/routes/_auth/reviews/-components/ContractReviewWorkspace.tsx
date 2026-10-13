@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { ActorBadge } from "@/components/ActorBadge";
 import { api, type Cell, type ReviewCompletion } from "@/lib/data/api";
 import { ContractReviewActions } from "./ContractReviewActions";
+import { WordInspectionNotice } from "@/routes/_auth/documents/-components/WordInspectionNotice";
 
 /** Keep legal text and the selected rule together, including on small screens. */
 export function ContractReviewWorkspace({
@@ -14,6 +15,7 @@ export function ContractReviewWorkspace({
   onOpenDraft,
   onRetry,
   retrying,
+  canRetry = true,
 }: {
   completion: ReviewCompletion;
   cells: Cell[];
@@ -21,6 +23,7 @@ export function ContractReviewWorkspace({
   onOpenDraft: (documentId: string) => void;
   onRetry: (acknowledgeUnknown: boolean) => void;
   retrying: boolean;
+  canRetry?: boolean;
 }) {
   const initial = cells.find((cell) => cell.id === initialFindingId);
   const [documentId, setDocumentId] = useState(initial?.documentId);
@@ -67,6 +70,46 @@ export function ContractReviewWorkspace({
   }
   return (
     <section className="space-y-4" aria-label="Contract review workspace">
+      <details className="rounded-md border border-border p-3 text-sm">
+        <summary className="cursor-pointer font-medium">Captured review instructions</summary>
+        {completion.reviewInstructions ? (
+          <dl className="mt-3 grid gap-2 sm:grid-cols-[auto_1fr]">
+            <dt>Party we represent</dt>
+            <dd className="break-words whitespace-pre-wrap">
+              {completion.reviewInstructions.representedParty ?? "Unknown or not instructed"}
+            </dd>
+            <dt>Disclosure role</dt>
+            <dd>{completion.reviewInstructions.disclosureRole}</dd>
+            <dt>NDA structure</dt>
+            <dd>{completion.reviewInstructions.ndaStructure}</dd>
+            <dt>Business purpose</dt>
+            <dd className="break-words whitespace-pre-wrap">
+              {completion.reviewInstructions.businessPurpose ?? "Unknown or not instructed"}
+            </dd>
+            <dt>Governing law context</dt>
+            <dd className="break-words whitespace-pre-wrap">
+              {completion.reviewInstructions.governingLaw ?? "Unknown or not instructed"}
+            </dd>
+            {completion.reviewInstructions.additionalInstructions && (
+              <>
+                <dt>Additional instructions</dt>
+                <dd className="break-words whitespace-pre-wrap">
+                  {completion.reviewInstructions.additionalInstructions}
+                </dd>
+              </>
+            )}
+          </dl>
+        ) : (
+          <p className="mt-3 text-muted-foreground">
+            No instructions were captured for this review. Party, role, structure, business purpose
+            and governing law remain unknown.
+          </p>
+        )}
+        <p className="mt-3 text-muted-foreground">
+          These inputs are fixed for this review. Prepare a new review to change instructions;
+          approved positions and permissions still apply.
+        </p>
+      </details>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <label className="flex min-w-0 items-center gap-2 text-sm">
           <span className="shrink-0 font-medium">Document</span>
@@ -91,7 +134,11 @@ export function ContractReviewWorkspace({
             size="sm"
             variant="outline"
             disabled={
-              retrying || jobs.isPending || !!jobs.error || (unknownOutcome && !acknowledgeUnknown)
+              !canRetry ||
+              retrying ||
+              jobs.isPending ||
+              !!jobs.error ||
+              (unknownOutcome && !acknowledgeUnknown)
             }
             onClick={() => onRetry(acknowledgeUnknown)}
           >
@@ -99,6 +146,17 @@ export function ContractReviewWorkspace({
           </Button>
         )}
       </div>
+      {document.fileType === "docx" && (
+        <div className="flex flex-col gap-2">
+          {document.reviewedVersionId !== document.currentVersionId && (
+            <p className="text-sm text-muted-foreground">
+              This inspection describes the current draft. Findings and quotations remain bound to
+              the version captured for this review.
+            </p>
+          )}
+          <WordInspectionNotice inspection={document.wordInspection} />
+        </div>
+      )}
       {unknownOutcome && (
         <label className="flex max-w-prose items-start gap-2 text-sm">
           <input

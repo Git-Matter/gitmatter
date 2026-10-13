@@ -18,9 +18,14 @@ import {
   matters,
 } from "@workspace/db/schema";
 import { z } from "zod";
-import { canAccessArtifact, hasMatterAccess, type AccessReader } from "../../core/access.js";
+import {
+  canAccessArtifact,
+  canReadDocument,
+  hasMatterAccess,
+  type AccessReader,
+} from "../../core/access.js";
 import { type Actor, recordCommit } from "../../core/commit.js";
-import { proposeEditDetail } from "../../content/documents.js";
+import { proposeEditDetail, getDocumentWordInspection } from "../../content/documents.js";
 
 export const findingDispositionSchema = z.object({
   documentId: z.uuid(),
@@ -342,6 +347,16 @@ export async function getReviewCompletion(
   const results = [];
   for (const source of review.inputSnapshot.documents) {
     const doc = docs.find((d) => d.id === source.id);
+    if (!(await canReadDocument(actor, source.id, reader))) throw new Error("access_denied");
+    const wordInspection =
+      doc?.fileType === "docx"
+        ? await getDocumentWordInspection(
+            doc,
+            doc.currentVersionId,
+            edits.filter((edit) => edit.documentId === doc.id && edit.status === "pending"),
+            reader
+          )
+        : null;
     const findings = review.inputSnapshot.rules.map((rule) => {
       const cell = cells.find(
         (c) => c.documentId === source.id && c.columnIndex === rule.columnIndex
@@ -427,14 +442,17 @@ export async function getReviewCompletion(
       pendingEdits === 0 &&
       pendingApprovals === 0;
     const canPropose =
+      wordInspection?.safeToEdit === true &&
       (await canAccessArtifact(actor, "tabular_review", reviewId, "editor", reader)) &&
       (await canAccessArtifact(actor, "document", source.id, "editor", reader));
     results.push({
       canPropose,
+      wordInspection,
       reviewedText: source.text,
       documentId: source.id,
       title: source.title,
-      editableDocx: doc?.fileType === "docx",
+      fileType: doc?.fileType ?? null,
+      editableDocx: doc?.fileType === "docx" && wordInspection?.safeToEdit === true,
       reviewedVersionId: source.versionId,
       currentVersionId: doc?.currentVersionId ?? null,
       approvedVersionId: doc?.approvedVersionId ?? null,
@@ -447,7 +465,11 @@ export async function getReviewCompletion(
       pendingApprovals,
       findings,
       decisionsComplete,
-      cleanReady: doc?.fileType === "docx" && approvedBaselineReady && decisionsComplete,
+      cleanReady:
+        doc?.fileType === "docx" &&
+        wordInspection?.safeClean === true &&
+        approvedBaselineReady &&
+        decisionsComplete,
     });
   }
   return {
@@ -461,6 +483,9 @@ export async function getReviewCompletion(
     playbookId: review.inputSnapshot.playbookId,
     capturedAt: review.inputSnapshot.createdAt,
     playbookRevision: review.inputSnapshot.playbookRevision,
+    inputSnapshotRevision: review.inputSnapshot.revision,
+    reviewInstructions:
+      review.inputSnapshot.revision === 2 ? review.inputSnapshot.reviewInstructions : null,
     documents: results,
     cleanReady: results.every((d) => d.cleanReady),
     decisionsComplete: results.every((d) => d.decisionsComplete),

@@ -21,6 +21,7 @@ import { chatRoute } from "./routes/chat.js";
 import { approvalRoute } from "./routes/approval.js";
 import { jobsRoute } from "./routes/jobs.js";
 import { searchRoute } from "./routes/search.js";
+import { firstReviewRoute } from "./routes/first-review.js";
 import { clausesRoute } from "./routes/clauses.js";
 import { documentsRoute } from "./routes/documents.js";
 import { keysRoute } from "./routes/keys.js";
@@ -318,6 +319,7 @@ app.route("/", clausesRoute);
 app.route("/", approvalRoute);
 app.route("/", jobsRoute);
 app.route("/", searchRoute);
+app.route("/", firstReviewRoute);
 
 // Exposed MCP server for Claude Desktop / CLI / Cowork. Authenticated by a
 // gitmatter access token; a fresh stateless server/transport per request.

@@ -1,5 +1,9 @@
 import { sql } from "drizzle-orm";
-import type { DocumentApprovalContext, FindingEditProvenance } from "@workspace/contracts";
+import type {
+  DocumentApprovalContext,
+  FindingEditProvenance,
+  WordInspection,
+} from "@workspace/contracts";
 import {
   type AnyPgColumn,
   boolean,
@@ -165,6 +169,9 @@ export const documentVersions = pgTable(
       .notNull(),
     sizeBytes: integer("size_bytes"),
     fileType: text("file_type").notNull(),
+    // Immutable technical evidence captured from this version's exact bytes.
+    // Null means legacy/uninspected, never safe by default.
+    wordInspection: jsonb("word_inspection").$type<WordInspection>(),
     deletedAt: timestamp("deleted_at"),
     deletedBy: text("deleted_by").references(() => user.id, { onDelete: "set null" }),
     lastCommitId: uuid("last_commit_id"),

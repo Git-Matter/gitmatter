@@ -26,7 +26,7 @@ export const Route = createFileRoute("/_auth")({
       throw redirect({ to: "/onboarding" });
     }
     if (tenant?.storageRegion && location.pathname === "/onboarding") {
-      throw redirect({ to: "/assistant" });
+      throw redirect({ to: "/first-review" });
     }
     // Narrow session to non-null for every route nested under this guard.
     return { session };

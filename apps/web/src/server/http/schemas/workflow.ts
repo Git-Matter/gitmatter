@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { reviewInstructionsSchema } from "@workspace/contracts";
 import { tabularColumnSchema } from "./tabular.js";
 
 const workflowStepSchema = z.object({
@@ -41,6 +42,7 @@ export const patchWorkflowSchema = z.object({
 
 export const runPlaybookSchema = z.object({
   requestId: z.uuid().optional(),
+  reviewInstructions: reviewInstructionsSchema.optional(),
   matterId: z.string().uuid(),
   documentIds: z.array(z.string().uuid()).min(1),
 });

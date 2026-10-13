@@ -26,6 +26,14 @@ reservations. External subscription-agent provider spend is outside this ledger.
   authorized end-to-end test, staging/production operation. No email or integration was sent/exercised
   merely by implementing these controls.
 
+## Research additions accepted 2026-10-14
+
+Reviewer/approval notification delivery remains planned with the named-handoff model. Start with
+in-app progress; external identifier-only digests require current recipient authorisation and
+explicit firm preferences. Select one external integration from repeated pilot friction. Guided
+setup now exposes existing processing/spend controls rather than introducing another policy system.
+See [the coordinated scope](review-setup-and-word-intake.md).
+
 ## Purpose
 
 Give firm administrators enough control to permit sustained use.

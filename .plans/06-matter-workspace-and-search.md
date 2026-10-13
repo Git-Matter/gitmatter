@@ -25,6 +25,13 @@ and GIN indexes. The NDA matter overview now connects work needing attention and
 - **Proof still open:** authenticated browser, staging permission matrix, and uncoached first-user
   usability. Negative result/count tests do not establish constant-time behavior.
 
+## Research additions accepted 2026-10-14
+
+A personal work list with named reviewer, due date and overdue/pending work is planned alongside
+plan 05 handoff. The current guided first-review entry is being implemented with actor-scoped
+server progress. Preserve accessible-result pagination and clearly label bounded/incomplete lists.
+See [the coordinated scope](review-setup-and-word-intake.md).
+
 ## Purpose
 
 Reduce navigation cost and make prior work reusable.

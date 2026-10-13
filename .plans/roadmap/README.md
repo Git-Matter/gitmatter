@@ -30,6 +30,16 @@ Numbers are delivery order, not progress rank — a low number is not further al
 | [`07`](../07-operational-controls.md)            | Cost estimates, hard caps, admin reporting, notifications, integrations | In progress              |
 | [`08`](../08-pilot-program-and-release-proof.md) | Shared framing, measures, release-proof tiers                           | Reference                |
 
+## Review setup and Word intake increment
+
+On 2026-10-14, review instructions, guided first review and bounded incoming Word inspection were
+implemented and locally checked. They extend plans 02 and 03 under
+[the coordinated scope](../review-setup-and-word-intake.md), with
+[dated implementation evidence](../evidence/2026-10-14-review-setup-and-word-intake.md).
+Named reviewer handoff, a personal work
+list, client brief and pilot-selected integration are tracked as later additions to plans 03/05–07.
+Source checks and real Word/pilot/release gates remain separate.
+
 ## In progress
 
 ### 02 Establish product truth

@@ -2,6 +2,8 @@ import * as mammoth from "mammoth";
 import JSZip from "jszip";
 import { XMLParser } from "fast-xml-parser";
 import { extractText, getDocumentProxy } from "unpdf";
+import { inspectDocx } from "./docx/inspection.js";
+import { extractDocxBodyText } from "./docx/trackedChanges.js";
 
 // mammoth ships markdown conversion at runtime but omits it from its type defs.
 const convertToMarkdown = (
@@ -75,7 +77,15 @@ export async function extractMarkdown(
   bytes: Buffer,
   fileType: SupportedFileType
 ): Promise<ExtractResult> {
-  if (fileType === "docx" || fileType === "doc") {
+  if (fileType === "docx") {
+    const inspection = await inspectDocx(bytes);
+    if (inspection.status !== "complete" || inspection.reasons.includes("unsupported_namespace"))
+      throw new Error("Word source could not be safely inspected for text extraction.");
+    // This is the matcher-compatible accepted body view, not a resolved Word
+    // file or a complete visual rendering. Ins is included; del is omitted.
+    return { markdown: await extractDocxBodyText(bytes), pageCount: await docxPageCount(bytes) };
+  }
+  if (fileType === "doc") {
     const { value } = await convertToMarkdown({ buffer: bytes });
     return { markdown: value, pageCount: await docxPageCount(bytes) };
   }

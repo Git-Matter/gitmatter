@@ -10,6 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { CommitHistory } from "@/components/CommitHistory";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DocxView } from "./-components/DocxView";
+import { WordInspectionNotice } from "./-components/WordInspectionNotice";
 import { PageHeader } from "@/components/PageHeader";
 import { api, type DocumentDetail, type DocEdit } from "@/lib/data/api";
 import { useSession } from "@/lib/auth/auth-client";
@@ -124,6 +125,7 @@ function DocumentView() {
           }
         />
 
+        {isDocx && <WordInspectionNotice inspection={data.wordInspection} />}
         <Card>
           <CardHeader>
             <CardTitle className="text-base">
@@ -131,7 +133,15 @@ function DocumentView() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {isDocx ? (
+            {isDocx && data.wordInspection?.inspection.status !== "complete" ? (
+              <p className="text-sm text-muted-foreground">
+                Preview is unavailable because this Word source could not be fully inspected.{" "}
+                <a className="underline" href={api.documentDownloadUrl(id)}>
+                  Download the source file
+                </a>{" "}
+                and inspect it in Word.
+              </p>
+            ) : isDocx ? (
               <DocxView
                 url={api.documentDownloadUrl(id)}
                 versionToken={document.currentVersionId}

@@ -199,3 +199,13 @@ relevant DB schema/migrations, and matter/review/document UI. Reuse phase 3 of
 Depends on [02's fixture/browser script](02-establish-product-truth.md).
 [04](04-durable-background-work.md) adds durability; [05](05-approval-and-agent-queue.md) enforces
 escalation and proposal policy.
+
+## Research additions accepted 2026-10-14
+
+Captured review instructions and bounded incoming Word inspection are in implementation. Freeze
+party, disclosure role, NDA structure, purpose and governing-law context across UI/MCP/provider
+paths. Bind Word inspection to immutable bytes, expose coverage, and gate proposal/decision/export
+readiness consistently. See [the coordinated scope and checks](review-setup-and-word-intake.md).
+
+A partner/client decision brief is planned as a human-previewed presentation of the existing report.
+Full returned-revision reconciliation and a native Word add-in require pilot evidence.

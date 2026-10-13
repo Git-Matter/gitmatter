@@ -1,4 +1,10 @@
-import type { DocumentApprovalContext, DocumentResolutionInput } from "@workspace/contracts";
+import type {
+  DocumentApprovalContext,
+  DocumentResolutionInput,
+  ReviewInstructions,
+  FirstReviewStatus,
+  DocumentWordInspection,
+} from "@workspace/contracts";
 import type { RunEstimate } from "@workspace/core";
 import type {
   JobControlPolicy,
@@ -79,6 +85,7 @@ export type Column = {
 export type ReviewDetail = {
   review: {
     id: string;
+    matterId: string;
     title: string;
     columnsConfig: Column[];
     documentIds: string[];
@@ -904,12 +911,21 @@ export const api = {
     req<WorkflowDetail>(`/api/workflows/${id}`, { method: "PATCH", body: JSON.stringify(patch) }),
   runPlaybook: (
     id: string,
-    body: { matterId: string; documentIds: string[]; requestId?: string }
+    body: {
+      matterId: string;
+      documentIds: string[];
+      requestId?: string;
+      reviewInstructions?: ReviewInstructions;
+    }
   ) =>
     req<{ reviewId: string; ruleCount: number }>(`/api/workflows/${id}/run-playbook`, {
       method: "POST",
       body: JSON.stringify(body),
     }),
+  getFirstReviewStatus: (matterId?: string) =>
+    req<FirstReviewStatus>(
+      `/api/first-review${matterId ? `?matterId=${encodeURIComponent(matterId)}` : ""}`
+    ),
   deleteWorkflow: (id: string) => req<null>(`/api/workflows/${id}`, { method: "DELETE" }),
   workflowHistory: (id: string) => req<Blame[]>(`/api/workflows/${id}/history`),
   // Hidden built-ins (per user)
@@ -1227,6 +1243,7 @@ export type DocEdit = {
 };
 
 export type DocumentDetail = {
+  wordInspection: DocumentWordInspection | null;
   document: {
     id: string;
     title: string;

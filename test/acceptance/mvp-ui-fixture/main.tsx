@@ -24,10 +24,20 @@ import { ContractReviewCompletion } from "@/routes/_auth/reviews/-components/Con
 import { MatterOverview } from "@/routes/_auth/matters/-components/MatterOverview";
 import { AgentActivity } from "@/routes/_auth/matters/-components/AgentActivity";
 import { JobControls } from "@/routes/_auth/settings/-components/JobControls";
+import { FirstReviewGuide } from "@/components/FirstReviewGuide";
+import { WordInspectionNotice } from "@/routes/_auth/documents/-components/WordInspectionNotice";
 import { Toaster } from "@/components/ui/sonner";
 import { Route as ProductionDocumentRoute } from "@/routes/_auth/documents/$id";
+import { Route as ProductionReviewRoute } from "@/routes/_auth/reviews/$id";
 import { api, type Cell, type ReviewCompletion } from "@/lib/data/api";
-import type { ApprovalProposal, JobSnapshot } from "@workspace/contracts";
+import {
+  reviewInstructionsSchema,
+  type ApprovalProposal,
+  type JobSnapshot,
+  type DocumentWordInspection,
+  type FirstReviewStatus,
+  type ReviewInstructions,
+} from "@workspace/contracts";
 import manifest from "../../../packages/core/test/fixtures/nda/manifest.json";
 import docxUrl from "../../../packages/core/test/fixtures/nda/source.docx?url";
 import "@/styles/globals.css";
@@ -39,9 +49,27 @@ const ids = {
   source: "10000000-0000-4000-8000-000000000004",
   proposal: "10000000-0000-4000-8000-000000000005",
   job: "10000000-0000-4000-8000-000000000006",
+  playbook: "10000000-0000-4000-8000-000000000007",
 };
-const fixedAt = "2026-10-13T02:00:00.000Z";
-type Scenario = "partial" | "failed" | "invalid" | "stale" | "complete" | "viewer";
+const originalReviewId = ids.review;
+const fixedAt = "2026-10-14T02:00:00.000Z";
+type Scenario =
+  | "partial"
+  | "failed"
+  | "invalid"
+  | "stale"
+  | "complete"
+  | "viewer"
+  | "legacy"
+  | "unknown_context"
+  | "word_incoming"
+  | "word_limited"
+  | "word_unknown"
+  | "document_pending"
+  | "guide_start"
+  | "guide_no_provider"
+  | "guide_no_standard"
+  | "guide_no_source";
 let scenario: Scenario = "partial";
 const findingDecisions = new Map<
   number,
@@ -53,7 +81,172 @@ let eventRead = false;
 let exportStatus: "pending" | "applied" | "rejected" | "withdrawn" = "pending";
 let exportRequestId: string | undefined;
 const decided = new Map<string, "applied" | "rejected">();
-let documentDecision: "pending" | "accepted" | "rejected" = "pending";
+let documentDecision: "pending" | "accepted" | "rejected" = "accepted";
+let preparedReview = false;
+let savedInstructions: ReviewInstructions | undefined;
+let preparationRequests = 0;
+const preparedReceipts = new Map<string, { fingerprint: string; reviewId: string }>();
+const requestCounters = { catalogs: 0, estimates: 0, executionAttempts: 0 };
+function countRequest(kind: keyof typeof requestCounters) {
+  requestCounters[kind]++;
+  window.dispatchEvent(new Event("synthetic-request-count"));
+}
+const unknownInstructions: ReviewInstructions = {
+  representedParty: null,
+  disclosureRole: "unknown",
+  ndaStructure: "unknown",
+  businessPurpose: null,
+  governingLaw: null,
+};
+const exampleInstructions: ReviewInstructions = {
+  representedParty: "Fictional Recipient Ltd",
+  disclosureRole: "receiving",
+  ndaStructure: "mutual",
+  businessPurpose: "Evaluate a fictional collaboration",
+  governingLaw: null,
+  additionalInstructions: "Identify restrictions on disclosure to advisers.",
+};
+
+function instructionsFixture(): ReviewInstructions | null {
+  if (savedInstructions) return savedInstructions;
+  if (scenario === "legacy") return null;
+  return scenario === "unknown_context" ? unknownInstructions : exampleInstructions;
+}
+
+function wordFixture(pending = 0): DocumentWordInspection {
+  const incoming = scenario === "word_incoming";
+  const limited = scenario === "word_limited";
+  const unknown = scenario === "word_unknown";
+  const blocked = incoming || limited || unknown;
+  return {
+    versionId:
+      scenario === "stale" || proposedFindings.size
+        ? "50000000-0000-4000-8000-000000000001"
+        : ids.source,
+    inspection: {
+      schemaVersion: 1,
+      sourceHash: "f".repeat(64),
+      status: unknown ? "uninspectable" : "complete",
+      textView: limited || unknown ? "limited_body" : "accepted_body",
+      stories: {
+        body: 1,
+        headers: limited ? 1 : 0,
+        footers: 0,
+        footnotes: 0,
+        endnotes: 0,
+        comments: 0,
+        other: 0,
+      },
+      revisions: {
+        insertions: incoming ? 1 : pending,
+        deletions: incoming ? 1 : pending,
+        moves: 0,
+        formatting: limited ? 1 : 0,
+        other: 0,
+      },
+      reasons: unknown
+        ? ["storage_unavailable"]
+        : limited
+          ? ["non_body_revision", "unsupported_revision"]
+          : [],
+    },
+    registeredRevisions: blocked ? 0 : pending * 2,
+    incomingRevisions: incoming ? 2 : limited ? 1 : 0,
+    safeToEdit: !blocked,
+    safeClean: !blocked && pending === 0,
+  };
+}
+
+function firstReviewFixture(matterId: string | null): FirstReviewStatus {
+  const completion = completionFixture();
+  const prepared = preparedReview || !scenario.startsWith("guide_");
+  const canEdit = scenario !== "viewer";
+  const hasMatter = matterId === ids.matter;
+  return {
+    capturedAt: fixedAt,
+    organization: {
+      name: "Fictional acceptance firm",
+      storageRegion: "au",
+      canPublishFirmStandard: canEdit,
+    },
+    matters: [{ id: ids.matter, name: "Fictional NDA matter", canEdit }],
+    mattersTruncated: false,
+    matter: hasMatter ? { id: ids.matter, name: "Fictional NDA matter", canEdit } : null,
+    application: {
+      verification: "configuration_only",
+      providers: [
+        {
+          provider: "anthropic",
+          label: "Anthropic (synthetic configuration)",
+          available: scenario !== "guide_no_provider",
+          source: scenario === "guide_no_provider" ? null : "user",
+          models: [
+            {
+              id: "claude-sonnet-5",
+              label: "Claude Sonnet 5 (fixture choice only)",
+              provider: "anthropic",
+              capabilities: { vision: true, tools: true, reasoning: true, contextWindow: 200000 },
+            },
+          ],
+        },
+      ],
+    },
+    agent: {
+      connections:
+        scenario === "guide_no_provider"
+          ? []
+          : [{ label: "Fictional MCP client", kind: "oauth", lastUsedAt: null }],
+      recentlyUsed: false,
+    },
+    playbooks:
+      hasMatter && scenario !== "guide_no_standard"
+        ? [
+            {
+              id: ids.playbook,
+              title: "Fictional firm-approved NDA positions",
+              ruleCount: manifest.rules.length,
+            },
+          ]
+        : [],
+    playbooksTruncated: false,
+    documents: hasMatter
+      ? [
+          {
+            id: ids.document,
+            title: "Synthetic mutual NDA.docx",
+            fileType: "docx",
+            status: scenario === "guide_no_source" ? "processing" : "ready",
+            ready: scenario !== "guide_no_source",
+            uploaded: true,
+          },
+        ]
+      : [],
+    documentsTruncated: false,
+    documentsSearchIncomplete: false,
+    reviewSearchIncomplete: false,
+    review:
+      hasMatter && prepared
+        ? {
+            id: ids.review,
+            title: "Synthetic NDA review",
+            instructionsCaptured: instructionsFixture() !== null,
+            totalFindings: manifest.rules.length,
+            completedFindings: preparationRequests
+              ? 0
+              : scenario === "failed"
+                ? manifest.rules.length - 1
+                : manifest.rules.length,
+            failedFindings: scenario === "failed" ? 1 : 0,
+            unresolvedFindings: completion.documents[0]!.unresolved,
+            pendingEdits: completion.documents[0]!.pendingEdits,
+            pendingApprovals: 0,
+            sourceChanged: scenario === "stale",
+            decisionsComplete: completion.decisionsComplete,
+            cleanReady: completion.cleanReady,
+          }
+        : null,
+  };
+}
 let controlsRevision = 1;
 let controlPolicy = {
   budgetWindowMinutes: 1440,
@@ -78,44 +271,52 @@ function cellFixtures(): Cell[] {
     documentId: ids.document,
     columnIndex: index,
     content:
-      scenario === "failed" && index === 2
+      preparationRequests > 0 || (scenario === "failed" && index === 2)
         ? null
         : {
             summary: finding.summary,
             flag: finding.flag as "green" | "red",
             reasoning: finding.reasoning,
           },
-    citations: finding.quote
-      ? [
-          {
-            quote:
-              scenario === "invalid" && index === 1
-                ? "A quotation not present in this source."
-                : finding.quote,
+    citations:
+      preparationRequests > 0
+        ? []
+        : finding.quote
+          ? [
+              {
+                quote:
+                  scenario === "invalid" && index === 1
+                    ? "A quotation not present in this source."
+                    : finding.quote,
+              },
+            ]
+          : [],
+    status:
+      preparationRequests > 0 ? "pending" : scenario === "failed" && index === 2 ? "error" : "done",
+    lastCommitId: preparationRequests > 0 ? null : `finding-${index}`,
+    blame:
+      preparationRequests > 0
+        ? null
+        : {
+            id: `finding-${index}`,
+            seq: index + 1,
+            op: "write_cell",
+            message: "Synthetic fixture finding",
+            actorType: "agent",
+            agentLabel: "Synthetic review worker",
+            actorId: "synthetic-human",
+            actorName: "Synthetic reviewer",
+            actorEmail: null,
+            createdAt: fixedAt,
           },
-        ]
-      : [],
-    status: scenario === "failed" && index === 2 ? "error" : "done",
-    lastCommitId: `finding-${index}`,
-    blame: {
-      id: `finding-${index}`,
-      seq: index + 1,
-      op: "write_cell",
-      message: "Synthetic fixture finding",
-      actorType: "agent",
-      agentLabel: "Synthetic review worker",
-      actorId: "synthetic-human",
-      actorName: "Synthetic reviewer",
-      actorEmail: null,
-      createdAt: fixedAt,
-    },
   }));
 }
 function completionFixture(): ReviewCompletion {
   const cells = cellFixtures();
-  const pendingEdits = [...proposedFindings.keys()].filter(
-    (index) => !resolvedFindings.has(index)
-  ).length;
+  const pendingEdits =
+    (documentDecision === "pending" ? 1 : 0) +
+    [...proposedFindings.keys()].filter((index) => !resolvedFindings.has(index)).length;
+  const wordInspection = wordFixture(pendingEdits);
   const findings = manifest.rules.map((rule, index) => ({
     columnIndex: index,
     cellId: cells[index]!.id,
@@ -124,7 +325,7 @@ function completionFixture(): ReviewCompletion {
     severity: rule.severity as "red",
     standardPosition: rule.standardPosition,
     finding:
-      scenario === "failed" && index === 2
+      preparationRequests > 0 || (scenario === "failed" && index === 2)
         ? null
         : {
             revisionId: `finding-${index}`,
@@ -171,28 +372,35 @@ function completionFixture(): ReviewCompletion {
     policyRevision: 2,
     requiredFindingRole: "owner",
     reviewId: ids.review,
+    inputSnapshotRevision: instructionsFixture() ? 2 : 1,
+    reviewInstructions: instructionsFixture(),
     matterId: ids.matter,
     reviewCommitId: "synthetic-review-commit",
-    playbookId: "synthetic-playbook",
+    playbookId: ids.playbook,
     playbookRevision: "synthetic-playbook-approved-v1",
     capturedAt: fixedAt,
     cleanReady:
       scenario !== "stale" &&
       scenario !== "failed" &&
       findings.every((finding) => finding.addressed) &&
-      pendingEdits === 0,
+      pendingEdits === 0 &&
+      wordInspection.safeClean &&
+      preparationRequests === 0,
     decisionsComplete:
       scenario !== "stale" &&
       scenario !== "failed" &&
       findings.every((finding) => finding.addressed) &&
-      pendingEdits === 0,
+      pendingEdits === 0 &&
+      preparationRequests === 0,
     documents: [
       {
-        canPropose: scenario !== "viewer",
+        canPropose: scenario !== "viewer" && wordInspection.safeToEdit && preparationRequests === 0,
+        wordInspection,
+        fileType: "docx",
         reviewedText: sourceText,
         documentId: ids.document,
         title: "Synthetic mutual NDA.docx",
-        editableDocx: true,
+        editableDocx: wordInspection.safeToEdit,
         reviewedVersionId: ids.source,
         currentVersionId:
           scenario === "stale" || proposedFindings.size > 0
@@ -205,7 +413,7 @@ function completionFixture(): ReviewCompletion {
         approvedBaselineReady: scenario !== "stale" && pendingEdits === 0,
         currentHeadCommitId: "synthetic-source-commit",
         sourceChanged: scenario === "stale",
-        unfinished: scenario === "failed" ? 1 : 0,
+        unfinished: preparationRequests > 0 ? manifest.rules.length : scenario === "failed" ? 1 : 0,
         unresolved: findings.filter((finding) => !finding.addressed).length,
         pendingEdits,
         pendingApprovals: 0,
@@ -214,12 +422,15 @@ function completionFixture(): ReviewCompletion {
           scenario !== "stale" &&
           scenario !== "failed" &&
           findings.every((finding) => finding.addressed) &&
-          pendingEdits === 0,
+          pendingEdits === 0 &&
+          wordInspection.safeClean &&
+          preparationRequests === 0,
         decisionsComplete:
           scenario !== "stale" &&
           scenario !== "failed" &&
           findings.every((finding) => finding.addressed) &&
-          pendingEdits === 0,
+          pendingEdits === 0 &&
+          preparationRequests === 0,
       },
     ],
   };
@@ -230,7 +441,9 @@ function findingDisposition(index: number) {
   if (proposedFindings.has(index) && !resolvedFindings.has(index)) return "redline_proposed";
   if (resolvedFindings.get(index) === "accepted") return "resolved";
   if (decision?.status === "left_unchanged") return "left_unchanged";
-  return scenario === "complete" ? "left_unchanged" : "needs_attention";
+  return scenario === "complete" || scenario.startsWith("word_")
+    ? "left_unchanged"
+    : "needs_attention";
 }
 function jobFixture(): JobSnapshot {
   return {
@@ -388,9 +601,12 @@ function proposalFixtures(): ApprovalProposal[] {
 }
 function documentFixture() {
   const snapshot = completionFixture().documents[0]!;
+  const inspection = snapshot.wordInspection ?? wordFixture(snapshot.pendingEdits);
   return {
+    wordInspection: inspection,
     document: {
       id: ids.document,
+      matterId: ids.matter,
       title: "Synthetic mutual NDA.docx",
       fileType: "docx",
       markdown: sourceText,
@@ -417,8 +633,9 @@ function documentFixture() {
       ownerName: "Synthetic reviewer",
       ownerEmail: null,
     },
-    edits:
-      proposedFindings.size > 0
+    edits: scenario.startsWith("word_")
+      ? []
+      : proposedFindings.size > 0
         ? [...proposedFindings].map(([columnIndex, edit]) => ({
             id: `synthetic-edit-${columnIndex}`,
             changeId: `synthetic-change-${columnIndex}`,
@@ -441,11 +658,15 @@ function documentFixture() {
           ],
     resolutionPolicy: {
       approvalContext: [{ matterId: ids.matter, policyRevision: 2, requiredRole: "owner" }],
-      mayResolve: scenario !== "viewer",
-      mayPropose: scenario !== "viewer",
+      mayResolve: scenario !== "viewer" && inspection.safeToEdit,
+      mayPropose: scenario !== "viewer" && inspection.safeToEdit,
       requiredRole: "owner",
       blockedReason:
-        scenario === "viewer" ? "A current human matter owner must decide these changes." : null,
+        scenario === "viewer"
+          ? "A current human matter owner must decide these changes."
+          : !inspection.safeToEdit
+            ? "Resolve incoming or unsupported revisions in Word, then upload a new source."
+            : null,
     },
   };
 }
@@ -469,6 +690,105 @@ window.fetch = async (input, init) => {
   if (scenario === "viewer" && method !== "GET" && !path.endsWith("/read"))
     return json({ error: "Synthetic viewer cannot mutate legal work." }, 403);
   if (path === "/api/auth/get-session") return json(null);
+  if (path === "/api/models" && method === "GET") {
+    countRequest("catalogs");
+    return json(firstReviewFixture(ids.matter).application.providers);
+  }
+  if (path === "/api/models/openrouter" && method === "GET") return json([]);
+  if (path === `/api/tabular/reviews/${ids.review}/estimate` && method === "GET") {
+    countRequest("estimates");
+    const model = url.searchParams.get("model");
+    const available = firstReviewFixture(ids.matter).application.providers.some(
+      (provider) =>
+        provider.available && provider.models.some((candidate) => candidate.id === model)
+    );
+    if (!available) return json({ error: "Fixture preferred model is unavailable." }, 409);
+    return json({
+      model,
+      cells: manifest.rules.length,
+      inputTokenUpperEstimate: 12000,
+      outputTokenLimit: 8192,
+      costUsd: 0.08,
+      budgetWindowMinutes: 1440,
+      tokenLimits: { tenant: 500000, user: 100000, matter: 100000, token: 50000, run: 30000 },
+      tenantCostLimitUsd: 20,
+      costLimitScope: "application_llm",
+    });
+  }
+  if (
+    method === "POST" &&
+    (path === `/api/tabular/reviews/${ids.review}/run` ||
+      path === `/api/tabular/reviews/${ids.review}/run-all`)
+  ) {
+    countRequest("executionAttempts");
+    return json(
+      { error: "Synthetic fixture blocks model execution. No provider call was made." },
+      501
+    );
+  }
+  if (path === "/api/first-review" && method === "GET") {
+    const matterId = url.searchParams.get("matterId");
+    if (matterId && matterId !== ids.matter) return json({ error: "Unknown fixture matter." }, 403);
+    return json(firstReviewFixture(matterId));
+  }
+  if (
+    path === "/api/documents" &&
+    url.searchParams.get("matterId") === ids.matter &&
+    method === "GET"
+  )
+    return json(
+      firstReviewFixture(ids.matter).documents.map((doc) => ({
+        ...doc,
+        matterId: ids.matter,
+        sizeBytes: 12000,
+        createdAt: fixedAt,
+        currentVersionId: ids.source,
+        approvedVersionId: ids.source,
+        ocrSuggested: false,
+        extractionError: null,
+        folderId: null,
+      }))
+    );
+  if (path === `/api/workflows/${ids.playbook}/run-playbook` && method === "POST") {
+    const context = reviewInstructionsSchema.safeParse(body.reviewInstructions);
+    if (
+      !context.success ||
+      body.matterId !== ids.matter ||
+      body.documentIds?.length !== 1 ||
+      body.documentIds[0] !== ids.document ||
+      !body.requestId
+    )
+      return json(
+        {
+          error:
+            "Fixture requires exact source, matter, request ID and bounded review instructions.",
+        },
+        400
+      );
+    const readiness = firstReviewFixture(ids.matter);
+    if (!readiness.playbooks.length || !readiness.documents[0]?.ready)
+      return json({ error: "Fixture review inputs are not ready." }, 409);
+    const fingerprint = JSON.stringify({
+      matterId: body.matterId,
+      documentIds: body.documentIds,
+      reviewInstructions: context.data,
+    });
+    const prior = preparedReceipts.get(body.requestId);
+    if (prior && prior.fingerprint !== fingerprint) return json({ error: "request_conflict" }, 409);
+    if (prior) return json({ reviewId: prior.reviewId, ruleCount: manifest.rules.length });
+    if (!prior) {
+      ids.review = crypto.randomUUID();
+      savedInstructions = context.data;
+      preparedReview = true;
+      preparationRequests++;
+      preparedReceipts.set(body.requestId, { fingerprint, reviewId: ids.review });
+      findingDecisions.clear();
+      proposedFindings.clear();
+      resolvedFindings.clear();
+      documentDecision = "accepted";
+    }
+    return json({ reviewId: ids.review, ruleCount: manifest.rules.length });
+  }
   if (scenario === "viewer" && path.startsWith("/api/admin"))
     return json({ error: "Synthetic viewer has no admin authority." }, 403);
   if (path === "/api/admin/job-controls") {
@@ -480,7 +800,7 @@ window.fetch = async (input, init) => {
       revision: controlsRevision,
       configured: controlPolicy,
       effective: controlPolicy,
-      scope: "durable_review",
+      scope: "application_llm",
       usage: {
         knownTokens: 1200,
         heldTokens: 2000,
@@ -494,7 +814,7 @@ window.fetch = async (input, init) => {
   if (path === "/api/admin/job-controls/usage")
     return json([
       {
-        day: "2026-10-13",
+        day: "2026-10-14",
         matterId: ids.matter,
         actorId: "synthetic-human",
         actorType: "agent",
@@ -533,6 +853,18 @@ window.fetch = async (input, init) => {
     return json(documentFixture());
   }
   if (path === `/api/documents/${ids.document}`) return json(documentFixture());
+  if (path === `/api/documents/${ids.document}/versions` && method === "GET")
+    return json([
+      {
+        id: completionFixture().documents[0]!.currentVersionId,
+        versionNumber: 1,
+        sizeBytes: 12000,
+        fileType: "docx",
+        source: "upload",
+        deletedAt: null,
+        createdAt: fixedAt,
+      },
+    ]);
   if (path.endsWith("/history")) return json([]);
   if (path.endsWith("/download") || path.includes("/versions/")) return nativeFetch(docxUrl);
   if (path.endsWith("/report"))
@@ -560,6 +892,8 @@ window.fetch = async (input, init) => {
     return json({ ok: true });
   }
   if (path.endsWith("/redline")) {
+    if (!completionFixture().documents[0]!.canPropose)
+      return json({ error: "Fixture Word safety or permissions block this proposal." }, 409);
     const finding = completionFixture().documents[0]!.findings.find(
       (item) => item.columnIndex === body.columnIndex
     );
@@ -570,12 +904,15 @@ window.fetch = async (input, init) => {
     return json({ changeIds: [`synthetic-change-${body.columnIndex}`] });
   }
   if (path.endsWith("/queue")) {
+    countRequest("executionAttempts");
     if (scenario === "failed" && !body.acknowledgeUnknown)
       return json({ error: "Acknowledge the uncertain provider outcome before retrying." }, 409);
     scenario = "partial";
     return json({ jobIds: [ids.job] }, 202);
   }
   if (path.endsWith("/clean-export-requests")) {
+    if (!completionFixture().cleanReady)
+      return json({ error: "Fixture clean output is not ready." }, 409);
     const replayed = exportRequestId === body.requestId;
     if (!replayed) {
       exportRequestId = body.requestId;
@@ -649,7 +986,7 @@ window.fetch = async (input, init) => {
         unpricedAttempts: 0,
       },
     });
-  if (path.endsWith("/jobs")) return json([jobFixture()]);
+  if (path.endsWith("/jobs")) return json(preparationRequests > 0 ? [] : [jobFixture()]);
   if (path.endsWith("/usage"))
     return json({
       llm: [],
@@ -658,19 +995,24 @@ window.fetch = async (input, init) => {
     });
   if (path.endsWith("/completion")) return json(completionFixture());
   if (path === "/api/tabular/reviews")
-    return json([
-      {
-        id: ids.review,
-        title: "Synthetic NDA review",
-        matterId: ids.matter,
-        documentIds: [ids.document],
-        createdAt: fixedAt,
-      },
-    ]);
+    return json(
+      scenario.startsWith("guide_") && !preparedReview
+        ? []
+        : [
+            {
+              id: ids.review,
+              title: "Synthetic NDA review",
+              matterId: ids.matter,
+              documentIds: [ids.document],
+              createdAt: fixedAt,
+            },
+          ]
+    );
   if (path === `/api/tabular/reviews/${ids.review}`)
     return json({
       review: {
         id: ids.review,
+        matterId: ids.matter,
         title: "Synthetic NDA review",
         columnsConfig: manifest.rules.map((rule, index) => ({
           index,
@@ -712,6 +1054,9 @@ document.addEventListener("click", (event) => {
 
 function ReviewFixture() {
   const qc = useQueryClient();
+  const search = useRouterState({
+    select: (state) => state.location.search as { executionRoute?: string; model?: string },
+  });
   const completion = useQuery({
     queryKey: ["review-completion", ids.review],
     queryFn: () => api.getReviewCompletion(ids.review),
@@ -729,6 +1074,13 @@ function ReviewFixture() {
   });
   return completion.data && review.data ? (
     <>
+      {preparedReview && (
+        <p role="status" className="text-sm text-muted-foreground">
+          Synthetic saved preparation: {preparationRequests} request(s). Captured route:{" "}
+          {search.executionRoute ?? "choose on review"}; preferred model:{" "}
+          {search.model ?? "choose on review"}. Findings are pending. No model was called.
+        </p>
+      )}
       <ContractReviewCompletion completion={completion.data} />
       <ContractReviewWorkspace
         completion={completion.data}
@@ -746,15 +1098,38 @@ function ReviewFixture() {
     <p>Loading synthetic review…</p>
   );
 }
+
+function GuideFixture() {
+  const matterId = useRouterState({
+    select: (state) => (state.location.search as { matterId?: string }).matterId,
+  });
+  return (
+    <FirstReviewGuide
+      matterId={matterId}
+      onChooseMatter={(id) =>
+        void router.navigate({ to: "/first-review", search: { matterId: id || undefined } })
+      }
+    />
+  );
+}
 function FixtureRoot() {
   const [surface, setSurface] = useState("review");
   const location = useRouterState({ select: (state) => state.location });
   useEffect(() => {
     if (location.pathname.startsWith("/documents/")) setSurface("document");
+    else if (location.pathname === "/first-review") setSurface("guide");
     else if ((location.search as { tab?: string }).tab === "activity") setSurface("approvals");
     else if (location.pathname.startsWith("/reviews/")) setSurface("review");
   }, [location.pathname, location.search]);
   const [selectedScenario, setSelectedScenario] = useState<Scenario>(scenario);
+  const [counts, setCounts] = useState({ ...requestCounters });
+  useEffect(() => {
+    const refresh = () => setCounts({ ...requestCounters });
+    window.addEventListener("synthetic-request-count", refresh);
+    refresh();
+    return () => window.removeEventListener("synthetic-request-count", refresh);
+  }, []);
+  const productionReviewMounted = location.pathname.startsWith("/reviews/");
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
@@ -762,6 +1137,15 @@ function FixtureRoot() {
           <p role="status" className="text-sm text-muted-foreground">
             Synthetic UI fixture — actual production components, fictional API data. No
             authenticated session, provider or release proof.
+          </p>
+          <p
+            data-testid="synthetic-request-counters"
+            role="status"
+            className="text-xs text-muted-foreground"
+          >
+            Synthetic API requests: model catalogs {counts.catalogs}, estimates {counts.estimates},
+            execution attempts {counts.executionAttempts}. Actual provider calls: 0. Execution is
+            blocked by this fixture.
           </p>
           <div className="flex flex-wrap items-center gap-3">
             <h1 className="mr-auto font-serif text-2xl">NDA review workspace</h1>
@@ -779,8 +1163,23 @@ function FixtureRoot() {
                   exportStatus = "pending";
                   exportRequestId = undefined;
                   decided.clear();
-                  documentDecision = "pending";
+                  documentDecision = scenario === "document_pending" ? "pending" : "accepted";
+                  preparedReview = false;
+                  savedInstructions = undefined;
+                  preparationRequests = 0;
+                  preparedReceipts.clear();
+                  ids.review = originalReviewId;
+                  requestCounters.catalogs = 0;
+                  requestCounters.estimates = 0;
+                  requestCounters.executionAttempts = 0;
+                  window.dispatchEvent(new Event("synthetic-request-count"));
                   void queryClient.resetQueries();
+                  if (productionReviewMounted)
+                    void router.navigate({
+                      to: "/reviews/$id",
+                      params: { id: ids.review },
+                      search: location.search,
+                    });
                 }}
               >
                 <option value="partial">Partial findings</option>
@@ -789,35 +1188,68 @@ function FixtureRoot() {
                 <option value="stale">Stale source</option>
                 <option value="complete">Completed decisions</option>
                 <option value="viewer">Read-only viewer</option>
+                <option value="legacy">Legacy review — instructions unknown</option>
+                <option value="unknown_context">Captured explicit unknown instructions</option>
+                <option value="word_incoming">Incoming Word revisions</option>
+                <option value="word_limited">Unsupported non-body Word revision</option>
+                <option value="word_unknown">Word inspection unavailable</option>
+                <option value="document_pending">Recorded pending document proposal</option>
+                <option value="guide_start">First review — ready to prepare</option>
+                <option value="guide_no_provider">First review — no AI route configured</option>
+                <option value="guide_no_standard">First review — no approved standard</option>
+                <option value="guide_no_source">First review — source still preparing</option>
               </select>
             </label>
           </div>
           <div className="flex flex-wrap gap-2">
-            {["review", "overview", "approvals", "document", "controls"].map((id) => (
-              <Button
-                key={id}
-                variant={surface === id ? "secondary" : "ghost"}
-                onClick={() => {
-                  setSurface(id);
-                  void router.navigate({
-                    to: id === "document" ? "/documents/$id" : "/",
-                    params: id === "document" ? { id: ids.document } : {},
-                  });
-                }}
-              >
-                {id === "review"
-                  ? "Contract review"
-                  : id === "overview"
-                    ? "Matter overview"
-                    : id === "approvals"
-                      ? "Approval queue"
-                      : id === "document"
-                        ? "Document decisions"
-                        : "Review limits"}
-              </Button>
-            ))}
+            {["guide", "review", "overview", "approvals", "document", "word", "controls"].map(
+              (id) => (
+                <Button
+                  key={id}
+                  variant={surface === id ? "secondary" : "ghost"}
+                  onClick={() => {
+                    setSurface(id);
+                    void router.navigate({
+                      to:
+                        id === "document"
+                          ? "/documents/$id"
+                          : id === "guide"
+                            ? "/first-review"
+                            : id === "review"
+                              ? "/reviews/$id"
+                              : "/",
+                      params:
+                        id === "document"
+                          ? { id: ids.document }
+                          : id === "review"
+                            ? { id: ids.review }
+                            : {},
+                      search: id === "guide" ? { matterId: ids.matter } : {},
+                    });
+                  }}
+                >
+                  {id === "guide"
+                    ? "Guided first review"
+                    : id === "word"
+                      ? "Word inspection"
+                      : id === "review"
+                        ? "Contract review"
+                        : id === "overview"
+                          ? "Matter overview"
+                          : id === "approvals"
+                            ? "Approval queue"
+                            : id === "document"
+                              ? "Document decisions"
+                              : "Review limits"}
+                </Button>
+              )
+            )}
           </div>
-          {surface === "review" ? (
+          {surface === "guide" ? (
+            <GuideFixture />
+          ) : surface === "word" ? (
+            <WordInspectionNotice inspection={completionFixture().documents[0]!.wordInspection} />
+          ) : surface === "review" && !productionReviewMounted ? (
             <ReviewFixture />
           ) : surface === "overview" ? (
             <MatterOverview
@@ -851,9 +1283,15 @@ ProductionDocumentRoute.update({
   getParentRoute: () => authFixtureRoute,
 } as never);
 const documentFixtureRoute: AnyRoute = ProductionDocumentRoute;
+ProductionReviewRoute.update({
+  id: "/reviews/$id",
+  path: "/reviews/$id",
+  getParentRoute: () => authFixtureRoute,
+} as never);
+const productionReviewFixtureRoute: AnyRoute = ProductionReviewRoute;
 const routes = [
   createRoute({ getParentRoute: () => rootRoute, path: "/" }),
-  createRoute({ getParentRoute: () => rootRoute, path: "/reviews/$id" }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/first-review" }),
   createRoute({
     getParentRoute: () => rootRoute,
     path: "/matters/$id",
@@ -861,10 +1299,12 @@ const routes = [
       tab: input.tab === "activity" ? "activity" : undefined,
     }),
   }),
-  authFixtureRoute.addChildren([documentFixtureRoute]),
+  authFixtureRoute.addChildren([documentFixtureRoute, productionReviewFixtureRoute]),
 ];
 const router = createRouter({
   routeTree: rootRoute.addChildren(routes),
-  history: createMemoryHistory({ initialEntries: ["/"] }),
+  history: createMemoryHistory({
+    initialEntries: [window.location.pathname + window.location.search],
+  }),
 });
 createRoot(document.getElementById("root")!).render(<RouterProvider router={router} />);

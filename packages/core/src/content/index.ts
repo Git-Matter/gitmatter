@@ -7,3 +7,4 @@ export * from "./extractionEvents.js";
 export * from "./extractionQueue.js";
 export * from "./reviewExport.js";
 export * from "./reviewReport.js";
+export * from "./docx/inspection.js";
