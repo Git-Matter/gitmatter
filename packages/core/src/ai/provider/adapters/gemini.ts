@@ -112,7 +112,16 @@ export class GeminiClient implements LlmClient {
   async complete(req: CompleteRequest): Promise<CompleteResult> {
     const ai = new GoogleGenAI({
       apiKey: this.apiKey,
-      ...(llmTimeoutMs() ? { httpOptions: { timeout: llmTimeoutMs() } } : {}),
+      ...(llmTimeoutMs() || req.maxRetries !== undefined
+        ? {
+            httpOptions: {
+              ...(llmTimeoutMs() ? { timeout: llmTimeoutMs() } : {}),
+              ...(req.maxRetries !== undefined
+                ? { retryOptions: { attempts: req.maxRetries + 1 } }
+                : {}),
+            },
+          }
+        : {}),
     });
     const res = await ai.models.generateContent(this.buildRequest(req));
     const out = this.finalize(res.candidates?.[0]?.content?.parts ?? []);
@@ -123,11 +132,27 @@ export class GeminiClient implements LlmClient {
   async stream(req: CompleteRequest, handlers: StreamHandlers): Promise<CompleteResult> {
     const ai = new GoogleGenAI({
       apiKey: this.apiKey,
-      ...(llmTimeoutMs() ? { httpOptions: { timeout: llmTimeoutMs() } } : {}),
+      ...(llmTimeoutMs() || req.maxRetries !== undefined
+        ? {
+            httpOptions: {
+              ...(llmTimeoutMs() ? { timeout: llmTimeoutMs() } : {}),
+              ...(req.maxRetries !== undefined
+                ? { retryOptions: { attempts: req.maxRetries + 1 } }
+                : {}),
+            },
+          }
+        : {}),
     });
     const gen = await ai.models.generateContentStream(this.buildRequest(req));
     const parts: Part[] = [];
-    let usageMeta: { promptTokenCount?: number; candidatesTokenCount?: number } | undefined;
+    let usageMeta:
+      | {
+          promptTokenCount?: number;
+          candidatesTokenCount?: number;
+          thoughtsTokenCount?: number;
+          totalTokenCount?: number;
+        }
+      | undefined;
     for await (const chunk of gen) {
       for (const p of chunk.candidates?.[0]?.content?.parts ?? []) {
         if (p.text) (p.thought ? handlers.onReasoning : handlers.onText)?.(p.text);
@@ -143,8 +168,24 @@ export class GeminiClient implements LlmClient {
 
 // Gemini reports cumulative counts on usageMetadata; map to our shape (null-safe).
 function geminiUsage(
-  m: { promptTokenCount?: number; candidatesTokenCount?: number } | undefined
+  m:
+    | {
+        promptTokenCount?: number;
+        candidatesTokenCount?: number;
+        thoughtsTokenCount?: number;
+        totalTokenCount?: number;
+      }
+    | undefined
 ): { inputTokens: number; outputTokens: number } | undefined {
-  if (!m) return undefined;
-  return { inputTokens: m.promptTokenCount ?? 0, outputTokens: m.candidatesTokenCount ?? 0 };
+  if (!m || m.promptTokenCount === undefined || m.candidatesTokenCount === undefined)
+    return undefined;
+  if (m.thoughtsTokenCount === undefined && m.totalTokenCount === undefined) return undefined;
+  const inputTokens = m.promptTokenCount;
+  const outputTokens = Math.max(
+    m.candidatesTokenCount + (m.thoughtsTokenCount ?? 0),
+    (m.totalTokenCount ?? inputTokens) - inputTokens
+  );
+  return [inputTokens, outputTokens].every((n) => Number.isSafeInteger(n) && n >= 0)
+    ? { inputTokens, outputTokens }
+    : undefined;
 }

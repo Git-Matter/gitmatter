@@ -26,6 +26,7 @@ const CELL_SCHEMA = {
     summary: { type: "string" },
     flag: { type: "string", enum: FLAGS },
     reasoning: { type: "string" },
+    outcome: { type: "string", enum: ["conforms", "deviates", "not_found", "inconclusive"] },
     citations: CITATIONS_SCHEMA,
   },
   required: ["summary", "flag", "reasoning"],
@@ -45,6 +46,7 @@ const ROW_SCHEMA = {
           summary: { type: "string" },
           flag: { type: "string", enum: FLAGS },
           reasoning: { type: "string" },
+          outcome: { type: "string", enum: ["conforms", "deviates", "not_found", "inconclusive"] },
           citations: CITATIONS_SCHEMA,
         },
         required: ["column_index", "summary", "flag", "reasoning"],
@@ -82,10 +84,12 @@ export function stripJsonFence(raw: string): string {
 
 /** Extract a single cell value from a document. */
 export async function queryCell(params: {
+  spendContext?: Parameters<typeof completeText>[0]["spendContext"];
   model?: string;
   filename: string;
   documentText: string;
   columnPrompt: string;
+  maxRetries?: number;
   format?: string;
   tags?: string[];
   apiKey?: string | null;
@@ -98,10 +102,12 @@ export async function queryCell(params: {
 }): Promise<CellResult> {
   const { system, user } = buildCellPrompt(params);
   const raw = await completeText({
+    spendContext: params.spendContext,
     model: params.model ?? DEFAULT_MODEL,
     systemPrompt: system,
     user,
     maxTokens: 2048,
+    maxRetries: params.maxRetries,
     apiKey: params.apiKey,
     // Deterministic, schema-constrained extraction so cell values are reproducible.
     temperature: 0,
@@ -117,6 +123,7 @@ export async function queryCell(params: {
       flag?: unknown;
       reasoning?: string;
       citations?: unknown;
+      outcome?: CellContent["outcome"];
     };
     return {
       content: normalizeCell(
@@ -124,6 +131,7 @@ export async function queryCell(params: {
           summary: String(parsed.summary ?? parsed.value ?? "").trim() || "Not addressed",
           flag: coerceFlag(parsed.flag),
           reasoning: String(parsed.reasoning ?? ""),
+          ...(parsed.outcome ? { outcome: parsed.outcome } : {}),
         },
         params.format,
         params.tags
@@ -148,6 +156,7 @@ export async function queryCell(params: {
  * runDocument. Missing columns simply don't appear in the returned map.
  */
 export async function queryRow(params: {
+  spendContext?: Parameters<typeof completeText>[0]["spendContext"];
   model?: string;
   filename: string;
   documentText: string;
@@ -157,6 +166,7 @@ export async function queryRow(params: {
 }): Promise<Map<number, CellResult>> {
   const { system, user } = buildRowPrompt(params);
   const raw = await completeText({
+    spendContext: params.spendContext,
     model: params.model ?? DEFAULT_MODEL,
     systemPrompt: system,
     user,

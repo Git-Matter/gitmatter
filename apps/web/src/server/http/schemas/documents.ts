@@ -14,11 +14,28 @@ export const proposeEditSchema = z.object({
   reason: z.string().optional(),
 });
 
-export const resolveEditSchema = z.object({ decision: z.enum(["accept", "reject"]) });
+const documentResolutionContext = {
+  expectedHeadCommitId: z.uuid().nullable().optional(),
+  approvalContext: z
+    .array(
+      z
+        .object({
+          matterId: z.uuid(),
+          policyRevision: z.number().int().nonnegative(),
+          requiredRole: z.enum(["editor", "owner"]),
+        })
+        .strict()
+    )
+    .optional(),
+};
+export const resolveEditSchema = z
+  .object({ decision: z.enum(["accept", "reject"]), ...documentResolutionContext })
+  .strict();
 
 export const resolveBatchSchema = z.object({
   changeIds: z.array(z.string()).min(1),
   decision: z.enum(["accept", "reject"]),
+  ...documentResolutionContext,
 });
 
 export const renameDocumentSchema = z.object({ title: z.string().min(1) });

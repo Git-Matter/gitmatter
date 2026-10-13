@@ -16,6 +16,7 @@ export * from "./catalog.js";
 export * from "./keys.js";
 export { getLlmClient } from "./factory.js";
 export { completeText } from "./complete.js";
+export { withProviderSpend, type ProviderCallContext } from "./spend.js";
 
 // Per-provider message converters (the client classes stay module-private; build
 // one via getLlmClient instead).

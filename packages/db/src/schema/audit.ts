@@ -31,7 +31,9 @@ export type AuditEventType =
   | "tenant.privacy_evidence_export"
   | "tenant.export"
   | "matter.audit_export"
-  | "budget.exceeded";
+  | "budget.exceeded"
+  | "job.controls_updated"
+  | "storage.orphan_deleted";
 
 export const auditEvents = pgTable(
   "audit_events",

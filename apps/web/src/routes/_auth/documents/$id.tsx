@@ -57,14 +57,21 @@ function DocumentView() {
 
   const resolveMutation = useMutation({
     mutationFn: (v: { edit: DocEdit; decision: "accept" | "reject" }) =>
-      api.resolveEdit(id, v.edit.changeId, v.decision),
+      api.resolveEdit(id, v.edit.changeId, v.decision, {
+        expectedHeadCommitId: data?.document.headCommitId,
+        approvalContext: data?.resolutionPolicy?.approvalContext ?? undefined,
+      }),
     onSuccess: onEdited,
     onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
   });
 
   // Accept/reject every pending change at once — one new version.
   const resolveAllMutation = useMutation({
-    mutationFn: (decision: "accept" | "reject") => api.resolveAllEdits(id, decision),
+    mutationFn: (decision: "accept" | "reject") =>
+      api.resolveAllEdits(id, decision, {
+        expectedHeadCommitId: data?.document.headCommitId,
+        approvalContext: data?.resolutionPolicy?.approvalContext ?? undefined,
+      }),
     onSuccess: onEdited,
     onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
   });
@@ -163,7 +170,7 @@ function DocumentView() {
             </div>
             <Button
               onClick={() => find && proposeMutation.mutate()}
-              disabled={proposeMutation.isPending || !find}
+              disabled={proposeMutation.isPending || !find || !data.resolutionPolicy?.mayPropose}
               className="self-start"
             >
               {proposeMutation.isPending ? "Proposing…" : "Propose edit"}
@@ -172,13 +179,26 @@ function DocumentView() {
         </Card>
 
         <div className="flex flex-col gap-2">
+          <p className="text-xs text-muted-foreground">
+            Latest tracked draft: {document.currentVersionId?.slice(0, 8) ?? "text"} · Accepted
+            baseline:{" "}
+            {document.approvedVersionId?.slice(0, 8) ??
+              (document.approvedMarkdown !== null ? "text" : "not bound")}
+            {pending.length ? " · Clean output is blocked while changes are pending." : ""}
+          </p>
+          {pending.length > 0 && data.resolutionPolicy && (
+            <p role="status" className="text-xs text-muted-foreground">
+              {data.resolutionPolicy.blockedReason ??
+                `A human ${data.resolutionPolicy.requiredRole ?? "editor"} decision is required. Each decision binds this draft and the current matter policy.`}
+            </p>
+          )}
           <div className="flex items-center justify-between gap-2">
             <h2 className="text-sm font-semibold">Tracked changes ({pending.length} pending)</h2>
             {pending.length > 0 && (
               <div className="flex gap-2">
                 <Button
                   size="xs"
-                  disabled={resolveAllMutation.isPending}
+                  disabled={resolveAllMutation.isPending || !data.resolutionPolicy?.mayResolve}
                   onClick={() => resolveAllMutation.mutate("accept")}
                 >
                   Accept all
@@ -186,7 +206,7 @@ function DocumentView() {
                 <Button
                   size="xs"
                   variant="outline"
-                  disabled={resolveAllMutation.isPending}
+                  disabled={resolveAllMutation.isPending || !data.resolutionPolicy?.mayResolve}
                   onClick={() => resolveAllMutation.mutate("reject")}
                 >
                   Reject all
@@ -232,6 +252,7 @@ function DocumentView() {
                   <div className="flex gap-2">
                     <Button
                       size="xs"
+                      disabled={resolveMutation.isPending || !data.resolutionPolicy?.mayResolve}
                       onClick={() => resolveMutation.mutate({ edit: e, decision: "accept" })}
                     >
                       Accept
@@ -239,6 +260,7 @@ function DocumentView() {
                     <Button
                       size="xs"
                       variant="outline"
+                      disabled={resolveMutation.isPending || !data.resolutionPolicy?.mayResolve}
                       onClick={() => resolveMutation.mutate({ edit: e, decision: "reject" })}
                     >
                       Reject

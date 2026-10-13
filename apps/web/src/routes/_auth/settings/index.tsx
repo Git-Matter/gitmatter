@@ -8,6 +8,7 @@ import { ConnectAgent } from "./-components/ConnectAgent";
 import { DataPrivacyCard } from "./-components/DataPrivacyCard";
 import { LegalResearchCard } from "./-components/LegalResearchCard";
 import { OrganizationCard } from "./-components/OrganizationCard";
+import { JobControls } from "./-components/JobControls";
 import { z } from "zod";
 
 export const Route = createFileRoute("/_auth/settings/")({
@@ -34,8 +35,9 @@ function Settings() {
         <TabsContent value="account" className="flex flex-col gap-section">
           <AccountSettings session={session} />
         </TabsContent>
-        <TabsContent value="organization">
+        <TabsContent value="organization" className="flex flex-col gap-section">
           <OrganizationCard />
+          <JobControls />
         </TabsContent>
         <TabsContent value="ai" className="flex flex-col gap-section">
           <JurisdictionCard />

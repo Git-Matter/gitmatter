@@ -15,6 +15,7 @@ import {
   listVersions,
   processDocument,
   resolveEdit,
+  setApprovalPolicy,
   updateWorkflow,
   uploadDocument,
 } from "@workspace/core";
@@ -53,7 +54,17 @@ test("subscription catalog excludes provider inference and human decisions", asy
   try {
     const { tools } = await client.listTools();
     expect(tools.map((tool) => tool.name)).toEqual(
-      expect.arrayContaining(["write_cell", "generate_docx", "write_workflow", "run_playbook"])
+      expect.arrayContaining([
+        "write_cell",
+        "generate_docx",
+        "write_workflow",
+        "run_playbook",
+        "get_job",
+        "list_document_jobs",
+        "list_review_jobs",
+        "cancel_job",
+        "retry_job",
+      ])
     );
     for (const name of ["run_cell", "draft_playbook", "resolve_document_edit"]) {
       expect(tools.some((tool) => tool.name === name)).toBe(false);
@@ -99,6 +110,7 @@ const hasStorage = !!process.env.S3_ACCESS_KEY;
       email: `${userId}@example.com`,
       emailVerified: true,
       tenantId,
+      tenantRole: "admin",
     });
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
     await server.connect(serverTransport);
@@ -253,6 +265,35 @@ const hasStorage = !!process.env.S3_ACCESS_KEY;
       "imported"
     );
 
+    const work = await call("list_document_jobs", { documentId });
+    const extractionJobs = work.structuredContent!.items as Array<{ id: string; state: string }>;
+    expect(extractionJobs).toEqual(
+      expect.arrayContaining([expect.objectContaining({ state: "succeeded" })])
+    );
+    const extraction = await call("get_job", { jobId: extractionJobs[0]!.id });
+    expect(extraction.structuredContent).toMatchObject({ state: "succeeded", completed: 1 });
+    expect(extraction.structuredContent).not.toHaveProperty("actor");
+    expect(extraction.structuredContent).not.toHaveProperty("storagePath");
+    const outside = buildToolCatalog(
+      {
+        type: "agent",
+        userId,
+        agentLabel: "outside",
+        scope: { matterIds: [randomUUID()], maxRole: "owner" },
+      },
+      { jurisdiction: "AU", defaultMatterLabel: "outside", executionMode: "subscription" }
+    );
+    expect(
+      await outside
+        .find((tool) => tool.name === "get_job")!
+        .handler({ jobId: extractionJobs[0]!.id })
+    ).toMatchObject({ error: "Not found" });
+    expect(
+      await outside
+        .find((tool) => tool.name === "cancel_job")!
+        .handler({ jobId: extractionJobs[0]!.id })
+    ).toMatchObject({ error: "Not found" });
+
     const proposed = await call("propose_document_edit", {
       documentId,
       edits: [{ find: "imported", replace: "global", reason: "Synthetic fixture redline" }],
@@ -328,4 +369,39 @@ const hasStorage = !!process.env.S3_ACCESS_KEY;
       expect.arrayContaining([expect.objectContaining({ id: playbookId, status: "approved" })])
     );
   }, 60_000);
+
+  test("a governed workflow is reported as proposed until a person applies it", async () => {
+    const createdClient = await call("create_client", { name: "Workflow proposal client" });
+    const matter = await call("create_matter", {
+      clientId: createdClient.structuredContent!.clientId,
+      name: "Workflow proposal matter",
+    });
+    const matterId = matter.structuredContent!.matterId as string;
+    await setApprovalPolicy({ type: "user", userId }, matterId, {
+      policy: { agentCells: "direct", agentWorkflows: "owner" },
+      expectedRevision: 0,
+      reason: "Require human workflow approval in this fixture",
+    });
+    const proposed = await call("write_workflow", {
+      matterId,
+      title: "Synthetic proposed workflow",
+      type: "assistant",
+      promptMd: "Synthetic fixture instruction",
+    });
+    expect(proposed.structuredContent).toMatchObject({ outcome: "proposed", status: "pending" });
+    expect(proposed.structuredContent!.proposalId).toEqual(expect.any(String));
+    const unavailable = await client.callTool({
+      name: "read_workflow",
+      arguments: { workflowId: proposed.structuredContent!.workflowId },
+    });
+    expect(unavailable.isError).toBe(true);
+    const pending = await call("get_proposal", {
+      proposalId: proposed.structuredContent!.proposalId,
+    });
+    expect(pending.structuredContent).toMatchObject({
+      kind: "workflow",
+      status: "pending",
+      requiredRole: "owner",
+    });
+  });
 });

@@ -19,6 +19,8 @@ import { type DocxBlock, generateDocx } from "./docx/generate.js";
 // and the artifact it belongs to. Commits with no field changes (e.g. version
 // bumps) still emit one line with an empty path so nothing disappears.
 export type AuditTrailEntry = {
+  commitId?: string;
+  summary?: unknown;
   at: Date;
   artifactType: ArtifactType;
   artifactId: string;
@@ -63,7 +65,12 @@ async function matterArtifacts(matterId: string) {
       .from(workflows)
       .where(eq(workflows.matterId, matterId)),
   ]);
+  const [matter] = await db
+    .select({ name: matters.name, headCommitId: matters.headCommitId })
+    .from(matters)
+    .where(eq(matters.id, matterId));
   const byType = new Map<ArtifactType, Map<string, string>>([
+    ["matter", new Map(matter?.headCommitId ? [[matterId, matter.name]] : [])],
     ["document", new Map([...docs, ...linkedDocs].map((d) => [d.id, d.title]))],
     ["tabular_review", new Map(reviews.map((r) => [r.id, r.title]))],
     ["workflow", new Map(wfs.map((w) => [w.id, w.title]))],
@@ -101,6 +108,7 @@ export async function gatherMatterAudit(matterId: string): Promise<MatterAuditTr
         agentLabel: commits.agentLabel,
         op: commits.op,
         message: commits.message,
+        summary: commits.summary,
         actorName: user.name,
         actorEmail: user.email,
         path: fieldChanges.path,
@@ -114,6 +122,8 @@ export async function gatherMatterAudit(matterId: string): Promise<MatterAuditTr
       .orderBy(asc(commits.createdAt), asc(commits.seq));
 
     entries = rows.map((r) => ({
+      commitId: r.commitId,
+      summary: r.summary,
       at: r.at,
       artifactType: r.artifactType,
       artifactId: r.artifactId,
@@ -142,8 +152,8 @@ function cellText(value: unknown): string {
   return JSON.stringify(value);
 }
 
-// Long field values (a whole document markdown) would make the export
-// unreadable; keep enough to identify the change.
+// The readable DOCX table abbreviates long values; CSV retains the full diff
+// and commit metadata for inspection and reproducible provenance.
 const VALUE_LIMIT = 500;
 function clip(value: unknown): string {
   const text = cellText(value);
@@ -163,6 +173,8 @@ const HEADER = [
   "field_path",
   "before",
   "after",
+  "commit_id",
+  "commit_metadata",
 ];
 
 export function auditTrailToCsv(trail: MatterAuditTrail): string {
@@ -179,8 +191,10 @@ export function auditTrailToCsv(trail: MatterAuditTrail): string {
       e.op,
       e.message,
       e.path,
-      clip(e.before),
-      clip(e.after),
+      cellText(e.before),
+      cellText(e.after),
+      e.commitId ?? "",
+      cellText(e.summary),
     ]);
   }
   return rowsToCsv(rows);
@@ -192,6 +206,10 @@ export async function auditTrailToDocx(trail: MatterAuditTrail): Promise<Uint8Ar
     {
       type: "paragraph",
       text: `Client: ${trail.clientName}. Artifacts: ${trail.artifactCount}. Entries: ${trail.entries.length}. Every change below is a commit in gitmatter's audit spine, attributed to the person or agent that made it.`,
+    },
+    {
+      type: "paragraph",
+      text: "Long field values are abbreviated in this report. The CSV export contains complete field values, commit identifiers and provenance metadata.",
     },
   ];
   // Group by artifact so the report reads document-by-document.
@@ -210,7 +228,7 @@ export async function auditTrailToDocx(trail: MatterAuditTrail): Promise<Uint8Ar
     blocks.push({
       type: "table",
       rows: [
-        ["When", "Actor", "Op", "Message", "Field", "After"],
+        ["When", "Actor", "Op", "Message", "Field", "After", "Commit"],
         ...group.map((e) => [
           e.at.toISOString(),
           e.actor,
@@ -218,6 +236,7 @@ export async function auditTrailToDocx(trail: MatterAuditTrail): Promise<Uint8Ar
           e.message,
           e.path ?? "",
           clip(e.after),
+          e.commitId ?? "",
         ]),
       ],
     });

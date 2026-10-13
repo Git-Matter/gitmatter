@@ -1,3 +1,4 @@
+import { safeLoginNext } from "@/lib/auth/redirect";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useForm } from "@tanstack/react-form";
 import { useState } from "react";
@@ -41,7 +42,7 @@ function Login() {
         setCaptchaKey((k) => k + 1);
         if (isEmailVerificationError(signInError)) {
           const params = new URLSearchParams({ email: value.email, sent: "1" });
-          if (next?.startsWith("/")) params.set("next", next);
+          if (next) params.set("next", safeLoginNext(next));
           window.location.href = `/verify-email?${params}`;
           return;
         }
@@ -55,7 +56,7 @@ function Login() {
       // now-authenticated session and SSRs the app shell. Bounce to a local
       // `next` (gated route or OAuth /authorize); only local paths, to avoid an
       // open redirect.
-      window.location.href = next && next.startsWith("/") ? next : "/assistant";
+      window.location.href = safeLoginNext(next);
     },
   });
 
@@ -65,7 +66,7 @@ function Login() {
     const { error: signInError } = await signIn.passkey();
     setPasskeyBusy(false);
     if (signInError) return setError(signInError.message ?? "Passkey sign in failed");
-    window.location.href = next && next.startsWith("/") ? next : "/assistant";
+    window.location.href = safeLoginNext(next);
   }
 
   return (

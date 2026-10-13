@@ -8,3 +8,12 @@ export * from "./keys.js";
 export * from "./log.js";
 export * from "./net.js";
 export * from "./storage.js";
+
+export * from "./funnel.js";
+export * from "./jobs.js";
+export * from "./approval.js";
+export * from "./job-spend.js";
+export * from "./job-controls.js";
+export * from "./staged-objects.js";
+export * from "./library-access.js";
+export * from "./search.js";

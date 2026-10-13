@@ -1,0 +1,5 @@
+CREATE INDEX "matters_search_idx" ON "matters" USING gin (to_tsvector('english', coalesce("name", '') || ' ' || coalesce("practice_area", '') || ' ' || coalesce("jurisdiction", '')));--> statement-breakpoint
+CREATE INDEX "documents_search_idx" ON "documents" USING gin (to_tsvector('english', coalesce("title", '') || ' ' || coalesce("markdown", '')));--> statement-breakpoint
+CREATE INDEX "tabular_cells_search_idx" ON "tabular_cells" USING gin (to_tsvector('english', coalesce("content"->>'summary', '') || ' ' || coalesce("content"->>'reasoning', '')));--> statement-breakpoint
+CREATE INDEX "workflows_search_idx" ON "workflows" USING gin (to_tsvector('english', coalesce("title", '') || ' ' || coalesce("rules"::text, '')));--> statement-breakpoint
+CREATE INDEX "clauses_search_idx" ON "clauses" USING gin (to_tsvector('english', coalesce("title", '') || ' ' || coalesce("body", '')));

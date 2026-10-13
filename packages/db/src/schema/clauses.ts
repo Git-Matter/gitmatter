@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import { index, integer, jsonb, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
 import { user } from "./auth.js";
 import { clients } from "./clients.js";
@@ -64,6 +65,10 @@ export const clauses = pgTable(
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
   (t) => [
+    index("clauses_search_idx").using(
+      "gin",
+      sql`to_tsvector('english', coalesce(${t.title}, '') || ' ' || coalesce(${t.body}, ''))`
+    ),
     index("clauses_tenant_category_idx").on(t.tenantId, t.category),
     index("clauses_parent_idx").on(t.parentClauseId),
     index("clauses_overrides_idx").on(t.overridesClauseId),

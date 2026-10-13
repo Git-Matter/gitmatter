@@ -16,7 +16,9 @@
     "test": "turbo run test",
     "test:ci": "vp test",
     "check": "vp check",
-    "prepare": "vp config"
+    "prepare": "vp config",
+    "fixtures:nda": "bun scripts/generate-nda-fixture.ts",
+    "fixtures:nda:check": "bun scripts/generate-nda-fixture.ts --check"
   },
   "devDependencies": {
     "dotenv": "^17.4.2",

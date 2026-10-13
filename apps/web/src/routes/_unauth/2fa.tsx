@@ -1,3 +1,4 @@
+import { safeLoginNext } from "@/lib/auth/redirect";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { ShieldCheckIcon } from "lucide-react";
@@ -41,7 +42,7 @@ function TwoFactorVerification() {
       setError(result.error.message ?? "The code was not accepted");
       return;
     }
-    window.location.href = next && next.startsWith("/") ? next : "/assistant";
+    window.location.href = safeLoginNext(next);
   }
 
   return (

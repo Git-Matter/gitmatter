@@ -28,6 +28,7 @@ export const runDocSchema = z.object({
 
 export const runAllSchema = z.object({
   model: z.string().optional(),
+  requestId: z.string().min(1).max(128).optional(),
 });
 
 export const updateColumnSchema = z.object({

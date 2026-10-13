@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { db, sql } from "@workspace/db/client";
-import { tenants, user } from "@workspace/db/schema";
+import { documents, jobs, tenants, user } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 import { canAccessArtifact } from "../src/core/access.js";
 import { ensureDefaultMatter } from "../src/platform/matters.js";
@@ -101,7 +101,7 @@ const hasS3 = !!process.env.S3_ACCESS_KEY;
     expect((after?.markdown ?? "").length).toBeGreaterThan(0);
   });
 
-  test("corrupt bytes fail extraction; retry resets the row", async () => {
+  test("corrupt bytes fail once and cannot retry the same invalid input", async () => {
     const doc = await uploadDocument(ownerId, {
       title: "Broken",
       fileType: "docx",
@@ -114,9 +114,55 @@ const hasS3 = !!process.env.S3_ACCESS_KEY;
     expect(failed?.extractionError).toBeTruthy();
     expect(failed?.attempts).toBe(1);
 
-    const reset = await retryDocument(doc.id);
-    expect(reset?.status).toBe("pending");
-    expect(reset?.attempts).toBe(0);
+    expect(failed?.extractionError).toBe("unsupported_format");
+    await expect(retryDocument(doc.id, actor)).rejects.toThrow("input_not_ready");
+    expect((await getDocument(doc.id))?.attempts).toBe(1);
+  });
+
+  test("an authorized person can durably retry a pre-migration failed source", async () => {
+    const doc = await uploadDocument(ownerId, {
+      title: "Legacy source",
+      fileType: "docx",
+      bytes: docxFixture(),
+      matterId: matterA,
+    });
+    // Simulate a row inherited from the former volatile queue, with stored bytes.
+    await db.delete(jobs).where(eq(jobs.artifactId, doc.id));
+    await db
+      .update(documents)
+      .set({ status: "failed", attempts: 2, extractionError: "Old queue interrupted" })
+      .where(eq(documents.id, doc.id));
+    await expect(retryDocument(doc.id, { type: "user", userId: outsiderId })).rejects.toThrow(
+      "access_denied"
+    );
+    expect(await retryDocument(doc.id, actor)).toMatchObject({ status: "pending", attempts: 2 });
+    const [accepted] = await db.select().from(jobs).where(eq(jobs.artifactId, doc.id));
+    expect(accepted!.actor).toEqual(actor);
+    expect(accepted!.inputVersionId).toBe(doc.currentVersionId);
+    expect(accepted!.requestId).toContain("legacy-extract:");
+    await processDocument((await getDocument(doc.id))!);
+    expect((await getDocument(doc.id))!.status).toBe("ready");
+  });
+
+  test("legacy retry refuses an active process or missing/tombstoned source", async () => {
+    const doc = await uploadDocument(ownerId, {
+      title: "Legacy active",
+      fileType: "docx",
+      bytes: docxFixture(),
+      matterId: matterA,
+    });
+    await db.delete(jobs).where(eq(jobs.artifactId, doc.id));
+    await db
+      .update(documents)
+      .set({ status: "processing", claimedAt: new Date() })
+      .where(eq(documents.id, doc.id));
+    expect(await retryDocument(doc.id, actor)).toBeNull();
+    await db
+      .update(documents)
+      .set({ status: "failed", currentVersionId: randomUUID() })
+      .where(eq(documents.id, doc.id));
+    await expect(retryDocument(doc.id, actor)).rejects.toThrow("input_not_ready");
+    expect(await db.select().from(jobs).where(eq(jobs.artifactId, doc.id))).toHaveLength(0);
   });
 
   test("a different tenant cannot access the document for download", async () => {

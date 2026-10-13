@@ -1,3 +1,10 @@
+import { sql } from "drizzle-orm";
+import type {
+  ContractReviewSnapshot,
+  FindingProvenance,
+  FindingDisposition,
+  FindingOutcome,
+} from "@workspace/contracts";
 import { index, integer, jsonb, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
 import { user } from "./auth.js";
 import { matters } from "./matters.js";
@@ -16,6 +23,7 @@ export type CellContent = {
   summary: string;
   flag: "green" | "grey" | "yellow" | "red";
   reasoning: string;
+  outcome?: FindingOutcome;
 };
 
 // One piece of grounding evidence for a cell: a verbatim quote and, when known,
@@ -41,11 +49,17 @@ export const tabularReviews = pgTable(
     columnsConfig: jsonb("columns_config").$type<TabularColumn[]>().notNull(),
     documentIds: jsonb("document_ids").$type<string[]>().notNull(),
     workflowId: uuid("workflow_id"),
+    inputSnapshot: jsonb("input_snapshot").$type<ContractReviewSnapshot>(),
+    requestKey: text("request_key"),
+    requestFingerprint: text("request_fingerprint"),
     headCommitId: uuid("head_commit_id"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
-  (t) => [index("tabular_reviews_tenant_idx").on(t.tenantId)]
+  (t) => [
+    index("tabular_reviews_tenant_idx").on(t.tenantId),
+    unique("tabular_review_request_unique").on(t.requestKey),
+  ]
 );
 
 export const tabularCells = pgTable(
@@ -58,6 +72,8 @@ export const tabularCells = pgTable(
     documentId: uuid("document_id").notNull(),
     columnIndex: integer("column_index").notNull(),
     content: jsonb("content").$type<CellContent | null>(),
+    finding: jsonb("finding").$type<FindingProvenance>(),
+    disposition: jsonb("disposition").$type<FindingDisposition>(),
     citations: jsonb("citations").$type<CellCitation[] | null>(),
     status: text("status")
       .$type<"pending" | "generating" | "done" | "error">()
@@ -68,7 +84,13 @@ export const tabularCells = pgTable(
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
-  (t) => [unique("tabular_cell_unique").on(t.reviewId, t.documentId, t.columnIndex)]
+  (t) => [
+    unique("tabular_cell_unique").on(t.reviewId, t.documentId, t.columnIndex),
+    index("tabular_cells_search_idx").using(
+      "gin",
+      sql`to_tsvector('english', coalesce(${t.content}->>'summary', '') || ' ' || coalesce(${t.content}->>'reasoning', ''))`
+    ),
+  ]
 );
 
 export type TabularReview = typeof tabularReviews.$inferSelect;

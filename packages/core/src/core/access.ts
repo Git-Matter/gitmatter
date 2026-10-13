@@ -1,5 +1,5 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
-import { db } from "@workspace/db/client";
+import { db, type DB, type Tx } from "@workspace/db/client";
 import {
   type ArtifactType,
   type MatterRole,
@@ -29,6 +29,7 @@ const ROLE_RANK: Record<MatterRole, number> = { viewer: 0, editor: 1, owner: 2 }
  * `maxRole` — even on artifacts the underlying user owns outright.
  */
 export type AccessSubject = string | Actor;
+export type AccessReader = DB | Tx;
 
 function subjectUserId(subject: AccessSubject): string {
   return typeof subject === "string" ? subject : subject.userId;
@@ -51,14 +52,24 @@ function clampRank(scope: TokenScope | null, rank: number): number {
 }
 
 /** The tenant a user belongs to, or null if unassigned. */
-export async function getUserTenant(userId: string): Promise<string | null> {
-  const [row] = await db.select({ tenantId: user.tenantId }).from(user).where(eq(user.id, userId));
+export async function getUserTenant(
+  userId: string,
+  reader: AccessReader = db
+): Promise<string | null> {
+  const [row] = await reader
+    .select({ tenantId: user.tenantId })
+    .from(user)
+    .where(eq(user.id, userId));
   return row?.tenantId ?? null;
 }
 
 /** True if the user belongs to the given tenant. */
-export async function sameTenant(userId: string, tenantId: string): Promise<boolean> {
-  return (await getUserTenant(userId)) === tenantId;
+export async function sameTenant(
+  userId: string,
+  tenantId: string,
+  reader: AccessReader = db
+): Promise<boolean> {
+  return (await getUserTenant(userId, reader)) === tenantId;
 }
 
 // Artifact tables that carry a matterId + owner, keyed by artifact type.
@@ -76,8 +87,12 @@ const MATTER_TABLE = {
  * defense-in-depth against cross-tenant id injection (membership normally implies
  * same tenant).
  */
-async function matterRole(userId: string, matterId: string): Promise<MatterRole | null> {
-  const [row] = await db
+async function matterRole(
+  userId: string,
+  matterId: string,
+  reader: AccessReader = db
+): Promise<MatterRole | null> {
+  const [row] = await reader
     .select({ role: matterMembers.role, matterTenant: matters.tenantId, userTenant: user.tenantId })
     .from(matterMembers)
     .innerJoin(matters, eq(matterMembers.matterId, matters.id))
@@ -93,9 +108,10 @@ async function artifactShareRole(
   userId: string,
   artifactType: ArtifactType,
   artifactId: string,
-  artifactTenant: string
+  artifactTenant: string,
+  reader: AccessReader = db
 ): Promise<MatterRole | null> {
-  const [row] = await db
+  const [row] = await reader
     .select({ role: artifactShares.role, userTenant: user.tenantId })
     .from(artifactShares)
     .innerJoin(user, eq(artifactShares.userId, user.id))
@@ -116,8 +132,12 @@ async function artifactShareRole(
  * The caller's role on a client, or null if not a member. Like matterRole, asserts
  * same-tenant as defense-in-depth. A client is visible only to its members.
  */
-async function clientRole(userId: string, clientId: string): Promise<MatterRole | null> {
-  const [row] = await db
+async function clientRole(
+  userId: string,
+  clientId: string,
+  reader: AccessReader = db
+): Promise<MatterRole | null> {
+  const [row] = await reader
     .select({ role: clientMembers.role, clientTenant: clients.tenantId, userTenant: user.tenantId })
     .from(clientMembers)
     .innerJoin(clients, eq(clientMembers.clientId, clients.id))
@@ -133,14 +153,15 @@ async function clientRole(userId: string, clientId: string): Promise<MatterRole 
 export async function hasClientAccess(
   subject: AccessSubject,
   clientId: string,
-  min: MatterRole = "viewer"
+  min: MatterRole = "viewer",
+  reader: AccessReader = db
 ): Promise<boolean> {
   const userId = subjectUserId(subject);
   const scope = subjectScope(subject);
-  const role = await clientRole(userId, clientId);
+  const role = await clientRole(userId, clientId, reader);
   if (!role) return false;
   if (scope?.matterIds) {
-    const [allowed] = await db
+    const [allowed] = await reader
       .select({ id: matters.id })
       .from(matters)
       .where(and(eq(matters.clientId, clientId), inArray(matters.id, scope.matterIds)))
@@ -154,11 +175,12 @@ export async function hasClientAccess(
 export async function hasMatterAccess(
   subject: AccessSubject,
   matterId: string,
-  min: MatterRole = "viewer"
+  min: MatterRole = "viewer",
+  reader: AccessReader = db
 ): Promise<boolean> {
   const scope = subjectScope(subject);
   if (!scopeAllowsMatter(scope, matterId)) return false;
-  const role = await matterRole(subjectUserId(subject), matterId);
+  const role = await matterRole(subjectUserId(subject), matterId, reader);
   if (!role) return false;
   return clampRank(scope, ROLE_RANK[role]) >= ROLE_RANK[min];
 }
@@ -179,13 +201,15 @@ export async function canAccessArtifact(
   subject: AccessSubject,
   artifactType: ArtifactType,
   artifactId: string,
-  min: MatterRole = "viewer"
+  min: MatterRole = "viewer",
+  reader: AccessReader = db
 ): Promise<boolean> {
+  if (artifactType === "matter") return hasMatterAccess(subject, artifactId, min, reader);
   const userId = subjectUserId(subject);
   const scope = subjectScope(subject);
   const table = MATTER_TABLE[artifactType];
   if (!table) throw new Error(`canAccessArtifact: unsupported artifact type "${artifactType}"`);
-  const [row] = await db
+  const [row] = await reader
     .select({ matterId: table.matterId, ownerId: table.userId, tenantId: table.tenantId })
     .from(table)
     .where(eq(table.id, artifactId));
@@ -200,7 +224,7 @@ export async function canAccessArtifact(
   // guard; a draft's creator still gets ownership below.
   let firmRole = -1;
   if (!row.matterId && row.tenantId && (artifactType === "clause" || artifactType === "workflow")) {
-    const [account] = await db
+    const [account] = await reader
       .select({ tenantId: user.tenantId, tenantRole: user.tenantRole })
       .from(user)
       .where(eq(user.id, userId));
@@ -214,11 +238,11 @@ export async function canAccessArtifact(
 
   // Effective role = the higher of matter membership and a direct artifact share.
   if (best < ROLE_RANK.owner && row.matterId) {
-    const mRole = await matterRole(userId, row.matterId);
+    const mRole = await matterRole(userId, row.matterId, reader);
     if (mRole) best = Math.max(best, ROLE_RANK[mRole]);
   }
   if (best < ROLE_RANK.owner && row.tenantId) {
-    const sRole = await artifactShareRole(userId, artifactType, artifactId, row.tenantId);
+    const sRole = await artifactShareRole(userId, artifactType, artifactId, row.tenantId, reader);
     if (sRole) best = Math.max(best, ROLE_RANK[sRole]);
   }
   if (best < 0) return false;
@@ -231,14 +255,44 @@ export async function canAccessArtifact(
  * docs were never shared with them directly. Read-only — editor endpoints keep
  * gating on `canAccessArtifact("document", …, "editor")`.
  */
-export async function canReadDocument(subject: AccessSubject, docId: string): Promise<boolean> {
-  if (await canAccessArtifact(subject, "document", docId)) return true;
-  const reviews = await db
+export async function canReadDocument(
+  subject: AccessSubject,
+  docId: string,
+  reader: AccessReader = db
+): Promise<boolean> {
+  if (await canAccessArtifact(subject, "document", docId, "viewer", reader)) return true;
+  const reviews = await reader
     .select({ id: tabularReviews.id })
     .from(tabularReviews)
     .where(sql`${tabularReviews.documentIds} @> ${JSON.stringify([docId])}::jsonb`);
   for (const r of reviews) {
-    if (await canAccessArtifact(subject, "tabular_review", r.id)) return true;
+    if (await canAccessArtifact(subject, "tabular_review", r.id, "viewer", reader)) return true;
   }
   return false;
+}
+
+/** Transaction-bound authorization locks membership/account/matter until application commits.
+ * Revocation and role changes cannot race a guarded mutation after this succeeds. */
+export async function hasMatterAccessInTransaction(
+  tx: Tx,
+  subject: AccessSubject,
+  matterId: string,
+  min: MatterRole = "viewer"
+): Promise<boolean> {
+  const scope = subjectScope(subject);
+  if (!scopeAllowsMatter(scope, matterId)) return false;
+  const [row] = await tx
+    .select({ role: matterMembers.role, matterTenant: matters.tenantId, userTenant: user.tenantId })
+    .from(matterMembers)
+    .innerJoin(matters, eq(matterMembers.matterId, matters.id))
+    .innerJoin(user, eq(matterMembers.userId, user.id))
+    .where(
+      and(eq(matterMembers.matterId, matterId), eq(matterMembers.userId, subjectUserId(subject)))
+    )
+    .for("share");
+  return (
+    !!row &&
+    row.matterTenant === row.userTenant &&
+    clampRank(scope, ROLE_RANK[row.role]) >= ROLE_RANK[min]
+  );
 }

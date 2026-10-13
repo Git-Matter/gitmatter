@@ -1,0 +1,94 @@
+{
+  "id": "synthetic-nda-v1",
+  "title": "Synthetic NDA acceptance fixture",
+  "notice": "Entirely fictional. Software acceptance fixture, not legal advice or a firm-approved policy.",
+  "paragraphs": [
+    "This mutual non-disclosure agreement is between Example Alpha Ltd and Example Beta Ltd for evaluating a fictional collaboration.",
+    "Each party may use confidential information only to evaluate the collaboration.",
+    "Confidentiality lasts five years from disclosure.",
+    "Confidential information excludes information already public or independently developed without use of the disclosing party's information.",
+    "The recipient may disclose information required by law without notifying the disclosing party."
+  ],
+  "rules": [
+    {
+      "id": "purpose",
+      "clauseType": "Permitted use",
+      "standardPosition": "Use only to evaluate the collaboration.",
+      "fallbacks": [],
+      "severity": "red"
+    },
+    {
+      "id": "term",
+      "clauseType": "Confidentiality term",
+      "standardPosition": "Confidentiality lasts three years from disclosure.",
+      "fallbacks": ["Confidentiality lasts four years from disclosure."],
+      "unacceptable": "More than four years.",
+      "severity": "red"
+    },
+    {
+      "id": "disclosure",
+      "clauseType": "Compelled disclosure",
+      "standardPosition": "The recipient may disclose information required by law after giving prompt notice to the disclosing party where legally permitted.",
+      "fallbacks": [],
+      "severity": "red"
+    },
+    {
+      "id": "return",
+      "clauseType": "Return or destruction",
+      "standardPosition": "Return or destroy confidential information on request, subject to legal retention obligations.",
+      "fallbacks": [],
+      "severity": "red"
+    }
+  ],
+  "findings": [
+    {
+      "ruleId": "purpose",
+      "flag": "green",
+      "summary": "Purpose-limited use",
+      "reasoning": "Matches the synthetic standard.",
+      "quote": "Each party may use confidential information only to evaluate the collaboration."
+    },
+    {
+      "ruleId": "term",
+      "flag": "red",
+      "summary": "Five-year term exceeds fallback",
+      "reasoning": "Exceeds both the three-year standard and four-year fallback.",
+      "quote": "Confidentiality lasts five years from disclosure."
+    },
+    {
+      "ruleId": "disclosure",
+      "flag": "red",
+      "summary": "Compelled disclosure without notice",
+      "reasoning": "Notice is required where legally permitted.",
+      "quote": "The recipient may disclose information required by law without notifying the disclosing party."
+    },
+    {
+      "ruleId": "return",
+      "flag": "red",
+      "summary": "Not found: return or destruction",
+      "reasoning": "No operative return or destruction clause is present.",
+      "quote": null
+    }
+  ],
+  "redlines": [
+    {
+      "ruleId": "term",
+      "find": "Confidentiality lasts five years from disclosure.",
+      "replace": "Confidentiality lasts three years from disclosure.",
+      "fallback": "Confidentiality lasts four years from disclosure."
+    },
+    {
+      "ruleId": "disclosure",
+      "find": "The recipient may disclose information required by law without notifying the disclosing party.",
+      "replace": "The recipient may disclose information required by law after giving prompt notice to the disclosing party where legally permitted."
+    }
+  ],
+  "expectedAuditOps": ["extract", "create", "write_cell", "propose_edit", "resolve_edit"],
+  "failureCases": [
+    "invalid DOCX rejected or extraction failed with retry visible",
+    "out-of-scope document inaccessible",
+    "missing provider produces a failed run, never completed telemetry",
+    "non-matching redline reports failure without an applied change",
+    "agent cannot accept or reject its own changes"
+  ]
+}

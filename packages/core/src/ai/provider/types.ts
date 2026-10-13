@@ -28,6 +28,8 @@ export type ChatMessage =
 export type ToolDef = { name: string; description: string; inputSchema: Record<string, unknown> };
 
 export type CompleteRequest = {
+  /** Durable workers own retries; 0 disables SDK-internal retry loops. */
+  maxRetries?: number;
   model: string;
   system?: string;
   messages: ChatMessage[];

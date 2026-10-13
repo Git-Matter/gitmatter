@@ -1,3 +1,18 @@
+import {
+  canAccessArtifact,
+  hasMatterAccess,
+  hasMatterAccessInTransaction,
+  sameTenant,
+} from "../core/access.js";
+import {
+  captureDocumentApprovalContext,
+  guardDocumentResolution,
+  pinDocumentBaseline,
+  recordDocumentEditDecisions,
+} from "../core/document-approval.js";
+import { validateFindingProposal } from "../ai/tabular/finding.js";
+import type { DocumentResolutionInput, FindingEditProvenance } from "@workspace/contracts";
+import { recordFunnel } from "../core/funnel.js";
 import { randomUUID } from "node:crypto";
 import {
   and,
@@ -13,6 +28,8 @@ import {
   sql,
 } from "drizzle-orm";
 import { db } from "@workspace/db/client";
+import { acceptExtractionJob } from "../core/jobs.js";
+import { putStagedObject, attachStagedObject } from "../core/staged-objects.js";
 import {
   commits,
   documentEdits,
@@ -27,24 +44,18 @@ import {
 import { recordAudit } from "../platform/audit.js";
 import { assertStorageWithinQuota } from "../platform/usage.js";
 import { accessCountSql, accessSummaryByArtifact, sharedArtifactIds } from "../platform/shares.js";
-import { type Actor, recordCommit } from "../core/commit.js";
+import { type Actor, recordCommit, recordCommitInTransaction } from "../core/commit.js";
 import { logEvent } from "../core/log.js";
 import { extractMarkdown, type SupportedFileType } from "./extract.js";
-import { emitDocStatus } from "./extractionEvents.js";
 import { generateDocx, type DocxSpec } from "./docx/generate.js";
 import {
   applyTrackedEdits,
   extractDocxBodyText,
+  extractTrackedChangeIds,
   resolveTrackedChange,
   type EditError,
 } from "./docx/trackedChanges.js";
-import {
-  buildStoragePath,
-  deleteObject,
-  getObject,
-  isAlreadyDeleted,
-  putObject,
-} from "../core/storage.js";
+import { buildStoragePath, deleteObject, getObject, isAlreadyDeleted } from "../core/storage.js";
 
 /**
  * Delete a stored object, tolerating "already gone" (idempotent purge) but
@@ -106,6 +117,7 @@ const documentListFields = {
   sizeBytes: documents.sizeBytes,
   folderId: documents.folderId,
   currentVersionId: documents.currentVersionId,
+  approvedVersionId: documents.approvedVersionId,
   createdAt: documents.createdAt,
 };
 
@@ -296,42 +308,53 @@ export async function createDocument(
     folderId?: string | null;
   }
 ) {
-  // Pasted text needs no extraction and no stored bytes — born ready.
-  const [doc] = await db
-    .insert(documents)
-    .values({
-      userId,
-      tenantId: await matterTenant(input.matterId),
-      matterId: input.matterId,
-      folderId: input.folderId ?? null,
-      title: input.title,
-      fileType: input.fileType ?? "text/markdown",
-      markdown: input.markdown,
-      sizeBytes: input.markdown.length,
-      status: "ready",
-    })
-    .returning();
+  // Publish text, matter link and the first audit head atomically.
+  const docId = randomUUID();
   await recordCommit({
     artifactType: "document",
-    artifactId: doc.id,
+    artifactId: docId,
     actor: { type: "user", userId },
     op: "create",
     message: `Created ${input.title}`,
     apply: async ({ tx }) => {
-      await tx.insert(matterDocuments).values({
+      const actor: Actor = { type: "user", userId };
+      if (!(await hasMatterAccessInTransaction(tx, actor, input.matterId, "editor")))
+        throw new Error("access_denied");
+      const [matter] = await tx
+        .select({ tenantId: matters.tenantId })
+        .from(matters)
+        .where(eq(matters.id, input.matterId));
+      if (!matter) throw new Error("access_denied");
+      await tx.insert(documents).values({
+        id: docId,
+        userId,
+        tenantId: matter.tenantId,
         matterId: input.matterId,
-        documentId: doc.id,
         folderId: input.folderId ?? null,
+        title: input.title,
+        fileType: input.fileType ?? "text/markdown",
+        markdown: input.markdown,
+        approvedMarkdown: input.markdown,
+        sizeBytes: input.markdown.length,
+        status: "ready",
       });
+      await tx
+        .insert(matterDocuments)
+        .values({ matterId: input.matterId, documentId: docId, folderId: input.folderId ?? null });
       return {
         changes: [
           { path: "markdown", before: null, after: input.markdown },
           { path: "matterId", before: null, after: input.matterId },
+          {
+            path: "approvedBaseline",
+            before: null,
+            after: { versionId: null, markdown: input.markdown },
+          },
         ],
       };
     },
   });
-  return (await getDocument(doc.id))!;
+  return (await getDocument(docId))!;
 }
 
 /**
@@ -343,39 +366,19 @@ export async function createGeneratedDocument(
   actor: Actor,
   input: { matterId: string; spec: DocxSpec }
 ): Promise<Document> {
+  if (!(await hasMatterAccess(actor, input.matterId, "editor"))) throw new Error("access_denied");
   const bytes = Buffer.from(await generateDocx(input.spec));
   const { markdown, pageCount } = await extractMarkdown(bytes, "docx");
   const tenantId = await matterTenant(input.matterId);
-  await assertStorageWithinQuota(tenantId, bytes.length);
-  const docId = randomUUID();
-  const versionId = randomUUID();
+  const docId = randomUUID(),
+    versionId = randomUUID();
   const storagePath = buildStoragePath({
     tenantId,
     userId: actor.userId,
     artifactId: docId,
     ext: "docx",
   });
-  await putObject(tenantId, storagePath, bytes, DOCX_MIME);
-  await db.insert(documents).values({
-    id: docId,
-    userId: actor.userId,
-    tenantId,
-    matterId: input.matterId,
-    title: input.spec.title,
-    fileType: "docx",
-    sizeBytes: bytes.length,
-    status: "ready",
-    currentVersionId: versionId,
-  });
-  await db.insert(documentVersions).values({
-    id: versionId,
-    documentId: docId,
-    versionNumber: 1,
-    storagePath,
-    source: "generated",
-    sizeBytes: bytes.length,
-    fileType: "docx",
-  });
+  await putStagedObject(tenantId, storagePath, bytes, DOCX_MIME);
   await recordCommit({
     artifactType: "document",
     artifactId: docId,
@@ -383,23 +386,51 @@ export async function createGeneratedDocument(
     op: "create",
     message: `Generated ${input.spec.title}`,
     apply: async ({ tx, commitId }) => {
+      if (!(await hasMatterAccessInTransaction(tx, actor, input.matterId, "editor")))
+        throw new Error("access_denied");
+      const [matter] = await tx
+        .select({ tenantId: matters.tenantId })
+        .from(matters)
+        .where(eq(matters.id, input.matterId));
+      if (matter?.tenantId !== tenantId) throw new Error("access_denied");
+      await tx.insert(documents).values({
+        id: docId,
+        userId: actor.userId,
+        tenantId,
+        matterId: input.matterId,
+        title: input.spec.title,
+        fileType: "docx",
+        sizeBytes: bytes.length,
+        status: "ready",
+        currentVersionId: versionId,
+        approvedVersionId: versionId,
+        approvedMarkdown: markdown,
+        markdown,
+        pageCount,
+      });
+      await tx.insert(documentVersions).values({
+        id: versionId,
+        documentId: docId,
+        versionNumber: 1,
+        storagePath,
+        source: "generated",
+        sizeBytes: bytes.length,
+        fileType: "docx",
+        lastCommitId: commitId,
+      });
+      await attachStagedObject(tx, tenantId, storagePath);
       await tx.insert(matterDocuments).values({ matterId: input.matterId, documentId: docId });
-      await tx.update(documents).set({ markdown, pageCount }).where(eq(documents.id, docId));
-      await tx
-        .update(documentVersions)
-        .set({ lastCommitId: commitId })
-        .where(eq(documentVersions.id, versionId));
       return {
         changes: [
           { path: "file", before: null, after: storagePath },
           { path: "markdown", before: null, after: markdown },
           { path: "matterId", before: null, after: input.matterId },
+          { path: "approvedBaseline", before: null, after: { versionId, markdown } },
         ],
       };
     },
   });
-  const [final] = await db.select().from(documents).where(eq(documents.id, docId));
-  return final!;
+  return (await getDocument(docId))!;
 }
 
 /**
@@ -425,59 +456,116 @@ export async function uploadDocument(
     staged?: boolean;
   }
 ) {
-  // Store the file BEFORE the row is visible to the extraction worker.
-  // Inserting as `pending` first lets a worker claim it in the gap before the
-  // object exists, which fails the doc with "no stored file to extract". So we
-  // pre-generate the id, write the object, then insert the row already complete.
-  const tenantId = input.matterId ? await matterTenant(input.matterId) : input.tenantId;
-  if (!tenantId) throw new Error("uploadDocument: tenantId is required when matterId is null");
-  // Folders live inside a matter; an unfiled document can't sit in one.
-  const folderId = input.matterId ? (input.folderId ?? null) : null;
-  await assertStorageWithinQuota(tenantId, input.bytes.length);
-  const id = randomUUID();
-  const versionId = randomUUID();
-  const storagePath = buildStoragePath({
-    tenantId,
-    userId,
-    artifactId: id,
-    ext: input.fileType,
-  });
-  await putObject(tenantId, storagePath, input.bytes);
-  const [row] = await db
-    .insert(documents)
-    .values({
-      id,
-      userId,
+  recordFunnel("upload_started", { actorType: "user", matterId: input.matterId ?? undefined });
+  try {
+    // Store the file BEFORE the row is visible to the extraction worker.
+    // Inserting as `pending` first lets a worker claim it in the gap before the
+    // object exists, which fails the doc with "no stored file to extract". So we
+    // pre-generate the id, write the object, then insert the row already complete.
+    const tenantId = input.matterId ? await matterTenant(input.matterId) : input.tenantId;
+    if (!tenantId) throw new Error("uploadDocument: tenantId is required when matterId is null");
+    const actor: Actor = { type: "user", userId };
+    if (
+      !(await sameTenant(userId, tenantId)) ||
+      (input.matterId && !(await hasMatterAccess(actor, input.matterId, "editor")))
+    )
+      throw new Error("access_denied");
+    // Folders live inside a matter; an unfiled document can't sit in one.
+    const folderId = input.matterId ? (input.folderId ?? null) : null;
+    await assertStorageWithinQuota(tenantId, input.bytes.length);
+    const id = randomUUID();
+    const versionId = randomUUID();
+    const storagePath = buildStoragePath({
       tenantId,
-      matterId: input.matterId,
-      folderId,
-      title: input.title,
-      fileType: input.fileType,
-      sizeBytes: input.bytes.length,
-      currentVersionId: versionId,
-      status: "pending",
-      staged: input.staged ?? false,
-    })
-    .returning();
-  await db.insert(documentVersions).values({
-    id: versionId,
-    documentId: id,
-    versionNumber: 1,
-    storagePath,
-    source: "upload",
-    sizeBytes: input.bytes.length,
-    fileType: input.fileType,
-  });
-  // Self-link to the origin matter so it lists there (source of truth for which
-  // matters a doc appears in). Unfiled documents have no matter, so no link.
-  if (input.matterId) {
-    await db.insert(matterDocuments).values({
-      matterId: input.matterId,
-      documentId: id,
-      folderId,
+      userId,
+      artifactId: id,
+      ext: input.fileType,
     });
+    await putStagedObject(tenantId, storagePath, input.bytes);
+    const row = await db.transaction(async (tx) => {
+      // Storage may have taken seconds or minutes. Hold the current account and
+      // matter authority stable through all publication rows and their audit head.
+      const [account] = await tx
+        .select({ tenantId: user.tenantId })
+        .from(user)
+        .where(eq(user.id, userId))
+        .for("share");
+      if (
+        account?.tenantId !== tenantId ||
+        (input.matterId &&
+          !(await hasMatterAccessInTransaction(tx, actor, input.matterId, "editor")))
+      )
+        throw new Error("access_denied");
+      const [created] = await tx
+        .insert(documents)
+        .values({
+          id,
+          userId,
+          tenantId,
+          matterId: input.matterId,
+          folderId,
+          title: input.title,
+          fileType: input.fileType,
+          sizeBytes: input.bytes.length,
+          currentVersionId: versionId,
+          approvedVersionId: versionId,
+          status: "pending",
+          staged: input.staged ?? false,
+        })
+        .returning();
+      await recordCommitInTransaction(tx, {
+        artifactType: "document",
+        artifactId: id,
+        actor,
+        op: "upload",
+        message: `Uploaded ${input.title}`,
+        apply: async ({ tx: commitTx, commitId }) => {
+          await commitTx.insert(documentVersions).values({
+            id: versionId,
+            documentId: id,
+            versionNumber: 1,
+            storagePath,
+            source: "upload",
+            sizeBytes: input.bytes.length,
+            fileType: input.fileType,
+            lastCommitId: commitId,
+          });
+          await attachStagedObject(commitTx, tenantId, storagePath);
+          if (input.matterId)
+            await commitTx.insert(matterDocuments).values({
+              matterId: input.matterId,
+              documentId: id,
+              folderId,
+            });
+          await acceptExtractionJob(commitTx, {
+            actor,
+            tenantId,
+            matterId: input.matterId,
+            documentId: id,
+            versionId,
+          });
+          return {
+            changes: [
+              { path: "version", before: null, after: 1 },
+              { path: "matterId", before: null, after: input.matterId },
+              { path: "status", before: null, after: "pending" },
+              { path: "approvedBaseline", before: null, after: { versionId, markdown: null } },
+            ],
+          };
+        },
+      });
+      return created!;
+    });
+    return row;
+  } catch (error) {
+    recordFunnel("upload_failed", {
+      actorType: "user",
+      matterId: input.matterId ?? undefined,
+      outcome: "failed",
+      failureCategory: "storage",
+    });
+    throw error;
   }
-  return row;
 }
 
 /**
@@ -490,26 +578,47 @@ export async function linkDocumentsToMatter(
   matterId: string,
   documentIds: string[]
 ): Promise<number> {
-  if (documentIds.length === 0) return 0;
-  const tenantId = await matterTenant(matterId);
-  const eligible = await db
-    .select({ id: documents.id })
-    .from(documents)
-    .where(
-      and(
-        inArray(documents.id, documentIds),
-        eq(documents.userId, userId),
-        eq(documents.tenantId, tenantId),
-        isNull(documents.deletedAt)
-      )
-    );
-  if (eligible.length === 0) return 0;
-  const inserted = await db
-    .insert(matterDocuments)
-    .values(eligible.map((d) => ({ matterId, documentId: d.id, folderId: null })))
-    .onConflictDoNothing()
-    .returning({ documentId: matterDocuments.documentId });
-  return inserted.length;
+  const actor: Actor = { type: "user", userId };
+  if (!(await hasMatterAccess(actor, matterId, "editor"))) throw new Error("access_denied");
+  let inserted = 0;
+  for (const documentId of [...new Set(documentIds)].sort()) {
+    const result = await recordCommit({
+      artifactType: "document",
+      artifactId: documentId,
+      actor,
+      op: "link_matter",
+      message: "Linked document to matter",
+      skipIfNoChanges: true,
+      apply: async ({ tx }) => {
+        if (!(await hasMatterAccessInTransaction(tx, actor, matterId, "editor")))
+          throw new Error("access_denied");
+        const [doc] = await tx
+          .select()
+          .from(documents)
+          .where(eq(documents.id, documentId))
+          .for("update");
+        const [matter] = await tx
+          .select()
+          .from(matters)
+          .where(eq(matters.id, matterId))
+          .for("share");
+        if (!doc || doc.deletedAt || doc.userId !== userId || doc.tenantId !== matter?.tenantId)
+          throw new Error("access_denied");
+        const [existing] = await tx
+          .select()
+          .from(matterDocuments)
+          .where(
+            and(eq(matterDocuments.documentId, documentId), eq(matterDocuments.matterId, matterId))
+          );
+        if (existing) return { changes: [] };
+        await tx.insert(matterDocuments).values({ documentId, matterId, folderId: null });
+        await captureDocumentApprovalContext(tx, actor, doc);
+        return { changes: [{ path: `matterLink/${matterId}`, before: null, after: { matterId } }] };
+      },
+    });
+    if (result.commit) inserted++;
+  }
+  return inserted;
 }
 
 /** Storage path of a document's active version, or null (pasted-text docs have none). */
@@ -680,14 +789,14 @@ export async function addDocumentVersion(
   await assertStorageWithinQuota(doc.tenantId, input.bytes.length);
   const latest = await latestVersion(documentId);
   const versionNumber = (latest?.versionNumber ?? 0) + 1;
+  const versionId = randomUUID();
   const storagePath = buildStoragePath({
     tenantId: doc.tenantId,
-    userId: doc.userId,
-    artifactId: doc.id,
+    userId: actor.userId,
+    artifactId: versionId,
     ext: input.fileType,
-    version: versionNumber,
   });
-  await putObject(doc.tenantId, storagePath, input.bytes);
+  await putStagedObject(doc.tenantId, storagePath, input.bytes);
   await recordCommit({
     artifactType: "document",
     artifactId: documentId,
@@ -697,9 +806,25 @@ export async function addDocumentVersion(
       ? `Replaced active file with version ${versionNumber} (superseded version ${latest.versionNumber})`
       : `Uploaded version ${versionNumber}`,
     apply: async ({ tx, commitId }) => {
+      const [current] = await tx.select().from(documents).where(eq(documents.id, documentId));
+      if (
+        current?.headCommitId !== doc.headCommitId ||
+        current?.currentVersionId !== doc.currentVersionId
+      )
+        throw new Error("stale_source");
+      if (actor.type !== "user")
+        throw new Error("A person must replace the accepted document source.");
+      await captureDocumentApprovalContext(tx, actor, current, [], true);
+      const [pending] = await tx
+        .select({ id: documentEdits.id })
+        .from(documentEdits)
+        .where(and(eq(documentEdits.documentId, documentId), eq(documentEdits.status, "pending")))
+        .limit(1);
+      if (pending) throw new Error("Resolve pending document changes before replacing the source.");
       const [nv] = await tx
         .insert(documentVersions)
         .values({
+          id: versionId,
           documentId,
           versionNumber,
           storagePath,
@@ -709,20 +834,37 @@ export async function addDocumentVersion(
           lastCommitId: commitId,
         })
         .returning();
+      await attachStagedObject(tx, doc.tenantId, storagePath);
       await tx
         .update(documents)
         .set({
           fileType: input.fileType,
           sizeBytes: input.bytes.length,
           currentVersionId: nv!.id,
+          approvedVersionId: nv!.id,
+          approvedMarkdown: null,
           status: "pending",
           extractionError: null,
           attempts: 0,
           claimedAt: null,
         })
         .where(eq(documents.id, documentId));
+      await acceptExtractionJob(tx, {
+        actor,
+        tenantId: doc.tenantId,
+        matterId: doc.matterId,
+        documentId,
+        versionId,
+      });
       return {
-        changes: [{ path: "version", before: latest?.versionNumber ?? null, after: versionNumber }],
+        changes: [
+          { path: "version", before: latest?.versionNumber ?? null, after: versionNumber },
+          {
+            path: "approvedBaseline",
+            before: { versionId: current.approvedVersionId, markdown: current.approvedMarkdown },
+            after: { versionId: nv!.id, markdown: null },
+          },
+        ],
       };
     },
   });
@@ -738,22 +880,14 @@ export async function deleteDocumentVersion(actor: Actor, documentId: string, ve
   const doc = await getDocument(documentId);
   if (!doc) throw new Error("Document not found");
   if (doc.currentVersionId === versionId) throw new Error("Cannot delete the active version");
+  if (doc.approvedVersionId === versionId)
+    throw new Error("Cannot delete the accepted document baseline");
   const [v] = await db
     .select()
     .from(documentVersions)
     .where(and(eq(documentVersions.id, versionId), eq(documentVersions.documentId, documentId)));
   if (!v) throw new Error("Version not found");
   if (v.deletedAt) throw new Error("Version already deleted");
-  // Interactive delete: tolerate an already-gone object, but surface a genuine
-  // storage failure to the caller (the route returns an error) rather than
-  // soft-deleting the row while bytes remain orphaned.
-  if (v.storagePath) {
-    try {
-      await deleteObject(doc.tenantId, v.storagePath);
-    } catch (err) {
-      if (!isAlreadyDeleted(err)) throw err;
-    }
-  }
   await recordCommit({
     artifactType: "document",
     artifactId: documentId,
@@ -761,6 +895,25 @@ export async function deleteDocumentVersion(actor: Actor, documentId: string, ve
     op: "delete_version",
     message: `Deleted version ${v.versionNumber}`,
     apply: async ({ tx, commitId }) => {
+      const [current] = await tx
+        .select()
+        .from(documents)
+        .where(eq(documents.id, documentId))
+        .for("update");
+      if (
+        !current ||
+        current.currentVersionId === versionId ||
+        current.approvedVersionId === versionId ||
+        !(await canAccessArtifact(actor, "document", documentId, "editor", tx))
+      )
+        throw new Error("Cannot delete an active or accepted document baseline");
+      const [liveVersion] = await tx
+        .select()
+        .from(documentVersions)
+        .where(and(eq(documentVersions.id, versionId), eq(documentVersions.documentId, documentId)))
+        .for("update");
+      if (!liveVersion || liveVersion.deletedAt || liveVersion.storagePath !== v.storagePath)
+        throw new Error("stale_source");
       await tx
         .update(documentVersions)
         .set({
@@ -775,6 +928,7 @@ export async function deleteDocumentVersion(actor: Actor, documentId: string, ve
       };
     },
   });
+  if (v.storagePath) await deleteObjectAudited(doc.tenantId, v.storagePath);
 }
 
 /**
@@ -782,118 +936,142 @@ export async function deleteDocumentVersion(actor: Actor, documentId: string, ve
  * whose run was lost (claimed > 5 min ago, e.g. a server restart). Returns the
  * reset row so the caller can re-enqueue it; null if the doc isn't retryable.
  */
-export async function retryDocument(id: string) {
-  const [row] = await db
-    .update(documents)
-    .set({ status: "pending", extractionError: null, attempts: 0, claimedAt: null })
-    .where(
-      and(
-        eq(documents.id, id),
-        or(
-          eq(documents.status, "failed"),
-          and(
-            eq(documents.status, "processing"),
-            sql`${documents.claimedAt} < now() - interval '5 minutes'`
-          )
-        )
-      )
-    )
-    .returning();
-  return row ?? null;
-}
-
-/**
- * Extract markdown for a document and record the result as a system-authored
- * ("extractor" agent) commit on the document artifact. Drives the row through
- * `processing` -> `ready`/`failed` and emits each transition. On failure the
- * row is marked `failed` for the manual retry button (no auto-requeue).
- */
-// A PDF text-layer extraction with very little text per page is usually a
-// scanned/image-only PDF (we don't OCR) or a broken text layer. ~40 chars/page
-// is roughly a line of text; below that there's effectively nothing to read, so
-// the UI shows a passive "little text — may be scanned" warning.
-function looksThinForOcr(markdown: string, pageCount: number | null): boolean {
-  const chars = markdown.trim().length;
-  if (pageCount && pageCount > 0) return chars / pageCount < 40;
-  return chars < 40;
-}
-
-export async function processDocument(doc: Document): Promise<void> {
-  // Flip to `processing` first: drives the UI badge and leaves a recoverable
-  // (stale) row if the server dies mid-extract. Emit every transition so the
-  // SSE stream can push it to the browser.
-  logEvent("info", "extract.start", {
-    documentId: doc.id,
-    fileType: doc.fileType,
-    attempt: doc.attempts + 1,
-  });
-  await db
-    .update(documents)
-    .set({ status: "processing", claimedAt: new Date(), attempts: doc.attempts + 1 })
-    .where(eq(documents.id, doc.id));
-  emitDocStatus({ userId: doc.userId, id: doc.id, status: "processing", extractionError: null });
-
-  const fail = async (message: string, err?: unknown) => {
-    // Log with context so a failed extraction is debuggable from server logs,
-    // not just the truncated message stored on the row.
-    logEvent("error", "extract.failed", {
-      documentId: doc.id,
-      fileType: doc.fileType,
-      attempt: doc.attempts + 1,
-      error: message,
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    await db
-      .update(documents)
-      .set({ status: "failed", extractionError: message, claimedAt: null })
-      .where(eq(documents.id, doc.id));
-    emitDocStatus({ userId: doc.userId, id: doc.id, status: "failed", extractionError: message });
-  };
-
-  const storagePath = await activeStoragePath(doc);
-  if (!storagePath) {
-    await fail("no stored file to extract");
-    return;
-  }
-  try {
-    const bytes = Buffer.from(await getObject(doc.tenantId, storagePath));
-    const { markdown, pageCount } = await extractMarkdown(bytes, doc.fileType as SupportedFileType);
-    // Warn (passively) when a PDF came back too thin to be a real text layer —
-    // likely a scan. DOCX always carries its text, so never flag it.
-    const ocrSuggested = doc.fileType === "pdf" && looksThinForOcr(markdown, pageCount);
-
+export async function retryDocument(id: string, actor?: Actor) {
+  const { JobError, listDocumentJobs, retryJob, authorizeJobInTransaction } =
+    await import("../core/jobs.js");
+  if (!actor) throw new Error("access_denied");
+  if (!(await canAccessArtifact(actor, "document", id, "editor")))
+    throw new JobError("access_denied");
+  const currentJobs = await listDocumentJobs(actor, id);
+  const latest = currentJobs[0];
+  if (!latest) {
+    // A deploy can inherit a failed/pending source from the old volatile queue.
+    // Only an explicit current human request establishes new durable authority.
+    if (actor.type !== "user") throw new JobError("access_denied");
+    const doc = await getDocument(id);
+    if (!doc || !doc.currentVersionId || doc.status === "ready") return null;
+    if (doc.status === "processing") {
+      const [age] = await db
+        .select({ stale: sql<boolean>`${documents.claimedAt} < now() - interval '5 minutes'` })
+        .from(documents)
+        .where(eq(documents.id, id));
+      if (!age?.stale) return null;
+    }
+    const [version] = await db
+      .select()
+      .from(documentVersions)
+      .where(
+        and(eq(documentVersions.id, doc.currentVersionId), eq(documentVersions.documentId, id))
+      );
+    if (!version?.storagePath || version.deletedAt) throw new JobError("input_not_ready");
+    try {
+      await getObject(doc.tenantId, version.storagePath);
+    } catch {
+      throw new JobError("input_not_ready");
+    }
     await recordCommit({
+      actor,
       artifactType: "document",
-      artifactId: doc.id,
-      actor: { type: "agent", userId: doc.userId, agentLabel: "extractor" },
-      op: "extract",
-      message: `Extracted markdown (${doc.fileType})`,
-      // recordCommit stamps head_commit_id on the document row itself.
+      artifactId: id,
+      op: "extraction_retried",
+      message: "Accepted legacy source extraction for durable retry",
       apply: async ({ tx }) => {
+        const [current] = await tx.select().from(documents).where(eq(documents.id, id));
+        if (
+          !current ||
+          current.deletedAt ||
+          current.currentVersionId !== doc.currentVersionId ||
+          current.headCommitId !== doc.headCommitId
+        )
+          throw new JobError("stale_source");
+        if (!(await canAccessArtifact(actor, "document", id, "editor", tx)))
+          throw new JobError("access_denied");
+        if (current.status === "ready") throw new JobError("input_not_ready");
+        if (current.status === "processing") {
+          const [age] = await tx
+            .select({ stale: sql<boolean>`${documents.claimedAt} < now() - interval '5 minutes'` })
+            .from(documents)
+            .where(eq(documents.id, id));
+          if (!age?.stale) throw new JobError("input_not_ready");
+        }
+        const [currentVersion] = await tx
+          .select()
+          .from(documentVersions)
+          .where(eq(documentVersions.id, version.id))
+          .for("share");
+        if (
+          !currentVersion?.storagePath ||
+          currentVersion.deletedAt ||
+          currentVersion.storagePath !== version.storagePath
+        )
+          throw new JobError("input_not_ready");
+        const job = await acceptExtractionJob(tx, {
+          actor,
+          tenantId: doc.tenantId,
+          matterId: doc.matterId,
+          documentId: id,
+          versionId: doc.currentVersionId!,
+          requestId: `legacy-extract:${id}:${doc.currentVersionId}`,
+        });
+        await authorizeJobInTransaction(tx, job);
         await tx
           .update(documents)
-          .set({
-            markdown,
-            pageCount,
-            status: "ready",
-            extractionError: null,
-            claimedAt: null,
-            ocrSuggested,
-          })
-          .where(eq(documents.id, doc.id));
-        return { changes: [{ path: "markdown", before: null, after: markdown }] };
+          .set({ status: "pending", extractionError: null, claimedAt: null })
+          .where(eq(documents.id, id));
+        return {
+          changes: [{ path: "status", before: current.status, after: "pending" }],
+          summary: { jobId: job.id, compatibility: "explicit_human_retry" },
+        };
       },
     });
-    logEvent("info", "extract.ready", { documentId: doc.id, pageCount: pageCount ?? null });
-    emitDocStatus({
-      userId: doc.userId,
-      id: doc.id,
-      status: "ready",
-      extractionError: null,
-      ocrSuggested,
-    });
-  } catch (err) {
-    await fail(err instanceof Error ? err.message : "extraction failed", err);
+    return getDocument(id);
+  }
+  if (latest.state !== "failed") return null;
+  await retryJob(actor, latest.id);
+  return getDocument(id);
+}
+
+/** Synchronous acceptance-test adapter over the same durable extraction worker. */
+export async function processDocument(doc: Document): Promise<void> {
+  const { runExtractionOnce } = await import("./extractionQueue.js");
+  await runExtractionOnce(doc.id);
+}
+
+/** Read a stored export only after caller access checks; preview is not a funnel conversion. */
+export async function downloadDocumentBytes(
+  doc: Document,
+  storagePath: string,
+  actor: Actor,
+  preview = false,
+  clean = false
+) {
+  const started = performance.now();
+  const funnel = { actorType: actor.type, documentId: doc.id, matterId: doc.matterId ?? undefined };
+  try {
+    const bytes = await getObject(doc.tenantId, storagePath);
+    if (
+      clean &&
+      (doc.fileType !== "docx" || (await extractTrackedChangeIds(Buffer.from(bytes))).length)
+    )
+      throw new Error(
+        "Clean output still contains tracked Word changes; resolve them before export."
+      );
+    if (!preview)
+      recordFunnel("document_exported", {
+        ...funnel,
+        durationMs: performance.now() - started,
+        outcome: "succeeded",
+      });
+    return bytes;
+  } catch (error) {
+    if (!preview)
+      recordFunnel("document_export_failed", {
+        ...funnel,
+        durationMs: performance.now() - started,
+        outcome: "failed",
+        failureCategory: "storage",
+      });
+    throw error;
   }
 }
 
@@ -969,7 +1147,8 @@ async function proposeDocxEdit(
   actor: Actor,
   doc: Document,
   edits: EditSpec[],
-  source: VersionSource
+  source: VersionSource,
+  options: { expectedHeadCommitId?: string | null; provenance?: FindingEditProvenance } = {}
 ): Promise<ProposeEditResult> {
   const v = await latestVersion(doc.id);
   if (!v?.storagePath) throw new Error("Document has no stored version");
@@ -996,11 +1175,11 @@ async function proposeDocxEdit(
   const storagePath = buildStoragePath({
     tenantId: doc.tenantId,
     userId: doc.userId,
-    artifactId: doc.id,
+    artifactId: `${doc.id}/staged-${randomUUID()}`,
     ext: "docx",
     version: versionNumber,
   });
-  await putObject(doc.tenantId, storagePath, result.bytes, DOCX_MIME);
+  await putStagedObject(doc.tenantId, storagePath, result.bytes, DOCX_MIME);
   const newMarkdown = await extractDocxBodyText(result.bytes);
 
   await recordCommit({
@@ -1013,6 +1192,21 @@ async function proposeDocxEdit(
         ? `Proposed edit: "${applied[0]!.deletedText.slice(0, 40)}" → "${applied[0]!.insertedText.slice(0, 40)}"`
         : `Proposed ${applied.length} edits`,
     apply: async ({ tx, commitId }) => {
+      if (!(await canAccessArtifact(actor, "document", doc.id, "editor", tx)))
+        throw new Error("access_denied");
+      const [current] = await tx.select().from(documents).where(eq(documents.id, doc.id));
+      if (
+        !current ||
+        current.deletedAt ||
+        current.headCommitId !==
+          (options.expectedHeadCommitId === undefined
+            ? doc.headCommitId
+            : options.expectedHeadCommitId)
+      )
+        throw new Error("stale_source");
+      if (options.provenance) await validateFindingProposal(tx, actor, options.provenance);
+      const approvalContext = await captureDocumentApprovalContext(tx, actor, current);
+      const baselineChanges = await pinDocumentBaseline(tx, current);
       const [nv] = await tx
         .insert(documentVersions)
         .values({
@@ -1025,6 +1219,7 @@ async function proposeDocxEdit(
           lastCommitId: commitId,
         })
         .returning();
+      await attachStagedObject(tx, doc.tenantId, storagePath);
       await tx.insert(documentEdits).values(
         applied.map((a) => ({
           documentId: doc.id,
@@ -1037,6 +1232,8 @@ async function proposeDocxEdit(
           contextBefore: a.contextBefore,
           contextAfter: a.contextAfter,
           reason: a.reason ?? null,
+          findingProvenance: options.provenance ?? null,
+          approvalContext,
           status: "pending" as const,
           createdBy: actor.userId,
           lastCommitId: commitId,
@@ -1048,6 +1245,7 @@ async function proposeDocxEdit(
         .where(eq(documents.id, doc.id));
       return {
         changes: [
+          ...baselineChanges,
           ...applied.map((a) => ({
             path: `edit/${a.id}`,
             before: null,
@@ -1056,6 +1254,7 @@ async function proposeDocxEdit(
               replace: a.insertedText,
               reason: a.reason ?? null,
               status: "pending",
+              ...(options.provenance ? { findingProvenance: options.provenance } : {}),
             },
           })),
           { path: "version", before: v.versionNumber, after: versionNumber },
@@ -1077,25 +1276,30 @@ async function resolveDocxEdits(
   actor: Actor,
   doc: Document,
   edits: Array<typeof documentEdits.$inferSelect>,
-  decision: "accept" | "reject"
+  decision: "accept" | "reject",
+  input: DocumentResolutionInput = {}
 ) {
   const v = await latestVersion(doc.id);
   if (!v?.storagePath) throw new Error("Document has no stored version");
   const wIds = edits.flatMap((e) => [e.delWId, e.insWId]).filter((x): x is string => !!x);
-  const { bytes: newBytes } = await resolveTrackedChange(
-    await loadDocxBytes(doc.tenantId, v.storagePath),
-    wIds,
-    decision
+  const sourceBytes = await loadDocxBytes(doc.tenantId, v.storagePath);
+  const knownChanges = new Set(
+    (await extractTrackedChangeIds(sourceBytes)).map((change) => change.w_id)
   );
+  if (!wIds.length || wIds.some((id) => !knownChanges.has(id)))
+    throw new Error(
+      "Tracked change binding is missing from the current DOCX; review a revised proposal."
+    );
+  const { bytes: newBytes } = await resolveTrackedChange(sourceBytes, wIds, decision);
   const versionNumber = v.versionNumber + 1;
   const storagePath = buildStoragePath({
     tenantId: doc.tenantId,
     userId: doc.userId,
-    artifactId: doc.id,
+    artifactId: `${doc.id}/staged-${randomUUID()}`,
     ext: "docx",
     version: versionNumber,
   });
-  await putObject(doc.tenantId, storagePath, newBytes, DOCX_MIME);
+  await putStagedObject(doc.tenantId, storagePath, newBytes, DOCX_MIME);
   const newMarkdown = await extractDocxBodyText(newBytes);
   const status = decision === "accept" ? "accepted" : "rejected";
   const source: VersionSource = decision === "accept" ? "user_accept" : "user_reject";
@@ -1111,6 +1315,7 @@ async function resolveDocxEdits(
         ? `${status} edit ${edits[0]!.changeId.slice(0, 8)}`
         : `${status} ${edits.length} edits`,
     apply: async ({ tx, commitId }) => {
+      const context = await guardDocumentResolution(tx, actor, doc, edits, input);
       const [nv] = await tx
         .insert(documentVersions)
         .values({
@@ -1123,6 +1328,7 @@ async function resolveDocxEdits(
           lastCommitId: commitId,
         })
         .returning();
+      await attachStagedObject(tx, doc.tenantId, storagePath);
       await tx
         .update(documentEdits)
         .set({ status, resolvedBy: actor.userId, resolvedAt: new Date(), lastCommitId: commitId })
@@ -1131,8 +1337,20 @@ async function resolveDocxEdits(
         .update(documents)
         .set({ markdown: newMarkdown, currentVersionId: nv!.id })
         .where(eq(documents.id, doc.id));
+      const baselineChanges = await pinDocumentBaseline(tx, {
+        ...doc,
+        markdown: newMarkdown,
+        currentVersionId: nv!.id,
+      });
+      const decisionChanges = await recordDocumentEditDecisions(tx, actor, {
+        ...context,
+        commitId,
+        decision,
+      });
       return {
         changes: [
+          ...baselineChanges,
+          ...decisionChanges,
           ...edits.map((e) => ({
             path: `edit/${e.changeId}/status`,
             before: "pending",
@@ -1153,12 +1371,22 @@ async function resolveDocxEdits(
 export async function proposeEditDetail(
   actor: Actor,
   documentId: string,
-  edits: EditSpec[]
+  edits: EditSpec[],
+  options: { expectedHeadCommitId?: string | null; provenance?: FindingEditProvenance } = {}
 ): Promise<ProposeEditResult> {
   if (!edits.length) throw new Error("No edits to propose");
+  if (!(await canAccessArtifact(actor, "document", documentId, "editor")))
+    throw new Error("access_denied");
   const started = performance.now();
   const doc = await getDocument(documentId);
   if (!doc) throw new Error("Document not found");
+  if (
+    options.expectedHeadCommitId !== undefined &&
+    doc.headCommitId !== options.expectedHeadCommitId
+  )
+    throw new Error("stale_source");
+  if (options.provenance && !isDocxMode(doc))
+    throw new Error("Finding redlines require editable DOCX");
   const source: VersionSource = actor.type === "agent" ? "assistant_edit" : "user_edit";
   const mode = isDocxMode(doc) ? "docx" : "markdown";
   const base = {
@@ -1172,7 +1400,7 @@ export async function proposeEditDetail(
   logEvent("info", "redline.propose.start", base);
   try {
     if (isDocxMode(doc)) {
-      const result = await proposeDocxEdit(actor, doc, edits, source);
+      const result = await proposeDocxEdit(actor, doc, edits, source, options);
       if (result.failed > 0)
         logEvent("warn", "redline.propose.partial", {
           ...base,
@@ -1185,6 +1413,14 @@ export async function proposeEditDetail(
         applied: result.applied,
         failed: result.failed,
         ms: Math.round(performance.now() - started),
+      });
+      recordFunnel("redline_proposed", {
+        actorType: actor.type,
+        documentId,
+        matterId: doc.matterId ?? undefined,
+        durationMs: performance.now() - started,
+        failedCount: result.failed,
+        outcome: result.failed ? "partial" : "succeeded",
       });
       return result;
     }
@@ -1204,6 +1440,19 @@ export async function proposeEditDetail(
           ? `Proposed edit: "${edits[0]!.find.slice(0, 40)}" → "${edits[0]!.replace.slice(0, 40)}"`
           : `Proposed ${edits.length} edits`,
       apply: async ({ tx, commitId }) => {
+        const [current] = await tx
+          .select()
+          .from(documents)
+          .where(eq(documents.id, documentId))
+          .for("update");
+        if (
+          !current ||
+          current.headCommitId !== doc.headCommitId ||
+          current.markdown !== doc.markdown
+        )
+          throw new Error("stale_source");
+        const approvalContext = await captureDocumentApprovalContext(tx, actor, current);
+        const baselineChanges = await pinDocumentBaseline(tx, current);
         await tx.insert(documentEdits).values(
           edits.map((e, i) => ({
             documentId,
@@ -1213,22 +1462,26 @@ export async function proposeEditDetail(
             contextBefore: e.contextBefore ?? null,
             contextAfter: e.contextAfter ?? null,
             reason: e.reason ?? null,
+            approvalContext,
             status: "pending" as const,
             createdBy: actor.userId,
             lastCommitId: commitId,
           }))
         );
         return {
-          changes: edits.map((e, i) => ({
-            path: `edit/${changeIds[i]}`,
-            before: null,
-            after: {
-              find: e.find,
-              replace: e.replace,
-              reason: e.reason ?? null,
-              status: "pending",
-            },
-          })),
+          changes: [
+            ...baselineChanges,
+            ...edits.map((e, i) => ({
+              path: `edit/${changeIds[i]}`,
+              before: null,
+              after: {
+                find: e.find,
+                replace: e.replace,
+                reason: e.reason ?? null,
+                status: "pending",
+              },
+            })),
+          ],
         };
       },
     });
@@ -1245,8 +1498,22 @@ export async function proposeEditDetail(
       failed: result.failed,
       ms: Math.round(performance.now() - started),
     });
+    recordFunnel("redline_proposed", {
+      actorType: actor.type,
+      documentId,
+      matterId: doc.matterId ?? undefined,
+      durationMs: performance.now() - started,
+      outcome: "succeeded",
+    });
     return result;
   } catch (e) {
+    recordFunnel("redline_failed", {
+      actorType: actor.type,
+      documentId,
+      durationMs: performance.now() - started,
+      outcome: "failed",
+      failureCategory: "validation",
+    });
     logEvent("warn", "redline.propose.failed", {
       ...base,
       applied: e instanceof RedlineApplyError ? 0 : undefined,
@@ -1269,18 +1536,23 @@ export async function proposeEdit(
 
 /**
  * Accept or reject one or more pending changes in ONE new version + ONE commit.
- * Non-pending change ids are ignored; throws if none remain to resolve.
+ * Every requested change must still be pending; a mixed or stale batch applies none.
  */
 export async function resolveEdits(
   actor: Actor,
   documentId: string,
   changeIds: string[],
-  decision: "accept" | "reject"
+  decision: "accept" | "reject",
+  input: DocumentResolutionInput = {}
 ) {
-  if (actor.type === "agent") {
+  if (actor.type !== "user") {
     throw new Error("A person must accept or reject document changes in the document review UI.");
   }
   if (!changeIds.length) throw new Error("No edits to resolve");
+  if (new Set(changeIds).size !== changeIds.length)
+    throw new Error("Choose distinct pending document changes.");
+  if (!(await canAccessArtifact(actor, "document", documentId, "editor")))
+    throw new Error("access_denied");
   const started = performance.now();
   const base = {
     documentId,
@@ -1298,13 +1570,16 @@ export async function resolveEdits(
         and(eq(documentEdits.documentId, documentId), inArray(documentEdits.changeId, changeIds))
       );
     const pending = edits.filter((e) => e.status === "pending");
-    if (!pending.length) throw new Error("No pending edits to resolve");
+    if (pending.length !== changeIds.length)
+      throw new Error(
+        "Every requested document change must still be pending; reload before deciding."
+      );
 
     const doc = await getDocument(documentId);
     if (!doc) throw new Error("Document not found");
 
     const result = isDocxMode(doc)
-      ? await resolveDocxEdits(actor, doc, pending, decision)
+      ? await resolveDocxEdits(actor, doc, pending, decision, input)
       : await (async () => {
           const status = decision === "accept" ? "accepted" : "rejected";
           const editIds = pending.map((e) => e.id);
@@ -1318,6 +1593,7 @@ export async function resolveEdits(
                 ? `${status} edit ${pending[0]!.changeId.slice(0, 8)}`
                 : `${status} ${pending.length} edits`,
             apply: async ({ tx, commitId }) => {
+              const context = await guardDocumentResolution(tx, actor, doc, pending, input);
               await tx
                 .update(documentEdits)
                 .set({
@@ -1336,11 +1612,13 @@ export async function resolveEdits(
                 })
               );
 
+              let resolvedMarkdown = doc.markdown;
               if (decision === "accept" && doc.markdown !== null) {
                 let md = doc.markdown;
                 for (const e of pending)
                   if (e.deletedText !== null) md = md.replace(e.deletedText, e.insertedText ?? "");
                 if (md !== doc.markdown) {
+                  resolvedMarkdown = md;
                   await tx
                     .update(documents)
                     .set({ markdown: md })
@@ -1348,6 +1626,16 @@ export async function resolveEdits(
                   changes.push({ path: "markdown", before: doc.markdown, after: md });
                 }
               }
+              changes.push(
+                ...(await pinDocumentBaseline(tx, { ...doc, markdown: resolvedMarkdown }))
+              );
+              changes.push(
+                ...(await recordDocumentEditDecisions(tx, actor, {
+                  ...context,
+                  commitId,
+                  decision,
+                }))
+              );
               return { changes };
             },
           });
@@ -1360,8 +1648,23 @@ export async function resolveEdits(
       committed: result.commit?.seq ?? null,
       ms: Math.round(performance.now() - started),
     });
+    recordFunnel("redline_resolved", {
+      actorType: actor.type,
+      documentId,
+      matterId: doc.matterId ?? undefined,
+      durationMs: performance.now() - started,
+      decision,
+      outcome: "succeeded",
+    });
     return result;
   } catch (e) {
+    recordFunnel("redline_failed", {
+      actorType: actor.type,
+      documentId,
+      durationMs: performance.now() - started,
+      outcome: "failed",
+      failureCategory: "validation",
+    });
     logEvent("warn", "redline.resolve.failed", {
       ...base,
       error: e instanceof Error ? e.message : "failed",
@@ -1376,16 +1679,18 @@ export async function resolveEdit(
   actor: Actor,
   documentId: string,
   changeId: string,
-  decision: "accept" | "reject"
+  decision: "accept" | "reject",
+  input: DocumentResolutionInput = {}
 ) {
-  return resolveEdits(actor, documentId, [changeId], decision);
+  return resolveEdits(actor, documentId, [changeId], decision, input);
 }
 
 /** Accept or reject EVERY pending change on a document in one version/commit. */
 export async function resolveAllEdits(
   actor: Actor,
   documentId: string,
-  decision: "accept" | "reject"
+  decision: "accept" | "reject",
+  input: DocumentResolutionInput = {}
 ) {
   const pending = await db
     .select({ changeId: documentEdits.changeId })
@@ -1396,12 +1701,15 @@ export async function resolveAllEdits(
     actor,
     documentId,
     pending.map((p) => p.changeId),
-    decision
+    decision,
+    input
   );
 }
 
 /** Document with its tracked edits and per-edit blame (commit that last touched each). */
-export async function getDocumentDetail(documentId: string) {
+export async function getDocumentDetail(documentId: string, actor?: Actor) {
+  if (actor && !(await canAccessArtifact(actor, "document", documentId)))
+    throw new Error("access_denied");
   const doc = await getDocument(documentId);
   if (!doc) return null;
 
@@ -1425,13 +1733,62 @@ export async function getDocumentDetail(documentId: string) {
     .select({ name: user.name, email: user.email })
     .from(user)
     .where(eq(user.id, doc.userId));
+  let resolutionPolicy: {
+    approvalContext: DocumentResolutionInput["approvalContext"] | null;
+    mayResolve: boolean;
+    mayPropose: boolean;
+    requiredRole: "editor" | "owner" | null;
+    blockedReason: string | null;
+  } = {
+    approvalContext: null,
+    mayResolve: false,
+    mayPropose: false,
+    requiredRole: null,
+    blockedReason: "Current document decision access is required.",
+  };
+  if (actor) {
+    resolutionPolicy = await db.transaction(async (tx) => {
+      try {
+        const captured = edits
+          .filter((e) => e.status === "pending")
+          .flatMap((e) => e.approvalContext ?? []);
+        const approvalContext = await captureDocumentApprovalContext(tx, actor, doc, captured);
+        const requiredRole = approvalContext.some((c) => c.requiredRole === "owner")
+          ? ("owner" as const)
+          : ("editor" as const);
+        let mayResolve = actor.type === "user";
+        if (mayResolve) {
+          try {
+            await captureDocumentApprovalContext(tx, actor, doc, captured, true);
+          } catch {
+            mayResolve = false;
+          }
+        }
+        return {
+          approvalContext,
+          mayResolve,
+          mayPropose: true,
+          requiredRole,
+          blockedReason: mayResolve
+            ? null
+            : `A current human matter ${requiredRole} must decide these changes.`,
+        };
+      } catch {
+        return resolutionPolicy;
+      }
+    });
+  }
 
   return {
     document: { ...doc, ownerName: owner?.name ?? null, ownerEmail: owner?.email ?? null },
     edits: edits.map((e) => ({
       ...e,
+      // Captured cross-matter context is server evidence; never expose hidden
+      // matter identifiers through a document readable in another context.
+      approvalContext: undefined,
       blame: e.lastCommitId ? (blameById.get(e.lastCommitId) ?? null) : null,
     })),
+    resolutionPolicy,
   };
 }
 

@@ -1,3 +1,4 @@
+import { safeLoginNext } from "@/lib/auth/redirect";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { MailCheck } from "lucide-react";
 import { useState } from "react";
@@ -31,10 +32,7 @@ function VerifyEmail() {
     if (!email) return;
     setError(null);
     setBusy(true);
-    const callbackURL = new URL(
-      next && next.startsWith("/") ? next : "/assistant",
-      window.location.origin
-    );
+    const callbackURL = new URL(safeLoginNext(next), window.location.origin);
     const { error: verificationError } = await sendVerificationEmail({
       email,
       callbackURL: callbackURL.toString(),

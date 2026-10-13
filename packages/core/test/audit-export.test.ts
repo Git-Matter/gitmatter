@@ -64,7 +64,20 @@ beforeAll(async () => {
     actor: { type: "agent", userId, agentLabel: "mcp:audit-test" },
     op: "edit",
     message: "agent change",
-    apply: async () => ({ changes: [{ path: "markdown", before: null, after: "hello" }] }),
+    apply: async () => ({
+      changes: [{ path: "markdown", before: null, after: "hello" }],
+      summary: { sourceVersionId: docId, ruleId: "synthetic-rule" },
+    }),
+  });
+  await recordCommit({
+    artifactType: "matter",
+    artifactId: matterId,
+    actor: { type: "user", userId },
+    op: "approval_policy",
+    message: "Require human review",
+    apply: async () => ({
+      changes: [{ path: "approvalPolicy", before: null, after: { agentCells: "review" } }],
+    }),
   });
 });
 
@@ -81,8 +94,8 @@ describe("gatherMatterAudit", () => {
     expect(trail).not.toBeNull();
     expect(trail!.matterName).toBe("Audit Matter");
     expect(trail!.clientName).toBe("Audit Client");
-    expect(trail!.artifactCount).toBe(2);
-    expect(trail!.entries).toHaveLength(2);
+    expect(trail!.artifactCount).toBe(3);
+    expect(trail!.entries).toHaveLength(3);
 
     const human = trail!.entries.find((e) => e.actorType === "user");
     expect(human?.actor).toContain("Audit User");
@@ -100,6 +113,18 @@ describe("gatherMatterAudit", () => {
 });
 
 describe("renderers", () => {
+  test("CSV preserves complete field values and immutable provenance", async () => {
+    const trail = (await gatherMatterAudit(matterId))!;
+    const fullValue = "X".repeat(700) + "END_OF_SOURCE";
+    const first = trail.entries[0]!;
+    const csv = auditTrailToCsv({
+      ...trail,
+      entries: [{ ...first, after: fullValue, summary: { sourceVersionId: docId } }],
+    });
+    expect(csv).toContain(fullValue);
+    expect(csv).toContain(docId);
+    expect(csv).toContain(first.commitId!);
+  });
   test("CSV has a header plus one row per entry", async () => {
     const trail = (await gatherMatterAudit(matterId))!;
     const csv = auditTrailToCsv(trail);
@@ -107,6 +132,9 @@ describe("renderers", () => {
     expect(lines[0]).toContain("timestamp");
     expect(lines).toHaveLength(1 + trail.entries.length);
     expect(csv).toContain("mcp:audit-test");
+    expect(csv).toContain("commit_metadata");
+    expect(csv).toContain("synthetic-rule");
+    expect(csv).toContain("approval_policy");
   });
 
   test("DOCX renders to a non-empty zip", async () => {

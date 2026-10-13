@@ -72,7 +72,10 @@ export class OpenRouterClient implements LlmClient {
   }
 
   async complete(req: CompleteRequest): Promise<CompleteResult> {
-    const client = new OpenRouter({ apiKey: this.apiKey });
+    const client = new OpenRouter({
+      apiKey: this.apiKey,
+      ...(req.maxRetries === 0 ? { retryConfig: { strategy: "none" as const } } : {}),
+    });
     const res = await client.chat.send(
       { chatRequest: { stream: false, ...this.chatRequest(req) } },
       llmTimeoutMs() ? { timeoutMs: llmTimeoutMs() } : undefined
@@ -92,7 +95,10 @@ export class OpenRouterClient implements LlmClient {
   }
 
   async stream(req: CompleteRequest, handlers: StreamHandlers): Promise<CompleteResult> {
-    const client = new OpenRouter({ apiKey: this.apiKey });
+    const client = new OpenRouter({
+      apiKey: this.apiKey,
+      ...(req.maxRetries === 0 ? { retryConfig: { strategy: "none" as const } } : {}),
+    });
     const events = await client.chat.send(
       { chatRequest: { stream: true, ...this.chatRequest(req) } },
       llmTimeoutMs() ? { timeoutMs: llmTimeoutMs() } : undefined

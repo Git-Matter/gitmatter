@@ -8,6 +8,7 @@ import {
   commits,
   documents,
   fieldChanges,
+  matters,
   tabularReviews,
   user,
   workflows,
@@ -42,6 +43,7 @@ const HEAD_TABLE = {
   workflow: workflows,
   document: documents,
   clause: clauses,
+  matter: matters,
 } as const;
 
 export interface RecordCommitArgs {
@@ -66,65 +68,68 @@ export interface RecordCommitArgs {
  * MCP agent tool — flows through here, producing one commit with field changes.
  */
 export async function recordCommit(args: RecordCommitArgs) {
-  return db.transaction(async (tx) => {
-    // Serialize all commits to this artifact for the duration of the transaction.
-    // A transaction-scoped advisory lock is robust even when no commit row exists
-    // yet (unlike SELECT ... FOR UPDATE, which locks nothing on an empty set).
-    await tx.execute(
-      sql`select pg_advisory_xact_lock(hashtext(${`${args.artifactType}:${args.artifactId}`}))`
+  return db.transaction((tx) => recordCommitInTransaction(tx, args));
+}
+
+/** Compose the audit spine with a caller-owned transaction; all locks and writes use tx. */
+export async function recordCommitInTransaction(tx: Tx, args: RecordCommitArgs) {
+  // Serialize all commits to this artifact for the duration of the transaction.
+  // A transaction-scoped advisory lock is robust even when no commit row exists
+  // yet (unlike SELECT ... FOR UPDATE, which locks nothing on an empty set).
+  await tx.execute(
+    sql`select pg_advisory_xact_lock(hashtext(${`${args.artifactType}:${args.artifactId}`}))`
+  );
+  const lastRows = (await tx.execute(sql`
+    select id, seq from ${commits}
+    where artifact_type = ${args.artifactType} and artifact_id = ${args.artifactId}
+    order by seq desc limit 1
+  `)) as unknown as Array<{ id: string; seq: number }>;
+  const last = lastRows[0];
+  const parentCommitId = last?.id ?? null;
+  const nextSeq = (last?.seq ?? 0) + 1;
+
+  const commitId = randomUUID();
+  const { changes, summary } = await args.apply({ tx, commitId });
+
+  if (changes.length === 0 && args.skipIfNoChanges) {
+    return { commit: null, changes };
+  }
+
+  const [commit] = await tx
+    .insert(commits)
+    .values({
+      id: commitId,
+      artifactType: args.artifactType,
+      artifactId: args.artifactId,
+      seq: nextSeq,
+      parentCommitId,
+      actorType: args.actor.type,
+      actorId: args.actor.userId,
+      agentLabel: args.actor.type === "agent" ? args.actor.agentLabel : null,
+      op: args.op,
+      message: args.message,
+      summary: summary ?? null,
+    })
+    .returning();
+
+  if (changes.length) {
+    await tx.insert(fieldChanges).values(
+      changes.map((c) => ({
+        commitId,
+        path: c.path,
+        before: c.before ?? null,
+        after: c.after ?? null,
+      }))
     );
-    const lastRows = (await tx.execute(sql`
-      select id, seq from ${commits}
-      where artifact_type = ${args.artifactType} and artifact_id = ${args.artifactId}
-      order by seq desc limit 1
-    `)) as unknown as Array<{ id: string; seq: number }>;
-    const last = lastRows[0];
-    const parentCommitId = last?.id ?? null;
-    const nextSeq = (last?.seq ?? 0) + 1;
+  }
 
-    const commitId = randomUUID();
-    const { changes, summary } = await args.apply({ tx, commitId });
+  const headTable = HEAD_TABLE[args.artifactType];
+  await tx
+    .update(headTable)
+    .set({ headCommitId: commitId })
+    .where(eq(headTable.id, args.artifactId));
 
-    if (changes.length === 0 && args.skipIfNoChanges) {
-      return { commit: null, changes };
-    }
-
-    const [commit] = await tx
-      .insert(commits)
-      .values({
-        id: commitId,
-        artifactType: args.artifactType,
-        artifactId: args.artifactId,
-        seq: nextSeq,
-        parentCommitId,
-        actorType: args.actor.type,
-        actorId: args.actor.userId,
-        agentLabel: args.actor.type === "agent" ? args.actor.agentLabel : null,
-        op: args.op,
-        message: args.message,
-        summary: summary ?? null,
-      })
-      .returning();
-
-    if (changes.length) {
-      await tx.insert(fieldChanges).values(
-        changes.map((c) => ({
-          commitId,
-          path: c.path,
-          before: c.before ?? null,
-          after: c.after ?? null,
-        }))
-      );
-    }
-
-    const headTable = HEAD_TABLE[args.artifactType];
-    await tx
-      .update(headTable)
-      .set({ headCommitId: commitId })
-      .where(eq(headTable.id, args.artifactId));
-
-    return { commit, changes };
-  });
+  return { commit, changes };
 }
 
 /** Fold field_changes (seq <= uptoSeq, last-writer-wins) into a path->value map. */

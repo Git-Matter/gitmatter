@@ -22,7 +22,6 @@ import {
   getLlmClient,
   getMatter,
   getUserJurisdiction,
-  getUserTenant,
   hasMatterAccess,
   listAllChats,
   listChats,
@@ -33,7 +32,6 @@ import {
   parseCitations,
   persistChat,
   providerForModel,
-  recordLlmUsage,
   resolveLlmKey,
   setChatPinned,
   streamComplete,
@@ -800,8 +798,7 @@ async function runAssistant(
   const { key } = await resolveLlmKey(user.id, provider);
   if (!key) throw new HttpError(400, `No API key for ${provider} (set one in Settings)`);
   const client = getLlmClient(provider, key);
-  // Resolved once for usage metering across the tool loop's completions.
-  const tenantId = await getUserTenant(user.id);
+  const spendRunId = crypto.randomUUID();
 
   const toolCalls: Array<{ tool: string; input: unknown }> = [];
   let cacheableToolCall: { documentId: string; input: Record<string, unknown> } | null = null;
@@ -846,6 +843,12 @@ async function runAssistant(
           }
           handlers.onReasoning?.(delta);
         },
+      },
+      {
+        actor: { type: "user", userId: user.id },
+        matterId: matterId ?? null,
+        runId: spendRunId,
+        sourceKind: "chat",
       }
     );
     const activeThinking = thinking as ChatTraceEvent | null;
@@ -877,17 +880,6 @@ async function runAssistant(
       inputTokens: res.usage?.inputTokens,
       outputTokens: res.usage?.outputTokens,
     });
-    // Meter this completion's token spend (log-only; never blocks the turn).
-    if (res.usage)
-      void recordLlmUsage({
-        userId: user.id,
-        tenantId,
-        matterId: matterId ?? null,
-        provider,
-        model,
-        inputTokens: res.usage.inputTokens,
-        outputTokens: res.usage.outputTokens,
-      });
     messages.push({
       role: "assistant",
       content: res.text,

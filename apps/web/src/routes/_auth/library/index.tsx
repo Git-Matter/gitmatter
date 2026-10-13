@@ -41,7 +41,15 @@ import { useSession } from "@/lib/auth/auth-client";
 import { queryKeys } from "@/lib/data/queries";
 import { useDataTable } from "@/lib/hooks/table/useDataTable";
 
-export const Route = createFileRoute("/_auth/library/")({ component: LibraryPage });
+export const Route = createFileRoute("/_auth/library/")({
+  component: LibraryPage,
+  validateSearch: (input: Record<string, unknown>): { clause?: string } => ({
+    clause:
+      typeof input.clause === "string" && /^[0-9a-f-]{36}$/i.test(input.clause)
+        ? input.clause
+        : undefined,
+  }),
+});
 
 // The firm's library: curated, admin-approved knowledge in two sections that
 // share one lifecycle (draft -> approved -> deprecated) and live on the commit
@@ -240,7 +248,8 @@ function ClausesSection({
   "use no memo";
   const qc = useQueryClient();
   const navigate = useNavigate();
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const searchParams = Route.useSearch();
+  const [selectedId, setSelectedId] = useState<string | null>(searchParams.clause ?? null);
   const [editing, setEditing] = useState<Clause | null>(null);
   const [creatingParent, setCreatingParent] = useState<Clause | null>(null);
 

@@ -13,9 +13,14 @@ import {
   purgeOldChats,
   recordAudit,
   seedBuiltinWorkflows,
+  setFunnelSink,
+  startExtractionWorker,
 } from "@workspace/core";
 import { resolveJurisdiction } from "@workspace/registry";
 import { chatRoute } from "./routes/chat.js";
+import { approvalRoute } from "./routes/approval.js";
+import { jobsRoute } from "./routes/jobs.js";
+import { searchRoute } from "./routes/search.js";
 import { clausesRoute } from "./routes/clauses.js";
 import { documentsRoute } from "./routes/documents.js";
 import { keysRoute } from "./routes/keys.js";
@@ -40,6 +45,16 @@ import { posthog } from "../posthog.js";
 // Initialize error tracking first, so anything thrown during boot is captured.
 // No-op when SENTRY_DSN is unset.
 initSentry();
+setFunnelSink((event, properties) => {
+  // An opaque matter/document/review id groups the journey without user identity.
+  const distinctId = properties.matterId ?? properties.reviewId ?? properties.documentId;
+  if (!distinctId || !getEnv("POSTHOG_API_KEY")) return;
+  posthog.capture({
+    distinctId,
+    event,
+    properties: { ...properties, $process_person_profile: false, $geoip_disable: true },
+  });
+});
 
 // Probe which AI providers have a server env key at boot, so the model catalog
 // can mark unavailable ones. Logs the result for ops visibility.
@@ -53,6 +68,7 @@ initSentry();
 
 // Seed system workflows once on boot (idempotent).
 void seedBuiltinWorkflows().catch(() => {});
+startExtractionWorker();
 
 // Retention sweeps. No scheduler here, so boot is the periodic sweep: hard-delete
 // documents past their soft-delete window, dead auth/MCP tokens, old audit events,
@@ -299,6 +315,9 @@ app.route("/", workflowRoute);
 app.route("/", chatRoute);
 app.route("/", tokensRoute);
 app.route("/", clausesRoute);
+app.route("/", approvalRoute);
+app.route("/", jobsRoute);
+app.route("/", searchRoute);
 
 // Exposed MCP server for Claude Desktop / CLI / Cowork. Authenticated by a
 // gitmatter access token; a fresh stateless server/transport per request.

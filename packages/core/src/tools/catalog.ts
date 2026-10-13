@@ -1,10 +1,13 @@
 import { type ProviderId, providersFor } from "@workspace/registry";
 import { type Actor, getUserTenant, hasMatterAccess, logEvent } from "../core/index.js";
 import { ensureDefaultMatter } from "../platform/index.js";
+import { buildApprovalTools } from "./approval.js";
 import { buildAuditTools } from "./audit.js";
+import { buildContractReviewTools } from "./contract-review.js";
 import { buildClauseTools } from "./clauses.js";
 import { buildDiscoveryTools } from "./discovery.js";
 import { buildDocumentTools } from "./documents.js";
+import { buildJobTools } from "./jobs.js";
 import { buildMatterTools } from "./matters.js";
 import { buildResearchTools } from "./research.js";
 import { buildReviewTools } from "./reviews.js";
@@ -179,6 +182,7 @@ export function buildToolCatalog(
     defaultMatterLabel: string;
     sourceIds?: ProviderId[];
     executionMode?: "subscription";
+    credentialId?: string;
   }
 ): ToolSpec[] {
   const allowedSourceIds = opts.sourceIds ? new Set(opts.sourceIds) : null;
@@ -204,13 +208,16 @@ export function buildToolCatalog(
     return ensureDefaultMatter(actor.userId, opts.defaultMatterLabel, tenantId);
   };
 
-  const ctx: ToolContext = { actor, resolveMatter };
+  const ctx: ToolContext = { actor, resolveMatter, credentialId: opts.credentialId };
 
   return [
     ...buildReviewTools(ctx),
+    ...buildContractReviewTools(ctx),
     ...buildAuditTools(ctx),
+    ...buildApprovalTools(ctx),
     ...buildMatterTools(ctx),
     ...buildDocumentTools(ctx),
+    ...buildJobTools(ctx),
     ...buildDiscoveryTools(ctx),
     ...buildWorkflowTools(ctx),
     ...buildClauseTools(ctx),
