@@ -337,7 +337,9 @@ export function ContractReviewCompletion({ completion }: { completion: ReviewCom
               </>
             ) : (
               <span className="text-muted-foreground">
-                DOCX output requires an editable DOCX source
+                {doc.fileType === "docx"
+                  ? "Word output blocked by source inspection"
+                  : "DOCX output requires a DOCX source"}
               </span>
             )}
           </div>

@@ -29,6 +29,7 @@ import {
   resolveRunModel,
 } from "../provider/index.js";
 import { coerceCitations, coerceFlag, queryCell, queryRow } from "./extract.js";
+import { capturedReviewInstructions } from "../prompts/tabular.js";
 
 /** Meter one extraction completion against the review's user/tenant/matter —
  *  tabular runs bill to the matter the review is filed under. Fire-and-forget. */
@@ -400,6 +401,7 @@ export async function runCell(
       documentText:
         review.inputSnapshot?.documents.find((d) => d.id === doc.id)?.text ?? doc.markdown ?? "",
       columnPrompt: col.prompt,
+      reviewInstructions: capturedReviewInstructions(review.inputSnapshot),
       format: col.format,
       tags: col.tags,
       apiKey: key,
@@ -520,6 +522,7 @@ export async function runDocument(
       documentText:
         review.inputSnapshot?.documents.find((d) => d.id === doc.id)?.text ?? doc.markdown ?? "",
       columns: review.columnsConfig,
+      reviewInstructions: capturedReviewInstructions(review.inputSnapshot),
       apiKey: key,
       onUsage: meterFor(actor, review),
     });

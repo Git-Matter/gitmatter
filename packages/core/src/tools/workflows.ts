@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { reviewInstructionsSchema } from "@workspace/contracts";
 import type { PlaybookRule } from "@workspace/db/schema";
 import { canAccessArtifact, canReadDocument, getPendingWorkflowProposal } from "../core/index.js";
 import { getDocument } from "../content/documents.js";
@@ -157,14 +158,15 @@ export function buildWorkflowTools({
     {
       name: "run_playbook",
       description:
-        "Prepare a review from an approved playbook with one verdict column per rule. This creates pending cells; it does not run a model. Read each document with get_document, analyse it yourself, then save cited findings with write_cell. Read results with read_review_cells.",
+        "Prepare a review from an approved playbook with one verdict column per rule. Supply reviewInstructions to capture the represented party, disclosure role, NDA structure, business purpose and governing law; null/unknown means not known. These instructions are frozen in the review. This creates pending cells; it does not run a model. Read each document with get_document, analyse it yourself, then save cited findings with write_cell. Read results with read_review_cells and get_review_completion.",
       schema: {
         playbookId: z.string(),
         requestId: z.uuid().optional(),
+        reviewInstructions: reviewInstructionsSchema.optional(),
         documentIds: z.array(z.string()).min(1),
         matterId: z.string().optional(),
       },
-      handler: async ({ playbookId, documentIds, matterId, requestId }) => {
+      handler: async ({ playbookId, documentIds, matterId, requestId, reviewInstructions }) => {
         const wf = await getWorkflow(playbookId as string);
         if (
           !wf ||
@@ -181,6 +183,10 @@ export function buildWorkflowTools({
           const result = await runPlaybook(actor, {
             playbookId: playbookId as string,
             requestId: requestId as string | undefined,
+            reviewInstructions:
+              reviewInstructions === undefined
+                ? undefined
+                : reviewInstructionsSchema.parse(reviewInstructions),
             documentIds: documentIds as string[],
             matterId: resolved,
           });

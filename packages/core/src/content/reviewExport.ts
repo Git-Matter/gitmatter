@@ -14,6 +14,7 @@ import { canReadDocument, hasMatterAccessInTransaction } from "../core/access.js
 import { type Actor, recordCommitInTransaction } from "../core/commit.js";
 import { ApprovalError, approvalHash, getProposal } from "../core/approval.js";
 import { assertApprovedDocumentBaseline } from "../core/document-approval.js";
+import { getDocumentWordInspection } from "./documents.js";
 
 async function captureReviewExport(tx: Tx, actor: Actor, reviewId: string, documentId: string) {
   const [review] = await tx
@@ -62,6 +63,9 @@ async function captureReviewExport(tx: Tx, actor: Actor, reviewId: string, docum
         .for("share")
     : [];
   if (!version?.storagePath || !doc.currentVersionId) throw new Error("input_not_ready");
+  // Authorization must refer to verified current bytes, even if an earlier cached inspection was safe.
+  const wordInspection = await getDocumentWordInspection(doc, doc.currentVersionId, [], tx, true);
+  if (!wordInspection?.safeClean) throw new Error("input_not_ready");
   const [capturedReview] = await tx
     .select({ headCommitId: tabularReviews.headCommitId })
     .from(tabularReviews)

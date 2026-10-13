@@ -32,15 +32,16 @@ export function validateFinding(source: string, content: CellContent, citations:
     citations.every(
       (c) => normalized(c.quote).length > 0 && normalized(source).includes(normalized(c.quote))
     );
-  const outcome: FindingOutcome = !citationsValid
-    ? "inconclusive"
-    : content.outcome === "not_found" && citations.length === 0
-      ? "not_found"
-      : !citations.length || content.flag === "grey"
-        ? "inconclusive"
-        : content.flag === "green"
-          ? "conforms"
-          : "deviates";
+  const outcome: FindingOutcome =
+    !citationsValid || content.outcome === "inconclusive"
+      ? "inconclusive"
+      : content.outcome === "not_found" && citations.length === 0
+        ? "not_found"
+        : !citations.length || content.flag === "grey"
+          ? "inconclusive"
+          : content.flag === "green"
+            ? "conforms"
+            : "deviates";
   return {
     outcome,
     citationsValid,

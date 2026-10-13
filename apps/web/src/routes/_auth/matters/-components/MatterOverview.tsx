@@ -94,6 +94,25 @@ export function MatterOverview({
     jobs.data?.jobs.filter((job) => job.state === "running" || job.state === "queued") ?? [];
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-8 overflow-y-auto pb-6">
+      <section
+        className="flex flex-wrap items-center justify-between gap-3"
+        aria-label="Guided contract review"
+      >
+        <div className="flex flex-col gap-1">
+          <h2 className="font-serif text-xl">Start a contract review</h2>
+          <p className="text-sm text-muted-foreground">
+            Follow storage, approved positions, instructions and human decisions through to Word
+            output.
+          </p>
+        </div>
+        <Link
+          to="/first-review"
+          search={{ matterId }}
+          className="text-sm underline underline-offset-4"
+        >
+          Open the first-review guide
+        </Link>
+      </section>
       <section className="space-y-3" aria-label="Work needing attention">
         <h2 className="font-serif text-xl">Needs attention</h2>
         {proposals.isPending || jobs.isPending ? <Skeleton className="h-16 w-full" /> : null}

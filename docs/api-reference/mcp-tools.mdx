@@ -325,9 +325,9 @@ Changes workspace data; recorded under the acting account.
 
 ## `run_playbook`
 
-Prepare a review from an approved playbook with one verdict column per rule. This creates pending cells; it does not run a model. Read each document with get_document, analyse it yourself, then save cited findings with write_cell. Read results with read_review_cells.
+Prepare a review from an approved playbook with one verdict column per rule. Supply reviewInstructions to capture the represented party, disclosure role, NDA structure, business purpose and governing law; null/unknown means not known. These instructions are frozen in the review. This creates pending cells; it does not run a model. Read each document with get_document, analyse it yourself, then save cited findings with write_cell. Read results with read_review_cells and get_review_completion.
 
-Inputs: `playbookId`, `requestId?`, `documentIds`, `matterId?`.
+Inputs: `playbookId`, `requestId?`, `reviewInstructions?`, `documentIds`, `matterId?`.
 
 Changes workspace data; recorded under the acting account.
 

@@ -13,6 +13,7 @@ import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { CommitHistory } from "@/components/CommitHistory";
 import { useSession } from "@/lib/auth/auth-client";
 import { DocxView } from "./DocxView";
+import { WordInspectionNotice } from "./WordInspectionNotice";
 import { api, type DocVersion } from "../../../../lib/data/api";
 import {
   documentSourceLabel,
@@ -293,8 +294,14 @@ function DrawerBody({
             />
           ) : (
             <ScrollArea className="min-h-0 flex-1">
-              <div className="p-6">
-                {showRendered && isDocx ? (
+              <div className="flex flex-col gap-4 p-6">
+                {isDocx && <WordInspectionNotice inspection={data.wordInspection} />}
+                {showRendered && isDocx && data.wordInspection?.inspection.status !== "complete" ? (
+                  <p className="text-sm text-muted-foreground">
+                    Preview is unavailable because this Word source could not be fully inspected.
+                    Download the source file and inspect it in Word.
+                  </p>
+                ) : showRendered && isDocx ? (
                   <DocxView
                     url={api.documentDownloadUrl(docId)}
                     versionToken={doc.currentVersionId}

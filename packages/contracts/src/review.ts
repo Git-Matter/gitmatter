@@ -1,3 +1,31 @@
+import { z } from "zod";
+
+/** Null and "unknown" are explicit unknowns, never a guessed client or legal position. */
+export const reviewInstructionsSchema = z.strictObject({
+  representedParty: z
+    .string()
+    .trim()
+    .min(1, "Enter the party name, or mark it unknown.")
+    .max(300)
+    .nullable(),
+  disclosureRole: z.enum(["receiving", "disclosing", "both", "unknown"]),
+  ndaStructure: z.enum(["mutual", "unilateral", "unknown"]),
+  businessPurpose: z
+    .string()
+    .trim()
+    .min(1, "Describe the purpose, or mark it unknown.")
+    .max(2000)
+    .nullable(),
+  governingLaw: z
+    .string()
+    .trim()
+    .min(1, "Enter the governing law context, or mark it unknown.")
+    .max(500)
+    .nullable(),
+  additionalInstructions: z.string().trim().max(4000).optional(),
+});
+export type ReviewInstructions = z.infer<typeof reviewInstructionsSchema>;
+
 /** Immutable inputs and decision metadata for an audited contract review. */
 export type ReviewClauseSnapshot = {
   id: string;
@@ -13,8 +41,7 @@ export type ReviewRuleSnapshot = {
   standardPosition: string;
   clauses: ReviewClauseSnapshot[];
 };
-export type ContractReviewSnapshot = {
-  revision: 1;
+type ContractReviewSnapshotInputs = {
   createdAt: string;
   playbookId: string;
   playbookRevision: string;
@@ -27,6 +54,8 @@ export type ContractReviewSnapshot = {
     text: string;
   }>;
 };
+export type ContractReviewSnapshot = ContractReviewSnapshotInputs &
+  ({ revision: 1 } | { revision: 2; reviewInstructions: ReviewInstructions });
 export type FindingOutcome = "conforms" | "deviates" | "not_found" | "inconclusive";
 export type FindingProvenance = {
   revisionId: string;

@@ -28,7 +28,7 @@ import {
   applyTenantRunLimits,
 } from "../../core/job-spend.js";
 import { DEFAULT_MODEL, LLM_MODELS, resolveRunModel, providerForModel } from "../provider/index.js";
-import { buildCellPrompt } from "../prompts/tabular.js";
+import { buildCellPrompt, capturedReviewInstructions } from "../prompts/tabular.js";
 import { commitCell } from "./runner.js";
 import { queryCell } from "./extract.js";
 
@@ -39,7 +39,17 @@ function cellInput(review: TabularReview, documentId: string, columnIndex: numbe
   const source = review.inputSnapshot?.documents.find((d) => d.id === documentId);
   const column = review.columnsConfig.find((c) => c.index === columnIndex);
   if (!source || !column) throw new JobError("input_not_ready");
-  return { source, column, fingerprint: hash({ source, column }) };
+  return {
+    source,
+    column,
+    fingerprint: hash({
+      source,
+      column,
+      ...(review.inputSnapshot?.revision === 2
+        ? { reviewInstructions: review.inputSnapshot.reviewInstructions }
+        : {}),
+    }),
+  };
 }
 
 export async function estimateDurableReview(actor: Actor, reviewId: string, model = DEFAULT_MODEL) {
@@ -61,6 +71,7 @@ export async function estimateDurableReview(actor: Actor, reviewId: string, mode
           filename: source?.title ?? doc.title,
           documentText: source?.text ?? doc.markdown ?? "",
           columnPrompt: column.prompt,
+          reviewInstructions: capturedReviewInstructions(review.inputSnapshot),
           format: column.format,
           tags: column.tags,
         })
@@ -292,6 +303,7 @@ async function retryFailedReviewRun(
       filename: source.title,
       documentText: source.text,
       columnPrompt: column.prompt,
+      reviewInstructions: capturedReviewInstructions(accepted.review.inputSnapshot),
       format: column.format,
       tags: column.tags,
     });
@@ -374,6 +386,7 @@ export async function runReviewJobOnce(): Promise<boolean> {
       filename: source.title,
       documentText: source.text,
       columnPrompt: column.prompt,
+      reviewInstructions: capturedReviewInstructions(review.inputSnapshot),
       format: column.format,
       tags: column.tags,
       apiKey: key,

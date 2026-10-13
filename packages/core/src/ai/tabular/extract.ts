@@ -1,4 +1,5 @@
 import type { CellCitation, CellContent, TabularColumn } from "@workspace/db/schema";
+import type { ReviewInstructions } from "@workspace/contracts";
 import { DEFAULT_MODEL, completeText } from "../provider/index.js";
 import { buildCellPrompt, buildRowPrompt, normalizeCell } from "../prompts/tabular.js";
 
@@ -92,6 +93,7 @@ export async function queryCell(params: {
   maxRetries?: number;
   format?: string;
   tags?: string[];
+  reviewInstructions?: ReviewInstructions | null;
   apiKey?: string | null;
   // Cache the document (it's in the system prefix) so the next column over the
   // same document reuses it instead of re-billing the full text. `cacheKey`
@@ -161,6 +163,7 @@ export async function queryRow(params: {
   filename: string;
   documentText: string;
   columns: TabularColumn[];
+  reviewInstructions?: ReviewInstructions | null;
   apiKey?: string | null;
   onUsage?: Parameters<typeof completeText>[0]["onUsage"];
 }): Promise<Map<number, CellResult>> {
@@ -195,6 +198,9 @@ export async function queryRow(params: {
           summary: (typeof cell.summary === "string" ? cell.summary : "").trim() || "Not addressed",
           flag: coerceFlag(cell.flag),
           reasoning: typeof cell.reasoning === "string" ? cell.reasoning : "",
+          ...(["conforms", "deviates", "not_found", "inconclusive"].includes(String(cell.outcome))
+            ? { outcome: cell.outcome as CellContent["outcome"] }
+            : {}),
         },
         col.format,
         col.tags

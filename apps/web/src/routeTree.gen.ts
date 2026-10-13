@@ -21,6 +21,7 @@ import { Route as UnauthLoginRouteImport } from './routes/_unauth/login'
 import { Route as UnauthForgotPasswordRouteImport } from './routes/_unauth/forgot-password'
 import { Route as Unauth2faRouteImport } from './routes/_unauth/2fa'
 import { Route as AuthOnboardingRouteImport } from './routes/_auth/onboarding'
+import { Route as AuthFirstReviewRouteImport } from './routes/_auth/first-review'
 import { Route as DotwellKnownSplatRouteImport } from './routes/[.]well-known/$'
 import { Route as marketingUseCasesRouteImport } from './routes/(marketing)/use-cases'
 import { Route as marketingTermsRouteImport } from './routes/(marketing)/terms'
@@ -117,6 +118,11 @@ const Unauth2faRoute = Unauth2faRouteImport.update({
 const AuthOnboardingRoute = AuthOnboardingRouteImport.update({
   id: '/onboarding',
   path: '/onboarding',
+  getParentRoute: () => AuthRouteRoute,
+} as any)
+const AuthFirstReviewRoute = AuthFirstReviewRouteImport.update({
+  id: '/first-review',
+  path: '/first-review',
   getParentRoute: () => AuthRouteRoute,
 } as any)
 const DotwellKnownSplatRoute = DotwellKnownSplatRouteImport.update({
@@ -340,6 +346,7 @@ export interface FileRoutesByFullPath {
   '/terms': typeof marketingTermsRoute
   '/use-cases': typeof marketingUseCasesRoute
   '/.well-known/$': typeof DotwellKnownSplatRoute
+  '/first-review': typeof AuthFirstReviewRoute
   '/onboarding': typeof AuthOnboardingRoute
   '/2fa': typeof Unauth2faRoute
   '/forgot-password': typeof UnauthForgotPasswordRoute
@@ -391,6 +398,7 @@ export interface FileRoutesByTo {
   '/terms': typeof marketingTermsRoute
   '/use-cases': typeof marketingUseCasesRoute
   '/.well-known/$': typeof DotwellKnownSplatRoute
+  '/first-review': typeof AuthFirstReviewRoute
   '/onboarding': typeof AuthOnboardingRoute
   '/2fa': typeof Unauth2faRoute
   '/forgot-password': typeof UnauthForgotPasswordRoute
@@ -445,6 +453,7 @@ export interface FileRoutesById {
   '/(marketing)/terms': typeof marketingTermsRoute
   '/(marketing)/use-cases': typeof marketingUseCasesRoute
   '/.well-known/$': typeof DotwellKnownSplatRoute
+  '/_auth/first-review': typeof AuthFirstReviewRoute
   '/_auth/onboarding': typeof AuthOnboardingRoute
   '/_unauth/2fa': typeof Unauth2faRoute
   '/_unauth/forgot-password': typeof UnauthForgotPasswordRoute
@@ -499,6 +508,7 @@ export interface FileRouteTypes {
     | '/terms'
     | '/use-cases'
     | '/.well-known/$'
+    | '/first-review'
     | '/onboarding'
     | '/2fa'
     | '/forgot-password'
@@ -550,6 +560,7 @@ export interface FileRouteTypes {
     | '/terms'
     | '/use-cases'
     | '/.well-known/$'
+    | '/first-review'
     | '/onboarding'
     | '/2fa'
     | '/forgot-password'
@@ -603,6 +614,7 @@ export interface FileRouteTypes {
     | '/(marketing)/terms'
     | '/(marketing)/use-cases'
     | '/.well-known/$'
+    | '/_auth/first-review'
     | '/_auth/onboarding'
     | '/_unauth/2fa'
     | '/_unauth/forgot-password'
@@ -736,6 +748,13 @@ declare module '@tanstack/react-router' {
       path: '/onboarding'
       fullPath: '/onboarding'
       preLoaderRoute: typeof AuthOnboardingRouteImport
+      parentRoute: typeof AuthRouteRoute
+    }
+    '/_auth/first-review': {
+      id: '/_auth/first-review'
+      path: '/first-review'
+      fullPath: '/first-review'
+      preLoaderRoute: typeof AuthFirstReviewRouteImport
       parentRoute: typeof AuthRouteRoute
     }
     '/.well-known/$': {
@@ -1080,6 +1099,7 @@ const marketingRouteRouteWithChildren = marketingRouteRoute._addFileChildren(
 )
 
 interface AuthRouteRouteChildren {
+  AuthFirstReviewRoute: typeof AuthFirstReviewRoute
   AuthOnboardingRoute: typeof AuthOnboardingRoute
   AuthAssistantIdRoute: typeof AuthAssistantIdRoute
   AuthDocumentsIdRoute: typeof AuthDocumentsIdRoute
@@ -1100,6 +1120,7 @@ interface AuthRouteRouteChildren {
 }
 
 const AuthRouteRouteChildren: AuthRouteRouteChildren = {
+  AuthFirstReviewRoute: AuthFirstReviewRoute,
   AuthOnboardingRoute: AuthOnboardingRoute,
   AuthAssistantIdRoute: AuthAssistantIdRoute,
   AuthDocumentsIdRoute: AuthDocumentsIdRoute,

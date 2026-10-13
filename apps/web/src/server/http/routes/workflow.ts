@@ -169,6 +169,7 @@ workflowRoute.post(
           documentIds: body.documentIds,
           matterId: body.matterId,
           requestId: body.requestId,
+          reviewInstructions: body.reviewInstructions,
         }
       );
       posthog.capture({

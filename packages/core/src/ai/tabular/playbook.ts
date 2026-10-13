@@ -2,7 +2,12 @@ import { canReadApprovedLibrary } from "../../core/library-access.js";
 import { createHash, randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { db } from "@workspace/db/client";
-import type { ContractReviewSnapshot, ReviewRuleSnapshot } from "@workspace/contracts";
+import {
+  reviewInstructionsSchema,
+  type ContractReviewSnapshot,
+  type ReviewRuleSnapshot,
+  type ReviewInstructions,
+} from "@workspace/contracts";
 import {
   type PlaybookRule,
   type TabularColumn,
@@ -103,13 +108,28 @@ export async function playbookColumns(
  */
 export async function runPlaybook(
   actor: Actor,
-  params: { playbookId: string; documentIds: string[]; matterId: string; requestId?: string }
+  params: {
+    playbookId: string;
+    documentIds: string[];
+    matterId: string;
+    requestId?: string;
+    reviewInstructions?: ReviewInstructions;
+  }
 ): Promise<{ reviewId: string; ruleCount: number }> {
   if (!(await hasMatterAccess(actor, params.matterId, "editor"))) throw new Error("access_denied");
+  const reviewInstructions =
+    params.reviewInstructions === undefined
+      ? undefined
+      : reviewInstructionsSchema.parse(params.reviewInstructions);
   const documentIds = [...new Set(params.documentIds)];
   const fingerprint = createHash("sha256")
     .update(
-      JSON.stringify({ playbookId: params.playbookId, matterId: params.matterId, documentIds })
+      JSON.stringify({
+        playbookId: params.playbookId,
+        matterId: params.matterId,
+        documentIds,
+        reviewInstructions,
+      })
     )
     .digest("hex");
   const requestKey = params.requestId
@@ -211,7 +231,9 @@ export async function runPlaybook(
     });
   }
   const inputSnapshot: ContractReviewSnapshot = {
-    revision: 1,
+    ...(reviewInstructions
+      ? { revision: 2 as const, reviewInstructions }
+      : { revision: 1 as const }),
     createdAt: new Date().toISOString(),
     playbookId: wf.id,
     playbookRevision:

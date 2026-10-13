@@ -27,6 +27,7 @@ import { logEvent } from "../core/log.js";
 import { recordFunnel } from "../core/funnel.js";
 import { emitDocStatus } from "./extractionEvents.js";
 import { assertFileTypeMatches, extractMarkdown, type SupportedFileType } from "./extract.js";
+import { inspectVersionWordBytes } from "./docx/inspection.js";
 
 const WORKER = Symbol.for("gitmatter.extractionWorker");
 type WorkerControl = { stop: () => void; wake: () => void };
@@ -164,6 +165,7 @@ export async function runExtractionOnce(documentId?: string): Promise<boolean> {
     phase = "extract";
     if (!assertFileTypeMatches(`source.${version.fileType}`, bytes).ok)
       throw new JobError("unsupported_format");
+    if (version.fileType === "docx") await inspectVersionWordBytes(bytes, version.wordInspection);
     const { markdown, pageCount } = await extractMarkdown(
       bytes,
       version.fileType as SupportedFileType

@@ -3,6 +3,7 @@ import {
   hasMatterAccess,
   hasMatterAccessInTransaction,
   sameTenant,
+  type AccessReader,
 } from "../core/access.js";
 import {
   captureDocumentApprovalContext,
@@ -11,7 +12,12 @@ import {
   recordDocumentEditDecisions,
 } from "../core/document-approval.js";
 import { validateFindingProposal } from "../ai/tabular/finding.js";
-import type { DocumentResolutionInput, FindingEditProvenance } from "@workspace/contracts";
+import {
+  wordInspectionSchema,
+  type DocumentResolutionInput,
+  type FindingEditProvenance,
+  type DocumentWordInspection,
+} from "@workspace/contracts";
 import { recordFunnel } from "../core/funnel.js";
 import { randomUUID } from "node:crypto";
 import {
@@ -56,6 +62,13 @@ import {
   type EditError,
 } from "./docx/trackedChanges.js";
 import { buildStoragePath, deleteObject, getObject, isAlreadyDeleted } from "../core/storage.js";
+import {
+  inspectDocx,
+  inspectVersionWordBytes,
+  WordInspectionMismatchError,
+  assertWordInspectionSafe,
+  wordInspectionSafety,
+} from "./docx/inspection.js";
 
 /**
  * Delete a stored object, tolerating "already gone" (idempotent purge) but
@@ -368,6 +381,7 @@ export async function createGeneratedDocument(
 ): Promise<Document> {
   if (!(await hasMatterAccess(actor, input.matterId, "editor"))) throw new Error("access_denied");
   const bytes = Buffer.from(await generateDocx(input.spec));
+  const wordInspection = await inspectDocx(bytes);
   const { markdown, pageCount } = await extractMarkdown(bytes, "docx");
   const tenantId = await matterTenant(input.matterId);
   const docId = randomUUID(),
@@ -416,6 +430,7 @@ export async function createGeneratedDocument(
         source: "generated",
         sizeBytes: bytes.length,
         fileType: "docx",
+        wordInspection,
         lastCommitId: commitId,
       });
       await attachStagedObject(tx, tenantId, storagePath);
@@ -473,6 +488,7 @@ export async function uploadDocument(
     // Folders live inside a matter; an unfiled document can't sit in one.
     const folderId = input.matterId ? (input.folderId ?? null) : null;
     await assertStorageWithinQuota(tenantId, input.bytes.length);
+    const wordInspection = input.fileType === "docx" ? await inspectDocx(input.bytes) : null;
     const id = randomUUID();
     const versionId = randomUUID();
     const storagePath = buildStoragePath({
@@ -528,6 +544,7 @@ export async function uploadDocument(
             source: "upload",
             sizeBytes: input.bytes.length,
             fileType: input.fileType,
+            wordInspection,
             lastCommitId: commitId,
           });
           await attachStagedObject(commitTx, tenantId, storagePath);
@@ -787,6 +804,7 @@ export async function addDocumentVersion(
   const doc = await getDocument(documentId);
   if (!doc) throw new Error("Document not found");
   await assertStorageWithinQuota(doc.tenantId, input.bytes.length);
+  const wordInspection = input.fileType === "docx" ? await inspectDocx(input.bytes) : null;
   const latest = await latestVersion(documentId);
   const versionNumber = (latest?.versionNumber ?? 0) + 1;
   const versionId = randomUUID();
@@ -830,6 +848,7 @@ export async function addDocumentVersion(
           storagePath,
           source: "replace",
           fileType: input.fileType,
+          wordInspection,
           sizeBytes: input.bytes.length,
           lastCommitId: commitId,
         })
@@ -843,6 +862,8 @@ export async function addDocumentVersion(
           currentVersionId: nv!.id,
           approvedVersionId: nv!.id,
           approvedMarkdown: null,
+          markdown: null,
+          pageCount: null,
           status: "pending",
           extractionError: null,
           attempts: 0,
@@ -859,6 +880,7 @@ export async function addDocumentVersion(
       return {
         changes: [
           { path: "version", before: latest?.versionNumber ?? null, after: versionNumber },
+          { path: "markdown", before: current.markdown, after: null },
           {
             path: "approvedBaseline",
             before: { versionId: current.approvedVersionId, markdown: current.approvedMarkdown },
@@ -1049,13 +1071,25 @@ export async function downloadDocumentBytes(
   const funnel = { actorType: actor.type, documentId: doc.id, matterId: doc.matterId ?? undefined };
   try {
     const bytes = await getObject(doc.tenantId, storagePath);
-    if (
-      clean &&
-      (doc.fileType !== "docx" || (await extractTrackedChangeIds(Buffer.from(bytes))).length)
-    )
-      throw new Error(
-        "Clean output still contains tracked Word changes; resolve them before export."
+    if (clean) {
+      if (doc.fileType !== "docx") throw new Error("Clean Word output requires a DOCX source.");
+      const [version] = await db
+        .select()
+        .from(documentVersions)
+        .where(
+          and(
+            eq(documentVersions.documentId, doc.id),
+            eq(documentVersions.storagePath, storagePath),
+            isNull(documentVersions.deletedAt)
+          )
+        );
+      if (!version) throw new Error("Clean Word source version is unavailable.");
+      assertWordInspectionSafe(
+        await inspectVersionWordBytes(Buffer.from(bytes), version.wordInspection),
+        [],
+        true
       );
+    }
     if (!preview)
       recordFunnel("document_exported", {
         ...funnel,
@@ -1096,8 +1130,91 @@ async function latestVersion(documentId: string) {
   return v ?? null;
 }
 
-async function loadDocxBytes(tenantId: string, storagePath: string): Promise<Buffer> {
-  return Buffer.from(await getObject(tenantId, storagePath));
+async function loadDocxBytes(
+  tenantId: string,
+  storagePath: string,
+  reader: AccessReader = db
+): Promise<Buffer> {
+  return Buffer.from(await getObject(tenantId, storagePath, reader));
+}
+
+async function isRegisteredWordSource(
+  version: typeof documentVersions.$inferSelect,
+  reader: AccessReader = db
+): Promise<boolean> {
+  if (
+    !version.lastCommitId ||
+    !["assistant_edit", "user_edit", "user_accept", "user_reject"].includes(version.source)
+  )
+    return false;
+  const [receipt] = await reader
+    .select({ op: commits.op })
+    .from(commits)
+    .where(
+      and(
+        eq(commits.id, version.lastCommitId),
+        eq(commits.artifactType, "document"),
+        eq(commits.artifactId, version.documentId)
+      )
+    );
+  return (
+    receipt?.op ===
+    (version.source === "user_accept" || version.source === "user_reject"
+      ? "resolve_edit"
+      : "propose_edit")
+  );
+}
+
+/** A readonly inspection of one exact version. Legacy metadata is obtained from
+ * storage on demand, never backfilled by an unaudited GET. Access is the caller's
+ * responsibility, as with the internal document row readers. */
+export async function getDocumentWordInspection(
+  doc: Document,
+  versionId = doc.currentVersionId,
+  pendingEdits?: Array<typeof documentEdits.$inferSelect>,
+  reader: AccessReader = db,
+  verifyBytes = false
+): Promise<DocumentWordInspection | null> {
+  if (doc.fileType !== "docx" || !versionId) return null;
+  const [version] = await reader
+    .select()
+    .from(documentVersions)
+    .where(
+      and(
+        eq(documentVersions.id, versionId),
+        eq(documentVersions.documentId, doc.id),
+        isNull(documentVersions.deletedAt)
+      )
+    );
+  const parsed = wordInspectionSchema.safeParse(version?.wordInspection);
+  let inspection = parsed.success ? parsed.data : null;
+  if (!inspection || verifyBytes) {
+    try {
+      if (!version?.storagePath) throw new Error("missing_source");
+      inspection = await inspectVersionWordBytes(
+        await loadDocxBytes(doc.tenantId, version.storagePath, reader),
+        version.wordInspection
+      );
+    } catch (error) {
+      inspection = await inspectDocx(Buffer.alloc(0));
+      inspection.reasons = [
+        error instanceof WordInspectionMismatchError
+          ? "inspection_mismatch"
+          : "storage_unavailable",
+      ];
+    }
+  }
+  const edits =
+    pendingEdits ??
+    (await reader
+      .select()
+      .from(documentEdits)
+      .where(and(eq(documentEdits.documentId, doc.id), eq(documentEdits.status, "pending"))));
+  const safety = wordInspectionSafety(inspection, edits);
+  if (edits.length && (!version || !(await isRegisteredWordSource(version, reader))))
+    safety.safeToEdit = false;
+  const { bodyBindings: _bindings, ...metadata } = inspection;
+  return { versionId, inspection: metadata, ...safety };
 }
 
 // One find->replace substitution the model (or a user) proposes. Context anchors
@@ -1152,8 +1269,17 @@ async function proposeDocxEdit(
 ): Promise<ProposeEditResult> {
   const v = await latestVersion(doc.id);
   if (!v?.storagePath) throw new Error("Document has no stored version");
+  if (v.id !== doc.currentVersionId) throw new Error("stale_source");
+  const pending = await db
+    .select()
+    .from(documentEdits)
+    .where(and(eq(documentEdits.documentId, doc.id), eq(documentEdits.status, "pending")));
+  if (pending.length && !(await isRegisteredWordSource(v)))
+    throw new Error("Word revision provenance is not bound to this source version.");
+  const sourceBytes = await loadDocxBytes(doc.tenantId, v.storagePath);
+  assertWordInspectionSafe(await inspectVersionWordBytes(sourceBytes, v.wordInspection), pending);
   const result = await applyTrackedEdits(
-    await loadDocxBytes(doc.tenantId, v.storagePath),
+    sourceBytes,
     edits.map((e) => ({
       find: e.find,
       replace: e.replace,
@@ -1170,6 +1296,18 @@ async function proposeDocxEdit(
       errors[0]?.reason ?? "no edits could be applied to the document",
       errors
     );
+  const wordInspection = await inspectDocx(result.bytes);
+  // The matcher must never silently collapse another pending insertion when a
+  // subsequent proposal overlaps it. Every existing binding must survive.
+  assertWordInspectionSafe(wordInspection, [
+    ...pending,
+    ...applied.map((edit) => ({
+      delWId: edit.delId ?? null,
+      insWId: edit.insId ?? null,
+      deletedText: edit.deletedText,
+      insertedText: edit.insertedText,
+    })),
+  ]);
 
   const versionNumber = v.versionNumber + 1;
   const storagePath = buildStoragePath({
@@ -1215,6 +1353,7 @@ async function proposeDocxEdit(
           storagePath,
           source,
           fileType: "docx",
+          wordInspection,
           sizeBytes: result.bytes.length,
           lastCommitId: commitId,
         })
@@ -1281,8 +1420,16 @@ async function resolveDocxEdits(
 ) {
   const v = await latestVersion(doc.id);
   if (!v?.storagePath) throw new Error("Document has no stored version");
+  if (v.id !== doc.currentVersionId) throw new Error("stale_source");
   const wIds = edits.flatMap((e) => [e.delWId, e.insWId]).filter((x): x is string => !!x);
   const sourceBytes = await loadDocxBytes(doc.tenantId, v.storagePath);
+  const pending = await db
+    .select()
+    .from(documentEdits)
+    .where(and(eq(documentEdits.documentId, doc.id), eq(documentEdits.status, "pending")));
+  if (!(await isRegisteredWordSource(v)))
+    throw new Error("Word revision provenance is not bound to this source version.");
+  assertWordInspectionSafe(await inspectVersionWordBytes(sourceBytes, v.wordInspection), pending);
   const knownChanges = new Set(
     (await extractTrackedChangeIds(sourceBytes)).map((change) => change.w_id)
   );
@@ -1291,6 +1438,11 @@ async function resolveDocxEdits(
       "Tracked change binding is missing from the current DOCX; review a revised proposal."
     );
   const { bytes: newBytes } = await resolveTrackedChange(sourceBytes, wIds, decision);
+  const wordInspection = await inspectDocx(newBytes);
+  assertWordInspectionSafe(
+    wordInspection,
+    pending.filter((edit) => !edits.some((resolved) => resolved.id === edit.id))
+  );
   const versionNumber = v.versionNumber + 1;
   const storagePath = buildStoragePath({
     tenantId: doc.tenantId,
@@ -1324,6 +1476,7 @@ async function resolveDocxEdits(
           storagePath,
           source,
           fileType: "docx",
+          wordInspection,
           sizeBytes: newBytes.length,
           lastCommitId: commitId,
         })
@@ -1779,6 +1932,21 @@ export async function getDocumentDetail(documentId: string, actor?: Actor) {
     });
   }
 
+  const wordInspection = await getDocumentWordInspection(
+    doc,
+    doc.currentVersionId,
+    edits.filter((edit) => edit.status === "pending")
+  );
+  if (wordInspection && !wordInspection.safeToEdit) {
+    resolutionPolicy = {
+      ...resolutionPolicy,
+      mayPropose: false,
+      mayResolve: false,
+      blockedReason:
+        "Incoming or unsupported Word revisions must be resolved in Word and uploaded as a new source before edits can be proposed or decided here.",
+    };
+  }
+
   return {
     document: { ...doc, ownerName: owner?.name ?? null, ownerEmail: owner?.email ?? null },
     edits: edits.map((e) => ({
@@ -1789,6 +1957,7 @@ export async function getDocumentDetail(documentId: string, actor?: Actor) {
       blame: e.lastCommitId ? (blameById.get(e.lastCommitId) ?? null) : null,
     })),
     resolutionPolicy,
+    wordInspection,
   };
 }
 

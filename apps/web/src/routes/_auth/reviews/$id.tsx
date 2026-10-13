@@ -2,7 +2,7 @@ import {
   ContractReviewActions,
   ContractReviewCompletion,
 } from "./-components/ContractReviewActions";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type ColumnDef, getCoreRowModel, useReactTable } from "@tanstack/react-table";
@@ -16,6 +16,7 @@ import {
   Info,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -38,10 +39,32 @@ import { ContractReviewWorkspace } from "./-components/ContractReviewWorkspace";
 
 export const Route = createFileRoute("/_auth/reviews/$id")({
   component: ReviewView,
-  validateSearch: (input: Record<string, unknown>): { finding?: string } => ({
+  validateSearch: (
+    input: Record<string, unknown>
+  ): {
+    finding?: string;
+    executionRoute?: "application" | "agent";
+    model?: string;
+    modelHintInvalid?: boolean;
+  } => ({
     finding:
       typeof input.finding === "string" && /^[0-9a-f-]{36}$/i.test(input.finding)
         ? input.finding
+        : undefined,
+    executionRoute:
+      input.executionRoute === "application" || input.executionRoute === "agent"
+        ? input.executionRoute
+        : undefined,
+    model:
+      typeof input.model === "string" && input.model.length > 0 && input.model.length <= 200
+        ? input.model
+        : undefined,
+    modelHintInvalid:
+      input.modelHintInvalid === true ||
+      input.modelHintInvalid === "true" ||
+      (input.model !== undefined &&
+        (typeof input.model !== "string" || input.model.length === 0 || input.model.length > 200))
+        ? true
         : undefined,
   }),
 });
@@ -59,6 +82,8 @@ function ReviewView() {
   "use no memo";
   const { id } = Route.useParams();
   const searchParams = Route.useSearch();
+  const navigate = useNavigate();
+  const applicationMode = searchParams.executionRoute !== "agent";
   const qc = useQueryClient();
   const { data: session } = useSession();
   const reviewKey = ["review", id];
@@ -88,10 +113,11 @@ function ReviewView() {
   const retryRequests = useRef(new Map<string, string>());
   const retryFailed = useMutation({
     mutationFn: (acknowledgeUnknown: boolean) => {
+      if (!canRun) throw new Error(runUnavailableReason);
       const key = `${model}:${acknowledgeUnknown}`;
       const requestId = retryRequests.current.get(key) ?? crypto.randomUUID();
       retryRequests.current.set(key, requestId);
-      return api.queueFailedReviewRules(id, requestId, model || undefined, acknowledgeUnknown);
+      return api.queueFailedReviewRules(id, requestId, model, acknowledgeUnknown);
     },
     onSuccess: (_result, acknowledgeUnknown) => {
       retryRequests.current.delete(`${model}:${acknowledgeUnknown}`);
@@ -105,11 +131,65 @@ function ReviewView() {
   const [runningAll, setRunningAll] = useState(false);
   const runAllAbort = useRef<AbortController | null>(null);
   useEffect(() => () => runAllAbort.current?.abort(), []);
-  const [model, setModel] = useSelectedModel();
+  const [savedModel, setSavedModel] = useSelectedModel();
+  const [explicitModel, setExplicitModel] = useState<{ reviewId: string; model: string } | null>(
+    null
+  );
+  const chosenModel = explicitModel?.reviewId === id ? explicitModel.model : null;
+  // A URL hint stays local to this review. It never replaces the user's saved choice.
+  const model = chosenModel ?? searchParams.model ?? savedModel;
+  const catalog = useQuery({
+    queryKey: ["models"],
+    queryFn: () => api.listModels(),
+    enabled: applicationMode,
+  });
+  const hintedModel = chosenModel === null && !!searchParams.model;
+  const guide = useQuery({
+    queryKey: ["first-review", data?.review.matterId],
+    queryFn: () => api.getFirstReviewStatus(data!.review.matterId),
+    enabled: applicationMode && hintedModel && !!data?.review.matterId,
+  });
+  const availableNativeModel =
+    catalog.data?.some(
+      (provider) =>
+        provider.available && provider.models.some((candidate) => candidate.id === model)
+    ) ?? false;
+  const availableOpenRouter =
+    !hintedModel &&
+    /^[^\s/]+\/[^\s]+$/.test(model) &&
+    (catalog.data?.some((provider) => provider.provider === "openrouter" && provider.available) ??
+      false);
+  const verifiedHint =
+    (chosenModel !== null || !searchParams.modelHintInvalid) &&
+    (!hintedModel ||
+      (!guide.isPending &&
+        !guide.isFetching &&
+        !guide.error &&
+        (guide.data?.application.providers.some(
+          (provider) =>
+            provider.available && provider.models.some((candidate) => candidate.id === model)
+        ) ??
+          false)));
+  const modelAvailable =
+    model.length > 0 &&
+    model.length <= 200 &&
+    !catalog.isPending &&
+    !catalog.isFetching &&
+    !catalog.error &&
+    (availableNativeModel || availableOpenRouter) &&
+    verifiedHint;
+  const canRun = applicationMode && modelAvailable && completion?.canEscalate !== false;
+  const runUnavailableReason = !applicationMode
+    ? "Use your connected agent, or explicitly switch to an application model before running paid calls."
+    : "Select a currently configured model before running this review. An unavailable or unverified preferred model is never replaced automatically.";
+  function chooseModel(next: string) {
+    setExplicitModel({ reviewId: id, model: next });
+    setSavedModel(next);
+  }
   const { data: estimate, error: estimateError } = useQuery({
     queryKey: ["review-estimate", id, model, dataUpdatedAt],
-    queryFn: () => api.getReviewEstimate(id, model || undefined),
-    enabled: !!data,
+    queryFn: () => api.getReviewEstimate(id, model),
+    enabled: !!data && canRun,
   });
   const [historyCollapsed, setHistoryCollapsed] = useState(false);
   // Source document preview (optionally jumped to a cited page).
@@ -133,8 +213,10 @@ function ReviewView() {
   }
 
   const runMutation = useMutation({
-    mutationFn: (v: { documentId: string; columnIndex: number }) =>
-      api.runCell(id, v.documentId, v.columnIndex, model || undefined),
+    mutationFn: (v: { documentId: string; columnIndex: number }) => {
+      if (!canRun) throw new Error(runUnavailableReason);
+      return api.runCell(id, v.documentId, v.columnIndex, model);
+    },
     onSuccess: (updated) => {
       qc.setQueryData(reviewKey, updated);
       void qc.invalidateQueries({ queryKey: ["review-history", id] });
@@ -150,6 +232,10 @@ function ReviewView() {
     cells?.find((c) => c.documentId === docId && c.columnIndex === col);
 
   async function run(documentId: string, columnIndex: number) {
+    if (!canRun) {
+      toast.error(runUnavailableReason);
+      return;
+    }
     const key = `${documentId}:${columnIndex}`;
     setRunning((s) => new Set(s).add(key));
     try {
@@ -172,14 +258,14 @@ function ReviewView() {
     );
 
   async function runAll() {
-    if (!review || runningAll) return;
+    if (!review || runningAll || !canRun) return;
     setRunningAll(true);
     const controller = new AbortController();
     runAllAbort.current = controller;
     try {
       await api.runReviewStream(
         id,
-        { model: model || undefined },
+        { model },
         {
           // A cell flips to "generating" the moment its column query starts…
           onCellStart: (documentId, columnIndex) =>
@@ -279,6 +365,7 @@ function ReviewView() {
             <ReviewCell
               cell={meta.cellOf(row.original.docId, col.index)}
               busy={meta.running.has(key)}
+              canRun={meta.canRun}
               onRun={() => meta.run(row.original.docId, col.index)}
               onDetail={() => meta.openDetail(row.original.docId, col.index)}
             />
@@ -298,6 +385,7 @@ function ReviewView() {
     meta: {
       run,
       running,
+      canRun,
       cellOf,
       preview: (docId: string) => setPreview({ docId }),
       openDetail: (docId: string, columnIndex: number) => {
@@ -335,7 +423,7 @@ function ReviewView() {
             title={review.title}
             action={
               <div className="flex items-center gap-2">
-                <ModelPicker value={model} onChange={setModel} />
+                {applicationMode ? <ModelPicker value={model} onChange={chooseModel} /> : null}
                 <DropdownMenu>
                   <DropdownMenuTrigger
                     render={
@@ -360,11 +448,7 @@ function ReviewView() {
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
-                <Button
-                  size="sm"
-                  onClick={runAll}
-                  disabled={runningAll || completion?.canEscalate === false}
-                >
+                <Button size="sm" onClick={runAll} disabled={runningAll || !canRun}>
                   {runningAll ? "Running…" : "Run"}
                 </Button>
               </div>
@@ -372,7 +456,50 @@ function ReviewView() {
           />
         </div>
 
-        {estimate && (
+        {!applicationMode ? (
+          <Alert className="mb-4">
+            <AlertTitle>Continue in your connected agent</AlertTitle>
+            <AlertDescription>
+              <p>
+                Ask the client to inspect this saved review with <code>get_review</code>, read its
+                captured source and instructions, and write cited rule findings with{" "}
+                <code>write_cell</code>. Use this review's ID: <code>{id}</code>. Then return here
+                for human decisions and output.
+              </p>
+              <p>
+                The client's subscription or model bill is separate from application AI usage. This
+                page will not start an application model call in connected-agent mode.
+              </p>
+              <div className="flex flex-wrap gap-3">
+                <Link
+                  to="/settings"
+                  search={{ tab: "agents" }}
+                  className="underline underline-offset-4"
+                >
+                  Inspect agent connections
+                </Link>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() =>
+                    void navigate({
+                      to: "/reviews/$id",
+                      params: { id },
+                      search: { ...searchParams, executionRoute: "application" },
+                    })
+                  }
+                >
+                  Use an application model instead
+                </Button>
+              </div>
+            </AlertDescription>
+          </Alert>
+        ) : !modelAvailable ? (
+          <p role="status" className="mb-4 max-w-prose text-sm text-muted-foreground">
+            {runUnavailableReason}
+          </p>
+        ) : null}
+        {applicationMode && estimate && (
           <p className="mb-4 max-w-prose text-xs text-muted-foreground">
             Run estimate: {estimate.cells} remaining rules · up to{" "}
             {estimate.inputTokenUpperEstimate.toLocaleString()} input tokens and{" "}
@@ -380,11 +507,11 @@ function ReviewView() {
             {estimate.costUsd === null
               ? "price unavailable for this model"
               : `estimated $${estimate.costUsd.toFixed(2)} USD`}
-            . Durable review limits apply before dispatch; this is an estimate, not a provider
+            . Application AI limits apply before dispatch; this is an estimate, not a provider
             invoice.
           </p>
         )}
-        {estimateError && (
+        {applicationMode && estimateError && (
           <p className="mb-4 text-xs text-muted-foreground">
             Run estimate unavailable. Check model access before starting.
           </p>
@@ -398,6 +525,7 @@ function ReviewView() {
             onOpenDraft={(docId) => setPreview({ docId })}
             onRetry={(acknowledgeUnknown) => retryFailed.mutate(acknowledgeUnknown)}
             retrying={retryFailed.isPending}
+            canRetry={canRun}
           />
         ) : (
           <DataTable
@@ -447,6 +575,7 @@ function ReviewView() {
           docTitle={docTitle(detail.docId)}
           cell={cellOf(detail.docId, detail.columnIndex)}
           busy={running.has(`${detail.docId}:${detail.columnIndex}`)}
+          canRun={canRun}
           onRun={() => run(detail.docId, detail.columnIndex)}
           onClose={() => setDetail(null)}
           onOpenSource={(page) => setPreview({ docId: detail.docId, page })}
@@ -488,6 +617,7 @@ type ReviewRow = { docId: string; title: string; matterName: string | null };
 type ReviewMeta = {
   run: (docId: string, columnIndex: number) => void;
   running: Set<string>;
+  canRun: boolean;
   cellOf: (docId: string, columnIndex: number) => Cell | undefined;
   preview: (docId: string) => void;
   openDetail: (docId: string, columnIndex: number) => void;
@@ -588,11 +718,13 @@ function ColumnHeader({
 function ReviewCell({
   cell,
   busy,
+  canRun,
   onRun,
   onDetail,
 }: {
   cell?: Cell;
   busy: boolean;
+  canRun: boolean;
   onRun: () => void;
   onDetail: () => void;
 }) {
@@ -600,7 +732,7 @@ function ReviewCell({
   const isBusy = busy || cell?.status === "generating";
   if (!cell?.content)
     return (
-      <Button size="xs" variant="outline" disabled={isBusy} onClick={onRun}>
+      <Button size="xs" variant="outline" disabled={isBusy || !canRun} onClick={onRun}>
         {isBusy ? "Running…" : "Run"}
       </Button>
     );
@@ -617,7 +749,7 @@ function ReviewCell({
         <button onClick={onDetail} className="hover:text-bronze hover:underline">
           Details{sourceCount ? ` · ${sourceCount} source${sourceCount > 1 ? "s" : ""}` : ""}
         </button>
-        <Button size="xs" variant="ghost" disabled={isBusy} onClick={onRun}>
+        <Button size="xs" variant="ghost" disabled={isBusy || !canRun} onClick={onRun}>
           {isBusy ? "…" : "Re-run"}
         </Button>
       </div>

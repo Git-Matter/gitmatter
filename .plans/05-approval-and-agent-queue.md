@@ -245,3 +245,10 @@ Enforces [03's escalations and export readiness](03-review-to-redline-loop.md), 
 [04's transaction/worker boundaries](04-durable-background-work.md), and feeds
 [06's matter workspace](06-matter-workspace-and-search.md). Evidence tiers come from
 [08](08-pilot-program-and-release-proof.md).
+
+## Research additions accepted 2026-10-14
+
+Named reviewer handoff is planned: an eligible matter member, optional due date, visible next step
+and an attributed assignment history. Assignment must not grant access or substitute for the
+approval role. This follows [review setup and Word intake](review-setup-and-word-intake.md); it is
+not part of the current three implementation workstreams.

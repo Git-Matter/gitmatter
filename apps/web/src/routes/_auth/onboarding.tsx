@@ -40,7 +40,7 @@ function Onboarding() {
     setError(null);
     try {
       await api.setTenantStorageRegion(selected);
-      window.location.href = "/assistant";
+      window.location.href = "/first-review";
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save your data region");
       setBusy(false);

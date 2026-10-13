@@ -345,7 +345,53 @@ const hasStorage = !!process.env.S3_ACCESS_KEY;
     expect(tooEarly.isError).toBe(true);
 
     await updateWorkflow({ type: "user", userId }, playbookId, { status: "approved" });
-    const run = await call("run_playbook", { playbookId, documentIds: [documentId], matterId });
+    const requestId = randomUUID();
+    const reviewInstructions = {
+      representedParty: "Synthetic recipient",
+      disclosureRole: "receiving",
+      ndaStructure: "mutual",
+      businessPurpose: "Evaluate a fictional collaboration",
+      governingLaw: null,
+      additionalInstructions: "Escalate uncertainty for human review",
+    };
+    const run = await call("run_playbook", {
+      playbookId,
+      documentIds: [documentId],
+      matterId,
+      requestId,
+      reviewInstructions,
+    });
+    const instructedReviewId = String(run.structuredContent?.reviewId);
+    const completion = await call("get_review_completion", { reviewId: instructedReviewId });
+    expect(completion.structuredContent).toMatchObject({
+      inputSnapshotRevision: 2,
+      reviewInstructions,
+    });
+    const report = await call("get_review_report", { reviewId: instructedReviewId });
+    expect(report.structuredContent).toMatchObject({
+      manifest: { inputSnapshotRevision: 2, reviewInstructions },
+    });
+    const replay = await call("run_playbook", {
+      playbookId,
+      documentIds: [documentId],
+      matterId,
+      requestId,
+      reviewInstructions,
+    });
+    expect(replay.structuredContent?.reviewId).toBe(instructedReviewId);
+    const conflict = CallToolResultSchema.parse(
+      await client.callTool({
+        name: "run_playbook",
+        arguments: {
+          playbookId,
+          documentIds: [documentId],
+          matterId,
+          requestId,
+          reviewInstructions: { ...reviewInstructions, disclosureRole: "disclosing" },
+        },
+      })
+    );
+    expect(conflict.isError).toBe(true);
     expect(run.structuredContent!.ruleCount).toBe(1);
     const reviewId = run.structuredContent!.reviewId as string;
 

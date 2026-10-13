@@ -31,6 +31,15 @@ or authenticated session. It supports separate interaction/responsive checks wit
 upload, provider run, Word transformation or staging acceptance. Final check results belong in the
 [coordinated MVP record](mvp-delivery.md).
 
+## Research additions accepted 2026-10-14
+
+Guided first review is implemented and locally checked: current server-derived progress, explicit
+matter and execution choice, firm-approved standards, actual upload, captured instructions, human decisions
+and Word output. Reuse existing privacy/provider/budget controls and keep configuration presence
+separate from provider verification. See [the coordinated scope](review-setup-and-word-intake.md) and
+[source/browser evidence](evidence/2026-10-14-review-setup-and-word-intake.md). Authenticated first-use
+acceptance remains open.
+
 ## Purpose
 
 Create a trustworthy baseline before changing the workflow.

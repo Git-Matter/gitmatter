@@ -82,6 +82,9 @@ export async function captureReviewReport(actor: Actor, reviewId: string) {
           reviewCommitId: review.headCommitId,
           playbookId: review.inputSnapshot.playbookId,
           playbookRevision: review.inputSnapshot.playbookRevision,
+          inputSnapshotRevision: review.inputSnapshot.revision,
+          reviewInstructions:
+            review.inputSnapshot.revision === 2 ? review.inputSnapshot.reviewInstructions : null,
           policyRevision: completion.policyRevision,
           cleanReadyAtCapture: completion.cleanReady,
           decisionsCompleteAtCapture: completion.decisionsComplete,
@@ -100,6 +103,7 @@ export async function captureReviewReport(actor: Actor, reviewId: string) {
                 .map((commit) => Number(commit.seq))
             ),
             sourceChanged: doc.sourceChanged,
+            wordInspection: doc.wordInspection,
             cleanReadyAtCapture: doc.cleanReady,
           })),
         },
@@ -146,10 +150,28 @@ export function renderReviewReportMarkdown(report: ReviewReport) {
   const lines = [
     `# Review report: ${text(report.title)}`,
     "",
-    `Captured ${text(report.manifest.capturedAt)}. ${report.manifest.cleanReadyAtCapture ? "The captured state met clean export readiness." : "Partial report: findings or decisions remain open."}`,
+    `Captured ${text(report.manifest.capturedAt)}. ${report.manifest.cleanReadyAtCapture ? "The captured state met clean export readiness." : "Clean export was not ready at capture; findings, decisions, source or Word inspection may need attention."}`,
     "This report does not approve legal quality, resolve tracked changes, or certify a later document export. Quotations and approved language refer to captured review inputs. Review the attached manifest for exact version and commit references.",
     "",
     `Playbook ${text(report.manifest.playbookId)} · revision ${text(report.manifest.playbookRevision)}`,
+    "",
+    "## Captured review instructions",
+    ...(report.manifest.reviewInstructions
+      ? [
+          `Represented party: ${text(report.manifest.reviewInstructions.representedParty ?? "Unknown")}`,
+          `Disclosure role: ${report.manifest.reviewInstructions.disclosureRole}`,
+          `NDA structure: ${report.manifest.reviewInstructions.ndaStructure}`,
+          `Business purpose: ${text(report.manifest.reviewInstructions.businessPurpose ?? "Unknown")}`,
+          `Governing law: ${text(report.manifest.reviewInstructions.governingLaw ?? "Unknown")}`,
+          ...(report.manifest.reviewInstructions.additionalInstructions
+            ? [
+                `Additional instructions: ${text(report.manifest.reviewInstructions.additionalInstructions)}`,
+              ]
+            : []),
+        ]
+      : [
+          "No review instructions were captured. Represented party, disclosure role, NDA structure, business purpose and governing law are unknown.",
+        ]),
   ];
   for (const document of report.documents) {
     lines.push(

@@ -1,11 +1,15 @@
 import { randomUUID } from "node:crypto";
-import { afterAll, beforeAll, describe, expect, test } from "vite-plus/test";
+import { afterAll, beforeAll, describe, expect, test, vi } from "vite-plus/test";
 import { db, sql } from "@workspace/db/client";
-import { documents, tabularReviews, tenants, user } from "@workspace/db/schema";
+import { documents, documentVersions, tabularReviews, tenants, user } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 import { createClient, createMatter } from "../src/platform/matters.js";
 import { writeCell } from "../src/ai/tabular/runner.js";
 import { captureReviewReport, renderReviewReportMarkdown } from "../src/content/reviewReport.js";
+import { generateDocx } from "../src/content/docx/generate.js";
+import { inspectDocx } from "../src/content/docx/inspection.js";
+import { extractDocxBodyText } from "../src/content/docx/trackedChanges.js";
+import * as storage from "../src/core/storage.js";
 
 const userId = `report-review-${randomUUID()}`;
 const human = { type: "user" as const, userId };
@@ -17,6 +21,13 @@ const clauseId = randomUUID();
 beforeAll(async () => {
   const [tenant] = await db.insert(tenants).values({ name: "Synthetic report" }).returning();
   tenantId = tenant!.id;
+  const sourceBytes = Buffer.from(await generateDocx({ title: source, blocks: [] }));
+  expect(await extractDocxBodyText(sourceBytes)).toBe(source);
+  vi.spyOn(storage, "getObject").mockImplementation(async (requestedTenant, path) => {
+    if (requestedTenant !== tenantId || path !== "synthetic-report-source.docx")
+      throw new Error("Unexpected fixture storage read");
+    return Buffer.from(sourceBytes);
+  });
   await db.insert(user).values({
     id: userId,
     name: "Synthetic reviewer",
@@ -42,6 +53,16 @@ beforeAll(async () => {
     })
     .returning();
   documentId = doc!.id;
+  await db.insert(documentVersions).values({
+    id: versionId,
+    documentId,
+    versionNumber: 1,
+    fileType: "docx",
+    storagePath: "synthetic-report-source.docx",
+    source: "upload",
+    wordInspection: await inspectDocx(sourceBytes),
+    sizeBytes: sourceBytes.length,
+  });
   const [review] = await db
     .insert(tabularReviews)
     .values({
@@ -83,6 +104,7 @@ beforeAll(async () => {
   reviewId = review!.id;
 });
 afterAll(async () => {
+  vi.restoreAllMocks();
   await db.delete(tenants).where(eq(tenants.id, tenantId));
   await db.delete(user).where(eq(user.id, userId));
   await sql.end();
@@ -94,7 +116,7 @@ describe("captured review report", () => {
     expect(report.manifest.cleanReadyAtCapture).toBe(false);
     expect(report.documents[0]!.findings[0]!.finding).toBeNull();
     const markdown = renderReviewReportMarkdown(report);
-    expect(markdown).toContain("Partial report");
+    expect(markdown).toContain("Clean export was not ready at capture");
     expect(markdown).toContain("Outcome: unavailable");
     expect(markdown).toContain("does not approve legal quality");
   });
