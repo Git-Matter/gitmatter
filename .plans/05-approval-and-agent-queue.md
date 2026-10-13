@@ -3,7 +3,7 @@
 Make agent-assisted work acceptable under firm supervision: configurable matter approval policy,
 append-only decisions, and one Agent activity queue per matter.
 
-**Status: In progress** (source coverage reviewed 2026-10-13; final integrated checks and release
+**Status: In progress** (source and local checks verified 2026-10-13; staging and release
 gates open).
 
 The existing document guard remains: `resolveEdits` rejects

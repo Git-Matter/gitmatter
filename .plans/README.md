@@ -55,8 +55,10 @@ separately. No plan closes a release gate merely by passing module tests.
 [`evidence/2026-09-13-subscription-agent.md`](evidence/2026-09-13-subscription-agent.md) records the
 implemented subscription-agent workflow, local validation and staging deployment blockers. The
 implementation was merged through [PR #10](https://github.com/Git-Matter/gitmatter/pull/10).
-The current increment continues on `feat/native-agent-workflow` in
-[draft PR #12](https://github.com/Git-Matter/gitmatter/pull/12).
+The NDA MVP implementation was merged into `dev` through
+[PR #12](https://github.com/Git-Matter/gitmatter/pull/12) on 2026-10-13 after current-head CI passed.
+[The current implementation record](evidence/2026-10-13-mvp-implementation.md) captures local checks;
+staging and authenticated acceptance remain separate gates.
 
 [`../PLANS.md`](../PLANS.md) contains the deeper candidate-feature designs for the audit spine,
 approval gates, agent review queue, search, notifications, and branching. Use those sections as

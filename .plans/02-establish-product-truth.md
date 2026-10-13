@@ -5,7 +5,7 @@ browser acceptance script for the current path, generated MCP tool documentation
 instrumentation that never records legal content or PII.
 
 **Status: In progress** (source coverage reviewed 2026-10-13; local engine baseline verified
-2026-10-11; final integrated checks, authenticated browser and staging gates remain open).
+2026-10-11; integrated repository checks passed; authenticated browser and staging gates remain open).
 
 Implemented the fully synthetic NDA pack in `packages/core/test/fixtures/nda/`, including source
 DOCX, playbook rules, standards/fallbacks, cited findings, missing-clause outcome, expected redlines,

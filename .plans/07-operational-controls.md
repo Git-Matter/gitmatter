@@ -3,7 +3,7 @@
 Give firm administrators enough control to permit sustained use: cost estimates before a run, hard
 spend caps, admin usage reporting, notifications, and integrations chosen from pilot evidence.
 
-**Status: In progress** (source coverage reviewed 2026-10-13; final integrated checks and release
+**Status: In progress** (source and local checks verified 2026-10-13; staging and release
 gates open).
 
 Per-matter usage is metered (`usage_events.matterId`, `GET /api/matters/:id/usage`). Existing application

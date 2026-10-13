@@ -63,7 +63,7 @@ Already implemented:
 - Generated and pasted documents appear in the matter with readable content and creation audit
   records. The MCP tools reference is generated from the runtime catalog with a CI drift check.
 
-The current feature branch adds immutable review inputs and approved-clause redline handoff;
+The source merged into `dev` through PR #12 adds immutable review inputs and approved-clause redline handoff;
 responsive captured-source/findings and report/manifest views; durable extraction/bulk review with
 paid-expiry recovery; cell, workflow and document approval policy with a separate accepted baseline;
 exact single-DOCX clean-export authorization; permission-filtered full-text search; a bounded job-led
@@ -71,7 +71,7 @@ matter overview; application LLM admission and tenant-admin controls; a replayab
 and staged-object reservation/reclamation. These are implemented source paths, not released behavior.
 Precise scope and proof appear in plans 02–07 and [MVP delivery](mvp-delivery.md).
 
-Final integrated repository checks, authenticated browser and scoped MCP acceptance, staging
+Integrated repository checks and PR CI passed on 2026-10-13. Authenticated browser and scoped MCP acceptance, staging
 restart/reconnect/revocation tests, actual provider findings/billing, Microsoft Word round-trip,
 legal review and repeat-use pilot evidence remain open. The authored UI fixture is separate from
 authenticated application behavior. Large-export jobs, broader export ceilings, external

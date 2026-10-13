@@ -4,7 +4,7 @@ Deliver the first complete legal outcome: open a matter, run the firm's approved
 third-party NDA, read cited findings, propose a tracked change using an approved clause or fallback,
 and export a redline with its audit trail.
 
-**Status: In progress** (source coverage reviewed 2026-10-13; final integrated checks and release
+**Status: In progress** (source and local checks verified 2026-10-13; staging and release
 gates open).
 
 The subscription-agent handoff already supplies a matter “review with your own AI” entry point,

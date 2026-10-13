@@ -10,7 +10,7 @@ This epic tracks progress. It is not a plan itself; each concern has its own pla
 - Goal, product hierarchy, current baseline, measures, and release-proof tiers:
   [`../08-pilot-program-and-release-proof.md`](../08-pilot-program-and-release-proof.md)
 - Plan index and status vocabulary: [`../README.md`](../README.md)
-- Status reviewed: 2026-10-13 for current source coverage in 02–07; final integrated checks and
+- Status reviewed: 2026-10-13 for current source coverage in 02–07; integrated repository checks passed;
   authenticated/staging gates remain open. Plan 01 retains its historical local proof.
 - Specifications deepened: 2026-10-11 for plans 03–05 and their
   [shared contracts](../workflow-contracts.md); no additional implementation or release claim.
@@ -46,8 +46,8 @@ Numbers are delivery order, not progress rank — a low number is not further al
   components with authored API responses; it creates no authenticated session or actual model output.
 - **Remaining:** execute full authenticated browser script locally and on staging, verify actual
   analytics delivery, and record Word/provider/pilot evidence separately.
-- **Where:** branch `feat/native-agent-workflow`,
-  [draft PR #12](https://github.com/Git-Matter/gitmatter/pull/12).
+- **Where:** merged into `dev` through
+  [PR #12](https://github.com/Git-Matter/gitmatter/pull/12).
 
 ### 03–07 Team implementation
 
@@ -80,9 +80,9 @@ Numbers are delivery order, not progress rank — a low number is not further al
   workflow proposals; accepted document baseline and owner gate; exact single-DOCX export approvals;
   compatible batch API/UI; queue and Library publication authority. Legacy edits retain known
   provenance and require a current human decision; no historical approval is invented.
-- **Remaining:** broader export scheduling/ceilings, expanded queue filters, final integrated
-  verification, authenticated staging/MCP/upgrade acceptance and Word/provider/pilot proof.
-- **Where:** branch `feat/native-agent-workflow` ([draft PR #12](https://github.com/Git-Matter/gitmatter/pull/12)); implementation remains in progress.
+- **Remaining:** broader export scheduling/ceilings, expanded queue filters, authenticated
+  staging/MCP/upgrade acceptance and Word/provider/pilot proof.
+- **Where:** source merged into `dev` through [PR #12](https://github.com/Git-Matter/gitmatter/pull/12); broader plan exit gates remain open.
 
 ## MFA sign-off review
 

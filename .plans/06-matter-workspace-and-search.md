@@ -4,7 +4,7 @@ Reduce navigation cost and make prior work reusable: a matter landing page organ
 plus permission-filtered Postgres full-text search across documents, cells, clauses, playbooks, and
 matter metadata.
 
-**Status: In progress** (source coverage reviewed 2026-10-13; final integrated checks and release
+**Status: In progress** (source and local checks verified 2026-10-13; staging and release
 gates open).
 
 The former title-only search baseline is now extended with permission-filtered full-text retrieval

@@ -43,9 +43,12 @@ const ids = {
 const fixedAt = "2026-10-13T02:00:00.000Z";
 type Scenario = "partial" | "failed" | "invalid" | "stale" | "complete" | "viewer";
 let scenario: Scenario = "partial";
-let disposition: "left_unchanged" | "escalated" | null = null;
-let rationale = "";
-let proposed = false;
+const findingDecisions = new Map<
+  number,
+  { status: "left_unchanged" | "escalated"; rationale: string }
+>();
+const proposedFindings = new Map<number, { find: string; replace: string }>();
+const resolvedFindings = new Map<number, "accepted" | "rejected">();
 let eventRead = false;
 let exportStatus: "pending" | "applied" | "rejected" | "withdrawn" = "pending";
 let exportRequestId: string | undefined;
@@ -110,6 +113,9 @@ function cellFixtures(): Cell[] {
 }
 function completionFixture(): ReviewCompletion {
   const cells = cellFixtures();
+  const pendingEdits = [...proposedFindings.keys()].filter(
+    (index) => !resolvedFindings.has(index)
+  ).length;
   const findings = manifest.rules.map((rule, index) => ({
     columnIndex: index,
     cellId: cells[index]!.id,
@@ -135,22 +141,15 @@ function completionFixture(): ReviewCompletion {
                     : ("deviates" as const),
             citationsValid: scenario !== "invalid" || index !== 1,
           },
-    disposition:
-      scenario === "complete"
-        ? "left_unchanged"
-        : index === 1 && disposition
-          ? disposition
-          : index === 1 && proposed
-            ? "redline_proposed"
-            : "needs_attention",
+    disposition: findingDisposition(index),
     rationale:
-      index === 1 && rationale
-        ? rationale
-        : scenario === "complete"
-          ? "Synthetic human acceptance rationale."
-          : null,
+      findingDecisions.get(index)?.rationale ??
+      (scenario === "complete" ? "Synthetic human acceptance rationale." : null),
     addressed:
-      scenario === "complete" || index === 0 || (index === 1 && disposition === "left_unchanged"),
+      findingDisposition(index) !== "escalated" &&
+      (findingDisposition(index) === "resolved" ||
+        findingDisposition(index) === "left_unchanged" ||
+        (index === 0 && !proposedFindings.has(index))),
     clauses: [
       {
         id: `30000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`,
@@ -177,8 +176,16 @@ function completionFixture(): ReviewCompletion {
     playbookId: "synthetic-playbook",
     playbookRevision: "synthetic-playbook-approved-v1",
     capturedAt: fixedAt,
-    cleanReady: scenario === "complete",
-    decisionsComplete: scenario === "complete",
+    cleanReady:
+      scenario !== "stale" &&
+      scenario !== "failed" &&
+      findings.every((finding) => finding.addressed) &&
+      pendingEdits === 0,
+    decisionsComplete:
+      scenario !== "stale" &&
+      scenario !== "failed" &&
+      findings.every((finding) => finding.addressed) &&
+      pendingEdits === 0,
     documents: [
       {
         canPropose: scenario !== "viewer",
@@ -188,21 +195,42 @@ function completionFixture(): ReviewCompletion {
         editableDocx: true,
         reviewedVersionId: ids.source,
         currentVersionId:
-          scenario === "stale" || proposed ? "50000000-0000-4000-8000-000000000001" : ids.source,
-        approvedVersionId: ids.source,
-        approvedBaselineReady: !proposed,
+          scenario === "stale" || proposedFindings.size > 0
+            ? "50000000-0000-4000-8000-000000000001"
+            : ids.source,
+        approvedVersionId:
+          proposedFindings.size > 0 && pendingEdits === 0
+            ? "50000000-0000-4000-8000-000000000001"
+            : ids.source,
+        approvedBaselineReady: scenario !== "stale" && pendingEdits === 0,
         currentHeadCommitId: "synthetic-source-commit",
         sourceChanged: scenario === "stale",
         unfinished: scenario === "failed" ? 1 : 0,
         unresolved: findings.filter((finding) => !finding.addressed).length,
-        pendingEdits: proposed ? 1 : 0,
+        pendingEdits,
         pendingApprovals: 0,
         findings,
-        cleanReady: scenario === "complete",
-        decisionsComplete: scenario === "complete",
+        cleanReady:
+          scenario !== "stale" &&
+          scenario !== "failed" &&
+          findings.every((finding) => finding.addressed) &&
+          pendingEdits === 0,
+        decisionsComplete:
+          scenario !== "stale" &&
+          scenario !== "failed" &&
+          findings.every((finding) => finding.addressed) &&
+          pendingEdits === 0,
       },
     ],
   };
+}
+function findingDisposition(index: number) {
+  const decision = findingDecisions.get(index);
+  if (decision?.status === "escalated") return "escalated";
+  if (proposedFindings.has(index) && !resolvedFindings.has(index)) return "redline_proposed";
+  if (resolvedFindings.get(index) === "accepted") return "resolved";
+  if (decision?.status === "left_unchanged") return "left_unchanged";
+  return scenario === "complete" ? "left_unchanged" : "needs_attention";
 }
 function jobFixture(): JobSnapshot {
   return {
@@ -359,6 +387,7 @@ function proposalFixtures(): ApprovalProposal[] {
   ];
 }
 function documentFixture() {
+  const snapshot = completionFixture().documents[0]!;
   return {
     document: {
       id: ids.document,
@@ -367,26 +396,49 @@ function documentFixture() {
       markdown: sourceText,
       status: "ready",
       headCommitId: `synthetic-document-${documentDecision}`,
-      currentVersionId: ids.source,
-      approvedVersionId: documentDecision === "pending" ? null : ids.source,
-      approvedMarkdown: documentDecision === "pending" ? null : sourceText,
+      currentVersionId: snapshot.currentVersionId,
+      approvedVersionId:
+        proposedFindings.size > 0
+          ? snapshot.approvedVersionId
+          : documentDecision === "pending"
+            ? null
+            : ids.source,
+      approvedMarkdown:
+        proposedFindings.size > 0
+          ? snapshot.approvedBaselineReady
+            ? sourceText
+            : null
+          : documentDecision === "pending"
+            ? null
+            : sourceText,
       sizeBytes: 12000,
       pageCount: 1,
       createdAt: fixedAt,
       ownerName: "Synthetic reviewer",
       ownerEmail: null,
     },
-    edits: [
-      {
-        id: "synthetic-edit",
-        changeId: "synthetic-change",
-        deletedText: manifest.redlines[0]!.find,
-        insertedText: manifest.redlines[0]!.replace,
-        reason: "Synthetic exact approved standard",
-        status: documentDecision,
-        blame: cellFixtures()[1]!.blame,
-      },
-    ],
+    edits:
+      proposedFindings.size > 0
+        ? [...proposedFindings].map(([columnIndex, edit]) => ({
+            id: `synthetic-edit-${columnIndex}`,
+            changeId: `synthetic-change-${columnIndex}`,
+            deletedText: edit.find,
+            insertedText: edit.replace,
+            reason: "Synthetic exact approved standard",
+            status: resolvedFindings.get(columnIndex) ?? "pending",
+            blame: cellFixtures()[columnIndex]!.blame,
+          }))
+        : [
+            {
+              id: "synthetic-edit",
+              changeId: "synthetic-change",
+              deletedText: manifest.redlines[0]!.find,
+              insertedText: manifest.redlines[0]!.replace,
+              reason: "Synthetic exact approved standard",
+              status: documentDecision,
+              blame: cellFixtures()[1]!.blame,
+            },
+          ],
     resolutionPolicy: {
       approvalContext: [{ matterId: ids.matter, policyRevision: 2, requiredRole: "owner" }],
       mayResolve: scenario !== "viewer",
@@ -463,7 +515,21 @@ window.fetch = async (input, init) => {
     path.endsWith("resolve-batch")
   ) {
     documentDecision = body.decision === "accept" ? "accepted" : "rejected";
-    proposed = false;
+    const changeId = path.split("/").at(-2);
+    const requested = path.endsWith("resolve-batch")
+      ? (body.changeIds as string[])
+      : path.endsWith("resolve-all")
+        ? [...proposedFindings.keys()].map((index) => `synthetic-change-${index}`)
+        : [changeId];
+    for (const index of proposedFindings.keys()) {
+      if (!requested.includes(`synthetic-change-${index}`)) continue;
+      resolvedFindings.set(index, documentDecision);
+      if (
+        documentDecision === "rejected" &&
+        findingDecisions.get(index)?.status === "left_unchanged"
+      )
+        findingDecisions.delete(index);
+    }
     return json(documentFixture());
   }
   if (path === `/api/documents/${ids.document}`) return json(documentFixture());
@@ -484,13 +550,24 @@ window.fetch = async (input, init) => {
         );
   if (path.endsWith("/opened")) return new Response(null, { status: 204 });
   if (path.endsWith("/disposition")) {
-    disposition = body.status;
-    rationale = body.rationale;
+    if (
+      !Number.isInteger(body.columnIndex) ||
+      !manifest.rules[body.columnIndex] ||
+      !["left_unchanged", "escalated"].includes(body.status)
+    )
+      return json({ error: "Invalid fixture finding decision" }, 400);
+    findingDecisions.set(body.columnIndex, { status: body.status, rationale: body.rationale });
     return json({ ok: true });
   }
   if (path.endsWith("/redline")) {
-    proposed = true;
-    return json({ changeIds: ["synthetic-change"] });
+    const finding = completionFixture().documents[0]!.findings.find(
+      (item) => item.columnIndex === body.columnIndex
+    );
+    const clause = finding?.clauses.find((item) => item.id === body.clauseId);
+    if (!finding || !clause) return json({ error: "Invalid fixture finding or clause" }, 400);
+    proposedFindings.set(body.columnIndex, { find: body.find, replace: clause.body });
+    resolvedFindings.delete(body.columnIndex);
+    return json({ changeIds: [`synthetic-change-${body.columnIndex}`] });
   }
   if (path.endsWith("/queue")) {
     if (scenario === "failed" && !body.acknowledgeUnknown)
@@ -696,9 +773,9 @@ function FixtureRoot() {
                 onChange={(event) => {
                   scenario = event.target.value as Scenario;
                   setSelectedScenario(scenario);
-                  disposition = null;
-                  proposed = false;
-                  rationale = "";
+                  findingDecisions.clear();
+                  proposedFindings.clear();
+                  resolvedFindings.clear();
                   exportStatus = "pending";
                   exportRequestId = undefined;
                   decided.clear();

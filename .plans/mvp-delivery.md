@@ -1,7 +1,8 @@
 # NDA MVP delivery
 
-Coordinated implementation started 2026-10-13 on `feat/native-agent-workflow`, continuing
-[PR #12](https://github.com/Git-Matter/gitmatter/pull/12) into `dev`.
+Coordinated implementation started 2026-10-13 on `feat/native-agent-workflow`.
+[PR #12](https://github.com/Git-Matter/gitmatter/pull/12) merged into `dev` at `ba161318`
+after current-head CI passed for `26b729dc`.
 
 ## Acceptance contract
 
@@ -32,8 +33,8 @@ workstreams for independent review of authorization, races and failure behavior.
 
 ## Current implementation (2026-10-13)
 
-The feature branch contains the connected NDA source path. Final integrated checks and authenticated
-acceptance remain pending; this section records implemented scope, not MVP release sign-off.
+The connected NDA source path is in `dev`. Integrated repository checks and PR CI passed.
+Authenticated and staging acceptance remain pending; this is source readiness, not release sign-off.
 
 - Responsive captured-source/findings workspace, quotation highlighting, approved-language preview,
   failed-rule retry with explicit acknowledgement of uncertain paid outcomes, completion status,
@@ -89,4 +90,7 @@ a legally accepted production workflow are separate milestones.
 
 The [2026-10-13 implementation record](evidence/2026-10-13-mvp-implementation.md) captures source
 coverage, all 282 passing tests in 54 files, required checks, local migrations and the isolated
-browser interaction evidence. Remote CI and staging acceptance remain separate promotion gates.
+browser interaction evidence. PR-head CI passed. The
+[integration and staging record](evidence/2026-10-14-dev-integration-and-staging.md) confirms the
+merge and fresh server pull failures: staging still runs older revisions because private GHCR
+authentication was denied. Authenticated acceptance remains open.

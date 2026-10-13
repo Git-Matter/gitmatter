@@ -3,7 +3,7 @@
 Move extraction, bulk review, playbook execution, and large exports onto a database-backed job/outbox
 and worker loop so deploys, restarts, provider failures, or closed tabs cannot lose accepted work.
 
-**Status: In progress** (source coverage reviewed 2026-10-13; final integrated checks and release
+**Status: In progress** (source and local checks verified 2026-10-13; staging and release
 gates open).
 
 The prior extraction baseline used an in-memory per-user chain in
