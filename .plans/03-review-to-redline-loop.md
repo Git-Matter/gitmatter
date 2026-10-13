@@ -202,10 +202,13 @@ escalation and proposal policy.
 
 ## Research additions accepted 2026-10-14
 
-Captured review instructions and bounded incoming Word inspection are in implementation. Freeze
-party, disclosure role, NDA structure, purpose and governing-law context across UI/MCP/provider
-paths. Bind Word inspection to immutable bytes, expose coverage, and gate proposal/decision/export
-readiness consistently. See [the coordinated scope and checks](review-setup-and-word-intake.md).
+Captured review instructions and bounded incoming Word inspection are implemented and locally
+checked. Reviews freeze party, disclosure role, NDA structure, purpose and governing-law context
+across UI/MCP/provider paths. Word inspection binds to immutable bytes, exposes coverage, and gates
+Word proposals, Word-edit decisions and clean export consistently. Human finding decisions remain
+separate. See [the coordinated scope and checks](review-setup-and-word-intake.md) and
+[dated implementation evidence](evidence/2026-10-14-review-setup-and-word-intake.md). Representative
+Word and authenticated staging acceptance remain open.
 
 A partner/client decision brief is planned as a human-previewed presentation of the existing report.
 Full returned-revision reconciliation and a native Word add-in require pilot evidence.

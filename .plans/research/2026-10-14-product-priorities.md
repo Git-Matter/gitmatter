@@ -3,6 +3,12 @@
 Research date: 2026-10-14. Source baseline: `dev` at `99acd833`.
 Audience: small-to-mid law firms from `PRODUCT.md`; commercial NDA work is the first-use hypothesis.
 
+The code-gap assessment below describes the source before the accepted implementation. Review
+instructions, guided first review and bounded Word inspection were subsequently implemented under
+[the coordinated scope](../review-setup-and-word-intake.md); their
+[source and local evidence](../evidence/2026-10-14-review-setup-and-word-intake.md) records the updated
+behavior and remaining runtime/release gates. Research recommendations retain their original context.
+
 The most worthwhile additions help a lawyer set the correct review position, exchange a usable
 Word document, and get another person to complete the next decision. Guided first-review setup can
 make the existing capabilities easier to buy and use. Broader legal research, a native Word add-in
