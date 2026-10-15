@@ -5,3 +5,9 @@
 .git
 .github
 *.log
+# Keep runtime credentials and local acceptance artifacts out of build contexts.
+.env
+.env.*
+**/.env
+**/.env.*
+.scratch

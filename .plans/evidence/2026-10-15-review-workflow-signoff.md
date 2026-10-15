@@ -23,6 +23,7 @@ The actual application ran at `http://127.0.0.1:4280` with local Postgres and de
 `0700` directory. No credential value is in this record or Git. Email and analytics were disabled
 only in this private process. Staging settings were not changed. The selected EU option maps to
 local MinIO for these checks; this establishes selection behavior, not European hosting/residency.
+Docker context exclusions also cover local environment files and `.scratch` acceptance artifacts.
 
 Synthetic actor `m6aPsGM7MwjXThQseb3I7dHwanPw0RgJ`, tenant
 `70868707-aa8a-4fef-9458-f0cf646ae999`. Scripted user-account approvals exercise software authority
