@@ -13,7 +13,7 @@ const CITATIONS_SCHEMA = {
   type: "array",
   items: {
     type: "object",
-    properties: { page: { type: "number" }, quote: { type: "string" } },
+    properties: { quote: { type: "string" } },
     required: ["quote"],
     additionalProperties: false,
   },
@@ -68,10 +68,9 @@ export function coerceFlag(flag: unknown): CellContent["flag"] {
 export function coerceCitations(raw: unknown): CellCitation[] {
   if (!Array.isArray(raw)) return [];
   return raw
-    .filter((c): c is { page?: unknown; quote?: unknown } => !!c && typeof c === "object")
+    .filter((c): c is { quote?: unknown } => !!c && typeof c === "object")
     .map((c) => ({
       quote: (typeof c.quote === "string" ? c.quote : "").trim(),
-      ...(typeof c.page === "number" ? { page: c.page } : {}),
     }))
     .filter((c) => c.quote);
 }

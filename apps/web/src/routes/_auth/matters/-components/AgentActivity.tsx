@@ -423,11 +423,6 @@ export function AgentActivity({ matterId, isOwner }: { matterId: string; isOwner
                           className="mt-2 border-l-2 pl-3 text-sm whitespace-pre-wrap"
                         >
                           {citation.quote}
-                          {citation.page !== undefined && (
-                            <span className="ml-2 text-xs text-muted-foreground">
-                              Page {citation.page}
-                            </span>
-                          )}
                         </blockquote>
                       ))
                     ) : (

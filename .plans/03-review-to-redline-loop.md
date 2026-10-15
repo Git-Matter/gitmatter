@@ -210,5 +210,10 @@ separate. See [the coordinated scope and checks](review-setup-and-word-intake.md
 [dated implementation evidence](evidence/2026-10-14-review-setup-and-word-intake.md). Representative
 Word and authenticated staging acceptance remain open.
 
+[The 2026-10-15 record](evidence/2026-10-15-review-workflow-signoff.md) adds bounded local provider
+comparisons and actual tracked/clean Word exports saved, reopened and re-imported in Microsoft Word.
+It also records the citation-page correction and preserved audit history. This establishes the
+tested synthetic cases, while broader Word/provider, staging and real-firm acceptance remain open.
+
 A partner/client decision brief is planned as a human-previewed presentation of the existing report.
 Full returned-revision reconciliation and a native Word add-in require pilot evidence.

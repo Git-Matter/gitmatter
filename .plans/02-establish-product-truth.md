@@ -40,6 +40,11 @@ separate from provider verification. See [the coordinated scope](review-setup-an
 [source/browser evidence](evidence/2026-10-14-review-setup-and-word-intake.md). Authenticated first-use
 acceptance remains open.
 
+[Bounded local runtime acceptance on 2026-10-15](evidence/2026-10-15-review-workflow-signoff.md) verifies
+actual login, onboarding, upload, saved instructions and execution-route guards. Live provider and
+native Word evidence are recorded separately in the same report. The full staging/real-firm exit
+gates remain open.
+
 ## Purpose
 
 Create a trustworthy baseline before changing the workflow.

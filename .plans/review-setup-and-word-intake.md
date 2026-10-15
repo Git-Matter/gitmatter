@@ -1,8 +1,13 @@
 # Review setup and Word intake
 
-**Status: Done (source and local checks)** as of 2026-10-14. Authenticated staging, representative
-Microsoft Word, provider-quality and pilot/release proof remain open. See
+**Status: Runtime-verified (local, bounded synthetic scope)** as of 2026-10-15. Authenticated staging,
+broader Word/provider quality and pilot/release proof remain open. See
 [the implementation evidence](evidence/2026-10-14-review-setup-and-word-intake.md).
+
+[Sign-off checks on 2026-10-15](evidence/2026-10-15-review-workflow-signoff.md) cover the actual local
+account/guide, live provider runs, native Word save/reopen and re-import. A discovered citation-page
+defect was corrected without rewriting audit history. Staging registry authorization and a final
+citation-label visual recheck remain open; the latter awaits an unlocked Mac.
 
 Capture a firm's actual review instructions, guide a new lawyer through the first completed review,
 and inspect incoming Word changes before allowing tracked editing or clean-output claims. These

@@ -4,6 +4,7 @@ import { commits, documentEdits, tabularCells, tabularReviews } from "@workspace
 import type { Actor } from "../core/commit.js";
 import { canAccessArtifact, canReadDocument } from "../core/access.js";
 import { getReviewCompletion } from "../ai/tabular/contract-review.js";
+import { quoteOnlyCitations } from "./citations.js";
 
 /** A read-only snapshot. Its manifest describes this report, not future DOCX downloads. */
 export async function captureReviewReport(actor: Actor, reviewId: string) {
@@ -88,6 +89,8 @@ export async function captureReviewReport(actor: Actor, reviewId: string) {
           policyRevision: completion.policyRevision,
           cleanReadyAtCapture: completion.cleanReady,
           decisionsCompleteAtCapture: completion.decisionsComplete,
+          citationLocator: "source_quotation" as const,
+          paginationVerified: false as const,
           documents: completion.documents.map((doc) => ({
             documentId: doc.documentId,
             title: doc.title,
@@ -118,7 +121,7 @@ export async function captureReviewReport(actor: Actor, reviewId: string) {
               ...finding,
               execution: cell?.status ?? "pending",
               content: cell?.content ?? null,
-              citations: cell?.citations ?? [],
+              citations: quoteOnlyCitations(cell?.citations),
               decision: cell?.disposition ?? null,
               edits: edits
                 .filter(
@@ -152,6 +155,7 @@ export function renderReviewReportMarkdown(report: ReviewReport) {
     "",
     `Captured ${text(report.manifest.capturedAt)}. ${report.manifest.cleanReadyAtCapture ? "The captured state met clean export readiness." : "Clean export was not ready at capture; findings, decisions, source or Word inspection may need attention."}`,
     "This report does not approve legal quality, resolve tracked changes, or certify a later document export. Quotations and approved language refer to captured review inputs. Review the attached manifest for exact version and commit references.",
+    "Citations locate quoted language in captured text. No trusted page map was captured; source page numbers are not attested.",
     "",
     `Playbook ${text(report.manifest.playbookId)} · revision ${text(report.manifest.playbookRevision)}`,
     "",
@@ -196,12 +200,8 @@ export function renderReviewReportMarkdown(report: ReviewReport) {
         lines.push(
           "No matching provision was found in the captured source; no supporting quotation exists."
         );
-      for (const citation of finding.citations)
-        lines.push(
-          "",
-          `> ${text(citation.quote).replaceAll("\n", "\n> ")}`,
-          ...(citation.page ? [`Recorded source page: ${citation.page}.`] : [])
-        );
+      for (const citation of quoteOnlyCitations(finding.citations))
+        lines.push("", `> ${text(citation.quote).replaceAll("\n", "\n> ")}`);
       if (finding.rationale) lines.push("", `Human rationale: ${text(finding.rationale)}`);
       if (finding.decision)
         lines.push(

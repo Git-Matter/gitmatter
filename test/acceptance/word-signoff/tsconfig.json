@@ -1,0 +1,10 @@
+{
+  "extends": "../../../packages/core/tsconfig.json",
+  "include": ["generate.ts", "verify.ts", "local-http.ts"],
+  "compilerOptions": {
+    "typeRoots": ["../../../packages/core/node_modules/@types"],
+    "paths": {
+      "@workspace/contracts": ["../../../packages/contracts/src/index.ts"]
+    }
+  }
+}

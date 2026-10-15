@@ -30,6 +30,7 @@ import {
 } from "../provider/index.js";
 import { coerceCitations, coerceFlag, queryCell, queryRow } from "./extract.js";
 import { capturedReviewInstructions } from "../prompts/tabular.js";
+import { quoteOnlyCitations } from "../../content/citations.js";
 
 /** Meter one extraction completion against the review's user/tenant/matter —
  *  tabular runs bill to the matter the review is filed under. Fire-and-forget. */
@@ -236,6 +237,7 @@ export function commitCell(
   },
   transaction?: Tx
 ) {
+  p = { ...p, citations: quoteOnlyCitations(p.citations) };
   const source = p.review.inputSnapshot?.documents.find((d) => d.id === p.documentId);
   if (source) {
     const validated = validateFinding(source.text, p.content, p.citations);
@@ -554,7 +556,7 @@ export async function runDocument(
           const source = review.inputSnapshot?.documents.find((d) => d.id === params.documentId);
           const { content, citations } = source
             ? validateFinding(source.text, result.content, result.citations)
-            : result;
+            : { ...result, citations: quoteOnlyCitations(result.citations) };
           const proposal = await stageCellProposal(tx, {
             actor: currentActor,
             commitId,
@@ -693,7 +695,7 @@ export async function runReviewStreaming(
           documentId: job.documentId,
           columnIndex,
           content: persisted?.content ?? null,
-          citations: persisted?.citations ?? null,
+          citations: persisted?.citations == null ? null : quoteOnlyCitations(persisted.citations),
           status: persisted?.status ?? "pending",
         });
         pending.delete(id);

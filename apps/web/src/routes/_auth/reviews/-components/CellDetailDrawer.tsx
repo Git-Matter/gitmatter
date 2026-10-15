@@ -17,9 +17,9 @@ const FLAG_BADGE: Record<string, string> = {
 
 /**
  * Right-slide panel showing one review cell in full: flag, the whole summary +
- * reasoning (no truncation), its grounding citations, and blame. A citation opens
- * the source document at that page. Mirrors the DocumentDrawer shell so the two
- * panels feel the same.
+ * reasoning (no truncation), its grounding citations, and blame. Citation links
+ * open the source document; quotations stay bound to captured text. Mirrors the
+ * DocumentDrawer shell so the two panels feel the same.
  */
 export function CellDetailDrawer({
   open,
@@ -133,22 +133,15 @@ export function CellDetailDrawer({
                         {citations.map((c, i) => (
                           <li key={i}>
                             <button
-                              onClick={() =>
-                                onOpenSource(sourceVersionChanged ? undefined : c.page)
-                              }
+                              onClick={() => onOpenSource()}
                               className="block w-full rounded-md border border-border p-2 text-start transition-colors hover:border-bronze hover:bg-bronze-tint/40"
                             >
-                              {c.page != null && (
-                                <span className="mb-1 block text-xs font-medium text-bronze">
-                                  Page {c.page}
-                                </span>
-                              )}
                               <span className="block text-xs text-muted-foreground italic">
                                 "{c.quote}"
                               </span>
-                              {sourceVersionChanged && (
-                                <span className="mt-2 block text-xs">Open current draft</span>
-                              )}
+                              <span className="mt-2 block text-xs">
+                                {sourceVersionChanged ? "Open current draft" : "Open source"}
+                              </span>
                             </button>
                           </li>
                         ))}
@@ -183,7 +176,7 @@ export function CellDetailDrawer({
                   <p className="mb-3 text-sm text-muted-foreground">
                     This cell hasn't been run yet.
                   </p>
-                  <Button size="sm" disabled={busy} onClick={onRun}>
+                  <Button size="sm" disabled={busy || !canRun} onClick={onRun}>
                     {busy ? "Running…" : "Run cell"}
                   </Button>
                 </div>
