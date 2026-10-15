@@ -41,6 +41,11 @@ on 2026-10-14. [Source and local proof](evidence/2026-10-14-review-setup-and-wor
 separately from authenticated staging, Word and pilot proof. Named handoff and partner/client briefs
 are planned follow-ups in the existing plans.
 
+[Local runtime checks on 2026-10-15](evidence/2026-10-15-review-workflow-signoff.md) add actual account
+and guide interactions, metered provider cases and native Word save/reopen/re-import proof. They also
+found and corrected unsupported citation-page claims. Staging and broader pilot/release gates remain
+separate; the last citation-label visual recheck awaits an unlocked Mac.
+
 ## Delivery order
 
 `02` → `03` → `04` → `05` → `06` → `07`, matching the `(M0)`–`(M5)` labels in the plan titles.
