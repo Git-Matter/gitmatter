@@ -149,7 +149,7 @@ export function buildReviewTools({ actor, resolveMatter, credentialId }: ToolCon
     {
       name: "write_cell",
       description:
-        "Write your own extracted value into one review cell — for when you have read the document yourself and produced the answer. Committed under your name. This does not run a GitMatter model or require an LLM API key. flag is the RAG status: green=ok, yellow=caution, red=problem, grey=n/a.",
+        "Write your own extracted value into one review cell — for when you have read the document yourself and produced the answer. Committed under your name. This does not run a GitMatter model or require an LLM API key. Supply exact source quotations; page numbers are omitted because current review snapshots have no trusted page map. flag is the RAG status: green=ok, yellow=caution, red=problem, grey=n/a.",
       schema: {
         reviewId: z.string(),
         documentId: z.string(),

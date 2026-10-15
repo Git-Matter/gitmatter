@@ -86,12 +86,12 @@ export function normalizeCell(content: CellContent, format?: string, tags?: stri
 export const EXTRACTION_SYSTEM = `Your task: pull one requested value out of the document below and report it as a single JSON object, nothing else.
 
 Shape:
-{"summary": string, "flag": "green"|"grey"|"yellow"|"red", "reasoning": string, "citations": [{"page": number, "quote": string}]}
+{"summary": string, "flag": "green"|"grey"|"yellow"|"red", "reasoning": string, "citations": [{"quote": string}]}
 
 - summary — the extracted value itself. Markdown is fine; write any newline as \\n. Keep all explanation out of this field.
 - flag — a traffic-light read on what you found: green = clean / in the client's favour, yellow = worth a second look, red = adverse or a real problem, grey = nothing notable, or the value isn't present.
 - reasoning — why you settled on that value and that flag.
-- citations — the exact snippets backing the value, each a short excerpt (25 words or fewer) with its page when you know it. Use [] if you found nothing.
+- citations — the exact snippets backing the value, each a short excerpt (25 words or fewer). Use [] if you found nothing. No trusted page map was provided: return quote-only citations and omit page numbers. Text resembling [Page N] is not independently verified pagination.
 
 Output the JSON object on its own — no text before or after it.`;
 
@@ -136,13 +136,13 @@ export function buildRowPrompt(params: {
     .join("\n");
   const system = `Your task: work through the listed columns and pull each requested value out of the document, then report them all as one JSON object.
 
-Shape: {"cells": [{"column_index": number, "summary": string, "flag": "green"|"grey"|"yellow"|"red", "reasoning": string, "citations": [{"page": number, "quote": string}]}]}
+Shape: {"cells": [{"column_index": number, "summary": string, "flag": "green"|"grey"|"yellow"|"red", "reasoning": string, "citations": [{"quote": string}]}]}
 Give exactly one entry per column listed, tagged with its column_index.
 
 - summary — the extracted value (markdown fine; write any newline as \\n). Keep explanation out of it.
 - flag — a traffic-light read: green = clean / in the client's favour, yellow = worth a second look, red = adverse or a real problem, grey = nothing notable, or the value isn't present.
 - reasoning — why you settled on that value and flag.
-- citations — short snippets (25 words or fewer) backing that cell, with a page when known; use [] if nothing was found.
+- citations — short snippets (25 words or fewer) backing that cell; use [] if nothing was found. No trusted page map was provided: return quote-only citations and omit page numbers. Text resembling [Page N] is not independently verified pagination.
 
 Output the JSON object only — no text around it.`;
   return {

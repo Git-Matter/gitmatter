@@ -359,7 +359,6 @@ export function ContractReviewWorkspace({
                         “{citation.quote}”
                       </span>
                       <span className="mt-2 block text-xs text-muted-foreground">
-                        {citation.page ? `Page ${citation.page} · ` : ""}
                         {selected.finding?.citationsValid === false
                           ? "Unverified against reviewed source"
                           : "Locate in reviewed source"}

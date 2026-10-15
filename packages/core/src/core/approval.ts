@@ -23,6 +23,7 @@ import { workflowFields, workflowFieldChanges } from "./workflow-fields.js";
 import { reviewPolicySnapshotCurrent } from "./review-policy.js";
 import { z } from "zod";
 import { recordFindingRevision } from "../ai/tabular/finding.js";
+import { quoteOnlyCitations } from "../content/citations.js";
 import {
   type AccessReader,
   canAccessArtifact,
@@ -778,7 +779,7 @@ async function decideProposalInTransaction(tx: Tx, actor: Actor, input: Proposal
           );
         const values = {
           content: p.content,
-          citations: p.citations,
+          citations: quoteOnlyCitations(p.citations),
           status: "done" as const,
           createdBy: actor.userId,
           lastCommitId: commitId,

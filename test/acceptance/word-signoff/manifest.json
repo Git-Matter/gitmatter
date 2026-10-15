@@ -1,0 +1,321 @@
+{
+  "schemaVersion": 1,
+  "preparedOn": "2026-10-15",
+  "notice": "Synthetic terminal-generated assets, not staging provenance, legal approval, provider quality or Microsoft Word evidence. Engine bindings describe pure transformations only; importing a file never creates application audit/approval history.",
+  "files": [
+    {
+      "file": "fixtures/01-clean-styled-nda.docx",
+      "sizeBytes": 11243,
+      "sha256": "51a69bdc3f2264aae27f32121835f76777272626068e56c5165185073ba6cc05",
+      "expected": "Supported revision-free source; styles, numbering, table, comments, header, footer and notes must survive.",
+      "inspection": {
+        "schemaVersion": 1,
+        "sourceHash": "51a69bdc3f2264aae27f32121835f76777272626068e56c5165185073ba6cc05",
+        "status": "complete",
+        "textView": "accepted_body",
+        "stories": {
+          "body": 1,
+          "headers": 1,
+          "footers": 1,
+          "footnotes": 1,
+          "endnotes": 1,
+          "comments": 1,
+          "other": 16
+        },
+        "revisions": {
+          "insertions": 0,
+          "deletions": 0,
+          "moves": 0,
+          "formatting": 0,
+          "other": 0
+        },
+        "reasons": []
+      },
+      "safetyAsFreshUpload": {
+        "registeredRevisions": 0,
+        "incomingRevisions": 0,
+        "safeToEdit": true,
+        "safeClean": true
+      }
+    },
+    {
+      "file": "fixtures/02-incoming-body-revisions.docx",
+      "sizeBytes": 11404,
+      "sha256": "b653c556cdc0be2610a6e3a3450c016782fe4f205b0c1a7ed3264fd7212f8602",
+      "expected": "Two incoming body markers; editing/decisions/clean output blocked after upload. Original download preserved.",
+      "inspection": {
+        "schemaVersion": 1,
+        "sourceHash": "b653c556cdc0be2610a6e3a3450c016782fe4f205b0c1a7ed3264fd7212f8602",
+        "status": "complete",
+        "textView": "accepted_body",
+        "stories": {
+          "body": 1,
+          "headers": 1,
+          "footers": 1,
+          "footnotes": 1,
+          "endnotes": 1,
+          "comments": 1,
+          "other": 16
+        },
+        "revisions": {
+          "insertions": 1,
+          "deletions": 1,
+          "moves": 0,
+          "formatting": 0,
+          "other": 0
+        },
+        "reasons": []
+      },
+      "safetyAsFreshUpload": {
+        "registeredRevisions": 0,
+        "incomingRevisions": 2,
+        "safeToEdit": false,
+        "safeClean": false
+      }
+    },
+    {
+      "file": "fixtures/03-incoming-nonbody-revisions.docx",
+      "sizeBytes": 11541,
+      "sha256": "cdea5c9b2627bbcf46387babc625f6de7315e4f1fb16f2f7908c9a761918f29d",
+      "expected": "Incoming header/footer/footnote/endnote/comment revisions; limited coverage and editing/clean output blocked.",
+      "inspection": {
+        "schemaVersion": 1,
+        "sourceHash": "cdea5c9b2627bbcf46387babc625f6de7315e4f1fb16f2f7908c9a761918f29d",
+        "status": "complete",
+        "textView": "limited_body",
+        "stories": {
+          "body": 1,
+          "headers": 1,
+          "footers": 1,
+          "footnotes": 1,
+          "endnotes": 1,
+          "comments": 1,
+          "other": 16
+        },
+        "revisions": {
+          "insertions": 4,
+          "deletions": 2,
+          "moves": 0,
+          "formatting": 0,
+          "other": 0
+        },
+        "reasons": ["non_body_revision", "unsupported_revision"]
+      },
+      "safetyAsFreshUpload": {
+        "registeredRevisions": 0,
+        "incomingRevisions": 6,
+        "safeToEdit": false,
+        "safeClean": false
+      }
+    },
+    {
+      "file": "fixtures/04-incoming-formatting-revision.docx",
+      "sizeBytes": 11322,
+      "sha256": "71c4559235a4d03bc268ffb8715a112baf6b32501ce89116123c894c636a987c",
+      "expected": "Tracked italic formatting change; unsupported_revision and clean output blocked.",
+      "inspection": {
+        "schemaVersion": 1,
+        "sourceHash": "71c4559235a4d03bc268ffb8715a112baf6b32501ce89116123c894c636a987c",
+        "status": "complete",
+        "textView": "limited_body",
+        "stories": {
+          "body": 1,
+          "headers": 1,
+          "footers": 1,
+          "footnotes": 1,
+          "endnotes": 1,
+          "comments": 1,
+          "other": 16
+        },
+        "revisions": {
+          "insertions": 0,
+          "deletions": 0,
+          "moves": 0,
+          "formatting": 1,
+          "other": 0
+        },
+        "reasons": ["unsupported_revision"]
+      },
+      "safetyAsFreshUpload": {
+        "registeredRevisions": 0,
+        "incomingRevisions": 1,
+        "safeToEdit": false,
+        "safeClean": false
+      }
+    },
+    {
+      "file": "fixtures/05-engine-two-pending-proposals.docx",
+      "sizeBytes": 11471,
+      "sha256": "ca928000f343946f7cde3a6a387d75a0058109395bccb7822516a5634038f164",
+      "expected": "Four body markers from two engine proposals; native Word must show both tracked replacements. Uploading this standalone file treats them as incoming.",
+      "inspection": {
+        "schemaVersion": 1,
+        "sourceHash": "ca928000f343946f7cde3a6a387d75a0058109395bccb7822516a5634038f164",
+        "status": "complete",
+        "textView": "accepted_body",
+        "stories": {
+          "body": 1,
+          "headers": 1,
+          "footers": 1,
+          "footnotes": 1,
+          "endnotes": 1,
+          "comments": 1,
+          "other": 16
+        },
+        "revisions": {
+          "insertions": 2,
+          "deletions": 2,
+          "moves": 0,
+          "formatting": 0,
+          "other": 0
+        },
+        "reasons": []
+      },
+      "safetyAsFreshUpload": {
+        "registeredRevisions": 0,
+        "incomingRevisions": 4,
+        "safeToEdit": false,
+        "safeClean": false
+      },
+      "engineBindingsOnly": [
+        {
+          "delWId": "1",
+          "insWId": "2",
+          "deletedText": "fiv",
+          "insertedText": "thre"
+        },
+        {
+          "delWId": "3",
+          "insWId": "4",
+          "deletedText": "without notifying the disclosing party",
+          "insertedText": "after giving prompt notice to the disclosing party where legally permitted"
+        }
+      ],
+      "engineBindingSafety": {
+        "registeredRevisions": 4,
+        "incomingRevisions": 0,
+        "safeToEdit": true,
+        "safeClean": false
+      }
+    },
+    {
+      "file": "fixtures/06-engine-partial-human-acceptance.docx",
+      "sizeBytes": 11452,
+      "sha256": "6f0521f34cfd4adccfb76d89a7e3a0906228394e1fb3dff90bf804bc3d80a529",
+      "expected": "Term accepted at three years; disclosure replacement still tracked. Uploading the remaining proposal file treats it as incoming.",
+      "inspection": {
+        "schemaVersion": 1,
+        "sourceHash": "6f0521f34cfd4adccfb76d89a7e3a0906228394e1fb3dff90bf804bc3d80a529",
+        "status": "complete",
+        "textView": "accepted_body",
+        "stories": {
+          "body": 1,
+          "headers": 1,
+          "footers": 1,
+          "footnotes": 1,
+          "endnotes": 1,
+          "comments": 1,
+          "other": 16
+        },
+        "revisions": {
+          "insertions": 1,
+          "deletions": 1,
+          "moves": 0,
+          "formatting": 0,
+          "other": 0
+        },
+        "reasons": []
+      },
+      "safetyAsFreshUpload": {
+        "registeredRevisions": 0,
+        "incomingRevisions": 2,
+        "safeToEdit": false,
+        "safeClean": false
+      },
+      "engineBindingsOnly": [
+        {
+          "delWId": "3",
+          "insWId": "4",
+          "deletedText": "without notifying the disclosing party",
+          "insertedText": "after giving prompt notice to the disclosing party where legally permitted"
+        }
+      ],
+      "engineBindingSafety": {
+        "registeredRevisions": 2,
+        "incomingRevisions": 0,
+        "safeToEdit": true,
+        "safeClean": false
+      }
+    },
+    {
+      "file": "fixtures/07-engine-mixed-decisions-clean.docx",
+      "sizeBytes": 11329,
+      "sha256": "a9fce67c0ac11d2b8d115d7349e93098d305698371fad5c94dd06b97b5203234",
+      "expected": "No tracked markers: term accepted at three years; disclosure rejected to its original wording.",
+      "inspection": {
+        "schemaVersion": 1,
+        "sourceHash": "a9fce67c0ac11d2b8d115d7349e93098d305698371fad5c94dd06b97b5203234",
+        "status": "complete",
+        "textView": "accepted_body",
+        "stories": {
+          "body": 1,
+          "headers": 1,
+          "footers": 1,
+          "footnotes": 1,
+          "endnotes": 1,
+          "comments": 1,
+          "other": 16
+        },
+        "revisions": {
+          "insertions": 0,
+          "deletions": 0,
+          "moves": 0,
+          "formatting": 0,
+          "other": 0
+        },
+        "reasons": []
+      },
+      "safetyAsFreshUpload": {
+        "registeredRevisions": 0,
+        "incomingRevisions": 0,
+        "safeToEdit": true,
+        "safeClean": true
+      }
+    },
+    {
+      "file": "fixtures/08-engine-all-accepted-clean.docx",
+      "sizeBytes": 11356,
+      "sha256": "95cc53335921d49bb43355d987f7964d44c48989c9e4dca8fb77a02a598a36f9",
+      "expected": "No tracked markers; both replacements accepted with all unrelated layout/notes/comments retained.",
+      "inspection": {
+        "schemaVersion": 1,
+        "sourceHash": "95cc53335921d49bb43355d987f7964d44c48989c9e4dca8fb77a02a598a36f9",
+        "status": "complete",
+        "textView": "accepted_body",
+        "stories": {
+          "body": 1,
+          "headers": 1,
+          "footers": 1,
+          "footnotes": 1,
+          "endnotes": 1,
+          "comments": 1,
+          "other": 16
+        },
+        "revisions": {
+          "insertions": 0,
+          "deletions": 0,
+          "moves": 0,
+          "formatting": 0,
+          "other": 0
+        },
+        "reasons": []
+      },
+      "safetyAsFreshUpload": {
+        "registeredRevisions": 0,
+        "incomingRevisions": 0,
+        "safeToEdit": true,
+        "safeClean": true
+      }
+    }
+  ]
+}

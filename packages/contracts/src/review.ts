@@ -26,6 +26,10 @@ export const reviewInstructionsSchema = z.strictObject({
 });
 export type ReviewInstructions = z.infer<typeof reviewInstructionsSchema>;
 
+/** Current captured review inputs have no trusted page map. A quote is the
+ * supported citation location; legacy provider page numbers are not verified. */
+export type QuoteCitation = { quote: string };
+
 /** Immutable inputs and decision metadata for an audited contract review. */
 export type ReviewClauseSnapshot = {
   id: string;

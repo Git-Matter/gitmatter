@@ -16,6 +16,7 @@ import {
   type TabularReview,
 } from "@workspace/db/schema";
 import type { Tx } from "@workspace/db/client";
+import { quoteOnlyCitations } from "../../content/citations.js";
 
 // CommonMark punctuation escapes are presentation syntax, not words in the source.
 export const normalizeEvidenceText = (text: string) =>
@@ -49,7 +50,7 @@ export function validateFinding(source: string, content: CellContent, citations:
       outcome === "inconclusive"
         ? { ...content, flag: "grey" as const, outcome }
         : { ...content, outcome },
-    citations: citationsValid ? citations : [],
+    citations: citationsValid ? quoteOnlyCitations(citations) : [],
   };
 }
 
