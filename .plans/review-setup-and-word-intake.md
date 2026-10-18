@@ -9,8 +9,8 @@ account/guide, live provider runs, native Word save/reopen and re-import. A disc
 defect was corrected without rewriting audit history. The
 [final visual check on 2026-10-18](evidence/2026-10-18-final-visual-and-staging-verification.md)
 passed, including quotation highlighting, persisted guide/instructions and Word inspection controls.
-Staging still lacks the integrated feature frontend; deployment access and authenticated staging
-acceptance remain open.
+Staging still lacks the integrated feature frontend; registry credential repair, a CI readiness
+HTTP 403 and authenticated staging acceptance remain open.
 
 Capture a firm's actual review instructions, guide a new lawyer through the first completed review,
 and inspect incoming Word changes before allowing tracked editing or clean-output claims. These
