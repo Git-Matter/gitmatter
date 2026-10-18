@@ -3,6 +3,11 @@
 Observed 2026-10-15 (Australia/Sydney). Initial feature baseline:
 `e1e0962770129bdcd3a01d6df371e6e1d70216cc`.
 
+Follow-up: the [2026-10-18 visual and staging record](2026-10-18-final-visual-and-staging-verification.md)
+closes the visual recheck described below. Staging acceptance remains open with fresh public
+evidence that the integrated feature frontend is unavailable. The observations below retain their
+2026-10-15 scope.
+
 The user directed checks to the local application and a locally retained test account. Authenticated
 guide, live-provider and native Word checks passed within the synthetic scope below. The discovered
 citation-provenance defect was corrected in `6d3eb96f772ea3fb93437ea25d3c77b65948984d` and verified

@@ -43,8 +43,10 @@ Source checks and real Word/pilot/release gates remain separate.
 The [2026-10-15 local acceptance record](../evidence/2026-10-15-review-workflow-signoff.md) now covers
 authenticated guided preparation, bounded live-provider quality and actual Word save/reopen/re-import.
 A discovered citation-page defect was corrected with history-preserving projections and regressions.
-Staging registry authorization, the final citation-label visual recheck and broader pilot/release
-proof remain open; this does not close the numbered plans.
+The [2026-10-18 follow-up](../evidence/2026-10-18-final-visual-and-staging-verification.md) closes the
+local citation-label/source-link visual check and verifies Word inspection controls. Staging still
+lacks the integrated feature frontend; deployment/runtime, authenticated staging and broader
+pilot/release proof remain open. This does not close the numbered plans.
 
 ## In progress
 

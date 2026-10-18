@@ -34,7 +34,7 @@ import { tokensRoute } from "./routes/tokens.js";
 import { workflowRoute } from "./routes/workflow.js";
 import { authenticateMcp } from "../mcp/auth.js";
 import { buildMcpServer } from "../mcp/server.js";
-import { checkReadiness } from "./lib/health.js";
+import { readinessResponse } from "./lib/health.js";
 import { serverOrigin } from "./lib/origin.js";
 import { clientMeta } from "./lib/request-meta.js";
 import { type AuthEnv, requireUser } from "./middleware/auth.js";
@@ -123,10 +123,7 @@ app.get("/api/health", (c) => c.json({ ok: true }));
 
 // Readiness: can we actually serve? (DB required → 503 on failure.) See
 // lib/health.ts.
-app.get("/api/health/ready", async (c) => {
-  const report = await checkReadiness();
-  return c.json(report, report.ok ? 200 : 503);
-});
+app.get("/api/health/ready", () => readinessResponse(getEnv("SENTRY_RELEASE")));
 
 app.get("/api/config/signup", (c) => {
   return c.json({ open: getEnv("ALLOW_SIGNUPS") !== "false" });

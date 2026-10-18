@@ -44,7 +44,9 @@ are planned follow-ups in the existing plans.
 [Local runtime checks on 2026-10-15](evidence/2026-10-15-review-workflow-signoff.md) add actual account
 and guide interactions, metered provider cases and native Word save/reopen/re-import proof. They also
 found and corrected unsupported citation-page claims. Staging and broader pilot/release gates remain
-separate; the last citation-label visual recheck awaits an unlocked Mac.
+separate. The [2026-10-18 follow-up](evidence/2026-10-18-final-visual-and-staging-verification.md)
+closes the local visual recheck. Staging's served frontend still lacks these features despite a
+successful image-build/deployment-trigger workflow; staging acceptance remains open.
 
 ## Delivery order
 
