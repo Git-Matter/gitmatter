@@ -214,6 +214,9 @@ Word and authenticated staging acceptance remain open.
 comparisons and actual tracked/clean Word exports saved, reopened and re-imported in Microsoft Word.
 It also records the citation-page correction and preserved audit history. This establishes the
 tested synthetic cases, while broader Word/provider, staging and real-firm acceptance remain open.
+[Visual checks on 2026-10-18](evidence/2026-10-18-final-visual-and-staging-verification.md) pass for
+quote-only citation navigation and incoming/clean Word inspection controls. Staging still lacks the
+integrated frontend and remains an open acceptance gate.
 
 A partner/client decision brief is planned as a human-previewed presentation of the existing report.
 Full returned-revision reconciliation and a native Word add-in require pilot evidence.
