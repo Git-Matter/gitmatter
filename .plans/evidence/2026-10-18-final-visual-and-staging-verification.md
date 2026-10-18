@@ -69,11 +69,20 @@ denials are historical evidence, not a freshly confirmed cause of this deploymen
 GitHub workflow does not prove the service pulled or started the image.
 
 The previous Dokploy connectors are unavailable in this session. Plugin discovery found no Dokploy
-plugin. The staging Dokploy browser is signed out; the user was asked to sign in so its current
-image, deployment logs and registry configuration can be inspected. No production environment,
-registry credentials, AWS session or staging auth setting was changed.
+plugin. Initially the staging Dokploy browser was signed out, and sign-in was requested. An existing
+authenticated session subsequently became available. In its Gitmatter organization, the inspected
+completed web and docs deployments for `5fb6641` both failed GHCR authentication, with no observed
+timeout/TLS or missing-manifest category. Each application's Docker form targeted the correct
+`ghcr.io` staging image and had nonempty username/password fields; their values were not recorded.
+Both settings tabs were prepared for human credential repair. The computer-use policy requires the
+human to enter and submit replacement credentials directly. No production environment, registry
+credentials, AWS session or staging auth setting was changed by the agent.
 Read-only discovery also found no existing authenticated staging CLI/SSH path; the local Tailscale
 connection was stopped. No new operational login was initiated.
+
+Private controller receipt: `.scratch/review-signoff-2026-10-18/dokploy-authorization-receipt.json`.
+These log classifications describe the inspected `5fb6641` attempts; they do not establish the
+registry-pull result of the subsequent `179c0ce6` attempt.
 
 ## Automated web runtime gate
 
@@ -105,11 +114,34 @@ original configured storage had one five-second timeout in the existing version-
 339-test pass, without changing storage implementation or test timeouts. The thin CLI also passed
 an explicit TypeScript check because the normal root checks exclude `scripts/`.
 
+## Post-merge staging result
+
+[PR #15](https://github.com/Git-Matter/gitmatter/pull/15) passed CI and merged as
+`179c0ce62b4513693be095804daf6bc8b2c3a15e`. Its
+[staging run 39086690701](https://github.com/Git-Matter/gitmatter/actions/runs/39086690701) passed CI,
+web image publication and webhook delivery. The independently triggered docs pipeline also returned
+success; its runtime is not attested by that result.
+
+The new web runtime gate ran from 01:36:09 to 01:41:09 UTC (12:36:09–12:41:09 Australia/Sydney).
+All 30 attempts received HTTP 403, and the job failed after its five-minute deadline. This
+establishes a CI-to-readiness access denial, not a current GHCR pull diagnosis or a verified release.
+
+The published web digest for `179c0ce6` is
+`sha256:9053d2a31f46e10ee5f7c858567e4a8f3a13ff97cc3d708f3ba17aea714ba569`.
+Separate post-run public requests returned HTTP 200/database up but no release field or no-store
+header. `/first-review` remained HTTP 404 and the served entry remained `index-Dc996Y9g.js`. The new
+runtime contract and feature frontend therefore remain unavailable on the observed host. Exact
+running revision, migration state and the current image-pull cause remain unverified.
+
+Private follow-up receipt: `.scratch/review-signoff-2026-10-18/staging-runtime-guard-followup.json`.
+The guard now fails closed instead of treating a successful trigger as runtime proof. Credential
+repair, current controller-log inspection and resolution of the CI readiness 403 remain required.
+
 ## Remaining staging gate
 
-1. Inspect the staging application's running image and current deployment failure, then restore the
-   intended candidate through its normal deployment path.
-2. Confirm runtime revision `5fb6641` or a verified successor and migration 0018 before treating
+1. Repair and save authorized GHCR credentials in both staging applications, then inspect the latest
+   deployment and restore the intended candidate through its normal deployment path.
+2. Resolve the CI readiness access denial, then confirm runtime revision `179c0ce6` or a verified successor and migration 0018 before treating
    readiness as feature availability.
 3. Use an isolated authenticated staging session to reproduce guided preparation, immutable review
    instructions, quote navigation and incoming/clean Word controls, preserving audit provenance.
