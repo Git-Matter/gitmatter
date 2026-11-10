@@ -154,15 +154,15 @@ export const VIDEOS: VideoResource[] = [
   {
     slug: "where-your-key-goes",
     title: "Where your key goes",
-    desc: "The bring-your-own-key path in thirty seconds: encrypted at rest, straight to your provider, no route to training.",
+    desc: "An introduction to bring-your-own-key. Check the current AI data-handling guide for account, routing, and retention conditions.",
     media: "/blog/byok.mp4",
     poster: "/posters/byok.jpg",
     publishedAt: "2026-07-12T20:54:37+02:00",
     duration: "PT30.059S",
     points: [
       "Your LLM key stored encrypted, never logged, never in the browser",
-      "Documents flowing to your own provider account under zero data retention",
-      "The off switch: revoke the key and every AI feature stops",
+      "The provider route and account terms still need to be assessed",
+      "Review configured user keys and any deployment-level fallback separately",
     ],
   },
 ];

@@ -6,18 +6,18 @@ import Eyebrow from "@/marketing/components/Eyebrow";
 const POINTS = [
   {
     n: "01",
-    title: "Set up in minutes",
-    body: "Install it on your own computer or server and add your AI account. No consultants, no IT project — you're running in minutes.",
+    title: "Start with the file",
+    body: "Bring the source documents together on a matter. Prepare a briefing that separates supported facts from missing information and questions for your judgment.",
   },
   {
     n: "02",
-    title: "Run the work as steps",
-    body: "Review, pull out, and draft contract terms as simple, repeatable steps. The AI does the work; you stay in charge and approve what counts.",
+    title: "Prepare work you can check",
+    body: "Review an agreement or draft a client update using repeatable instructions. Check each source and proposed change before using the output.",
   },
   {
     n: "03",
-    title: "Keep a full record",
-    body: "Every change is saved with the person, the time, and the exact before and after. Read it, share it, or undo it — nothing is hidden.",
+    title: "Return to a clear record",
+    body: "See the changes made in gitmatter, who made them, and the before and after. AI actions remain distinguishable from a practitioner's own review.",
   },
 ];
 
@@ -28,7 +28,7 @@ export default function Manifesto() {
         <div className="flex flex-col gap-stack lg:sticky lg:top-24 lg:self-start">
           <Eyebrow>why firms choose it</Eyebrow>
           <h2 className="max-w-[14ch] font-heading text-4xl tracking-tight text-balance">
-            Easy to run. Nothing slips by.
+            From the file to your next piece of work.
           </h2>
         </div>
         <div className="flex flex-col">

@@ -12,6 +12,14 @@ export const JURISDICTIONS: { code: Jurisdiction; label: string }[] = [
   { code: "EU", label: "European Union" },
   { code: "UK", label: "United Kingdom" },
   { code: "AU", label: "Australia" },
+  { code: "AU-ACT", label: "Australia — Australian Capital Territory" },
+  { code: "AU-NSW", label: "Australia — New South Wales" },
+  { code: "AU-NT", label: "Australia — Northern Territory" },
+  { code: "AU-QLD", label: "Australia — Queensland" },
+  { code: "AU-SA", label: "Australia — South Australia" },
+  { code: "AU-TAS", label: "Australia — Tasmania" },
+  { code: "AU-VIC", label: "Australia — Victoria" },
+  { code: "AU-WA", label: "Australia — Western Australia" },
 ];
 
 export const DEFAULT_JURISDICTION: Jurisdiction = "US";
@@ -30,4 +38,17 @@ export function resolveJurisdiction(
   userDefault?: Jurisdiction | null
 ): Jurisdiction {
   return artifact || userDefault || DEFAULT_JURISDICTION;
+}
+
+/** A chat's selected context survives its original launch and route remount. */
+export function resolveChatJurisdiction(context: {
+  request?: string | null;
+  conversation?: string | null;
+  matter?: string | null;
+  user?: string | null;
+}): Jurisdiction {
+  return resolveJurisdiction(
+    context.request || context.conversation || context.matter,
+    context.user
+  );
 }

@@ -28,6 +28,7 @@ const deployment = process.env.DEPLOYMENT === "cloud" ? "cloud" : "local";
 const PUBLIC_PRERENDER_PATHS = [
   "/", // marketing home
   "/about",
+  "/australian-practices",
   "/privacy",
   "/security",
   "/terms",

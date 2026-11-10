@@ -2,37 +2,36 @@ import { Button } from "@/components/ui/button";
 import { SITE } from "@/marketing/site";
 import Eyebrow from "@/marketing/components/Eyebrow";
 
-// Centered editorial hero built around transparency: the tagline, the product
-// video as proof, and two plain actions — book a demo, or set it up. Below it,
-// four benefits in one glance. No jargon.
 const POINTS = [
-  { k: "Set up in minutes", v: "no IT project" },
-  { k: "Use the AI you trust", v: "your agent, your key" },
-  { k: "Every change recorded", v: "who, what, when" },
-  { k: "Your work stays private", v: "never used to train AI" },
+  { k: "Understand the file", v: "start with the source documents" },
+  { k: "Prepare the next step", v: "briefings, reviews, client updates" },
+  { k: "Use your own AI", v: "your approved assistant or API account" },
+  { k: "Keep a clear record", v: "who changed what, and when" },
 ];
 
 export default function Hero() {
   return (
     <section className="mx-auto max-w-5xl px-6 pt-28 pb-28 text-center sm:pt-36">
       <div className="flex flex-col items-center gap-7">
-        <Eyebrow>see every step</Eyebrow>
-        <h1 className="max-w-[16ch] font-heading text-6xl leading-[1.02] tracking-tight text-balance sm:text-7xl">
-          Legal AI with full transparency.
+        <Eyebrow>for Australian sole practitioners &amp; general practices</Eyebrow>
+        <h1 className="max-w-[18ch] font-heading text-5xl leading-[1.06] tracking-tight text-balance sm:text-7xl">
+          Make sense of the file. Prepare the next step.
         </h1>
         <p className="max-w-[54ch] text-lg leading-relaxed text-muted-foreground">
-          Download, install, and run.
+          Turn matter documents into a briefing, an agreement review, or a draft client update.
+          Check the sources, make your decisions, and keep the work on the matter file.
         </p>
         <div className="mt-2 flex flex-wrap items-center justify-center gap-3">
+          <Button size="lg" nativeButton={false} render={<a href="/australian-practices" />}>
+            Explore the Australian pilot
+          </Button>
           <Button
             size="lg"
+            variant="outline"
             nativeButton={false}
             render={<a href={SITE.bookDemo} target="_blank" rel="noreferrer" />}
           >
-            Book demo
-          </Button>
-          <Button size="lg" variant="outline" nativeButton={false} render={<a href={SITE.docs} />}>
-            Install locally
+            Book a walkthrough
           </Button>
         </div>
       </div>

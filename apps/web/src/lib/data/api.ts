@@ -456,6 +456,7 @@ export const api = {
     clientId: string;
     name: string;
     practiceArea?: string;
+    jurisdiction?: string;
     adverseParties?: string[];
   }) => req<Matter>("/api/matters", { method: "POST", body: JSON.stringify(d) }),
   closeMatter: (id: string) => req<null>(`/api/matters/${id}/close`, { method: "POST" }),
@@ -918,7 +919,13 @@ export type ChatTurn = {
   edits?: ChatEdit[];
   citations?: Citation[];
 };
-export type ChatDetail = { id: string; title: string | null; turns: ChatTurn[] };
+export type ChatDetail = {
+  id: string;
+  title: string | null;
+  matterId: string | null;
+  jurisdiction: string | null;
+  turns: ChatTurn[];
+};
 
 export type ChatStreamHandlers = {
   onText?: (delta: string) => void;

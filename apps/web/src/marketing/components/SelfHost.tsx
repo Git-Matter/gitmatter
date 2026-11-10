@@ -15,14 +15,14 @@ const POINTS: {
 }[] = [
   {
     title: "Install it yourself",
-    body: "Set it up on your own computer or server in minutes. Nothing locked to one company's cloud.",
+    body: "Run the MIT-licensed application on infrastructure you manage. You remain responsible for hosting, recovery, and the AI-provider configuration.",
     cta: "Read the setup guide",
     href: `${SITE.docs}/admin/self-hosting`,
   },
   {
-    title: "Run on our cloud",
-    body: "Skip the setup and start with a hosted walkthrough. Your files are never kept or used to train anyone's model.",
-    cta: "Book demo",
+    title: "Get help with setup",
+    body: "Start with a hosted walkthrough using fictional material. We can walk through the workflows and discuss a setup suited to your practice.",
+    cta: "Book assisted setup",
     href: SITE.bookDemo,
   },
 ];
@@ -36,7 +36,7 @@ export default function SelfHost() {
       <div className="mx-auto max-w-7xl px-6 py-24">
         <Eyebrow>runs on your terms</Eyebrow>
         <h2 className="mt-stack max-w-[18ch] font-heading text-4xl tracking-tight text-balance">
-          Install it, or run on our cloud.
+          A setup that suits your practice.
         </h2>
         <div className="mt-12 grid gap-10 sm:grid-cols-2 md:gap-16">
           {POINTS.map((p) => (

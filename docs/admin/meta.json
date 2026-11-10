@@ -2,9 +2,11 @@
   "title": "Admin",
   "pages": [
     "index",
+    "assisted-setup",
     "spending-controls",
     "data-retention",
     "ai-data-handling",
+    "privacy-evidence",
     "backup-restore",
     "self-hosting",
     "security"

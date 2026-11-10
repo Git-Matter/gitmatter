@@ -34,6 +34,7 @@ import type {
 } from "@workspace/db/schema";
 import { type Actor, recordCommit } from "../core/commit.js";
 import { canAccessArtifact, getUserTenant } from "../core/access.js";
+import { buildGuidedPrompt, GUIDED_TASKS } from "@workspace/registry";
 
 type WorkflowInput = {
   title: string;
@@ -674,6 +675,14 @@ export async function unhideWorkflow(userId: string, workflowId: string) {
 }
 
 const BUILTINS: WorkflowInput[] = [
+  ...GUIDED_TASKS.map(
+    (task): WorkflowInput => ({
+      title: task.workflowTitle,
+      type: "assistant",
+      practice: "General Practice",
+      promptMd: buildGuidedPrompt({ task: task.id, jurisdiction: "AU" }),
+    })
+  ),
   {
     title: "Contract Summary",
     type: "assistant",

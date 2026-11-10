@@ -65,8 +65,8 @@ export interface RecordCommitArgs {
  * The single mutation path. Every change to an artifact — by a human route or an
  * MCP agent tool — flows through here, producing one commit with field changes.
  */
-export async function recordCommit(args: RecordCommitArgs) {
-  return db.transaction(async (tx) => {
+export async function recordCommit(args: RecordCommitArgs, transaction?: Tx) {
+  const applyCommit = async (tx: Tx) => {
     // Serialize all commits to this artifact for the duration of the transaction.
     // A transaction-scoped advisory lock is robust even when no commit row exists
     // yet (unlike SELECT ... FOR UPDATE, which locks nothing on an empty set).
@@ -124,7 +124,8 @@ export async function recordCommit(args: RecordCommitArgs) {
       .where(eq(headTable.id, args.artifactId));
 
     return { commit, changes };
-  });
+  };
+  return transaction ? applyCommit(transaction) : db.transaction(applyCommit);
 }
 
 /** Fold field_changes (seq <= uptoSeq, last-writer-wins) into a path->value map. */

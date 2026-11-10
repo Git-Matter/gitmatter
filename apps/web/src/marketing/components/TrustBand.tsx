@@ -2,17 +2,14 @@ import { Link } from "@tanstack/react-router";
 import { ArrowRight } from "lucide-react";
 import Eyebrow from "@/marketing/components/Eyebrow";
 
-// The trust band. Harvey shows certification badges here; we show the
-// guarantees that are true of gitmatter today, each verifiable in the product
-// or the code. When real certifications land, they join this grid.
-const GUARANTEES = [
+const CONTROLS = [
   {
     title: "Encrypted LLM keys",
     body: "Your provider key is stored encrypted, never logged, never sent to the browser.",
   },
   {
-    title: "Zero data retention",
-    body: "AI runs on your own provider account, configured so nothing is kept or used for training.",
+    title: "Know your processing route",
+    body: "AI handling depends on the provider, account, settings, and agreements you choose. Check these before using client material.",
   },
   {
     title: "Field-level audit trail",
@@ -38,10 +35,10 @@ export default function TrustBand() {
       <div className="mx-auto max-w-7xl px-6 py-24">
         <Eyebrow>security &amp; control</Eyebrow>
         <h2 className="mt-stack max-w-[22ch] font-heading text-4xl tracking-tight text-balance">
-          Guarantees you can check, not badges to take on faith.
+          Understand the controls behind the work.
         </h2>
         <div className="mt-12 grid gap-x-10 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
-          {GUARANTEES.map((g) => (
+          {CONTROLS.map((g) => (
             <div key={g.title} className="flex flex-col gap-1.5 border-t border-border pt-4">
               <h3 className="font-heading text-lg tracking-tight">{g.title}</h3>
               <p className="text-sm leading-relaxed text-muted-foreground">{g.body}</p>

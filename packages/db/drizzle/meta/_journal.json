@@ -64,6 +64,20 @@
       "when": 1784319144443,
       "tag": "0008_noisy_hardball",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1794292001308,
+      "tag": "0009_round_abomination",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1794292672617,
+      "tag": "0010_lazy_harry_osborn",
+      "breakpoints": true
     }
   ]
 }

@@ -15,3 +15,5 @@ export * from "./keys.js";
 export * from "./oauth.js";
 export * from "./settings.js";
 export * from "./practice.js";
+export * from "./practice-profile.js";
+export * from "./document-review.js";

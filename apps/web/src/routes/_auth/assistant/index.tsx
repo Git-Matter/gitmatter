@@ -12,8 +12,11 @@ import { ChatTurns } from "./-components/ChatTurns";
 import { ActivityPanel } from "./-components/ActivityPanel";
 import { ActivityPanelProvider } from "./-components/activity-context";
 import { useChatSession } from "./-components/useChatSession";
-import { type ChatAttachment, type ChatDetail } from "@/lib/data/api";
+import { type ChatDetail } from "@/lib/data/api";
 import { useSession } from "@/lib/auth/auth-client";
+import type { PreparedGuidedTask } from "@workspace/registry";
+import { GuidedStarts } from "./-components/GuidedStarts";
+import { parseWorkflowChatSeed } from "./-components/workflow-seed";
 
 // Fresh chat. Resuming a conversation lives at /assistant/$id (assistant.$id.tsx),
 // which seeds AssistantView from its loader. Keyed "new" so state starts clean.
@@ -24,6 +27,7 @@ export const Route = createFileRoute("/_auth/assistant/")({
 export function AssistantView({ loaded }: { loaded: ChatDetail | null }) {
   const { data: session } = useSession();
   const navigate = useNavigate();
+  const [guidedMatterId, setGuidedMatterId] = useState<string>();
 
   // Multi-step workflow run: prompts still queued to send (after the current one)
   // and the new chat id to navigate to once the last step is sent. Navigation is
@@ -33,6 +37,7 @@ export function AssistantView({ loaded }: { loaded: ChatDetail | null }) {
 
   const s = useChatSession({
     loaded,
+    matterId: guidedMatterId,
     onFirstChat: (id) => {
       if (stepsRef.current.length > 0) navIdRef.current = id;
       else void navigate({ to: "/assistant/$id", params: { id }, replace: true });
@@ -47,17 +52,27 @@ export function AssistantView({ loaded }: { loaded: ChatDetail | null }) {
   // attachments) then navigates here; consume it once on a fresh chat. The first
   // step auto-sends; the rest are queued and sent one-by-one as each completes.
   const [pendingAutoSend, setPendingAutoSend] = useState(false);
+
+  function startGuidedTask(seed: PreparedGuidedTask) {
+    if (seed.version !== 1 || loaded || s.busy) return;
+    stepsRef.current = [];
+    setGuidedMatterId(seed.matterId);
+    s.setJurisdictionOverride(seed.jurisdiction);
+    s.setAttachments(seed.attachments);
+    s.setInput(seed.prompt);
+    setPendingAutoSend(true);
+  }
   useEffect(() => {
     if (loaded) return;
     const raw = sessionStorage.getItem("workflowChatSeed");
     if (!raw) return;
     sessionStorage.removeItem("workflowChatSeed");
     try {
-      const seed = JSON.parse(raw) as { steps?: string[]; attachments?: ChatAttachment[] };
-      const steps = seed.steps ?? [];
-      if (!steps.length) return;
+      const seed = parseWorkflowChatSeed(JSON.parse(raw));
+      if (!seed) return;
+      const steps = seed.steps;
       s.setInput(steps[0]);
-      s.setAttachments(seed.attachments ?? []);
+      s.setAttachments(seed.attachments);
       stepsRef.current = steps.slice(1);
       setPendingAutoSend(true);
     } catch {
@@ -116,13 +131,14 @@ export function AssistantView({ loaded }: { loaded: ChatDetail | null }) {
 
   if (empty) {
     return (
-      <div className="mx-auto flex h-full w-full max-w-xl flex-col items-center justify-center gap-section md:max-w-2xl lg:max-w-3xl xl:max-w-4xl">
+      <div className="mx-auto flex min-h-0 w-full max-w-xl flex-1 flex-col items-center gap-section overflow-y-auto py-8 md:max-w-2xl lg:max-w-3xl">
         <h1 className="flex items-center gap-3 font-heading text-4xl font-light tracking-tight">
           <span className="grid size-9 place-items-center rounded-lg bg-primary text-primary-foreground">
             <BrandMark className="size-6" />
           </span>
-          Hi, {firstName}
+          What are you working on, {firstName}?
         </h1>
+        {!loaded ? <GuidedStarts onStart={startGuidedTask} /> : null}
         <div className="w-full">{composer}</div>
         <p className="text-sm text-muted-foreground">
           AI can make mistakes. Answers are not legal advice.

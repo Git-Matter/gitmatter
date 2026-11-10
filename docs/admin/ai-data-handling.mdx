@@ -1,56 +1,65 @@
 ---
 title: AI data handling
-description: What content reaches AI providers, and how to keep them from keeping it.
+description: Understand the account, processing route, and retention conditions before using client material.
 ---
 
-Law-firm documents are privileged (legally confidential). This page explains which content leaves gitmatter, where it goes, and how to set up the strictest privacy posture each AI provider allows, so providers keep as little of your data as possible.
+Matter documents may contain confidential, personal, sensitive, or privileged information. Before using AI with them, establish that the particular account, service terms, settings, and processing route are appropriate for your practice and that use of the material is authorised.
 
 <Callout type="warn">
-  Provider privacy policies change over time. Verify a provider's current policy before relying on
-  it.
+  Supplying an API key, paying for an AI subscription, or selecting an Australian document-storage
+  region does not establish zero retention or suitability for client information. Verify the current
+  provider terms and your account's configuration before relying on either.
 </Callout>
 
-## What gets sent to a provider
+## Two ways to use AI
 
-When you run a chat turn or a tabular review, gitmatter sends the prompt and document content to **one** AI provider only: the one that serves the model you picked. Nothing goes to providers you did not select. CourtListener legal-research calls go to CourtListener, not to an AI provider.
+### Connect your own assistant
 
-## Whose key is used
+An external assistant such as ChatGPT or Claude connects to gitmatter over MCP and calls the tools your account can access. The assistant may receive document content in tool responses. That assistant's own account terms, conversation history, retention settings, connected tools, and processing locations apply separately from gitmatter.
 
-A "key" is the credential that bills and identifies the account talking to an AI provider. For each provider, gitmatter picks the key in this order: **the user's own key first**, then the server-wide key set in env (the deployment-level setting), and otherwise none. The model picker shows which source is active (`user` or `env`), so it is never in doubt.
+gitmatter records the actions performed through its tools. It does not automatically hold a complete transcript of a conversation conducted in an external assistant. A paid consumer subscription is not evidence of an enterprise confidentiality or zero-retention agreement.
 
-With bring-your-own-key (the firm supplies its own provider key), requests are billed and logged under the firm's own provider account.
+### Use gitmatter's built-in features
 
-## Per-provider retention posture
+The built-in assistant and review features send prompts and relevant document content to the provider serving the selected model. OpenRouter is an intermediary: requests through it also reach the model-serving provider. Research tools can send queries to their own sources, including CourtListener and IP Australia. Review the selected tools as well as the model before using client details in a request.
 
-This table shows how much each provider keeps your data. "Trains on API data" means the provider uses your content to improve its models. "Zero data retention (ZDR)" means the provider does not keep or train on your data at all.
+For each AI provider, gitmatter uses your saved key first, then a configured deployment-level key if one exists. The model picker indicates the active source. A personal key identifies and bills your provider account; it does not itself establish a retention agreement.
 
-| Provider          | Trains on API data?                                    | Default posture                                               | True zero data retention (ZDR)                                                                                                          |
-| ----------------- | ------------------------------------------------------ | ------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| **OpenRouter**    | No                                                     | Zero prompt and completion logging by default (metadata only) | Self-serve, and the only out-of-the-box ZDR. It is a proxy, so privileged data passes a third party before reaching the model provider. |
-| **Anthropic**     | No                                                     | Roughly 7-day abuse-log retention; never trains on API data   | Needs a separate enterprise ZDR agreement (requires approval).                                                                          |
-| **OpenAI**        | No                                                     | 30-day abuse retention                                        | Org-level ZDR requires sales approval.                                                                                                  |
-| **Google Gemini** | No on the **paid** tier (the free tier **does** train) | Paid / Vertex: no training, limited abuse logging             | Per-project ZDR request (requires approval). Reject free-tier keys.                                                                     |
+## Controls implemented in the provider adapters
 
-## What gitmatter sends today
+| Route               | Application setting                          | What still needs checking                                                                                                                                                              |
+| ------------------- | -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| OpenAI              | `store: false`                               | This disables response storage requested through that parameter. It does not establish the absence of abuse-monitoring logs or an account-level zero-retention agreement.              |
+| OpenRouter          | `provider.dataCollection: "deny"`            | A routing preference is not evidence of the actual account agreement, endpoint eligibility, or every intermediary's handling. Verify the route and any stricter retention requirement. |
+| Anthropic or Google | Requests use the configured provider account | Check the applicable product, account tier, retention, training terms, and any additional agreement. Do not infer them from the key or model name.                                     |
 
-gitmatter sets these privacy flags (settings that tell the provider not to keep your data) by default:
+Provider policies and product availability change. This guide deliberately does not promise a retention duration for an account that gitmatter cannot verify. Consult the applicable provider's current documentation and contractual terms:
 
-- **OpenAI** — `store: false` (the provider does not save the response on its servers), and reasoning is sent encrypted and never persisted (never kept).
-- **OpenRouter** — `provider.dataCollection: "deny"` (route only to endpoints that do not retain or collect prompt data).
-- **Anthropic and Gemini** — no training on API data by default, so no extra flag is needed for the default posture.
+- [OpenAI API data controls](https://platform.openai.com/docs/guides/your-data)
+- [Anthropic privacy documentation](https://privacy.claude.com/)
+- [Gemini API terms](https://ai.google.dev/gemini-api/terms)
+- [OpenRouter privacy policy](https://openrouter.ai/privacy)
 
-### Optional hardening
+## Storage region and processing location are different
 
-- OpenRouter also supports `zdr: true`, which restricts routing to ZDR-certified endpoints only (only providers that promise to keep nothing). It is stricter than `dataCollection: deny`, but it can shrink the set of available models, so enable it deliberately rather than by default.
-- Use a **paid** Gemini key only. The free tier trains on submitted data.
+The hosted document-region choice routes document object storage. It does not locate the account database, extracted text, audit events, backups, email, error monitoring, AI requests, or an external assistant's conversations. Governing law is a separate matter setting.
 
-## Enabling true ZDR
+Retain the application record and the relevant provider/deployment evidence when documenting a location requirement. See [privacy evidence](/admin/privacy-evidence). Do not describe an Australian document-storage choice as proof that all information is processed or retained only in Australia.
 
-- **OpenRouter** — self-serve. The `dataCollection: deny` default already avoids retention. Add `zdr: true` for strict ZDR routing.
-- **Anthropic, OpenAI, and Google** — request an enterprise or per-project ZDR agreement with the provider. Until that is in place, they keep short-lived abuse logs.
+## A practical setup check
+
+1. Choose the AI execution path and identify the actual account and provider route.
+2. Review current contractual terms, training use, retention, processing locations, and account permissions for the intended material.
+3. Check the selected document-storage region separately from the other systems involved.
+4. Start with the fictional sample. Verify source checking, output quality, and the Word handoff before deciding whether to use client material.
+5. Keep the evidence supporting your configuration decision and review it when the provider or account changes.
+
+Never send credentials or confidential material in a setup enquiry. Add provider credentials only through the application's designated settings. [Assisted setup](/admin/assisted-setup) explains the available paths.
 
 ## User controls
 
-- Pick the model (and therefore the provider) per chat message and per review run.
-- Add or remove provider keys in Settings &rarr; AI &amp; Models.
-- Export or delete your organization's data anytime in Settings &rarr; Data &amp; Privacy. See also the [data retention policy](/admin/data-retention).
+- Select the model and available research sources in the assistant.
+- Add or remove provider keys in Settings → AI & Models.
+- Connect and manage an external agent through Settings.
+- Review document-storage evidence and available export/deletion controls in Settings → Data & Privacy.
+- Check the [data retention policy](/admin/data-retention) for data retained by gitmatter itself; provider retention is separate.

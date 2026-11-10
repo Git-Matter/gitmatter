@@ -28,13 +28,13 @@ export default function LegalAiCategory() {
         <div className="mt-stack grid gap-8 lg:grid-cols-[1fr_1.2fr] lg:gap-20">
           <div>
             <h2 className="max-w-[15ch] font-heading text-4xl tracking-tight text-balance sm:text-5xl">
-              Legal AI for work a team can check.
+              Legal AI for work you can check.
             </h2>
           </div>
           <p className="max-w-[55ch] text-lg leading-relaxed text-muted-foreground">
-            gitmatter helps legal teams review, redline, extract, draft, and research contract work
-            with AI. It is built for the part that follows the first answer: checking the source,
-            making the decision, and keeping a record of what changed.
+            gitmatter helps practitioners understand documents, review agreements, and prepare
+            drafts with their own AI. It supports the work that follows the first answer: checking
+            the source, making the decision, and keeping a record of what changed.
           </p>
         </div>
         <div className="mt-12 grid gap-4 md:grid-cols-3">

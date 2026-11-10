@@ -7,6 +7,9 @@
     "test": "vp test --passWithNoTests",
     "typecheck": "tsc --noEmit"
   },
+  "dependencies": {
+    "zod": "4.4.3"
+  },
   "devDependencies": {
     "typescript": "^6",
     "vitest": "catalog:"

@@ -16,6 +16,8 @@ import {
 import { PracticeAreaPicker } from "@/components/PracticeAreaPicker";
 import { api } from "@/lib/data/api";
 import { queryKeys } from "@/lib/data/queries";
+import { JURISDICTIONS } from "@workspace/registry";
+import { practiceApi } from "@/lib/data/practice-api";
 
 /** Create a new matter: client, name, practice area, adverse parties, with an
  *  optional conflicts check before filing. */
@@ -36,6 +38,12 @@ export function CreateMatterModal({
   const [clientId, setClientId] = useState("");
   const [name, setName] = useState("");
   const [practiceArea, setPracticeArea] = useState<string | null>(null);
+  const [jurisdiction, setJurisdiction] = useState<string | null>(null);
+  const { data: practice } = useQuery({
+    queryKey: ["practice-profile"],
+    queryFn: practiceApi.getProfile,
+    enabled: open,
+  });
   const [adverse, setAdverse] = useState("");
   const [conflicts, setConflicts] = useState<string[] | null>(null);
 
@@ -45,6 +53,7 @@ export function CreateMatterModal({
     setClientId("");
     setName("");
     setPracticeArea(null);
+    setJurisdiction(null);
     setAdverse("");
     setConflicts(null);
   }, [open]);
@@ -85,6 +94,7 @@ export function CreateMatterModal({
       clientId,
       name: name.trim(),
       practiceArea: practiceArea ?? undefined,
+      jurisdiction: jurisdiction ?? practice?.profile.jurisdiction ?? "AU",
       adverseParties: adverseParties(),
     });
   }
@@ -126,7 +136,7 @@ export function CreateMatterModal({
             <Input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Series A financing"
+              placeholder="Services agreement review"
             />
           </div>
           <div className="flex flex-col gap-1.5">
@@ -134,11 +144,29 @@ export function CreateMatterModal({
             <PracticeAreaPicker value={practiceArea} onChange={setPracticeArea} />
           </div>
           <div className="flex flex-col gap-1.5">
+            <Label htmlFor="new-matter-jurisdiction">Applicable jurisdiction</Label>
+            <select
+              id="new-matter-jurisdiction"
+              className="h-9 rounded-md border border-input bg-background px-2.5 text-sm"
+              value={jurisdiction ?? practice?.profile.jurisdiction ?? "AU"}
+              onChange={(event) => setJurisdiction(event.target.value)}
+            >
+              {JURISDICTIONS.map((item) => (
+                <option key={item.code} value={item.code}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-muted-foreground">
+              Confirm the jurisdiction for this matter. This is separate from document storage.
+            </p>
+          </div>
+          <div className="flex flex-col gap-1.5">
             <Label>Adverse parties (optional, comma-separated)</Label>
             <Input
               value={adverse}
               onChange={(e) => setAdverse(e.target.value)}
-              placeholder="Beta LLC, Gamma Inc"
+              placeholder="Example Services Pty Ltd"
             />
           </div>
 
