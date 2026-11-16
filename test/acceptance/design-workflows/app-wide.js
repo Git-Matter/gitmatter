@@ -37,7 +37,11 @@ async function appWide(page) {
           sidebarState,
         "Typing shortcuts must not collapse navigation"
       );
-      await search.fill("No fictional record matches this");
+      await search.pressSequentially("No fictional record matches this", { delay: 15 });
+      check(
+        (await search.inputValue()) === "No fictional record matches this",
+        "Search must remain editable while previous results are paused"
+      );
       await page.waitForTimeout(650);
       await search.fill("");
       await page.getByRole("main").getByText(probe, { exact: false }).first().waitFor();

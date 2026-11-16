@@ -1,5 +1,5 @@
 import { FieldDescription } from "@/components/ui/field";
-import { notifySuccess } from "@/lib/feedback";
+import { captureActionOrigin, notifySuccess } from "@/lib/feedback";
 import { FormFeedback } from "@/components/FormFeedback";
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
@@ -27,59 +27,63 @@ export function TwoFactorCard({ enabled }: { enabled: boolean }) {
   const [replacementCodes, setReplacementCodes] = useState<string[] | null>(null);
 
   const enable = useMutation({
+    onMutate: () => captureActionOrigin(),
     mutationFn: async () => {
       const { data, error } = await twoFactor.enable({ password, method: "totp" });
       if (error) throw new Error(error.message ?? "Could not start two-factor setup");
       if (data?.method !== "totp") throw new Error("Setup details were not returned");
       return { totpURI: data.totpURI, backupCodes: data.backupCodes };
     },
-    onSuccess: (details) => {
+    onSuccess: (details, _variables, origin) => {
       setEnrollment(details);
-      notifySuccess("Authenticator created. Verify a code to finish.");
+      notifySuccess("Authenticator created. Verify a code to finish.", origin);
     },
     onError: (error) => toast.error(messageFor(error)),
   });
 
   const verify = useMutation({
+    onMutate: () => captureActionOrigin(),
     mutationFn: async () => {
       const { error } = await twoFactor.verifyTotp({ code: code.replace(/\s/g, "") });
       if (error) throw new Error(error.message ?? "The verification code was not accepted");
     },
-    onSuccess: async () => {
+    onSuccess: async (_data, _variables, origin) => {
       setPassword("");
       setCode("");
       setEnrollment(null);
       await router.invalidate();
-      notifySuccess("Two-factor authentication enabled");
+      notifySuccess("Two-factor authentication enabled", origin);
     },
     onError: (error) => toast.error(messageFor(error)),
   });
 
   const disable = useMutation({
+    onMutate: () => captureActionOrigin(),
     mutationFn: async () => {
       const { error } = await twoFactor.disable({ password });
       if (error) throw new Error(error.message ?? "Could not disable two-factor authentication");
     },
-    onSuccess: async () => {
+    onSuccess: async (_data, _variables, origin) => {
       setPassword("");
       setReplacementCodes(null);
       await router.invalidate();
-      notifySuccess("Two-factor authentication disabled");
+      notifySuccess("Two-factor authentication disabled", origin);
     },
     onError: (error) => toast.error(messageFor(error)),
   });
 
   const regenerate = useMutation({
+    onMutate: () => captureActionOrigin(),
     mutationFn: async () => {
       const { data, error } = await twoFactor.generateBackupCodes({ password });
       if (error) throw new Error(error.message ?? "Could not regenerate backup codes");
       if (!data?.backupCodes) throw new Error("Backup codes were not returned");
       return data.backupCodes;
     },
-    onSuccess: (codes) => {
+    onSuccess: (codes, _variables, origin) => {
       setPassword("");
       setReplacementCodes(codes);
-      notifySuccess("Previous backup codes are now invalid");
+      notifySuccess("Previous backup codes are now invalid", origin);
     },
     onError: (error) => toast.error(messageFor(error)),
   });
@@ -234,8 +238,9 @@ function PasswordField({
 function BackupCodes({ codes }: { codes: string[] }) {
   async function copyCodes() {
     try {
+      const actionOrigin = captureActionOrigin();
       await navigator.clipboard.writeText(codes.join("\n"));
-      notifySuccess("Backup codes copied");
+      notifySuccess("Backup codes copied", actionOrigin);
     } catch {
       toast.error("Could not copy backup codes");
     }

@@ -59,28 +59,38 @@ export function WorkflowDetailPage({ id }: { id: string }) {
     setColumns((workflow.columnsConfig ?? []).slice().sort((a, b) => a.index - b.index));
   }, [workflow]);
 
-  const persist = useCallback(
-    async (patch: Parameters<typeof api.updateWorkflow>[1], version: number) => {
-      const request = writeQueue.current.then(() => api.updateWorkflow(id, patch));
+  // Rename/details and autosave share response ordering and one authoritative cache update.
+  const queueWrite = useCallback(
+    (patch: Parameters<typeof api.updateWorkflow>[1]) => {
+      const request = writeQueue.current.then(async () => {
+        const updated = await api.updateWorkflow(id, patch);
+        qc.setQueryData(["workflow", id], updated);
+        void qc.invalidateQueries({ queryKey: ["workflows"] });
+        return updated;
+      });
       writeQueue.current = request.then(
         () => undefined,
         () => undefined
       );
+      return request;
+    },
+    [id, qc]
+  );
+  const persist = useCallback(
+    async (patch: Parameters<typeof api.updateWorkflow>[1], version: number) => {
       try {
-        const updated = await request;
+        await queueWrite(patch);
         if (revision.current !== version) return;
         unsaved.current = false;
         setSaveError(null);
         setSaveStatus("saved");
-        qc.setQueryData(["workflow", id], updated);
-        void qc.invalidateQueries({ queryKey: ["workflows"] });
       } catch (error) {
         if (revision.current !== version) return;
         setSaveError(error);
         setSaveStatus("error");
       }
     },
-    [id, qc]
+    [queueWrite]
   );
   const save = useCallback(
     (nextSteps: WorkflowStep[]) => {
@@ -151,9 +161,7 @@ export function WorkflowDetailPage({ id }: { id: string }) {
 
   async function handleDetailsSave(values: { title: string }) {
     if (!workflow || readOnly) return;
-    const updated = await api.updateWorkflow(id, { title: values.title });
-    qc.setQueryData(["workflow", id], updated);
-    void qc.invalidateQueries({ queryKey: ["workflows"] });
+    await queueWrite({ title: values.title });
   }
 
   const headerActions: React.ReactNode[] = [];

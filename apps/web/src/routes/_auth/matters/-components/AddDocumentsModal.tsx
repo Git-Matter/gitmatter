@@ -1,4 +1,4 @@
-import { notifySuccess } from "@/lib/feedback";
+import { captureActionOrigin, notifySuccess } from "@/lib/feedback";
 import { Input } from "@/components/ui/input";
 import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -54,9 +54,10 @@ export function AddDocumentsModal({
   }, [docs, existing, query]);
 
   const link = useMutation({
+    onMutate: () => captureActionOrigin(),
     mutationFn: () => api.linkDocumentsToMatter(matterId, [...selected]),
-    onSuccess: ({ linked }) => {
-      notifySuccess(`Added ${linked} document${linked === 1 ? "" : "s"}`);
+    onSuccess: ({ linked }, _variables, origin) => {
+      notifySuccess(`Added ${linked} document${linked === 1 ? "" : "s"}`, origin);
       onLinked();
       onOpenChange(false);
     },

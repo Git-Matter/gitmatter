@@ -6,6 +6,13 @@ import { resolve } from "node:path";
 const group = process.argv[2];
 const cli = process.env.PLAYWRIGHT_CLI;
 const groups = {
+  "feedback-recovery": [
+    "feedback-recovery",
+    "feedback-interactions",
+    "ux-nine",
+    "ux-authoring",
+    "app-wide",
+  ],
   feedback: ["feedback-interactions", "ux-nine", "ux-authoring", "app-wide"],
   "ux-nine": ["ux-nine", "ux-authoring", "app-wide"],
   "app-wide": ["app-wide"],
@@ -34,12 +41,15 @@ const groups = {
 };
 if (!groups[group] || !cli) {
   throw new Error(
-    "Usage: PLAYWRIGHT_CLI=/path/to/playwright-cli node test/acceptance/design-workflows/replay.mjs feedback|ux-nine|app-wide|first-review|review-and-output|marketing-media|template-library|assistant|access"
+    "Usage: PLAYWRIGHT_CLI=/path/to/playwright-cli node test/acceptance/design-workflows/replay.mjs feedback-recovery|feedback|ux-nine|app-wide|first-review|review-and-output|marketing-media|template-library|assistant|access"
   );
 }
 const root = resolve(import.meta.dirname, "../../..");
 const fixtureUrl = `http://127.0.0.1:4280${
-  group === "app-wide" || group === "ux-nine" || group === "feedback"
+  group === "app-wide" ||
+  group === "ux-nine" ||
+  group === "feedback" ||
+  group === "feedback-recovery"
     ? "/clients"
     : group === "assistant"
       ? "/assistant"
@@ -144,6 +154,7 @@ if (group === "template-library")
       "TemplateEditor.tsx",
       "TemplateTeam.tsx",
       "TemplateHistory.tsx",
+      "template-access.ts",
       "template-ui.tsx",
     ].map((file) => `apps/web/src/routes/_auth/library/-components/${file}`),
     "apps/web/src/routes/_auth/library/index.tsx",
@@ -246,7 +257,7 @@ if (group === "access")
       (file) => `test/acceptance/account-ui-fixture/${file}`
     ),
   ];
-if (group === "ux-nine" || group === "feedback") {
+if (group === "ux-nine" || group === "feedback" || group === "feedback-recovery") {
   const walk = async (directory) => {
     const entries = await readdir(resolve(root, directory), { withFileTypes: true });
     return (
@@ -314,7 +325,7 @@ const localRun =
       )
     : null;
 const scope =
-  group === "feedback"
+  group === "feedback" || group === "feedback-recovery"
     ? "Current production components in one isolated fictional browser fixture on port 4280. Exercises associated input guidance, pressed state without layout shift, persistent success after confirmed intercepted responses, failure retention, navigation/dismissal focus, autosave status, reduced motion and mobile containment, alongside the nine-issue and authoring regressions. Fictional identities and API outcomes; no real authentication, credential changes, providers, server write authorization, legal quality, participant study or deployment proof. Source and script hashes identify relevant files, not the complete runtime."
     : group === "ux-nine"
       ? "Current production components for Clients, Matters, Documents, Reviews, Workflows, Library and Settings in one isolated fictional browser fixture on port 4280. Native browser history, keyboard/focus, pending/error/denied states, draft retention, explicit save retry and serialized autosave are exercised. Fictional identity/data and intercepted mutation outcomes; no real authentication, credentials, provider inference, authorization, deletion, legal quality, representative-user study or deployment proof. Native unload is suppressed only for explicit fixture resets. Source hashes identify relevant files, not a complete transitive runtime attestation."
@@ -385,7 +396,7 @@ await writeFile(
   JSON.stringify(
     {
       version: 1,
-      recordedOn: "2026-11-16",
+      recordedOn: new Date().toISOString().slice(0, 10),
       scope,
       ...(localRun ? { localRun: { runId: localRun.runId, tenantId: localRun.tenantId } } : {}),
       sourceSHA256,

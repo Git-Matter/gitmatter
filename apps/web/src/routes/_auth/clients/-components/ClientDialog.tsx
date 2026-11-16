@@ -1,8 +1,10 @@
 import { notifySuccess } from "@/lib/feedback";
 import { useDraftExit } from "@/lib/hooks/useDraftExit";
 import { FormFeedback } from "@/components/FormFeedback";
+import { SnapshotNotice } from "@/components/SnapshotNotice";
+import { readableSnapshot, snapshotIsCurrent } from "@/lib/data/snapshot-refresh";
 import { Link } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
@@ -33,52 +35,60 @@ import { queryKeys } from "@/lib/data/queries";
 export function ClientDialog({ client, onClose }: { client: Client | null; onClose: () => void }) {
   const qc = useQueryClient();
   // Fetch only while a client is selected; cached per id so reopening is instant.
-  const { data: overview } = useQuery({
+  const overviewQuery = useQuery({
     queryKey: queryKeys.client(client?.id ?? ""),
     queryFn: () => api.getClient(client!.id),
     enabled: !!client,
+    retry: false,
   });
-  // Prefer the freshly fetched client; fall back to the row snapshot.
-  const current = overview?.client ?? client;
+  const overview = readableSnapshot(overviewQuery);
+  // A row is useful initial context, but cannot override a denied detail response.
+  const current = overview?.client ?? (!overviewQuery.error ? client : null);
+  const confirmed = snapshotIsCurrent(overviewQuery);
 
   const [name, setName] = useState("");
   const [type, setType] = useState<Client["type"]>("organization");
   const [clientNumber, setClientNumber] = useState("");
   const [status, setStatus] = useState<Client["status"]>("active");
+  const [baseline, setBaseline] = useState<Client | null>(null);
 
-  const seeded = useRef<string | null>(null);
+  const dirty =
+    !!baseline &&
+    baseline.id === client?.id &&
+    (name.trim() !== baseline.name ||
+      type !== baseline.type ||
+      clientNumber.trim() !== (baseline.clientNumber ?? "") ||
+      status !== baseline.status);
+
   // Background refresh must not overwrite unsaved local input.
   useEffect(() => {
     if (!client) {
-      seeded.current = null;
+      setBaseline(null);
       return;
     }
-    if (!current || seeded.current === current.id) return;
-    seeded.current = current.id;
+    if (!current || (baseline?.id === current.id && (dirty || !confirmed || baseline === current)))
+      return;
+    setBaseline(current);
     setName(current.name);
     setType(current.type);
     setClientNumber(current.clientNumber ?? "");
     setStatus(current.status);
-  }, [current, client]);
-
-  const dirty =
-    !!current &&
-    (name.trim() !== current.name ||
-      type !== current.type ||
-      clientNumber.trim() !== (current.clientNumber ?? "") ||
-      status !== current.status);
+  }, [current, client, baseline, confirmed, dirty]);
 
   const save = useMutation({
-    mutationFn: () =>
-      api.updateClient(client!.id, {
+    mutationFn: () => {
+      if (!client || !snapshotIsCurrent(overviewQuery))
+        throw new Error("Refresh client details before saving changes.");
+      return api.updateClient(client.id, {
         name: name.trim(),
         type,
         clientNumber: clientNumber.trim() || null,
         status,
-      }),
+      });
+    },
     onSuccess: () => {
       exit.resolve();
-      notifySuccess("Client updated");
+      notifySuccess("Client updated", { section: "Clients" });
       void qc.invalidateQueries({ queryKey: queryKeys.clients });
       void qc.invalidateQueries({ queryKey: queryKeys.client(client!.id) });
       onClose();
@@ -90,11 +100,11 @@ export function ClientDialog({ client, onClose }: { client: Client | null; onClo
     dirty: !!client && dirty,
     saving: !!client && save.isPending,
     discard: () => {
-      if (current) {
-        setName(current.name);
-        setType(current.type);
-        setClientNumber(current.clientNumber ?? "");
-        setStatus(current.status);
+      if (baseline) {
+        setName(baseline.name);
+        setType(baseline.type);
+        setClientNumber(baseline.clientNumber ?? "");
+        setStatus(baseline.status);
       }
     },
   });
@@ -108,14 +118,15 @@ export function ClientDialog({ client, onClose }: { client: Client | null; onClo
         }}
       >
         <DialogContent>
-          {client && (
+          <DialogHeader>
+            <DialogTitle>Edit client</DialogTitle>
+          </DialogHeader>
+          <SnapshotNotice query={overviewQuery} label="Client" />
+          {overviewQuery.isPending && <p role="status">Loading client details…</p>}
+          {client && current && (
             <>
-              <DialogHeader>
-                <DialogTitle>Edit client</DialogTitle>
-              </DialogHeader>
-
               <FormFeedback error={save.error} title="Client was not saved" />
-              <fieldset disabled={save.isPending} className="flex flex-col gap-3">
+              <fieldset disabled={save.isPending || !confirmed} className="flex flex-col gap-3">
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor="edit-client-name">Name</Label>
                   <Input
@@ -126,9 +137,9 @@ export function ClientDialog({ client, onClose }: { client: Client | null; onClo
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="flex flex-col gap-1.5">
-                    <Label>Type</Label>
+                    <Label htmlFor="edit-client-type">Type</Label>
                     <Select value={type} onValueChange={(v) => setType(v as Client["type"])}>
-                      <SelectTrigger className="capitalize">
+                      <SelectTrigger id="edit-client-type" className="capitalize">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -151,9 +162,9 @@ export function ClientDialog({ client, onClose }: { client: Client | null; onClo
                   </div>
                 </div>
                 <div className="flex items-center justify-between gap-3">
-                  <Label>Status</Label>
+                  <Label htmlFor="edit-client-status">Status</Label>
                   <Select value={status} onValueChange={(v) => setStatus(v as Client["status"])}>
-                    <SelectTrigger className="w-32 capitalize">
+                    <SelectTrigger id="edit-client-status" className="w-32 capitalize">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -173,14 +184,16 @@ export function ClientDialog({ client, onClose }: { client: Client | null; onClo
                   <Skeleton className="h-5 w-2/3" />
                 </div>
               ) : (
-                <div className="flex max-h-[50vh] flex-col gap-section overflow-x-hidden overflow-y-auto border-t border-border pt-4">
+                <div
+                  inert={!confirmed}
+                  className="flex max-h-[50vh] flex-col gap-section overflow-x-hidden overflow-y-auto border-t border-border pt-4"
+                >
                   <Section title="Matters" empty="No matters you can access.">
                     {overview.matters.map(({ matter }) => (
                       <Row
                         key={matter.id}
                         to="/matters/$id"
                         id={matter.id}
-                        onNavigate={onClose}
                         label={matter.name}
                         meta={matter.practiceArea ?? undefined}
                       />
@@ -192,7 +205,6 @@ export function ClientDialog({ client, onClose }: { client: Client | null; onClo
                         key={d.id}
                         to="/documents/$id"
                         id={d.id}
-                        onNavigate={onClose}
                         label={d.title}
                         meta={d.fileType}
                       />
@@ -200,13 +212,7 @@ export function ClientDialog({ client, onClose }: { client: Client | null; onClo
                   </Section>
                   <Section title="Reviews" empty="No reviews.">
                     {overview.reviews.map((rv) => (
-                      <Row
-                        key={rv.id}
-                        to="/reviews/$id"
-                        id={rv.id}
-                        onNavigate={onClose}
-                        label={rv.title}
-                      />
+                      <Row key={rv.id} to="/reviews/$id" id={rv.id} label={rv.title} />
                     ))}
                   </Section>
                 </div>
@@ -215,7 +221,7 @@ export function ClientDialog({ client, onClose }: { client: Client | null; onClo
               <DialogFooter>
                 <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
                 <Button
-                  disabled={!dirty || !name.trim() || save.isPending}
+                  disabled={!confirmed || !dirty || !name.trim() || save.isPending}
                   onClick={() => save.mutate()}
                 >
                   {save.isPending ? "Saving…" : "Save"}
@@ -255,19 +261,16 @@ function Row({
   id,
   label,
   meta,
-  onNavigate,
 }: {
   to: "/matters/$id" | "/documents/$id" | "/reviews/$id";
   id: string;
   label: string;
   meta?: string;
-  onNavigate: () => void;
 }) {
   return (
     <Link
       to={to}
       params={{ id }}
-      onClick={onNavigate}
       className="-mx-2 flex items-center justify-between gap-3 rounded-md px-2 py-2 text-sm transition-colors hover:bg-muted/50"
     >
       <span className="truncate">{label}</span>

@@ -19,7 +19,7 @@ ALLOW_LOCAL_TEMPLATE_ACCEPTANCE=1 vp exec tsx --import ./test/acceptance/templat
 vp dev --config test/acceptance/template-library/harness/browser/vite.config.ts
 ```
 
-The UI is at `http://127.0.0.1:4296/`, proxying its API to port 4295. The harness uses the managed Node
+The UI is at `http://127.0.0.1:4280/`, proxying its API to port 4295. The harness uses the managed Node
 runtime's `registerHooks` API. Run `vp env doctor` if that runtime cannot start the loader.
 
 With the Playwright CLI executable or installed skill wrapper:

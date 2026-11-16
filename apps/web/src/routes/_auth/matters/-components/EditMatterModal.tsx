@@ -1,4 +1,4 @@
-import { notifySuccess } from "@/lib/feedback";
+import { captureActionOrigin, notifySuccess } from "@/lib/feedback";
 import { useDraftExit } from "@/lib/hooks/useDraftExit";
 import { FormFeedback } from "@/components/FormFeedback";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
@@ -160,6 +160,7 @@ export function EditMatterModal({
   }, [open, matter, currentClient]);
 
   const save = useMutation({
+    onMutate: () => captureActionOrigin(),
     mutationFn: () =>
       api.updateMatter(matter.id, {
         clientId,
@@ -173,9 +174,9 @@ export function EditMatterModal({
           conflictNotes: conflictCleared ? conflictNotes.trim() || null : null,
         }),
       }),
-    onSuccess: () => {
+    onSuccess: (_data, _variables, origin) => {
       exit.resolve();
-      notifySuccess("Matter updated");
+      notifySuccess("Matter updated", origin);
       onSaved();
       onOpenChange(false);
     },

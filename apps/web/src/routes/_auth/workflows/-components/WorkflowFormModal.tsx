@@ -1,5 +1,5 @@
 import { FieldDescription } from "@/components/ui/field";
-import { notifySuccess } from "@/lib/feedback";
+import { captureActionOrigin, notifySuccess } from "@/lib/feedback";
 import { useDraftExit } from "@/lib/hooks/useDraftExit";
 import { FormFeedback } from "@/components/FormFeedback";
 import { Input } from "@/components/ui/input";
@@ -111,6 +111,7 @@ function useWorkflowForm({ open, onClose, onCreated, editWorkflow, onUpdated }: 
     event.preventDefault();
     if (!title.trim()) return;
 
+    const actionOrigin = captureActionOrigin();
     setLoading(true);
     setError("");
     try {
@@ -134,7 +135,7 @@ function useWorkflowForm({ open, onClose, onCreated, editWorkflow, onUpdated }: 
         committed.current = true;
         onCreated({ id: created.workflow.id, type: created.workflow.type });
       }
-      notifySuccess(isEditing ? "Workflow updated" : "Workflow created");
+      notifySuccess(isEditing ? "Workflow updated" : "Workflow created", actionOrigin);
       onClose();
     } catch (err) {
       setError((err as Error).message || `Failed to ${isEditing ? "update" : "create"} workflow`);

@@ -1,5 +1,5 @@
 import { FieldDescription } from "@/components/ui/field";
-import { notifySuccess } from "@/lib/feedback";
+import { captureActionOrigin, notifySuccess } from "@/lib/feedback";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -27,20 +27,22 @@ export function LegalResearchCard() {
   const invalidate = () => qc.invalidateQueries({ queryKey: ["courtlistener-key"] });
 
   const saveMutation = useMutation({
+    onMutate: () => captureActionOrigin(),
     mutationFn: () => api.setCourtListenerKey(key.trim()),
-    onSuccess: () => {
+    onSuccess: (_data, _variables, origin) => {
       setKey("");
       void invalidate();
-      notifySuccess("CourtListener key saved");
+      notifySuccess("CourtListener key saved", origin);
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
   });
 
   const removeMutation = useMutation({
+    onMutate: () => captureActionOrigin(),
     mutationFn: () => api.deleteCourtListenerKey(),
-    onSuccess: () => {
+    onSuccess: (_data, _variables, origin) => {
       void invalidate();
-      notifySuccess("CourtListener key removed");
+      notifySuccess("CourtListener key removed", origin);
     },
   });
 
