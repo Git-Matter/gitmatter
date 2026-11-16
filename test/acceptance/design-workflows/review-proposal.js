@@ -76,7 +76,7 @@ async function reviewProposal(page) {
   await page.getByRole("link", { name: "Documents", exact: true }).click();
   await guard.getByRole("button", { name: "Discard changes", exact: true }).click();
   await guard.waitFor({ state: "hidden" });
-  await page.goto("http://127.0.0.1:4286/");
+  await page.goto("http://127.0.0.1:4280/");
   assert(counters.includes("execution attempts 0"), "Human review must not run a model");
   return {
     cases: results,

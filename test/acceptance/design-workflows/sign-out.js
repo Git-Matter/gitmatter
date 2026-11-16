@@ -27,8 +27,8 @@ async function signOutWorkflow(page) {
   };
   await page.route("**/*", async (route) => {
     const request = route.request();
-    if (!request.url().startsWith("http://127.0.0.1:4300/")) return route.abort();
-    const path = request.url().replace("http://127.0.0.1:4300", "").split("?")[0];
+    if (!request.url().startsWith("http://127.0.0.1:4280/")) return route.abort();
+    const path = request.url().replace("http://127.0.0.1:4280", "").split("?")[0];
     if (!path.startsWith("/api/")) return route.continue();
     calls.push({ path, method: request.method() });
     const json = (body, code = 200) =>
@@ -66,7 +66,7 @@ async function signOutWorkflow(page) {
     await page.getByRole("menuitem", { name: "Sign out", exact: true }).click();
   };
   await page.setViewportSize({ width: 1440, height: 1000 });
-  await page.goto("http://127.0.0.1:4300/settings");
+  await page.goto("http://127.0.0.1:4280/settings");
   const name = page.getByLabel("Name", { exact: true }).first();
   await name.fill("Fictional unsaved name");
   await page.getByRole("button", { name: "Open user menu" }).click();
@@ -139,7 +139,7 @@ async function signOutWorkflow(page) {
   // A URL cannot carry the private history-state action signal.
   holdSignOut = false;
   status = 503;
-  await page.goto("http://127.0.0.1:4300/sign-out?signOutRequested=true");
+  await page.goto("http://127.0.0.1:4280/sign-out?signOutRequested=true");
   await page.getByRole("button", { name: "Sign out", exact: true }).waitFor();
   await page.waitForTimeout(100);
   check(countSignOut() === 3, "Direct URL/query caused sign-out without an action");

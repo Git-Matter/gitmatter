@@ -4,7 +4,7 @@ import { LegalPage } from "./LegalPage";
 // Cloud-only marketing page summarizing gitmatter's security posture.
 export default function Security() {
   return (
-    <LegalPage title="Security" lastUpdated="November 10, 2026">
+    <LegalPage title="Security" lastUpdated="November 16, 2026">
       <p>
         Security is the core of gitmatter: the product exists to make every change to legal work
         attributable and reviewable. This page summarizes our current posture for the hosted
@@ -30,10 +30,9 @@ export default function Security() {
       <h2>Authentication and sessions</h2>
       <p>
         Accounts use email and password, with credentials stored using a strong one-way hash and
-        sessions managed by our authentication layer. Device passkeys can also be managed in account
-        settings. Use the available account controls and review the configuration of your
-        deployment; this page does not establish an enforced authentication policy for your
-        practice.
+        sessions managed by our authentication layer. You can enable two-factor authentication with
+        an authenticator app and retain backup codes for recovery. Device passkeys can also be
+        managed in Settings. Single sign-on is not currently available.
       </p>
 
       <h2>Secrets and credentials</h2>

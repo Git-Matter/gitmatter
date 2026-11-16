@@ -17,22 +17,44 @@ const formatDate = (value: string) =>
     new Date(value)
   );
 
+/** The document route owns these drafts so a denied refresh cannot discard unfinished input. */
+export function usePractitionerReviewDrafts() {
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
+  return {
+    drafts,
+    setDrafts,
+    setSaving,
+    guard: (
+      <UnsavedNavigationGuard
+        isDirty={() => Object.values(drafts).some((value) => !!value.trim()) || saving}
+        saving={saving}
+        onDiscard={() => setDrafts({})}
+        title="Keep your unfinished review record?"
+        description="Your review scope is retained for its document version. Keep editing, or discard this unfinished input."
+      />
+    ),
+  };
+}
+
 export function PractitionerReviewPanel({
   documentId,
   versionId,
   headCommitId,
   previewReady,
+  draftState,
 }: {
   documentId: string;
   versionId: string | null;
   headCommitId: string | null;
   previewReady: boolean;
+  draftState: ReturnType<typeof usePractitionerReviewDrafts>;
 }) {
   const qc = useQueryClient();
   const queryKey = ["document-review", documentId, versionId, headCommitId];
   const query = useQuery({ queryKey, queryFn: () => practiceApi.getDocumentReview(documentId) });
-  const revision = `${versionId}:${headCommitId}`;
-  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const revision = `${documentId}:${versionId}:${headCommitId}`;
+  const { drafts, setDrafts, setSaving } = draftState;
   const scope = drafts[revision] ?? "";
   const setScope = (text: string) => setDrafts((previous) => ({ ...previous, [revision]: text }));
   const [confirmedToken, setConfirmedToken] = useState<string | null>(null);
@@ -57,31 +79,21 @@ export function PractitionerReviewPanel({
       setConfirmedToken(null);
       void query.refetch();
     },
+    onSettled: () => setSaving(false),
   });
-  const guard = (
-    <UnsavedNavigationGuard
-      isDirty={() => Object.values(drafts).some((value) => !!value.trim()) || review.isPending}
-      saving={review.isPending}
-      onDiscard={() => setDrafts({})}
-      title="Keep your unfinished review record?"
-      description="Your review scope is retained for its document version. Keep editing, or discard this unfinished input."
-    />
-  );
   const earlierDrafts = Object.entries(drafts).filter(
-    ([key, value]) => key !== revision && value.trim()
+    ([key, value]) => key.startsWith(`${documentId}:`) && key !== revision && value.trim()
   );
 
   if (query.isPending)
     return (
       <>
-        {guard}
         <Skeleton className="h-32 w-full" aria-label="Loading practitioner review" />
       </>
     );
   if (query.isError)
     return (
       <>
-        {guard}
         <Alert variant="destructive">
           <AlertDescription>
             Could not load practitioner review.{" "}
@@ -103,7 +115,6 @@ export function PractitionerReviewPanel({
 
   return (
     <>
-      {guard}
       <Card variant="section">
         <CardHeader>
           <CardTitle>Practitioner review</CardTitle>
@@ -185,12 +196,14 @@ export function PractitionerReviewPanel({
             className="flex flex-col gap-stack"
             onSubmit={(event) => {
               event.preventDefault();
-              if (canReview && confirmed && scope.trim().length >= 10)
+              if (canReview && confirmed && scope.trim().length >= 10) {
+                setSaving(true);
                 review.mutate({
                   expectedStateToken: state.stateToken,
                   scope: scope.trim(),
                   revision,
                 });
+              }
             }}
           >
             <FieldGroup>

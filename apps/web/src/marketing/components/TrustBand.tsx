@@ -1,17 +1,15 @@
 import { Link } from "@tanstack/react-router";
 import { ArrowRight } from "lucide-react";
 
-// The trust band. Harvey shows certification badges here; we show the
-// guarantees that are true of gitmatter today, each verifiable in the product
-// or the code. When real certifications land, they join this grid.
+// Describe current controls without implying certification or provider guarantees.
 const GUARANTEES = [
   {
     title: "Encrypted LLM keys",
     body: "Your provider key is stored encrypted, never logged, never sent to the browser.",
   },
   {
-    title: "Zero data retention",
-    body: "AI runs on your own provider account, configured so nothing is kept or used for training.",
+    title: "Provider retention controls",
+    body: "AI runs on your provider account, with zero-data-retention handling where supported. Review your provider's settings and terms.",
   },
   {
     title: "Field-level audit trail",

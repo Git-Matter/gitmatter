@@ -22,8 +22,8 @@ async function authRecovery(page) {
         body: "window.turnstile={render(el,options){window.fictionalChallenge=options;el.textContent='Fictional security check';return 'fictional-widget'},remove(){}};",
       });
     }
-    if (!request.url().startsWith("http://127.0.0.1:4300/")) return route.abort();
-    const path = request.url().replace("http://127.0.0.1:4300", "").split("?")[0];
+    if (!request.url().startsWith("http://127.0.0.1:4280/")) return route.abort();
+    const path = request.url().replace("http://127.0.0.1:4280", "").split("?")[0];
     if (!path.startsWith("/api/")) return route.continue();
     const json = (body, status = 200) =>
       route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
@@ -56,7 +56,7 @@ async function authRecovery(page) {
   });
   const goto = async (path) => {
     await page.evaluate(() => window.accountFixture?.resetForNavigation());
-    await page.goto(`http://127.0.0.1:4300${path}`);
+    await page.goto(`http://127.0.0.1:4280${path}`);
   };
   const ready = async () => {
     await page.waitForFunction(() => Boolean(window.fictionalChallenge));
@@ -127,7 +127,7 @@ async function authRecovery(page) {
   authStatus = 200;
   await page.getByRole("button", { name: "Log in", exact: true }).click();
   await page.waitForURL("**/assistant");
-  check(page.url().startsWith("http://127.0.0.1:4300/"), "External return URL accepted");
+  check(page.url().startsWith("http://127.0.0.1:4280/"), "External return URL accepted");
 
   await goto("/forgot-password");
   await page.getByLabel("Email", { exact: true }).fill("reviewer@example.invalid");

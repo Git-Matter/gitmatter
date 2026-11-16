@@ -27,8 +27,8 @@ async function settingsNavigation(page) {
   };
   await page.route("**/*", async (route) => {
     const request = route.request();
-    if (!request.url().startsWith("http://127.0.0.1:4300/")) return route.abort();
-    const path = request.url().replace("http://127.0.0.1:4300", "").split("?")[0];
+    if (!request.url().startsWith("http://127.0.0.1:4280/")) return route.abort();
+    const path = request.url().replace("http://127.0.0.1:4280", "").split("?")[0];
     if (!path.startsWith("/api/")) return route.continue();
     const method = request.method();
     calls.push({ path, method });
@@ -75,7 +75,7 @@ async function settingsNavigation(page) {
       return json([]);
     return json({ error: "Unhandled fictional request" }, 599);
   });
-  await page.goto("http://127.0.0.1:4300/settings");
+  await page.goto("http://127.0.0.1:4280/settings");
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.getByLabel("Name", { exact: true }).first().waitFor();
   check(

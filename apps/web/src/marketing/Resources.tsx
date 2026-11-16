@@ -96,7 +96,7 @@ export default function Resources() {
               <TypeLabel type={item.type} />
               <span className="inline-flex items-center gap-1.5 text-[15px] font-medium">
                 {item.title}
-                <ArrowRight className="size-3.5 -translate-x-1 opacity-0 transition-all group-hover:translate-x-0 group-hover:opacity-100" />
+                <ArrowRight className="size-3.5 -translate-x-1 opacity-0 transition-[opacity,translate] group-hover:translate-x-0 group-hover:opacity-100" />
               </span>
               <span className="max-w-[52ch] text-sm leading-relaxed text-muted-foreground">
                 {item.desc}
@@ -121,7 +121,7 @@ export default function Resources() {
                 <TypeLabel type={item.type} />
                 <span className="inline-flex items-center gap-1.5 text-[15px] font-medium">
                   {item.title}
-                  <ArrowRight className="size-3.5 -translate-x-1 opacity-0 transition-all group-hover:translate-x-0 group-hover:opacity-100" />
+                  <ArrowRight className="size-3.5 -translate-x-1 opacity-0 transition-[opacity,translate] group-hover:translate-x-0 group-hover:opacity-100" />
                 </span>
                 <span className="text-sm leading-relaxed text-muted-foreground">{item.desc}</span>
               </div>

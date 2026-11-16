@@ -6,7 +6,7 @@ Run from the repository root:
 vp dev --config test/acceptance/mvp-ui-fixture/vite.config.ts
 ```
 
-Open `http://127.0.0.1:4286`. This standalone Vite+ entry renders the production contract
+Open `http://127.0.0.1:4280`. This standalone Vite+ entry renders the production contract
 review, completion, matter overview and approval components with synthetic API responses.
 It loads no environment files and creates no authenticated session. Its fetch adapter rejects
 unimplemented API calls; it cannot call a provider or mutate application data.

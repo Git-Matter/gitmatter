@@ -2,7 +2,7 @@
 async function assistantScreenshots(page) {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto(
-    "http://127.0.0.1:4299/matters/10000000-0000-4000-8000-000000000001/assistant/10000000-0000-4000-8000-000000000003?preview=1"
+    "http://127.0.0.1:4280/matters/10000000-0000-4000-8000-000000000001/assistant/10000000-0000-4000-8000-000000000003?preview=1"
   );
   await page.getByRole("textbox", { name: "Message for the assistant", exact: true }).waitFor();
   await page.getByText("Fictional source.txt", { exact: true }).click();

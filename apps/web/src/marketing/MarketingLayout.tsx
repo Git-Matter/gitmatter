@@ -1,4 +1,5 @@
 import { Link } from "@tanstack/react-router";
+import { useEffect, useId, useRef, useState } from "react";
 import { ArrowRight, ChevronDown, GitBranch, Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SITE } from "@/marketing/site";
@@ -27,12 +28,12 @@ function FooterSection({ title, children }: { title: string; children: React.Rea
   );
 }
 
-function MenuItem({ item }: { item: NavMenuItem }) {
+function MenuItem({ item, onNavigate }: { item: NavMenuItem; onNavigate: () => void }) {
   const body = (
     <>
       <span className="inline-flex items-center gap-1.5 text-[15px] font-medium text-foreground">
         {item.label}
-        <ArrowRight className="size-3.5 -translate-x-1 opacity-0 transition-all duration-150 group-hover/item:translate-x-0 group-hover/item:opacity-100" />
+        <ArrowRight className="size-3.5 -translate-x-1 opacity-0 transition-[opacity,translate] duration-150 group-hover/item:translate-x-0 group-hover/item:opacity-100" />
       </span>
       <span className="max-w-[34ch] text-sm leading-relaxed text-muted-foreground">
         {item.desc}
@@ -44,6 +45,7 @@ function MenuItem({ item }: { item: NavMenuItem }) {
       <a
         href={item.href}
         className={itemClass}
+        onClick={onNavigate}
         {...(item.external ? { target: "_blank", rel: "noreferrer" } : {})}
       >
         {body}
@@ -51,16 +53,16 @@ function MenuItem({ item }: { item: NavMenuItem }) {
     );
   }
   return (
-    <Link to={item.to} className={itemClass}>
+    <Link to={item.to} className={itemClass} onClick={onNavigate}>
       {body}
     </Link>
   );
 }
 
 // A static product still keeps navigation calm and does not start media playback.
-function FeaturedCard({ featured }: { featured: NavFeatured }) {
+function FeaturedCard({ featured, onNavigate }: { featured: NavFeatured; onNavigate: () => void }) {
   return (
-    <Link to={featured.to} className="group/item flex flex-col gap-2.5">
+    <Link to={featured.to} className="group/item flex flex-col gap-2.5" onClick={onNavigate}>
       <img
         className="aspect-[4/3] w-full rounded-lg object-cover"
         src={featured.poster}
@@ -75,10 +77,7 @@ function FeaturedCard({ featured }: { featured: NavFeatured }) {
   );
 }
 
-// Hover dropdown in the Harvey register: a trigger with a chevron, and a
-// panel of title + one-line-description links in columns with a featured
-// media card on the right. Pure CSS (group-hover + focus-within) so it needs
-// no client state and works with keyboard focus.
+// Pointer and keyboard entry share a panel that Escape can dismiss without navigating away.
 function NavDropdown({
   label,
   to,
@@ -92,21 +91,62 @@ function NavDropdown({
   featured: NavFeatured;
   columns?: 1 | 2;
 }) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLAnchorElement>(null);
+  const panelId = useId();
+  const close = () => setOpen(false);
+
+  useEffect(() => {
+    if (!open) return;
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key !== "Escape" || event.defaultPrevented) return;
+      event.preventDefault();
+      setOpen(false);
+      if (containerRef.current?.contains(document.activeElement)) triggerRef.current?.focus();
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [open]);
+
   return (
     // Not `relative`: the panel positions against the nav (the nearest
     // positioned ancestor), which is centered in the page — centering a wide
     // panel on its own trigger clips it off the viewport edge.
-    <div className="group">
+    <div
+      ref={containerRef}
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => {
+        if (!containerRef.current?.contains(document.activeElement)) close();
+      }}
+      onFocus={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget)) setOpen(true);
+      }}
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget)) close();
+      }}
+    >
       <Link
+        ref={triggerRef}
         to={to}
-        className="inline-flex items-center gap-1 rounded-md px-3 py-2 text-muted-foreground group-hover:text-foreground"
+        aria-expanded={open}
+        aria-controls={panelId}
+        onClick={close}
+        className="inline-flex items-center gap-1 rounded-md px-3 py-2 text-muted-foreground hover:text-foreground aria-expanded:text-foreground"
       >
         {label}
-        <ChevronDown className="size-3.5 transition-transform duration-200 group-hover:rotate-180" />
+        <ChevronDown
+          aria-hidden="true"
+          className={`size-3.5 transition-transform duration-150 ${open ? "rotate-180" : ""}`}
+        />
       </Link>
       {/* Full-bleed panel bar under the header (the Harvey pattern): spans
           the viewport, content aligned to the page grid. */}
-      <div className="invisible absolute top-full left-1/2 z-50 w-screen -translate-x-1/2 pt-4 opacity-0 transition-opacity duration-150 group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100">
+      <div
+        id={panelId}
+        hidden={!open}
+        className="absolute top-full left-1/2 z-50 w-screen -translate-x-1/2 pt-4"
+      >
         <div className="border-y border-border bg-background shadow-float">
           <div className="mx-auto grid max-w-7xl grid-cols-[1fr_320px] gap-x-16 px-6 py-12">
             <div
@@ -115,10 +155,10 @@ function NavDropdown({
               }
             >
               {items.map((item) => (
-                <MenuItem key={item.label} item={item} />
+                <MenuItem key={item.label} item={item} onNavigate={close} />
               ))}
             </div>
-            <FeaturedCard featured={featured} />
+            <FeaturedCard featured={featured} onNavigate={close} />
           </div>
         </div>
       </div>

@@ -11,11 +11,16 @@ import { CommitHistory } from "@/components/CommitHistory";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DocxView } from "./-components/DocxView";
 import { WordInspectionNotice } from "./-components/WordInspectionNotice";
-import { PractitionerReviewPanel } from "./-components/PractitionerReviewPanel";
+import {
+  PractitionerReviewPanel,
+  usePractitionerReviewDrafts,
+} from "./-components/PractitionerReviewPanel";
 import { PageHeader } from "@/components/PageHeader";
 import { api, type DocumentDetail, type DocEdit } from "@/lib/data/api";
 import { useSession } from "@/lib/auth/auth-client";
 import { UnsavedNavigationGuard } from "@/components/UnsavedChangesGuard";
+import { SnapshotNotice } from "@/components/SnapshotNotice";
+import { readableSnapshot, snapshotIsCurrent } from "@/lib/data/snapshot-refresh";
 
 export const Route = createFileRoute("/_auth/documents/$id")({ component: DocumentView });
 
@@ -31,15 +36,20 @@ function DocumentView() {
   const qc = useQueryClient();
   const { data: session } = useSession();
   const docKey = ["document", id];
-  const { data } = useQuery({ queryKey: docKey, queryFn: () => api.getDocumentDetail(id) });
-  const { data: history = [] } = useQuery({
+  const documentQuery = useQuery({ queryKey: docKey, queryFn: () => api.getDocumentDetail(id) });
+  const data = readableSnapshot(documentQuery);
+  const current = snapshotIsCurrent(documentQuery);
+  const historyQuery = useQuery({
     queryKey: ["document-history", id],
     queryFn: () => api.documentHistory(id),
+    enabled: !!data,
   });
+  const history = readableSnapshot(historyQuery) ?? [];
   const [find, setFind] = useState("");
   const [replace, setReplace] = useState("");
   const [reason, setReason] = useState("");
   const [renderedVersion, setRenderedVersion] = useState<string | null>(null);
+  const practitionerDrafts = usePractitionerReviewDrafts();
 
   // Both mutations return the updated document; seed it into the cache and
   // refresh the blame history.
@@ -50,7 +60,10 @@ function DocumentView() {
   };
 
   const proposeMutation = useMutation({
-    mutationFn: () => api.proposeEdit(id, { find, replace, reason: reason || undefined }),
+    mutationFn: () => {
+      if (!current) throw new Error("Refresh the document before proposing a change.");
+      return api.proposeEdit(id, { find, replace, reason: reason || undefined });
+    },
     onSuccess: (updated) => {
       onEdited(updated);
       setFind("");
@@ -61,34 +74,67 @@ function DocumentView() {
   });
 
   const resolveMutation = useMutation({
-    mutationFn: (v: { edit: DocEdit; decision: "accept" | "reject" }) =>
-      api.resolveEdit(id, v.edit.changeId, v.decision, {
+    mutationFn: (v: { edit: DocEdit; decision: "accept" | "reject" }) => {
+      if (!current) throw new Error("Refresh the document before deciding a change.");
+      return api.resolveEdit(id, v.edit.changeId, v.decision, {
         expectedHeadCommitId: data?.document.headCommitId,
         approvalContext: data?.resolutionPolicy?.approvalContext ?? undefined,
-      }),
+      });
+    },
     onSuccess: onEdited,
     onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
   });
 
   // Accept/reject every pending change at once — one new version.
   const resolveAllMutation = useMutation({
-    mutationFn: (decision: "accept" | "reject") =>
-      api.resolveAllEdits(id, decision, {
+    mutationFn: (decision: "accept" | "reject") => {
+      if (!current) throw new Error("Refresh the document before deciding changes.");
+      return api.resolveAllEdits(id, decision, {
         expectedHeadCommitId: data?.document.headCommitId,
         approvalContext: data?.resolutionPolicy?.approvalContext ?? undefined,
-      }),
+      });
+    },
     onSuccess: onEdited,
     onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
   });
 
+  const guard = (
+    <UnsavedNavigationGuard
+      isDirty={() =>
+        !!(find || replace || reason) ||
+        proposeMutation.isPending ||
+        resolveMutation.isPending ||
+        resolveAllMutation.isPending
+      }
+      saving={
+        proposeMutation.isPending || resolveMutation.isPending || resolveAllMutation.isPending
+      }
+      title="Keep your unfinished tracked change?"
+      description="Your proposed text and reason are still here. Keep editing, or discard this unfinished input. Recorded changes remain in the audit history."
+      onDiscard={() => {
+        setFind("");
+        setReplace("");
+        setReason("");
+      }}
+    />
+  );
+
   if (!data)
     return (
       <div className="grid min-h-0 flex-1 gap-6 overflow-y-auto pt-6 lg:grid-cols-[1fr_300px]">
-        <div className="flex flex-col gap-4">
-          <Skeleton className="h-8 w-64" />
-          <Skeleton className="h-96 w-full" />
-        </div>
-        <Skeleton className="h-40 w-full" />
+        {guard}
+        {practitionerDrafts.guard}
+        {documentQuery.error ? (
+          <SnapshotNotice query={documentQuery} label="Document" />
+        ) : (
+          <>
+            <div className="flex flex-col gap-4">
+              <Skeleton className="h-8 w-64" />
+              <Skeleton className="h-96 w-full" />
+            </div>
+            <Skeleton className="h-40 w-full" />
+          </>
+        )}
       </div>
     );
 
@@ -98,32 +144,21 @@ function DocumentView() {
 
   return (
     <div className="grid min-h-0 flex-1 gap-6 overflow-y-auto pt-6 lg:grid-cols-[1fr_300px]">
-      <UnsavedNavigationGuard
-        isDirty={() =>
-          !!(find || replace || reason) ||
-          proposeMutation.isPending ||
-          resolveMutation.isPending ||
-          resolveAllMutation.isPending
-        }
-        saving={
-          proposeMutation.isPending || resolveMutation.isPending || resolveAllMutation.isPending
-        }
-        title="Keep your unfinished tracked change?"
-        description="Your proposed text and reason are still here. Keep editing, or discard this unfinished input. Recorded changes remain in the audit history."
-        onDiscard={() => {
-          setFind("");
-          setReplace("");
-          setReason("");
-        }}
-      />
-      <div className="flex min-w-0 flex-col gap-4">
+      {guard}
+      {practitionerDrafts.guard}
+      {documentQuery.error && (
+        <div className="lg:col-span-full">
+          <SnapshotNotice query={documentQuery} label="Document" />
+        </div>
+      )}
+      <div inert={!current} className="flex min-w-0 flex-col gap-4">
         <PageHeader
           breadcrumbs={[{ label: "Documents", to: "/documents" }, { label: document.title }]}
           title={document.title}
           action={
             <Button
               variant="outline"
-              disabled={!document.markdown}
+              disabled={!current || !document.markdown}
               tooltip={
                 document.markdown
                   ? "Draft a playbook from this document"
@@ -190,11 +225,13 @@ function DocumentView() {
           documentId={id}
           versionId={document.currentVersionId}
           headCommitId={document.headCommitId}
+          draftState={practitionerDrafts}
           previewReady={
-            isDocx
+            current &&
+            (isDocx
               ? data.wordInspection?.inspection.status === "complete" &&
                 renderedVersion === document.currentVersionId
-              : document.status === "ready" && !!document.markdown?.trim()
+              : document.status === "ready" && !!document.markdown?.trim())
           }
         />
 
@@ -209,7 +246,9 @@ function DocumentView() {
                 id={`edit-find-${id}`}
                 value={find}
                 onChange={(e) => setFind(e.target.value)}
-                disabled={proposeMutation.isPending || !data.resolutionPolicy?.mayPropose}
+                disabled={
+                  !current || proposeMutation.isPending || !data.resolutionPolicy?.mayPropose
+                }
               />
             </div>
             <div className="flex flex-col gap-1.5">
@@ -218,7 +257,9 @@ function DocumentView() {
                 id={`edit-replace-${id}`}
                 value={replace}
                 onChange={(e) => setReplace(e.target.value)}
-                disabled={proposeMutation.isPending || !data.resolutionPolicy?.mayPropose}
+                disabled={
+                  !current || proposeMutation.isPending || !data.resolutionPolicy?.mayPropose
+                }
               />
             </div>
             <div className="flex flex-col gap-1.5">
@@ -227,12 +268,16 @@ function DocumentView() {
                 id={`edit-reason-${id}`}
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
-                disabled={proposeMutation.isPending || !data.resolutionPolicy?.mayPropose}
+                disabled={
+                  !current || proposeMutation.isPending || !data.resolutionPolicy?.mayPropose
+                }
               />
             </div>
             <Button
               onClick={() => find && proposeMutation.mutate()}
-              disabled={proposeMutation.isPending || !find || !data.resolutionPolicy?.mayPropose}
+              disabled={
+                !current || proposeMutation.isPending || !find || !data.resolutionPolicy?.mayPropose
+              }
               className="self-start"
             >
               {proposeMutation.isPending ? "Proposing…" : "Propose edit"}
@@ -260,7 +305,9 @@ function DocumentView() {
               <div className="flex gap-2">
                 <Button
                   size="xs"
-                  disabled={resolveAllMutation.isPending || !data.resolutionPolicy?.mayResolve}
+                  disabled={
+                    !current || resolveAllMutation.isPending || !data.resolutionPolicy?.mayResolve
+                  }
                   onClick={() => resolveAllMutation.mutate("accept")}
                 >
                   Accept all
@@ -268,7 +315,9 @@ function DocumentView() {
                 <Button
                   size="xs"
                   variant="outline"
-                  disabled={resolveAllMutation.isPending || !data.resolutionPolicy?.mayResolve}
+                  disabled={
+                    !current || resolveAllMutation.isPending || !data.resolutionPolicy?.mayResolve
+                  }
                   onClick={() => resolveAllMutation.mutate("reject")}
                 >
                   Reject all
@@ -312,7 +361,9 @@ function DocumentView() {
                   <div className="flex gap-2">
                     <Button
                       size="xs"
-                      disabled={resolveMutation.isPending || !data.resolutionPolicy?.mayResolve}
+                      disabled={
+                        !current || resolveMutation.isPending || !data.resolutionPolicy?.mayResolve
+                      }
                       onClick={() => resolveMutation.mutate({ edit: e, decision: "accept" })}
                     >
                       Accept
@@ -320,7 +371,9 @@ function DocumentView() {
                     <Button
                       size="xs"
                       variant="outline"
-                      disabled={resolveMutation.isPending || !data.resolutionPolicy?.mayResolve}
+                      disabled={
+                        !current || resolveMutation.isPending || !data.resolutionPolicy?.mayResolve
+                      }
                       onClick={() => resolveMutation.mutate({ edit: e, decision: "reject" })}
                     >
                       Reject
@@ -336,6 +389,7 @@ function DocumentView() {
 
       <aside>
         <h2 className="mb-2 text-sm font-semibold">History</h2>
+        <SnapshotNotice query={historyQuery} label="Document history" />
         <CommitHistory commits={history} currentUserId={session?.user.id} />
       </aside>
     </div>

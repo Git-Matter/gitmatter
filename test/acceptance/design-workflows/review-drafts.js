@@ -112,7 +112,7 @@ async function reviewDrafts(page) {
   await keep.waitFor();
   await keep.getByRole("button", { name: "Discard changes", exact: true }).click();
   await keep.waitFor({ state: "hidden" });
-  await page.goto("http://127.0.0.1:4286/");
+  await page.goto("http://127.0.0.1:4280/");
   await page.getByRole("combobox", { name: /^Scenario/ }).selectOption("review_slow");
   await page.getByRole("button", { name: "Contract review", exact: true }).click();
   await page.getByRole("tab", { name: "Document", exact: true }).click();

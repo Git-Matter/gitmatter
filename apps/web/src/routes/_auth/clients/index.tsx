@@ -181,13 +181,16 @@ function Clients() {
         <CreateClient onCreated={() => setCreating(false)} onCancel={() => setCreating(false)} />
       )}
 
+      {showTable && (
+        <div className="flex h-10 items-center justify-end border-b border-border">
+          <TableSearch value={query} onChange={setQuery} placeholder="Search clients…" />
+        </div>
+      )}
+
       {
         <CollectionPanel query={viewQuery} label="Clients">
           {showTable ? (
             <>
-              <div className="flex h-10 items-center justify-end border-b border-border">
-                <TableSearch value={query} onChange={setQuery} placeholder="Search clients…" />
-              </div>
               <ClientSelectionBar
                 table={table}
                 selectedCount={selectedCount}
