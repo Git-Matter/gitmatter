@@ -132,11 +132,23 @@ export function PractitionerReviewPanel({
                 These drafts were not applied to this version. Inspect the current document before
                 writing and confirming its review scope.
               </p>
-              {earlierDrafts.map(([key, value]) => (
-                <p key={key} className="mt-3 text-sm whitespace-pre-wrap">
-                  {value}
-                </p>
-              ))}
+              {earlierDrafts.map(([key, value]) => {
+                const [sourceVersionId, sourceHeadCommitId] = key
+                  .slice(documentId.length + 1)
+                  .split(":");
+                return (
+                  <div key={key} className="mt-3 space-y-1">
+                    <p className="text-xs break-words text-muted-foreground">
+                      Source version:{" "}
+                      {sourceVersionId === "null" ? "No version ID" : sourceVersionId}
+                      {" · "}
+                      Revision:{" "}
+                      {sourceHeadCommitId === "null" ? "No commit ID" : sourceHeadCommitId}
+                    </p>
+                    <p className="text-sm whitespace-pre-wrap">{value}</p>
+                  </div>
+                );
+              })}
             </details>
           )}
           {state.currentReview && displayedStateMatches ? (

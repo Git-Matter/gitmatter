@@ -46,18 +46,18 @@ async function australianWorkflows(page) {
   await page.route("**/*", async (route) => {
     const request = route.request();
     if (!request.url().startsWith("http://127.0.0.1:4280/")) return route.abort();
-    const url = new URL(request.url());
-    if (!url.pathname.startsWith("/api/")) return route.continue();
+    const path = request.url().replace("http://127.0.0.1:4280", "").split("?")[0];
+    if (!path.startsWith("/api/")) return route.continue();
     const method = request.method();
     const body = request.postDataJSON();
-    calls.push({ path: url.pathname, method, body });
+    calls.push({ path, method, body });
     const json = (value, status = 200) =>
       route.fulfill({ status, contentType: "application/json", body: JSON.stringify(value) });
     if ((hold === "profile" && method === "PUT") || (hold === "review" && method === "POST"))
       await new Promise((resolve) => {
         release = resolve;
       });
-    if (url.pathname === "/api/practice-profile") {
+    if (path === "/api/practice-profile") {
       if (method === "PUT") {
         if (saveProfileStatus !== 200)
           return json({ error: "Fictional practice save failed" }, saveProfileStatus);
@@ -66,7 +66,7 @@ async function australianWorkflows(page) {
         return json({ error: "Fictional practice access unavailable" }, profileStatus);
       return json({ profile, canEdit: true });
     }
-    if (url.pathname === "/api/matters")
+    if (path === "/api/matters")
       return json([
         {
           matter: {
@@ -79,8 +79,8 @@ async function australianWorkflows(page) {
           role: "owner",
         },
       ]);
-    if (url.pathname === "/api/documents") return json([source]);
-    if (url.pathname === "/api/guided/prepare") {
+    if (path === "/api/documents") return json([source]);
+    if (path === "/api/guided/prepare") {
       if (prepareStatus !== 200)
         return json({ error: "Fictional source check failed" }, prepareStatus);
       return json({
@@ -92,9 +92,9 @@ async function australianWorkflows(page) {
         attachments: [{ ...source, kind: "document", label: source.title }],
       });
     }
-    if (url.pathname === "/api/guided/sample")
+    if (path === "/api/guided/sample")
       return json({ matterId: "fictional-matter", documentIds: [source.id] });
-    if (url.pathname === `/api/documents/${source.id}/review`) {
+    if (path === `/api/documents/${source.id}/review`) {
       if (method === "POST") {
         if (saveReviewStatus !== 200)
           return json({ error: "Fictional source revision changed" }, saveReviewStatus);
@@ -111,7 +111,7 @@ async function australianWorkflows(page) {
         return json({ error: "Fictional review access denied" }, reviewStatus);
       return json(reviewState());
     }
-    unknown.push(url.pathname);
+    unknown.push(path);
     return json({ error: "Unhandled fictional request" }, 599);
   });
   const resetTo = async (path) => {
@@ -168,6 +168,32 @@ async function australianWorkflows(page) {
     !calls.some((call) => /chat|execute|runs/.test(call.path)),
     "Preparation dispatched an inference request"
   );
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole("button", { name: "Prepare a file briefing", exact: true }).click();
+  await instructions.fill("Fictional mobile draft to keep or discard deliberately.");
+  await guided.getByRole("button", { name: "Cancel", exact: true }).click();
+  await discard.waitFor();
+  await discard.getByRole("button", { name: "Keep editing", exact: true }).click();
+  check(
+    (await instructions.inputValue()).includes("mobile draft"),
+    "Mobile Keep lost guided input"
+  );
+  check(
+    await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+    "Mobile guided dialog overflowed"
+  );
+  await page.screenshot({
+    path: "output/playwright/design-workflows/au/guided-mobile.png",
+    fullPage: true,
+    animations: "disabled",
+  });
+  await guided.getByRole("button", { name: "Cancel", exact: true }).click();
+  await discard.getByRole("button", { name: "Discard changes", exact: true }).click();
+  await guided.waitFor({ state: "hidden" });
+  await page.getByRole("button", { name: "Prepare a file briefing", exact: true }).click();
+  check((await instructions.inputValue()) === "", "Discarded guided draft reappeared");
+  await guided.getByRole("button", { name: "Cancel", exact: true }).click();
+  await page.setViewportSize({ width: 1440, height: 1000 });
 
   await resetTo("/settings?tab=practice");
   const name = page.getByLabel("Practice name", { exact: true });
@@ -193,7 +219,7 @@ async function australianWorkflows(page) {
   );
   profileStatus = 200;
   await page.getByRole("button", { name: "Retry Practice preferences", exact: true }).click();
-  await page.waitForFunction(() => !document.querySelector("#practice-name")?.disabled);
+  await page.waitForFunction(() => !document.querySelector("#practice-name")?.matches(":disabled"));
   await page.getByRole("button", { name: "Save practice preferences", exact: true }).click();
   await page.getByText("Fictional practice save failed", { exact: true }).waitFor();
   check(
@@ -206,8 +232,10 @@ async function australianWorkflows(page) {
   saveProfileStatus = 200;
   hold = "profile";
   await page.getByRole("button", { name: "Save practice preferences", exact: true }).click();
-  await page.waitForFunction(() => document.querySelector("#practice-name")?.disabled);
   try {
+    await page.waitForFunction(() =>
+      document.querySelector("#practice-name")?.matches(":disabled")
+    );
     await page.getByRole("link", { name: "Leave fixture surface", exact: true }).click();
     const pending = page.getByRole("dialog", { name: "Saving your changes", exact: true });
     await pending.waitFor();
@@ -220,11 +248,16 @@ async function australianWorkflows(page) {
     hold = "";
     release?.();
   }
-  await page.waitForFunction(() => !document.querySelector("#practice-name")?.disabled);
+  await page.waitForFunction(() => !document.querySelector("#practice-name")?.matches(":disabled"));
   check(
     (await name.inputValue()) === "Fictional retained practice draft",
     "Saved practice did not preserve confirmed value"
   );
+  await page.screenshot({
+    path: "output/playwright/design-workflows/au/practice-desktop.png",
+    fullPage: true,
+    animations: "disabled",
+  });
   profileStatus = 403;
   await page.evaluate(() => window.australianFixture.invalidate("practice-profile"));
   await name.waitFor({ state: "hidden" });
@@ -294,6 +327,9 @@ async function australianWorkflows(page) {
     await page.getByRole("button", { name: "Record my review", exact: true }).isDisabled(),
     "Blank displayed source permitted review"
   );
+  await page.waitForFunction(() =>
+    document.querySelector("#review-scope-fictional-document")?.matches(":disabled")
+  );
   check(await scope.isDisabled(), "Blank displayed source allowed editable attestation");
   await page.evaluate(() =>
     window.australianFixture.setDocument({
@@ -348,6 +384,90 @@ async function australianWorkflows(page) {
       !Object.hasOwn(recorded.body, "revision"),
     "Review payload lost exact token/scope or leaked local revision key"
   );
+  await page.setViewportSize({ width: 390, height: 844 });
+  check(
+    await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+    "Current practitioner panel overflows mobile viewport"
+  );
+  await page.screenshot({
+    path: "output/playwright/design-workflows/au/review-mobile.png",
+    fullPage: true,
+    animations: "disabled",
+  });
+  const fullVersion = "b42dfc81-93fe-4bd8-a326-17b8bc4f78ac";
+  const fullHead = "fd5c4efb4ecf20919df88c5fa1d0c3b36d8e9432";
+  version = fullVersion;
+  head = fullHead;
+  tokenDigit = "c";
+  currentReview = null;
+  await page.evaluate(
+    ({ versionId, headCommitId }) =>
+      window.australianFixture.setDocument({
+        versionId,
+        headCommitId,
+        text: "Fictional full-identity source.",
+        ready: true,
+      }),
+    { versionId: fullVersion, headCommitId: fullHead }
+  );
+  await scope.fill("Retained scope belonging to the full stored source identifiers.");
+  version = null;
+  head = null;
+  tokenDigit = "d";
+  await page.evaluate(() =>
+    window.australianFixture.setDocument({
+      versionId: null,
+      headCommitId: null,
+      text: "Fictional source without stored identifiers.",
+      ready: true,
+    })
+  );
+  await page.waitForFunction(
+    () => document.querySelector("#review-scope-fictional-document")?.value === ""
+  );
+  const earlierScopes = page.getByText(/Unfinished scopes from earlier document versions/);
+  if (!(await earlierScopes.evaluate((el) => el.parentElement.open))) await earlierScopes.click();
+  await page
+    .getByText(`Source version: ${fullVersion} · Revision: ${fullHead}`, { exact: true })
+    .waitFor();
+  await scope.fill("Retained scope belonging to a source with no stored identifiers.");
+  version = "version-3";
+  head = "content-3";
+  tokenDigit = "e";
+  await page.evaluate(() =>
+    window.australianFixture.setDocument({
+      versionId: "version-3",
+      headCommitId: "content-3",
+      text: "Fictional current source after identity comparison.",
+      ready: true,
+    })
+  );
+  await page.waitForFunction(
+    () => document.querySelector("#review-scope-fictional-document")?.value === ""
+  );
+  await earlierScopes.waitFor();
+  if (!(await earlierScopes.evaluate((el) => el.parentElement.open))) await earlierScopes.click();
+  await page
+    .getByText("Source version: No version ID · Revision: No commit ID", { exact: true })
+    .waitFor();
+  await scope.fill("Current scope retained while inspecting earlier source identities.");
+  check(
+    await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+    "Full earlier-source identities must wrap at 390px"
+  );
+  await scope.focus();
+  await page.screenshot({
+    path: "output/playwright/design-workflows/au/review-earlier-identities-mobile.png",
+    fullPage: true,
+    animations: "disabled",
+  });
+  await page.getByRole("link", { name: "Leave fixture surface", exact: true }).click();
+  await scopeExit.getByRole("button", { name: "Keep editing", exact: true }).click();
+  check(
+    (await scope.inputValue()) ===
+      "Current scope retained while inspecting earlier source identities.",
+    "Source identity inspection must retain the current draft through route Keep"
+  );
   reviewStatus = 403;
   await page.evaluate(() => window.australianFixture.invalidate("document-review"));
   await scope.waitFor({ state: "hidden" });
@@ -363,6 +483,7 @@ async function australianWorkflows(page) {
       "Fictional HTTP and displayed-source readiness; actual production components and draft guards",
     guidedKeepAndFailureRecovery: true,
     guidedScopeDraftRetention: true,
+    mobileGuidedKeepAndDiscard: true,
     preparedCallbackIdentity: true,
     zeroInferenceRequests: true,
     retainedSettingsSections: true,
@@ -376,6 +497,9 @@ async function australianWorkflows(page) {
     pendingRecordProtection: true,
     exactStateTokenPayload: true,
     reviewDenialRemovesPrivatePanel: true,
+    fullEarlierSourceIdentities: true,
+    nullEarlierSourceIdentitiesExplicit: true,
+    earlierIdentityMobileAndDraftRecovery: true,
     mobileOverflow: false,
     apiCalls: calls.length,
     unhandledApiCalls: unknown.length,

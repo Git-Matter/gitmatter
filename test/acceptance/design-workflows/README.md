@@ -37,6 +37,15 @@ They are checkpoints, not complete transitive bundle attestations. Format genera
 
 ## Coverage
 
+`replay.mjs australian` uses the single-port
+[Australian component fixture](../australian-ui-fixture/README.md) on4280. It exercises guided
+preparation/failure/Keep/Discard and source identity without inference; retained practice settings,
+transient refresh and pending/failed saves; version-keyed practitioner drafts across private-panel
+unmount/recovery, blank-source blocking, stale rejection/reconfirmation and exact state-token
+payloads. Desktop and normal mobile components are captured. Displayed-source readiness and HTTP
+responses are fictional; the group does not prove real rendering, immutable storage, authorization,
+legal quality or live assistant dispatch. Its record is `design/evidence/australian.json`.
+
 | Entry point          | Verified behavior                                                                                                                                                                                            | Boundary                                                                             |
 | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
 | first-review         | One initial stage; recommendation does not replace selection; explicit Continue focuses the next stage; entered context and standard survive inspection; preparation captures instructions without execution | Fictional prepare response, not a live provider or authorization proof               |

@@ -81,10 +81,16 @@ async function assistantExecution(page) {
       await page.getByRole("button", { name: "Stop", exact: true }).click();
     await page.getByText(/^Workflow paused/).waitFor();
     await page
-      .getByText(mode === "workflow-stop" ? "Response stopped" : "Response incomplete", {
+      .getByText(mode === "workflow-stop" ? "Streaming stopped" : "Response incomplete", {
         exact: true,
       })
       .waitFor();
+    if (mode === "workflow-stop")
+      await page
+        .getByText(
+          /Processing and provider usage may continue; check the saved conversation and history before sending again\./
+        )
+        .waitFor();
     await page.waitForTimeout(200);
     assert((await count()) === 2, "Failure or stop must not dispatch the next workflow step");
     await page.getByText("Fictional partial answer", { exact: true }).waitFor();

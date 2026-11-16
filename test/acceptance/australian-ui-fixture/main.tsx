@@ -28,8 +28,8 @@ const client = new QueryClient({
   defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
 });
 type ShownDocument = {
-  versionId: string;
-  headCommitId: string;
+  versionId: string | null;
+  headCommitId: string | null;
   text: string;
   ready: boolean;
   available?: boolean;
@@ -86,7 +86,11 @@ function GuidedPage() {
           onStart={setSeed}
         />
       )}
-      {seed && <output data-testid="prepared-draft">{JSON.stringify(seed)}</output>}
+      {seed && (
+        <output data-testid="prepared-draft" className="block max-w-full text-xs break-all">
+          {JSON.stringify(seed)}
+        </output>
+      )}
     </>
   );
 }
@@ -126,7 +130,7 @@ function ReviewPage() {
       <h1 className="text-xl">Practitioner review fixture</h1>
       {draftState.guard}
       <section aria-label="Fictional displayed source" hidden={shown.available === false}>
-        <p>
+        <p className="break-words">
           {shown.versionId} · {shown.headCommitId}
         </p>
         <p>{shown.text || "No source content is displayed."}</p>

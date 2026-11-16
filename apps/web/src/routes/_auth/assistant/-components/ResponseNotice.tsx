@@ -4,12 +4,13 @@ export function ResponseNotice({ outcome, error }: { outcome: string; error: str
   if (outcome !== "failed" && outcome !== "stopped") return null;
   return (
     <Alert>
-      <AlertTitle>{outcome === "stopped" ? "Response stopped" : "Response incomplete"}</AlertTitle>
+      <AlertTitle>{outcome === "stopped" ? "Streaming stopped" : "Response incomplete"}</AlertTitle>
       <AlertDescription>
         {error && <p>{error}</p>}
         <p>
-          The original request and any partial output remain in this view. Check them before sending
-          again. Another request can incur provider usage; recorded changes remain in history.
+          {outcome === "stopped"
+            ? "Your original request and partial output remain in this view. Processing and provider usage may continue; check the saved conversation and history before sending again."
+            : "The original request and any partial output remain in this view. Check them before sending again. Another request can incur provider usage; recorded changes remain in history."}
         </p>
       </AlertDescription>
     </Alert>

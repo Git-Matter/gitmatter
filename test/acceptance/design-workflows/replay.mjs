@@ -13,6 +13,7 @@ const groups = {
     "ux-authoring",
     "app-wide",
   ],
+  australian: ["australian-workflows"],
   feedback: ["feedback-interactions", "ux-nine", "ux-authoring", "app-wide"],
   "ux-nine": ["ux-nine", "ux-authoring", "app-wide"],
   "app-wide": ["app-wide"],
@@ -40,7 +41,7 @@ const groups = {
 };
 if (!groups[group] || !cli) {
   throw new Error(
-    "Usage: PLAYWRIGHT_CLI=/path/to/playwright-cli node test/acceptance/design-workflows/replay.mjs feedback-recovery|feedback|ux-nine|app-wide|first-review|review-and-output|template-library|assistant|access"
+    "Usage: PLAYWRIGHT_CLI=/path/to/playwright-cli node test/acceptance/design-workflows/replay.mjs australian|feedback-recovery|feedback|ux-nine|app-wide|first-review|review-and-output|template-library|assistant|access"
   );
 }
 const root = resolve(import.meta.dirname, "../../..");
@@ -50,7 +51,7 @@ const fixtureUrl = `http://127.0.0.1:4280${
   group === "feedback" ||
   group === "feedback-recovery"
     ? "/clients"
-    : group === "assistant"
+    : group === "assistant" || group === "australian"
       ? "/assistant"
       : "/"
 }`;
@@ -235,6 +236,29 @@ if (group === "access")
       (file) => `test/acceptance/account-ui-fixture/${file}`
     ),
   ];
+if (group === "australian")
+  sources = [
+    "design/tokens.json",
+    "apps/web/src/styles/tokens.css",
+    "apps/web/src/components/UnsavedChangesGuard.tsx",
+    "apps/web/src/lib/hooks/useDraftExit.tsx",
+    "apps/web/src/lib/data/api.ts",
+    "apps/web/src/lib/data/practice-api.ts",
+    "apps/web/src/lib/data/guided-api.ts",
+    "apps/web/src/lib/data/snapshot-refresh.ts",
+    "apps/web/src/lib/feedback.ts",
+    "apps/web/src/components/ui/field.tsx",
+    "apps/web/src/components/ui/dialog.tsx",
+    "apps/web/src/components/ui/button.tsx",
+    "apps/web/src/routes/_auth/assistant/-components/GuidedTaskDialog.tsx",
+    "apps/web/src/routes/_auth/settings/-components/PracticeProfileCard.tsx",
+    "apps/web/src/routes/_auth/settings/-components/SettingsDrafts.tsx",
+    "apps/web/src/routes/_auth/settings/-components/SettingsQueryNotice.tsx",
+    "apps/web/src/routes/_auth/documents/-components/PractitionerReviewPanel.tsx",
+    ...["main.tsx", "vite.config.ts", "tsconfig.json", "index.html"].map(
+      (file) => `test/acceptance/australian-ui-fixture/${file}`
+    ),
+  ];
 if (group === "ux-nine" || group === "feedback" || group === "feedback-recovery") {
   const walk = async (directory) => {
     const entries = await readdir(resolve(root, directory), { withFileTypes: true });
@@ -298,20 +322,25 @@ const localRun =
         await readFile(resolve(root, ".scratch/template-design-acceptance/run.json"), "utf8")
       )
     : null;
+const scopeByGroup = {
+  australian:
+    "Actual guided preparation, practice preferences, practitioner-review components and shared draft guards in an isolated memory router on4280. Fictional intercepted HTTP outcomes and displayed-source readiness; no authentication, provider inference, actual Word/PDF rendering, immutable storage bytes, server authorization, legal correctness or deployment proof. Covers errors, denied refresh, stale rejection, source revision identity, pending protection, deliberate keep/discard and mobile containment. Guided callback produces a fixture draft only, not a live assistant dispatch. Relevant source/script hashes are not a complete runtime attestation.",
+  feedback:
+    "Current production components in one isolated fictional browser fixture on port 4280. Exercises associated input guidance, pressed state without layout shift, persistent success after confirmed intercepted responses, failure retention, navigation/dismissal focus, autosave status, reduced motion and mobile containment, alongside the nine-issue and authoring regressions. Fictional identities and API outcomes; no real authentication, credential changes, providers, server write authorization, legal quality, participant study or deployment proof. Source and script hashes identify relevant files, not the complete runtime.",
+  "ux-nine":
+    "Current production components for Clients, Matters, Documents, Reviews, Workflows, Library and Settings in one isolated fictional browser fixture on port 4280. Native browser history, keyboard/focus, pending/error/denied states, draft retention, explicit save retry and serialized autosave are exercised. Fictional identity/data and intercepted mutation outcomes; no real authentication, credentials, provider inference, authorization, deletion, legal quality, representative-user study or deployment proof. Native unload is suppressed only for explicit fixture resets. Source hashes identify relevant files, not a complete transitive runtime attestation.",
+  "app-wide":
+    "Production clients, matters, documents, workflows and Library routes in an isolated read-only browser fixture. Fictional identity and data; remote requests and mutations are blocked. Covers search/return, filter changes, checkbox selection, editor shortcut preservation, mobile sheet/focus, pagination bounds and current desktop/mobile captures. No production authentication, providers, legal quality, mutation authorization or deployment claim. Relevant source hashes are not a complete runtime attestation.",
+  access:
+    "Current settings, shell, authentication components and real Better Auth browser client in an isolated memory router. Fictional session resolution and intercepted API/challenge outcomes; unhandled local API paths return 599 and remote requests are blocked. No real authentication, mail delivery, credential operations, hardware passkey, challenge verification or server authorization proof. Native unload is suppressed only during explicit fixture scenario resets; client exit guards are real. Hashes identify relevant sources, not a complete transitive runtime.",
+  assistant:
+    "Production assistant and saved-conversation components in an isolated client router with fictional identity, metadata, extraction events and streamed responses. Actual provider calls are blocked. No credential operations, authentication, legal quality, server cancellation/usage settlement or production proof. Native unload prompts are suppressed only for explicit fixture resets; production client route guards are exercised. Source hashes identify relevant files, not a complete runtime bundle.",
+  "template-library":
+    "Current production template UI/Hono/core with real loopback Postgres, original fictional DOCX files and a tenant-scoped disk object adapter. Injected loopback personas, not production authentication, remote object storage, deployment or a legal-user study. Hashes identify relevant files, not the complete transitive runtime.",
+};
 const scope =
-  group === "feedback" || group === "feedback-recovery"
-    ? "Current production components in one isolated fictional browser fixture on port 4280. Exercises associated input guidance, pressed state without layout shift, persistent success after confirmed intercepted responses, failure retention, navigation/dismissal focus, autosave status, reduced motion and mobile containment, alongside the nine-issue and authoring regressions. Fictional identities and API outcomes; no real authentication, credential changes, providers, server write authorization, legal quality, participant study or deployment proof. Source and script hashes identify relevant files, not the complete runtime."
-    : group === "ux-nine"
-      ? "Current production components for Clients, Matters, Documents, Reviews, Workflows, Library and Settings in one isolated fictional browser fixture on port 4280. Native browser history, keyboard/focus, pending/error/denied states, draft retention, explicit save retry and serialized autosave are exercised. Fictional identity/data and intercepted mutation outcomes; no real authentication, credentials, provider inference, authorization, deletion, legal quality, representative-user study or deployment proof. Native unload is suppressed only for explicit fixture resets. Source hashes identify relevant files, not a complete transitive runtime attestation."
-      : group === "app-wide"
-        ? "Production clients, matters, documents, workflows and Library routes in an isolated read-only browser fixture. Fictional identity and data; remote requests and mutations are blocked. Covers search/return, filter changes, checkbox selection, editor shortcut preservation, mobile sheet/focus, pagination bounds and current desktop/mobile captures. No production authentication, providers, legal quality, mutation authorization or deployment claim. Relevant source hashes are not a complete runtime attestation."
-        : group === "access"
-          ? "Current settings, shell, authentication components and real Better Auth browser client in an isolated memory router. Fictional session resolution and intercepted API/challenge outcomes; unhandled local API paths return 599 and remote requests are blocked. No real authentication, mail delivery, credential operations, hardware passkey, challenge verification or server authorization proof. Native unload is suppressed only during explicit fixture scenario resets; client exit guards are real. Hashes identify relevant sources, not a complete transitive runtime."
-          : group === "assistant"
-            ? "Production assistant and saved-conversation components in an isolated client router with fictional identity, metadata, extraction events and streamed responses. Actual provider calls are blocked. No credential operations, authentication, legal quality, server cancellation/usage settlement or production proof. Native unload prompts are suppressed only for explicit fixture resets; production client route guards are exercised. Source hashes identify relevant files, not a complete runtime bundle."
-            : group === "template-library"
-              ? "Current production template UI/Hono/core with real loopback Postgres, original fictional DOCX files and a tenant-scoped disk object adapter. Injected loopback personas, not production authentication, remote object storage, deployment or a legal-user study. Hashes identify relevant files, not the complete transitive runtime."
-              : "Local production-component UI fixture with fictional API data. No live authentication, provider inference, template lifecycle, real Word transformation or production release proof. Native unload event prevention was signaled; no cross-browser native-prompt claim. Source hashes identify relevant modules, not a complete transitive bundle attestation. Screenshots capture settled states with finite animations disabled. The review-output download uses fixed fictional source bytes.";
+  scopeByGroup[group === "feedback-recovery" ? "feedback" : group] ??
+  "Local production-component UI fixture with fictional API data. No live authentication, provider inference, template lifecycle, real Word transformation or production release proof. Native unload event prevention was signaled; no cross-browser native-prompt claim. Source hashes identify relevant modules, not a complete transitive bundle attestation. Screenshots capture settled states with finite animations disabled. The review-output download uses fixed fictional source bytes.";
 const digest = async (path) =>
   createHash("sha256")
     .update(await readFile(resolve(root, path)))

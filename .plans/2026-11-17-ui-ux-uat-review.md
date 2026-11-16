@@ -1,5 +1,51 @@
 # Independent UI and task UAT - 17 November 2026
 
+## Final integrated checkpoint - observed passing
+
+This section supersedes the original-checkout and interrupted checkpoints below. **Observed passing:** all seven assigned integrated browser groups, 28 functions, with no new consequential product defect observed. This is local rendered/task acceptance within the stated fixtures. Live authentication, configured providers, native Word transformation, representative-practitioner usability and production deployment remain **Unverified** by this review.
+
+### Source, environment and ownership
+
+- Checkout `/Users/applecakes/.codex/worktrees/gitmatter-consolidation`, branch `dev`, HEAD `af8494d6f2a63a0e58817f28a48b43b17c199240`; starting branch was five commits ahead of origin. Index was empty. Root's expected pending `ResponseNotice.tsx` and `PractitionerReviewPanel.tsx` patches and existing report/test/receipt work were preserved. HEAD alone does not identify that working tree: the receipts bind the relevant actual files and scripts.
+- Product source and installed dependencies remained frozen. This reviewer changed only the Australian acceptance adapter/fixture, generated receipts, screenshots and this existing report. No index, Git delivery, main app or production mutation was performed.
+- Used the current `ui-craft.md`, its relevant detailed-reference guidance, current design/philosophy and affected workflow briefs. Meaningful source/permission/form/status labels were preserved; no aesthetic defect quota or redesign was applied.
+- Fixtures ran serially on sole `http://127.0.0.1:4280`. App, MVP, Australian, assistant and account fixtures use fictional identities and intercepted outcomes. Template integration used the approved loopback Postgres URL and tenant-scoped disk object adapter, API `4295`, run `136e207b`, tenant `92b2dfa1-2b54-4ee4-ae0d-4898b4656351`. No live provider, real credentials, email or external account action was used.
+- Desktop 1440 x 1000 and mobile 390 x 844. Light, rendered dark tokens, normal and reduced motion were checked in the affected captures/journeys. Dark captures explicitly applied the existing dark class/tokens; they do not prove the settings theme-switch journey. The main task scripts provide keyboard, pending, error, denial, stale, partial, Keep/Discard and resumed coverage where applicable.
+
+### Executed acceptance and final hash verification
+
+Each group returned its required structured results; shell exit alone was not treated as success. The recorder checked relevant source hashes before and after execution. A final independent comparison of every receipt's source and script hashes found zero drift. Verification record: `.scratch/final-integrated-uat-verification.json`. Receipt dates are 16 November UTC, the same run day as 17 November in Australia/Sydney.
+
+| Group               | Functions | Relevant sources | Observed result                                                                                                                                                                         |
+| ------------------- | --------: | ---------------: | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `feedback-recovery` |         5 |              142 | Client/search recovery, named selector keyboard use, sharing, origin receipts, ordered workflow saves, per-file uncertainty and deliberate retries, collection/mobile regressions pass. |
+| `first-review`      |         6 |               35 | Prerequisites, explicit preparation without execution, retained instructions, pending save, dirty close/route, transient and denied refresh pass.                                       |
+| `review-and-output` |         8 |               41 | Detail recovery, matrix/inspector/source return, revision-keyed rationale, partial/stale/denied states, proposal decisions and source-bound output gates pass.                          |
+| `australian`        |         1 |               36 | Guided preparation, practice settings, practitioner state-token/revision checks, full earlier source IDs, null labels and 390px draft recovery pass.                                    |
+| `assistant`         |         2 |               43 | Model/file/IME gates, zero-send preparation, ordered workflow, stopped/error/truncated queues, retained context, saved/matter history and mobile source panes pass.                     |
+| `access`            |         4 |               53 | Settings navigation/drafts, pending and failed saves, metadata recovery, authentication feedback and deliberate sign-out guards pass.                                                   |
+| `template-library`  |         2 |               45 | Real local UI/Hono/core lifecycle, approved original-byte equality, stale/denied/pending/dirty review, both successful permission-narrowing cases and reader download boundaries pass.  |
+
+Current receipts are `design/evidence/{feedback-recovery,first-review,review-and-output,australian,assistant,access,template-library}.json`. Raw logs are under `output/playwright/design-workflows/replay-GROUP/`.
+
+### Specific findings retested
+
+- **Observed passing - earlier source identity P2:** earlier scopes display the complete stored UUID and 40-character commit ID. Missing values display `No version ID` and `No commit ID`. At 390px the IDs wrap without page overflow; the current scope retains visible keyboard focus and survives route Keep. Fresh proof: `output/playwright/design-workflows/au/review-earlier-identities-mobile.png`. The first extended attempt queried the null label inside a newly closed disclosure; reopening that disclosure after the version change corrected the adapter. No product correction was needed for that interruption.
+- **Observed passing - assistant stop language:** the current notice says `Streaming stopped` and explains that processing/provider usage may continue, directing the person to saved conversation/history before sending again. The workflow remains paused at two dispatched fictional requests and does not send step three. The scripted partial-answer case retains its output. Independent screenshots show the stopped notice and paused workflow; its early Stop occurred before a partial chunk, so those screenshots are not the partial-retention proof.
+- **Observed passing - client selector P2:** the integrated recovery replay confirms separately named Type and Status comboboxes and actual keyboard selection, with retained draft/denial recovery. The original unnamed-selector finding is closed for this source.
+- **Observed passing - successful template redaction:** both membership removal from a DOCX review and ownership transfer of a text template return HTTP 200 reader DTOs while removing frozen private source, guidance, history/team/actions and acknowledgement. The user's own note remains separately copyable. Approved source is unchanged; the DOCX bytes remain equal; direct private downloads return 404. No local access recovery invents an approval.
+- **Reused unchanged evidence - explicit 422 upload rejection:** the earlier independently executed 422 case and its implementation remain unchanged. Its deliberate v2/v3 retries and no repeated confirmed v1 result are reused at their recorded original fixture boundary, as authorized; they are not relabelled as a newly executed integrated request. The integrated five-function recovery group supplies fresh uncertainty/retry and collection evidence.
+
+### Rendered review and limits
+
+Fresh captures under `output/playwright/final-integrated/` show Clients at light/dark desktop, keyboard-opened dark mobile navigation, and the assistant stopped notice at desktop/dark mobile. The mobile sidebar closes with Escape and returns focus once the sheet has settled. Current scripted mobile finding/output captures preserve readable source and decision context. Operational tables, restrained surfaces, visible source/version distinctions and quiet pending/saved feedback remain appropriate for this legal workbench. No additional label removal or visual polish was justified by the affected tasks.
+
+Normal and reduced-motion feedback remain understandable; no interaction relies on motion alone. Existing press/status feedback is useful. A shake is not appropriate for the exercised server failures. These checks are not a complete WCAG audit or a gesture/device certification. Review fixtures use fixed source bytes and incomplete synthetic storage/document envelopes, so they cannot establish actual private Word rendering, immutable remote storage, live cancellation/usage settlement or legal quality. Console script-tag/not-found/native-button warnings were visible in isolated fixture runs; no associated failure of these tested tasks was observed, and they are not claimed as production findings.
+
+The Australian adapter now represents nullable source IDs, wraps its fictional long-ID source header and explicitly checks full/null earlier identities plus draft recovery. Its TypeScript project and script syntax check pass. Final combined readability review and repository gates belong to root; no cleanup workflow or Git delivery was invoked by this reviewer.
+
+All reviewer-owned browsers, fixture servers and template API were closed. Ports 4280 and 4295 were confirmed unbound at handoff. App-only public entry/legal smoke is coordinator-owned and **Unverified by this reviewer**. Marketing/media acceptance is **Not applicable** because those surfaces were removed by explicit scope. Root owns restoring the intended main app and final delivery.
+
 ## Current retest - original checkout
 
 Status: **Observed passing for the assigned feedback/recovery and template integration journeys at the original checkout checkpoint. Final integrated acceptance remains Unverified.** The earlier P2 unnamed Type/Status finding is closed by rendered keyboard retest. No new consequential product defect was observed in these journeys. This result supersedes the older interrupted checkpoint while retaining its original evidence and failures below.

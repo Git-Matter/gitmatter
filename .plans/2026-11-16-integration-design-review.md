@@ -59,3 +59,31 @@ exit. Verify practitioner scope retention on version changes, source/preview fai
 pending record requests, and a fresh explicit confirmation for the current source. Re-run the
 current first-review, assistant, Word preview and settings flows after the root query-state patch
 lands. Then run combined repository gates and authenticated release acceptance.
+
+## Current AU component replay - 17 November local time
+
+The new `australian` recorder group passes against integration product sources from `04642c1`.
+`design/evidence/australian.json` binds the exact production-component, fixture and script hashes;
+they were rechecked against current files after the run. Its 26 HTTP calls are fictional and
+fully intercepted, with zero unhandled calls and zero inference requests. The guided callback only
+produces a fixture draft; full live-assistant dispatch is outside this test.
+
+The browser checks new guided work, failed preparation, edited prompt retention after source-scope
+changes, desktop and mobile Keep/Discard and fresh reopen. Practice preferences survive section
+changes, changed server data, transient refresh failure, rejected saves and a pending-save exit;
+denial removes the form. Practitioner scopes survive a private-panel unmount/recovery, remain
+separate across source revisions, reject blank displayed content, require fresh confirmation after
+a stale rejection, block discard during pending record creation, and send the exact state token
+without leaking the local draft key. Confirmed output clears only its current scope; denial removes
+the private panel. Normal mobile guided and practitioner surfaces remain within the viewport.
+
+Three unmodified desktop/mobile captures and their hashes are listed in
+`design/evidence/australian-screenshots.json`. Finite animations were disabled for settled captures.
+They show fictional component state, not actual Word/PDF rendering or immutable stored bytes.
+Core source/hash authorization tests and authenticated release acceptance remain separate.
+
+Harness corrections were limited to URL parsing in the CLI sandbox, inherited fieldset-disabled
+checks, waiting for React state, wrapping the fixture's raw JSON output and disabling finite capture
+animations. No production defect was inferred from those test-harness failures. Standalone fixture
+TypeScript and whitespace checks pass. Both AU browsers were closed, fixture process exit was
+observed, and port4280 was confirmed free afterward; no main app was started by this agent.
