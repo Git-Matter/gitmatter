@@ -1,5 +1,5 @@
 import { FieldDescription } from "@/components/ui/field";
-import { notifySuccess } from "@/lib/feedback";
+import { captureActionOrigin, notifySuccess } from "@/lib/feedback";
 import { FormFeedback } from "@/components/FormFeedback";
 import { useEffect, useState } from "react";
 import { useRouter } from "@tanstack/react-router";
@@ -55,20 +55,22 @@ function AccountCard({ session }: { session: Session }) {
   const initials = initialsFor(session.user.name ?? session.user.email);
 
   const saveProfile = useMutation({
+    onMutate: () => captureActionOrigin(),
     mutationFn: async () => {
       const { error } = await updateUser({ name: name.trim() });
       if (error) throw new Error(error.message ?? "Failed to update profile");
     },
-    onSuccess: async () => {
+    onSuccess: async (_data, _variables, origin) => {
       setSavedName(name.trim());
       setName(name.trim());
       await router.invalidate();
-      notifySuccess("Profile updated");
+      notifySuccess("Profile updated", origin);
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
   });
 
   const savePassword = useMutation({
+    onMutate: () => captureActionOrigin(),
     mutationFn: async () => {
       const { error } = await changePassword({
         currentPassword: current,
@@ -77,10 +79,10 @@ function AccountCard({ session }: { session: Session }) {
       });
       if (error) throw new Error(error.message ?? "Failed to change password");
     },
-    onSuccess: () => {
+    onSuccess: (_data, _variables, origin) => {
       setCurrent("");
       setNext("");
-      notifySuccess("Password changed");
+      notifySuccess("Password changed", origin);
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
   });
@@ -199,40 +201,43 @@ function PasskeysCard() {
   const [editingName, setEditingName] = useState("");
 
   const add = useMutation({
+    onMutate: () => captureActionOrigin(),
     mutationFn: async () => {
       const { error } = await authClient.passkey.addPasskey({ name: name.trim() || undefined });
       if (error) throw new Error(error.message ?? "Failed to add passkey");
     },
-    onSuccess: async () => {
+    onSuccess: async (_data, _variables, origin) => {
       setName("");
       await passkeys.refetch();
-      notifySuccess("Passkey added");
+      notifySuccess("Passkey added", origin);
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
   });
 
   const rename = useMutation({
+    onMutate: () => captureActionOrigin(),
     mutationFn: async ({ id, nextName }: { id: string; nextName: string }) => {
       const { error } = await authClient.passkey.updatePasskey({ id, name: nextName });
       if (error) throw new Error(error.message ?? "Failed to rename passkey");
     },
-    onSuccess: async () => {
+    onSuccess: async (_data, _variables, origin) => {
       setEditingId(null);
       setEditingName("");
       await passkeys.refetch();
-      notifySuccess("Passkey renamed");
+      notifySuccess("Passkey renamed", origin);
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
   });
 
   const remove = useMutation({
+    onMutate: () => captureActionOrigin(),
     mutationFn: async (id: string) => {
       const { error } = await authClient.passkey.deletePasskey({ id });
       if (error) throw new Error(error.message ?? "Failed to remove passkey");
     },
-    onSuccess: async () => {
+    onSuccess: async (_data, _variables, origin) => {
       await passkeys.refetch();
-      notifySuccess("Passkey removed");
+      notifySuccess("Passkey removed", origin);
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
   });
@@ -414,15 +419,16 @@ function DangerZoneCard() {
   const [password, setPassword] = useState("");
 
   const remove = useMutation({
+    onMutate: () => captureActionOrigin(),
     mutationFn: async () => {
       const { error } = await deleteUser({ password, callbackURL: "/signup" });
       if (error) throw new Error(error.message ?? "Failed to delete account");
     },
-    onSuccess: async () => {
+    onSuccess: async (_data, _variables, origin) => {
       const { data: session } = await authClient.getSession();
       if (session) {
         setOpen(false);
-        notifySuccess("Check your email to confirm account deletion.");
+        notifySuccess("Check your email to confirm account deletion.", origin);
         return;
       }
       window.location.href = "/signup";

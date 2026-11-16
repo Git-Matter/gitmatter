@@ -1,4 +1,4 @@
-import { notifySuccess } from "@/lib/feedback";
+import { captureActionOrigin, notifySuccess } from "@/lib/feedback";
 import { FormFeedback } from "@/components/FormFeedback";
 import { useState } from "react";
 import { SUBSCRIPTION_WORKFLOW } from "@workspace/registry";
@@ -86,8 +86,9 @@ export function ConnectAgent() {
           className="self-start"
           onClick={async () => {
             try {
+              const actionOrigin = captureActionOrigin();
               await navigator.clipboard.writeText(mcpUrl);
-              notifySuccess("Connection address copied.");
+              notifySuccess("Connection address copied.", actionOrigin);
             } catch {
               toast.error("Couldn't copy. Select the address above and copy it manually.");
             }

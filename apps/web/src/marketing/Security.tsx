@@ -4,20 +4,20 @@ import { LegalPage } from "./LegalPage";
 // Cloud-only marketing page summarizing gitmatter's security posture.
 export default function Security() {
   return (
-    <LegalPage title="Security" lastUpdated="November 16, 2026">
+    <LegalPage title="Security" lastUpdated="November 17, 2026">
       <p>
         Security is the core of gitmatter: the product exists to make every change to legal work
-        attributable and reviewable. This page summarizes our current posture for the hosted
-        service; self-hosted deployments inherit these controls but their operational security
-        depends on how you run them.
+        attributable and reviewable. This page describes application controls and the deployment
+        configuration to verify. Hosting, operator access, backups and connected services need their
+        own operational checks.
       </p>
 
       <h2>Audit spine</h2>
       <p>
-        Every change to a client, matter, review, document, or workflow — by a person in the UI or
-        by an AI agent — is recorded as a commit with author, message, field-level diff, and blame,
-        in one history. Mutations never bypass the commit path, so any action can be traced to the
-        member or agent that made it.
+        Legal content mutations through gitmatter's shared engine record an author, message and
+        field-level diff in an artifact history. Human decisions retain the originating proposal and
+        agent attribution. Permissions and matter approval policies govern which changes can be
+        applied.
       </p>
 
       <h2>Security event logging</h2>
@@ -30,18 +30,28 @@ export default function Security() {
       <h2>Authentication and sessions</h2>
       <p>
         Accounts use email and password, with credentials stored using a strong one-way hash and
-        sessions managed by our authentication layer. You can enable two-factor authentication with
-        an authenticator app and retain backup codes for recovery. Device passkeys can also be
-        managed in Settings. Single sign-on is not currently available.
+        sessions managed by our authentication layer. We recommend a unique, strong password for
+        your account. You can enable two-factor authentication with an authenticator app in Settings
+        and retain backup codes for recovery. Single sign-on is not currently available.
       </p>
 
       <h2>Secrets and credentials</h2>
       <p>
         Bring-your-own-key provider credentials and external-connection secrets are encrypted at
-        rest with AES-256-GCM. Access tokens are stored hashed, never in plaintext. Provider keys
-        are never logged. API flags do not establish an account-level zero-retention agreement;
-        provider terms, settings, and any additional agreement must be checked for the actual
-        account.
+        rest with AES-256-GCM. Stored MCP bearer tokens use hashes. The provider-key settings API
+        returns configuration status, not saved key values. Built-in AI uses a saved provider key
+        first, then a server key if configured.
+      </p>
+      <p>
+        OpenAI requests disable response application-state storage. OpenRouter requests filter
+        endpoints using its data-collection policy; they do not send an explicit zero-retention
+        flag. These controls do not establish account-level zero retention. Anthropic and Gemini
+        handling also depends on the service, model, account controls and agreement. gitmatter does
+        not verify provider zero-retention eligibility or Gemini paid-service eligibility. See the{" "}
+        <a href={`${SITE.docs}/admin/ai-data-handling`} className="text-foreground underline">
+          AI data-handling guide
+        </a>{" "}
+        for the actual request controls and provider conditions.
       </p>
 
       <h2>Access and tenant isolation</h2>
@@ -54,47 +64,46 @@ export default function Security() {
 
       <h2>Operator access</h2>
       <p>
-        Access to production systems is limited to personnel who need it to operate the Service, and
-        we do not access tenant content except as necessary to provide, secure, or troubleshoot the
-        Service, or as required by law.
+        Operator permissions and support access depend on the deployment and its operating
+        procedures. Confirm who can access infrastructure and tenant content, and how that access is
+        authorized and reviewed, with the deployment operator.
       </p>
 
       <h2>Data in transit and at rest</h2>
       <p>
-        Traffic to the hosted service is served over TLS. Documents are stored in S3-compatible
-        object storage; account, matter, and audit data live in the database. Deleted documents are
-        purged after a soft-delete window, and revoked tokens and aged audit logs are purged on a
-        schedule.
+        Documents use S3-compatible object storage; account, matter and audit data live in the
+        database. TLS termination and storage encryption beyond the application's encrypted
+        credentials depend on the deployment. Verify those controls for the environment you use.
+      </p>
+      <p>
+        Eligible retention cleanup runs at process startup; document deletion also triggers
+        opportunistic cleanup. Cleanup is best effort, so eligibility is not a guaranteed deletion
+        deadline or proof that every stored copy was removed. Shared artifact history, chat
+        retention and backups have separate rules.
       </p>
 
       <h2>Backups and resilience</h2>
       <p>
-        The database is backed up on a regular schedule to support recovery from failures. Backups
-        inherit the same access controls as production data. gitmatter does not currently offer a
-        formal uptime or recovery-time commitment.
+        The repository includes database backup and restore tooling. Backup schedules, storage
+        locations, retention, access controls and restore testing depend on the deployment. Verify
+        those arrangements with its operator. gitmatter does not currently offer a formal uptime or
+        recovery-time commitment.
       </p>
 
       <h2>Subprocessors and hosting</h2>
       <p>
         The hosted service runs on third-party infrastructure, object storage, authentication,
-        email, error monitoring, and AI model providers. Error reports are scrubbed of document
-        content, keys, request bodies, and credentials before they leave our servers and are
-        processed in the EU. Document and prompt content is sent only to the AI provider you select
-        (Anthropic, Google, OpenAI, or OpenRouter), under your own key where configured. gitmatter
-        does not train models on your data. A current list of subprocessors is available on request.
+        email, error monitoring and AI model providers. The Sentry request filter removes captured
+        request bodies and cookies, and redacts selected authentication headers. It does not
+        comprehensively sanitize free-form exception messages or every telemetry field. Reporting
+        destinations and processing regions depend on deployed services and configuration.
       </p>
       <p>
-        The document-storage region is a separate control from account/database data, extracted
-        text, backups, monitoring, and AI processing. Selecting Australian document storage does not
-        establish that all data remains in Australia. An external assistant connected over MCP is
-        subject to its own account terms and may receive document content in tool responses.
-      </p>
-      <p>
-        Review the{" "}
-        <a href={`${SITE.docs}/admin/ai-data-handling`} className="text-foreground underline">
-          AI data-handling guide
-        </a>{" "}
-        and retain the provider and deployment evidence needed for your practice's assessment.
+        Built-in AI sends prompts and document context to the selected model's service. OpenRouter
+        forwards requests to a model provider. Connected assistants receive the tool results they
+        request; research and external tools can involve other services. Review those services'
+        terms separately from gitmatter's storage and built-in API controls. gitmatter does not
+        train models on your data. A current list of subprocessors is available on request.
       </p>
 
       <h2>Vulnerability management</h2>

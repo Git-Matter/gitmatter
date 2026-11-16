@@ -1,65 +1,59 @@
 ---
 title: AI data handling
-description: Understand the account, processing route, and retention conditions before using client material.
+description: What reaches AI services, which request controls gitmatter sends, and what to verify with your provider.
 ---
 
-Matter documents may contain confidential, personal, sensitive, or privileged information. Before using AI with them, establish that the particular account, service terms, settings, and processing route are appropriate for your practice and that use of the material is authorised.
+Before sending confidential material, check which services receive it and which terms apply. This page covers gitmatter's built-in AI requests, connected assistants, and provider retention controls. gitmatter stores your documents and work history separately from any AI provider.
 
 <Callout type="warn">
-  Supplying an API key, paying for an AI subscription, or selecting an Australian document-storage
-  region does not establish zero retention or suitability for client information. Verify the current
-  provider terms and your account's configuration before relying on either.
+  Provider policies change. The provider summaries below were reviewed on November 16, 2026. Verify
+  your service, model, account controls, and agreement before relying on a retention claim.
 </Callout>
 
-## Two ways to use AI
+## What gets sent to a provider
 
-### Connect your own assistant
+Built-in chat and tabular review send prompts and document context to the service serving the selected model. OpenRouter is an intermediary that forwards requests to a model provider. Research and external tools can send requests to other services, each with its own data policy.
 
-An external assistant such as ChatGPT or Claude connects to gitmatter over MCP and calls the tools your account can access. The assistant may receive document content in tool responses. That assistant's own account terms, conversation history, retention settings, connected tools, and processing locations apply separately from gitmatter.
+When you connect ChatGPT, Claude, or another external assistant, it receives the gitmatter tool results it requests. Its service terms and settings govern that content. A provider API agreement for gitmatter's built-in AI does not establish the connected assistant's retention policy.
 
-gitmatter records the actions performed through its tools. It does not automatically hold a complete transcript of a conversation conducted in an external assistant. A paid consumer subscription is not evidence of an enterprise confidentiality or zero-retention agreement.
+## Whose key is used
 
-### Use gitmatter's built-in features
+A provider key authorizes requests under an account with the AI service. gitmatter uses your saved key first, then a server-wide key if configured. The model catalog reports the active source as `user` or `env`. If a run has no requested model, gitmatter selects an available configured model.
 
-The built-in assistant and review features send prompts and relevant document content to the provider serving the selected model. OpenRouter is an intermediary: requests through it also reach the model-serving provider. Research tools can send queries to their own sources, including CourtListener and IP Australia. Review the selected tools as well as the model before using client details in a request.
+Removing your saved key can make a server key active. Revoking a key at the provider blocks future requests authorized by that key; it does not cancel requests already in progress or disable other providers and connected assistants.
 
-For each AI provider, gitmatter uses your saved key first, then a configured deployment-level key if one exists. The model picker indicates the active source. A personal key identifies and bills your provider account; it does not itself establish a retention agreement.
+## Per-provider retention posture
 
-## Controls implemented in the provider adapters
+Training, response storage, abuse monitoring, and metadata retention are separate policies. Zero data retention (ZDR) is a provider arrangement with defined scope and exceptions. gitmatter does not verify your account's ZDR eligibility or agreement.
 
-| Route               | Application setting                          | What still needs checking                                                                                                                                                              |
-| ------------------- | -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| OpenAI              | `store: false`                               | This disables response storage requested through that parameter. It does not establish the absence of abuse-monitoring logs or an account-level zero-retention agreement.              |
-| OpenRouter          | `provider.dataCollection: "deny"`            | A routing preference is not evidence of the actual account agreement, endpoint eligibility, or every intermediary's handling. Verify the route and any stricter retention requirement. |
-| Anthropic or Google | Requests use the configured provider account | Check the applicable product, account tier, retention, training terms, and any additional agreement. Do not infer them from the key or model name.                                     |
+| Service               | What to verify                                                                                                                                                                                                                                                                                                                                                          |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **OpenAI API**        | API content is not used for training by default. Abuse-monitoring logs can be retained for up to 30 days. ZDR requires approval and has endpoint and feature limits. See [OpenAI data controls](https://developers.openai.com/api/docs/guides/your-data).                                                                                                               |
+| **Anthropic API**     | Standard API inputs and outputs are deleted within 30 days, subject to exceptions. ZDR depends on the agreement, model, and feature. See [commercial retention](https://privacy.claude.com/en/articles/7996866-how-long-do-you-store-my-organization-s-data) and [API retention eligibility](https://platform.claude.com/docs/en/manage-claude/api-and-data-retention). |
+| **Google Gemini API** | Paid-service terms exclude prompts and responses from product improvement but permit limited safety logging. Unpaid-service terms can permit content use and human review; regional exceptions apply. See [Gemini API terms](https://aistudio.google.com/docs/terms).                                                                                                   |
+| **OpenRouter**        | Review both OpenRouter's handling and the routed endpoint's policy. ZDR enforcement can allow Safety Retention endpoints depending on account and guardrail settings. See [routing controls](https://openrouter.ai/docs/guides/routing/provider-selection) and [ZDR scope and exceptions](https://openrouter.ai/docs/guides/features/zdr).                              |
 
-Provider policies and product availability change. This guide deliberately does not promise a retention duration for an account that gitmatter cannot verify. Consult the applicable provider's current documentation and contractual terms:
+## What gitmatter sends today
 
-- [OpenAI API data controls](https://platform.openai.com/docs/guides/your-data)
-- [Anthropic privacy documentation](https://privacy.claude.com/)
-- [Gemini API terms](https://ai.google.dev/gemini-api/terms)
-- [OpenRouter privacy policy](https://openrouter.ai/privacy)
+The adapters send these request controls:
 
-## Storage region and processing location are different
+- **OpenAI:** `store: false` disables response application-state storage for the request, subject to feature-specific rules. It does not disable abuse-monitoring retention or establish ZDR. The adapter requests encrypted reasoning for replay across tool turns.
+- **OpenRouter:** `provider.dataCollection: "deny"` filters endpoints under OpenRouter's data policy. The adapter does not send an explicit `zdr` flag or verify account and guardrail retention settings.
+- **Anthropic and Gemini:** the adapters do not send a ZDR control. Account agreements and service policies govern retention. The Gemini adapter uses the Gemini API with an API key; it does not configure Vertex AI.
 
-The hosted document-region choice routes document object storage. It does not locate the account database, extracted text, audit events, backups, email, error monitoring, AI requests, or an external assistant's conversations. Governing law is a separate matter setting.
+## Before sending confidential content
 
-Retain the application record and the relevant provider/deployment evidence when documenting a location requirement. See [privacy evidence](/admin/privacy-evidence). Do not describe an Australian document-storage choice as proof that all information is processed or retained only in Australia.
+Confirm the applicable account controls with your provider:
 
-## A practical setup check
-
-1. Choose the AI execution path and identify the actual account and provider route.
-2. Review current contractual terms, training use, retention, processing locations, and account permissions for the intended material.
-3. Check the selected document-storage region separately from the other systems involved.
-4. Start with the fictional sample. Verify source checking, output quality, and the Word handoff before deciding whether to use client material.
-5. Keep the evidence supporting your configuration decision and review it when the provider or account changes.
-
-Never send credentials or confidential material in a setup enquiry. Add provider credentials only through the application's designated settings. [Assisted setup](/admin/assisted-setup) explains the available paths.
+- **OpenAI and Anthropic:** verify any approved ZDR arrangement and the selected model and feature's eligibility. A saved key alone does not establish coverage.
+- **Gemini:** confirm the Cloud project's billing status and applicable data-use terms. gitmatter does not check paid-service eligibility or reject a key based on billing tier.
+- **OpenRouter:** review account and guardrail ZDR settings, including whether Safety Retention is allowed. Its `zdr: true` request option is not sent by gitmatter today. Provider definitions also have exceptions and caching rules; avoid promising that nothing is ever retained.
+- **Connected assistants and external tools:** verify their policies separately from the built-in API path.
 
 ## User controls
 
-- Select the model and available research sources in the assistant.
-- Add or remove provider keys in Settings → AI & Models.
-- Connect and manage an external agent through Settings.
-- Review document-storage evidence and available export/deletion controls in Settings → Data & Privacy.
-- Check the [data retention policy](/admin/data-retention) for data retained by gitmatter itself; provider retention is separate.
+- Pick the model (and therefore the provider) per chat message and per review run.
+- Add or remove provider keys in Settings &rarr; AI &amp; Models.
+- Removing a saved key can make a configured server key active; it is not a global AI off switch.
+- Organization admins can export selected client and matter fields, review grids, and a document metadata manifest in Settings &rarr; Data &amp; Privacy. This excludes document files and versions, chats, workflows, commit history, and security audit logs.
+- Account deletion does not establish complete removal of shared organization records, stored files, or backups. See [data retention](/admin/data-retention) for cleanup behavior.

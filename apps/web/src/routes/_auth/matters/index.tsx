@@ -1,4 +1,4 @@
-import { notifySuccess } from "@/lib/feedback";
+import { captureActionOrigin, notifySuccess } from "@/lib/feedback";
 import { useWorkspaceViewState } from "@/lib/hooks/state/useWorkspaceViewState";
 import { CollectionPanel, collectionBlocked } from "@/components/CollectionPanel";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
@@ -94,12 +94,13 @@ function Matters() {
   };
 
   const closeMutation = useMutation({
+    onMutate: () => captureActionOrigin(),
     mutationFn: (m: MatterListItem) =>
       api.updateMatter(m.matter.id, {
         status: m.matter.status === "closed" ? "open" : "closed",
       }),
-    onSuccess: (_, m) => {
-      notifySuccess(m.matter.status === "closed" ? "Matter reopened" : "Matter closed");
+    onSuccess: (_, m, origin) => {
+      notifySuccess(m.matter.status === "closed" ? "Matter reopened" : "Matter closed", origin);
       refreshMatters();
       void qc.invalidateQueries({ queryKey: ["matter", m.matter.id] });
     },

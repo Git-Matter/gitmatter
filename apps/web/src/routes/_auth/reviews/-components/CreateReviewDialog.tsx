@@ -1,4 +1,4 @@
-import { notifySuccess } from "@/lib/feedback";
+import { captureActionOrigin, notifySuccess } from "@/lib/feedback";
 import { FieldDescription } from "@/components/ui/field";
 import { useDraftExit } from "@/lib/hooks/useDraftExit";
 import { FormFeedback } from "@/components/FormFeedback";
@@ -106,9 +106,10 @@ export function CreateReviewDialog({
   }
 
   const createMutation = useMutation({
+    onMutate: () => captureActionOrigin(),
     mutationFn: (d: Parameters<typeof api.createReview>[0]) => api.createReview(d),
-    onSuccess: ({ id }) => {
-      notifySuccess("Review created");
+    onSuccess: ({ id }, _variables, origin) => {
+      notifySuccess("Review created", origin);
       exit.resolve();
       void qc.invalidateQueries({ queryKey: queryKeys.reviews });
       onOpenChange(false);

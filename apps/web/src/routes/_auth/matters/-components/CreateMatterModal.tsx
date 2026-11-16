@@ -1,5 +1,5 @@
 import { FieldDescription } from "@/components/ui/field";
-import { notifySuccess } from "@/lib/feedback";
+import { captureActionOrigin, notifySuccess } from "@/lib/feedback";
 import { useDraftExit } from "@/lib/hooks/useDraftExit";
 import { FormFeedback } from "@/components/FormFeedback";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
@@ -64,10 +64,11 @@ export function CreateMatterModal({
   }, [open]);
 
   const createMutation = useMutation({
+    onMutate: () => captureActionOrigin(),
     mutationFn: (d: Parameters<typeof api.createMatter>[0]) => api.createMatter(d),
-    onSuccess: (m) => {
+    onSuccess: (m, _variables, origin) => {
       exit.resolve();
-      notifySuccess("Matter created");
+      notifySuccess("Matter created", origin);
       onCreated(m.id);
       onOpenChange(false);
     },

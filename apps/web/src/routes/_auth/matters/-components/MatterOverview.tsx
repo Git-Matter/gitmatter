@@ -1,4 +1,4 @@
-import { notifySuccess } from "@/lib/feedback";
+import { captureActionOrigin, notifySuccess } from "@/lib/feedback";
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -67,18 +67,20 @@ export function MatterOverview({
     queryFn: () => api.getMatterUsage(matterId),
   });
   const retry = useMutation({
+    onMutate: () => captureActionOrigin(),
     mutationFn: (id: string) => api.retryJob(id),
-    onSuccess: () => {
+    onSuccess: (_data, _variables, origin) => {
       void qc.invalidateQueries({ queryKey: ["matter-jobs", matterId] });
-      notifySuccess("Job queued for retry");
+      notifySuccess("Job queued for retry", origin);
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : "Retry failed"),
   });
   const cancel = useMutation({
+    onMutate: () => captureActionOrigin(),
     mutationFn: (id: string) => api.cancelJob(id),
-    onSuccess: () => {
+    onSuccess: (_data, _variables, origin) => {
       void qc.invalidateQueries({ queryKey: ["matter-jobs", matterId] });
-      notifySuccess("Cancellation requested");
+      notifySuccess("Cancellation requested", origin);
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : "Cancellation failed"),
   });

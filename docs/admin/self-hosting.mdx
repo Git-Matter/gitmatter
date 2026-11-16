@@ -140,7 +140,7 @@ GEMINI_API_KEY=...
 OPENROUTER_API_KEY=...
 ```
 
-A user's own key always **overrides** the server key. Pick the model per chat message or per review run. Verify retention, training use, intermediaries, processing locations, and any additional agreement for the actual provider account; no provider name or default setting establishes zero retention by itself.
+A user's own key takes precedence over the server key. Removing that saved key can make the server fallback active. Pick the model per chat message or per review run. For OpenRouter, gitmatter sends `provider.dataCollection: "deny"`; it does not send an explicit `zdr` routing flag or verify the account's retention settings. Check the provider's current terms and account controls before sending confidential material.
 
 ### Semantic search embeddings
 

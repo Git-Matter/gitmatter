@@ -1,4 +1,4 @@
-import { notifySuccess } from "@/lib/feedback";
+import { captureActionOrigin, notifySuccess } from "@/lib/feedback";
 import { CollectionPanel } from "@/components/CollectionPanel";
 import { useWorkspaceViewState } from "@/lib/hooks/state/useWorkspaceViewState";
 import { MatterWorkSearch } from "../-components/MatterWorkSearch";
@@ -338,54 +338,60 @@ function DocumentsTab({ matterId, canEdit }: { matterId: string; canEdit: boolea
     qc.invalidateQueries({ queryKey: ["matter-docs", matterId, folderId] });
 
   const uploadDoc = useMutation({
+    onMutate: () => captureActionOrigin(),
     mutationFn: (file: File) => api.uploadDocument(file, undefined, matterId, folderId),
-    onSuccess: () => {
-      notifySuccess("Uploaded");
+    onSuccess: (_data, _variables, origin) => {
+      notifySuccess("Uploaded", origin);
       void invalidateDocs();
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Upload failed"),
   });
 
   const addFolderMut = useMutation({
+    onMutate: () => captureActionOrigin(),
     mutationFn: (name: string) => api.createFolder(matterId, name, folderId),
-    onSuccess: () => {
-      notifySuccess("Folder added");
+    onSuccess: (_data, _variables, origin) => {
+      notifySuccess("Folder added", origin);
       void qc.invalidateQueries({ queryKey: ["folders", matterId] });
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
   });
 
   const renameDoc = useMutation({
+    onMutate: () => captureActionOrigin(),
     mutationFn: (v: { id: string; title: string }) => api.renameDocument(v.id, v.title),
-    onSuccess: () => {
-      notifySuccess("Renamed");
+    onSuccess: (_data, _variables, origin) => {
+      notifySuccess("Renamed", origin);
       void invalidateDocs();
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Rename failed"),
   });
 
   const uploadVersion = useMutation({
+    onMutate: () => captureActionOrigin(),
     mutationFn: (v: { id: string; file: File }) => api.uploadDocumentVersion(v.id, v.file),
-    onSuccess: () => {
-      notifySuccess("New version uploaded — extracting…");
+    onSuccess: (_data, _variables, origin) => {
+      notifySuccess("New version uploaded — extracting…", origin);
       void invalidateDocs();
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Upload failed"),
   });
 
   const deleteDoc = useMutation({
+    onMutate: () => captureActionOrigin(),
     mutationFn: (id: string) => api.deleteDocument(id),
-    onSuccess: () => {
-      notifySuccess("Document deleted");
+    onSuccess: (_data, _variables, origin) => {
+      notifySuccess("Document deleted", origin);
       void invalidateDocs();
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Delete failed"),
   });
 
   const retryExtract = useMutation({
+    onMutate: () => captureActionOrigin(),
     mutationFn: (id: string) => api.retryDocument(id),
-    onSuccess: () => {
-      notifySuccess("Re-extracting…");
+    onSuccess: (_data, _variables, origin) => {
+      notifySuccess("Re-extracting…", origin);
       void invalidateDocs();
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Re-extract failed"),

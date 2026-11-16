@@ -1,4 +1,4 @@
-import { notifySuccess } from "@/lib/feedback";
+import { captureActionOrigin, notifySuccess } from "@/lib/feedback";
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { FileText } from "lucide-react";
@@ -74,6 +74,7 @@ export function TemplateEditor({
   const existingFile = existing?.draft?.file ?? existing?.current?.file;
   const hasOriginal = !!existingFile;
   const mutation = useMutation({
+    onMutate: () => captureActionOrigin(),
     mutationFn: async () => {
       if (file) {
         if (existing)
@@ -91,12 +92,13 @@ export function TemplateEditor({
         await api.createTemplate(content);
       }
     },
-    onSuccess: async () => {
+    onSuccess: async (_data, _variables, origin) => {
       await client.invalidateQueries({ queryKey: templateQueryKey });
       notifySuccess(
         existing
           ? "Working revision saved. The approved version is unchanged."
-          : "Template draft created. Choose a reviewer to publish it."
+          : "Template draft created. Choose a reviewer to publish it.",
+        origin
       );
       onClose();
     },

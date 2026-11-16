@@ -1,4 +1,4 @@
-import { notifySuccess } from "@/lib/feedback";
+import { captureActionOrigin, notifySuccess } from "@/lib/feedback";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { TemplateView } from "@workspace/contracts";
@@ -36,6 +36,7 @@ export function TemplateTeam({
   const [role, setRole] = useState<"editor" | "reviewer">("editor");
   const [ownerId, setOwnerId] = useState(item.ownerId ?? "");
   const mutation = useMutation({
+    onMutate: () => captureActionOrigin(),
     mutationFn: (input: {
       action: "set_member" | "remove_member" | "assign";
       userId?: string;
@@ -52,9 +53,9 @@ export function TemplateTeam({
               ? "Removed template team access"
               : `Granted template ${input.role} access`,
       }),
-    onSuccess: async () => {
+    onSuccess: async (_data, _variables, origin) => {
       await client.invalidateQueries({ queryKey: templateQueryKey });
-      notifySuccess("Template team updated");
+      notifySuccess("Template team updated", origin);
       onUpdated();
     },
     onError: async (error) => {

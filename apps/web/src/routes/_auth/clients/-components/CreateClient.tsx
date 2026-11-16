@@ -1,5 +1,5 @@
 import { FieldDescription } from "@/components/ui/field";
-import { notifySuccess } from "@/lib/feedback";
+import { captureActionOrigin, notifySuccess } from "@/lib/feedback";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useDraftExit } from "@/lib/hooks/useDraftExit";
@@ -22,12 +22,13 @@ export function CreateClient({
 }) {
   const qc = useQueryClient();
   const createMutation = useMutation({
+    onMutate: () => captureActionOrigin(),
     mutationFn: (d: { name: string; type: "organization" | "individual"; clientNumber?: string }) =>
       api.createClient(d),
-    onSuccess: () => {
+    onSuccess: (_data, _variables, origin) => {
       exit.resolve();
       void qc.invalidateQueries({ queryKey: queryKeys.clients });
-      notifySuccess("Client created");
+      notifySuccess("Client created", origin);
       onCreated();
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),

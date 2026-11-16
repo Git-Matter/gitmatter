@@ -1,4 +1,4 @@
-import { notifySuccess } from "@/lib/feedback";
+import { captureActionOrigin, notifySuccess } from "@/lib/feedback";
 import { FieldDescription } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
@@ -151,9 +151,10 @@ function useWorkflowTitleForm({ open, workflow, canEdit, onSave }: UseWorkflowTi
     setSaved(false);
     setError(null);
     try {
+      const actionOrigin = captureActionOrigin();
       await onSave({ title: trimmedTitle });
       setSaved(true);
-      notifySuccess("Workflow details updated");
+      notifySuccess("Workflow details updated", actionOrigin);
     } catch {
       setError("Could not update workflow details.");
     } finally {

@@ -1,5 +1,5 @@
-import { notifySuccess } from "@/lib/feedback";
-import { lazy, Suspense, useRef, useState } from "react";
+import { captureActionOrigin, notifySuccess } from "@/lib/feedback";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { z } from "zod";
 import type { TemplateView, templateActionSchema } from "@workspace/contracts";
@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/dialog";
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -39,6 +40,7 @@ import {
 } from "./template-ui";
 import { TemplateHistory } from "./TemplateHistory";
 import { TemplateTeam } from "./TemplateTeam";
+import { templateSnapshotAccess, type TemplateAccess } from "./template-access";
 import { DiscardChangesDialog, UnsavedNavigationGuard } from "@/components/UnsavedChangesGuard";
 
 const DocxView = lazy(async () => ({
@@ -56,6 +58,7 @@ const pendingLabels: Partial<Record<TemplateAction, string>> = {
 export function TemplateDetail({
   item,
   latestHead,
+  latestAccess,
   onClose,
   onEdit,
   returnFocus,
@@ -64,6 +67,7 @@ export function TemplateDetail({
 }: {
   item: TemplateView;
   latestHead?: string;
+  latestAccess?: TemplateAccess;
   onClose: () => void;
   onEdit: (snapshot: TemplateView) => void;
   returnFocus?: () => HTMLElement | null;
@@ -73,7 +77,13 @@ export function TemplateDetail({
   const client = useQueryClient();
   // Review the revision deliberately opened, never whatever a background refetch
   // happens to replace it with while the person is reading.
-  const [snapshot, setSnapshot] = useState(item);
+  const [openedSnapshot, setSnapshot] = useState(item);
+  const { privateViewRevoked, ...currentAccess } = templateSnapshotAccess(
+    openedSnapshot,
+    item,
+    latestAccess
+  );
+  const snapshot = { ...openedSnapshot, ...currentAccess };
   const [view, setView] = useState<"working" | "current">(initialView(item));
   const [reason, setReason] = useState("");
   const [reviewerId, setReviewerId] = useState(item.reviewerId ?? "");
@@ -85,7 +95,11 @@ export function TemplateDetail({
     item.headCommitId !== snapshot.headCommitId ||
     (latestHead !== undefined && latestHead !== snapshot.headCommitId);
   const latestReady = latestHead === undefined || item.headCommitId === latestHead;
-  const blocked = stale || !refreshCurrent;
+  const blocked = stale || !refreshCurrent || privateViewRevoked;
+  const authorityReduced =
+    (openedSnapshot.canReview && !currentAccess.canReview) ||
+    (openedSnapshot.canEdit && !currentAccess.canEdit) ||
+    (openedSnapshot.canManageMembers && !currentAccess.canManageMembers);
   const content =
     (view === "working" ? snapshot.draft : snapshot.current) ?? snapshot.current ?? snapshot.draft!;
   const viewingWorking = view === "working" && content.id === snapshot.draft?.id;
@@ -103,6 +117,8 @@ export function TemplateDetail({
   const mutation = useMutation({
     onMutate: () => {
       exitResolved.current = false;
+
+      return captureActionOrigin();
     },
     mutationFn: (action: TemplateAction) =>
       api.templateAction(snapshot.id, {
@@ -112,7 +128,7 @@ export function TemplateDetail({
         reviewerId,
         message: reason,
       }),
-    onSuccess: async (_, action) => {
+    onSuccess: async (_, action, origin) => {
       exitResolved.current = true;
       await client.invalidateQueries({ queryKey: templateQueryKey });
       notifySuccess(
@@ -124,7 +140,8 @@ export function TemplateDetail({
               ? "Sent to the selected reviewer."
               : action === "archive"
                 ? "Template withdrawn from the library."
-                : "Restored as a draft. Fresh approval is required."
+                : "Restored as a draft. Fresh approval is required.",
+        origin
       );
       onClose();
     },
@@ -143,12 +160,17 @@ export function TemplateDetail({
   const pendingLabel =
     (mutation.variables && pendingLabels[mutation.variables]) ?? "Recording template action…";
   const dirty = !!reason || reviewerId !== (snapshot.reviewerId ?? "") || reviewed;
+  useEffect(() => {
+    if (!currentAccess.canReview) setReviewed(false);
+  }, [currentAccess.canReview]);
   const reviewInputCopy = {
     title: "Keep your template review input?",
     description:
       "Your note, reviewer choice and confirmation are still here. Continue reviewing, or discard this input before leaving or loading another revision.",
   };
   function performIntent(intent: "close" | "reload" | "edit") {
+    if (intent === "reload" && (privateViewRevoked || !refreshCurrent || !latestReady)) return;
+    if (intent === "edit" && (blocked || !snapshot.canEdit)) return;
     if (intent === "reload") reloadRevision();
     else if (intent === "edit") onEdit(snapshot);
     else onClose();
@@ -167,7 +189,7 @@ export function TemplateDetail({
     setReviewerId(item.reviewerId ?? "");
     setReviewed(false);
   }
-  return (
+  const exitGuards = (
     <>
       <UnsavedNavigationGuard
         {...reviewInputCopy}
@@ -191,6 +213,27 @@ export function TemplateDetail({
           if (intent) performIntent(intent);
         }}
       />
+    </>
+  );
+  if (privateViewRevoked) {
+    return (
+      <>
+        {exitGuards}
+        <TemplateAccessChanged
+          item={!item.canManage && !item.draft ? item : undefined}
+          reason={reason}
+          busy={busy}
+          refreshCurrent={refreshCurrent}
+          onRetryRefresh={onRetryRefresh}
+          onClose={() => requestIntent("close")}
+          returnFocus={returnFocus}
+        />
+      </>
+    );
+  }
+  return (
+    <>
+      {exitGuards}
       <Dialog
         open
         onOpenChange={(open) => {
@@ -264,6 +307,18 @@ export function TemplateDetail({
                   </Button>
                 </AlertDescription>
               </Alert>
+            )}
+            {authorityReduced && (
+              <Alert>
+                <AlertTitle>Your template permissions changed</AlertTitle>
+                <AlertDescription>
+                  You can still inspect this revision, but previous editing, review, or team
+                  authority is no longer available.
+                </AlertDescription>
+              </Alert>
+            )}
+            {reason && !reviewInputAvailable && !submitInputAvailable && (
+              <RetainedTemplateNote reason={reason} />
             )}
             {snapshot.draft && snapshot.current && snapshot.draft.id !== snapshot.current.id && (
               <Tabs
@@ -568,7 +623,7 @@ export function TemplateDetail({
         </DialogContent>
       </Dialog>
       <Dialog
-        open={!!confirmAction}
+        open={!!confirmAction && snapshot.canManageMembers}
         onOpenChange={(open) => {
           if (!open && !busy) setConfirmAction(null);
         }}
@@ -592,9 +647,10 @@ export function TemplateDetail({
             </Button>
             <Button
               variant={confirmAction === "archive" ? "destructive" : "default"}
-              disabled={busy}
+              disabled={busy || blocked}
               onClick={() => {
-                if (confirmAction) mutation.mutate(confirmAction);
+                if (confirmAction && canApply && snapshot.canManageMembers)
+                  mutation.mutate(confirmAction);
               }}
             >
               {busy && <Spinner data-icon="inline-start" />}
@@ -604,6 +660,111 @@ export function TemplateDetail({
         </DialogContent>
       </Dialog>
     </>
+  );
+}
+
+function TemplateAccessChanged({
+  item,
+  reason,
+  busy,
+  refreshCurrent,
+  onRetryRefresh,
+  onClose,
+  returnFocus,
+}: {
+  item?: Pick<TemplateView, "id" | "current">;
+  reason: string;
+  busy: boolean;
+  refreshCurrent: boolean;
+  onRetryRefresh?: () => void;
+  onClose: () => void;
+  returnFocus?: () => HTMLElement | null;
+}) {
+  const current = item?.current;
+  return (
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
+      <DialogContent
+        finalFocus={returnFocus}
+        showCloseButton={false}
+        className="max-h-[92dvh] overflow-y-auto sm:max-w-3xl md:max-w-3xl lg:max-w-3xl"
+      >
+        <DialogHeader>
+          <DialogTitle>Your template access changed</DialogTitle>
+          <DialogDescription>
+            The private working revision and its team controls are no longer available. Your own
+            unsaved note is kept separately.
+          </DialogDescription>
+        </DialogHeader>
+        {reason && <RetainedTemplateNote reason={reason} />}
+        <p role="status" className="sr-only">
+          {busy ? "Waiting for the template action response…" : ""}
+        </p>
+        {current && item && refreshCurrent ? (
+          <>
+            <div className="flex flex-wrap items-center gap-3">
+              <Badge>Current approved v{current.version}</Badge>
+              <h2 className="text-lg font-medium break-words">{current.title}</h2>
+            </div>
+            {current.file ? (
+              <div
+                role="region"
+                aria-label="Approved Word document preview"
+                tabIndex={0}
+                className="max-h-[50dvh] overflow-auto rounded-xl bg-card p-4 outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+              >
+                <Suspense fallback={<Skeleton className="h-48 w-full" />}>
+                  <DocxView
+                    url={`/api/templates/${item.id}/download?revisionId=${encodeURIComponent(current.id)}`}
+                    versionToken={current.id}
+                    preserveLayout
+                  />
+                </Suspense>
+              </div>
+            ) : (
+              <article className="max-h-[50dvh] overflow-auto whitespace-pre-wrap">
+                {current.body}
+              </article>
+            )}
+            <div>
+              <TemplateDownload id={item.id} revisionId={current.id} version={current.version} />
+            </div>
+          </>
+        ) : (
+          <Alert>
+            <AlertTitle>Checking your approved access</AlertTitle>
+            <AlertDescription>
+              Private content has been removed. Refresh the template to load the approved version
+              you can still read.
+              <Button variant="outline" className="mt-3 w-fit" onClick={onRetryRefresh}>
+                Retry template refresh
+              </Button>
+            </AlertDescription>
+          </Alert>
+        )}
+        <div className="flex justify-end">
+          <Button variant="outline" disabled={busy} onClick={onClose}>
+            Close
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function RetainedTemplateNote({ reason }: { reason: string }) {
+  return (
+    <Field>
+      <FieldLabel htmlFor="template-retained-note">Your unsaved review note</FieldLabel>
+      <Textarea id="template-retained-note" readOnly value={reason} rows={3} />
+      <FieldDescription>
+        You can copy this note. It cannot be applied as a review decision.
+      </FieldDescription>
+    </Field>
   );
 }
 

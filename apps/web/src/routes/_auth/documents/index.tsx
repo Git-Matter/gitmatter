@@ -1,4 +1,6 @@
-import { notifySuccess } from "@/lib/feedback";
+import { cn } from "@/lib/util/utils";
+import { UploadFeedback } from "./-components/UploadFeedback";
+import { captureActionOrigin, notifySuccess } from "@/lib/feedback";
 import { useWorkspaceViewState } from "@/lib/hooks/state/useWorkspaceViewState";
 import { CollectionPanel, collectionBlocked } from "@/components/CollectionPanel";
 import { createFileRoute } from "@tanstack/react-router";
@@ -95,20 +97,33 @@ function Documents() {
     onError: (e) => toast.error(e instanceof Error ? e.message : "Retry failed"),
   });
   const deleteMutation = useMutation({
+    onMutate: () => captureActionOrigin(),
     mutationFn: (id: string) => api.deleteDocument(id),
-    onSuccess: () => {
-      notifySuccess("Document deleted");
+    onSuccess: (_data, _variables, origin) => {
+      notifySuccess("Document deleted", origin);
       void invalidateDocs();
       setConfirmDelete(null);
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Delete failed"),
   });
-  const { dragging, fileRef, onDragEnter, onDragLeave, onDragOver, onDrop, onPick, uploading } =
-    useDocumentUpload({
-      matterId,
-      onUploaded: () => void invalidateDocs(),
-      setPagination,
-    });
+  const {
+    dragging,
+    fileRef,
+    onDragEnter,
+    onDragLeave,
+    onDragOver,
+    onDrop,
+    onPick,
+    uploading,
+    results,
+    retryUpload,
+    dismissUploads,
+  } = useDocumentUpload({
+    matterId,
+    disabled: blocked,
+    onUploaded: () => void invalidateDocs(),
+    setPagination,
+  });
 
   const columns = useMemo(
     () =>
@@ -141,7 +156,7 @@ function Documents() {
 
   return (
     <div
-      className="relative flex min-h-0 flex-1 flex-col gap-stack"
+      className="relative flex min-h-0 flex-1 flex-col gap-stack overflow-y-auto"
       onDragEnter={onDragEnter}
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
@@ -181,6 +196,13 @@ function Documents() {
         }
       />
 
+      <UploadFeedback
+        results={results}
+        uploading={uploading}
+        blocked={blocked}
+        onRetry={retryUpload}
+        onDismiss={dismissUploads}
+      />
       {showTable && (
         <ToolbarTabs
           tabs={[
@@ -196,30 +218,34 @@ function Documents() {
         />
       )}
 
-      <CollectionPanel query={viewQuery} label="Documents">
-        {showTable && (
-          <>
-            <DataTable
-              rowActionColumn="title"
-              scrollKey={`documents:${JSON.stringify(pageParams)}`}
-              table={table}
-              onRowClick={(doc) => setSelectedId(doc.id)}
-              empty={query.trim() ? `No documents match "${query}".` : "No documents in this view."}
-            />
-            <TablePager table={table} />
-          </>
-        )}
-        {!showTable && (
-          <button
-            type="button"
-            onClick={() => fileRef.current?.click()}
-            className="flex flex-col items-center gap-2 rounded-lg border-2 border-dashed border-border py-section text-center text-sm text-muted-foreground hover:border-primary/50 hover:text-foreground"
-          >
-            <Upload className="size-5" />
-            Drop files here or click to upload. PDF or DOCX.
-          </button>
-        )}
-      </CollectionPanel>
+      <div className={cn("flex min-h-0 flex-1 flex-col", results.length > 0 && "min-h-64")}>
+        <CollectionPanel query={viewQuery} label="Documents">
+          {showTable && (
+            <>
+              <DataTable
+                rowActionColumn="title"
+                scrollKey={`documents:${JSON.stringify(pageParams)}`}
+                table={table}
+                onRowClick={(doc) => setSelectedId(doc.id)}
+                empty={
+                  query.trim() ? `No documents match "${query}".` : "No documents in this view."
+                }
+              />
+              <TablePager table={table} />
+            </>
+          )}
+          {!showTable && (
+            <button
+              type="button"
+              onClick={() => fileRef.current?.click()}
+              className="flex flex-col items-center gap-2 rounded-lg border-2 border-dashed border-border py-section text-center text-sm text-muted-foreground hover:border-primary/50 hover:text-foreground"
+            >
+              <Upload className="size-5" />
+              Drop files here or click to upload. PDF or DOCX.
+            </button>
+          )}
+        </CollectionPanel>
+      </div>
       <DocumentDrawer docId={selectedId} onClose={() => setSelectedId(null)} />
 
       {shareFor && (

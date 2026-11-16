@@ -224,7 +224,7 @@ export const FEATURES: Feature[] = [
         points: [
           {
             name: "Cited answers",
-            desc: "Every answer links to the exact passage it came from. Checking the AI takes one click, not a re-read of the document.",
+            desc: "Inspect available source quotations alongside an answer. Missing or invalid citations still need review; an answer is not evidence by itself.",
           },
           {
             name: "Matter scope",
@@ -242,7 +242,7 @@ export const FEATURES: Feature[] = [
         points: [
           {
             name: "Your own LLM key",
-            desc: "Claude, Gemini, OpenAI, or OpenRouter — keys stored encrypted. Retention and training use depend on the selected route, account terms, settings, and agreements.",
+            desc: "Connect Claude, Gemini, OpenAI, or OpenRouter with an encrypted key. Your saved key takes precedence over a configured server key. Data handling depends on the service, model, account controls and agreement.",
           },
           {
             name: "Recorded sessions",
@@ -314,7 +314,7 @@ export const FEATURES: Feature[] = [
     menuDesc: "First-pass markups from your own playbook.",
     clip: "/features/redline.mp4",
     intro:
-      "AI marks up the agreement against your firm's own positions. Every suggestion arrives as a tracked change with its reasoning — nothing applies itself.",
+      "Review the agreement against your firm's positions and propose tracked changes with a reason. Document edits remain pending until an eligible person accepts or rejects them.",
     sections: [
       {
         title: "Your playbook makes the first pass",
@@ -326,7 +326,7 @@ export const FEATURES: Feature[] = [
           },
           {
             name: "Suggestions, never silent edits",
-            desc: "Every proposed change lands as a tracked change awaiting review. Only a named lawyer's acceptance turns it into the document.",
+            desc: "Proposed document edits remain pending. Acceptance or rejection requires an eligible human reviewer under the current matter policy.",
           },
           {
             name: "Reasoning attached",
@@ -442,7 +442,7 @@ export const FEATURES: Feature[] = [
         points: [
           {
             name: "Update in one place",
-            desc: "Change a fallback once and every future markup and draft uses the new position.",
+            desc: "Publish an updated position for new work. Existing reviews retain their captured source and standard versions.",
           },
           {
             name: "Changes on the record",
@@ -461,7 +461,7 @@ export const FEATURES: Feature[] = [
   feature({
     tag: "Audit trail",
     title: "Every change is on the record.",
-    body: "Person or AI, every edit is a commit with an author, a message, and the exact before and after. Open any clause and see how it got there. Read it, share it, or undo it.",
+    body: "Legal content edits keep an author, a message, and the exact before and after. Open an artifact's history to inspect how it changed, and export a matter audit when needed.",
     menuDesc: "Every change on the record: who, what, why.",
     clip: "/features/audit.mp4",
     intro:
@@ -510,11 +510,11 @@ export const FEATURES: Feature[] = [
   feature({
     tag: "Bring your own agent",
     title: "ChatGPT and Claude plug straight in.",
-    body: "Connect the assistant your firm already pays for over MCP — no new chatbot, no second login. The agent drives gitmatter's tools; gitmatter records every step it takes.",
+    body: "Connect the assistant your firm already uses over MCP. Authorize access with your gitmatter account; content changes made through its tools keep their author and history.",
     menuDesc: "ChatGPT and Claude plug straight in.",
     clip: "/features/agent.mp4",
     intro:
-      "Connect ChatGPT or Claude to gitmatter as a connector, and the assistant your firm already uses can do real matter work — with every action on the record.",
+      "Connect ChatGPT or Claude to gitmatter as a connector. The assistant can use permitted tools, with content mutations recorded in the artifact history.",
     sections: [
       {
         title: "Connect your agent over MCP",
@@ -530,7 +530,7 @@ export const FEATURES: Feature[] = [
           },
           {
             name: "Acts as you, not as a superuser",
-            desc: "The agent gets the access of the member who connected it and can only see that member's matters.",
+            desc: "Current member permissions, selected matters and the token's role limit what the agent can read or change.",
           },
         ],
       },
@@ -543,8 +543,8 @@ export const FEATURES: Feature[] = [
             desc: "The agent can open matters, review stacks, propose redlines, and extract tables through gitmatter's tools.",
           },
           {
-            name: "Every action attributed",
-            desc: "Each tool call lands in the audit trail under the assistant's name, inside your session.",
+            name: "Attributed content changes",
+            desc: "Tool mutations record the authorizing member and agent attribution in the artifact history.",
           },
           {
             name: "Swap agents, keep the record",
@@ -587,23 +587,23 @@ export const SOLUTIONS: Solution[] = [
   solution({
     tag: "Audit trail",
     title: "Trace every change to its author.",
-    body: "Every change — by a person in the UI or by an AI agent — is a commit with an author, a message, a field-level diff, and blame, all in one history. Open any clause and see exactly how it got there. Built for client-data duties, eDiscovery, and supervision rules.",
+    body: "Legal content changes through the shared engine keep an author, a message, a field-level diff, and blame. Inspect artifact history and export a matter audit to support your team's review and recordkeeping.",
     who: "For general counsel, risk, and compliance who must show their work.",
     menuDesc: "Version control for legal documents.",
   }),
   solution({
     tag: "Bring your own agent",
     title: "Connect ChatGPT or Claude over MCP.",
-    body: "Plug the AI client your firm already uses into gitmatter as an MCP connector. The agent drives the tools; gitmatter does the work and records every action. No new chatbot to learn, no second login.",
+    body: "Connect the AI client your firm already uses over MCP and authorize it with your gitmatter account. The agent uses permitted tools; content changes retain their author and history.",
     who: "For firms already standardized on ChatGPT, Claude Desktop, or Claude web.",
     menuDesc: "Connect ChatGPT or Claude over MCP.",
   }),
   solution({
     tag: "Bring your own key",
-    title: "Your provider account, with handling you can assess.",
-    body: "Run gitmatter's built-in features with your selected AI-provider account. Keys are encrypted at rest. Assess the provider route, current terms, retention settings, and any additional agreement before using client material; an API key alone does not establish zero retention.",
+    title: "Use your firm's approved AI provider.",
+    body: "Run built-in AI with Claude, Gemini, OpenAI, or OpenRouter. Your encrypted saved key takes precedence over a configured server key. OpenAI requests disable response storage; OpenRouter requests filter data collection. Retention still depends on the selected service, model, account controls and agreement.",
     who: "For firms blocked on AI by confidentiality and data-privacy rules.",
-    menuDesc: "Your provider account, encrypted keys, clear processing boundaries.",
+    menuDesc: "Your own LLM key and provider account.",
   }),
 ];
 

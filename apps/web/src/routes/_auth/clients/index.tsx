@@ -1,4 +1,4 @@
-import { notifySuccess } from "@/lib/feedback";
+import { captureActionOrigin, notifySuccess } from "@/lib/feedback";
 import { useWorkspaceViewState } from "@/lib/hooks/state/useWorkspaceViewState";
 import { CollectionPanel, collectionBlocked } from "@/components/CollectionPanel";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
@@ -144,13 +144,15 @@ function Clients() {
   }
 
   const deleteMutation = useMutation({
+    onMutate: () => captureActionOrigin(),
     mutationFn: () => api.bulkDeleteClients(selection),
-    onSuccess: ({ deleted, skipped }) => {
+    onSuccess: ({ deleted, skipped }, _variables, origin) => {
       void qc.invalidateQueries({ queryKey: queryKeys.clients });
       notifySuccess(
         skipped > 0
           ? `Deleted ${deleted}. Skipped ${skipped} with matters.`
-          : `Deleted ${deleted} client${deleted === 1 ? "" : "s"}.`
+          : `Deleted ${deleted} client${deleted === 1 ? "" : "s"}.`,
+        origin
       );
       clearSelection();
       setConfirmDelete(false);

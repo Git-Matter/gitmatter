@@ -1,4 +1,4 @@
-import { notifySuccess } from "@/lib/feedback";
+import { captureActionOrigin, notifySuccess } from "@/lib/feedback";
 import { Checkbox } from "@/components/ui/checkbox";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { useRef, useState } from "react";
@@ -79,6 +79,7 @@ export function AgentActivity({ matterId, isOwner }: { matterId: string; isOwner
     void qc.invalidateQueries({ queryKey: ["workflows"] });
   };
   const decide = useMutation({
+    onMutate: () => captureActionOrigin(),
     mutationFn: async (decision: "approve" | "reject") => {
       if (!selected) throw new Error("Select a proposal first.");
       const key = JSON.stringify([
@@ -105,11 +106,12 @@ export function AgentActivity({ matterId, isOwner }: { matterId: string; isOwner
         body: JSON.stringify(input),
       });
     },
-    onSuccess: (result) => {
+    onSuccess: (result, _variables, origin) => {
       notifySuccess(
         result.outcome === "applied"
           ? "Proposal applied and recorded."
-          : "Proposal rejected and recorded."
+          : "Proposal rejected and recorded.",
+        origin
       );
       setConfirmDecision(undefined);
       setNote("");
@@ -121,6 +123,7 @@ export function AgentActivity({ matterId, isOwner }: { matterId: string; isOwner
     },
   });
   const changePolicy = useMutation({
+    onMutate: () => captureActionOrigin(),
     mutationFn: () =>
       request(`/api/matters/${matterId}/approval-policy`, {
         method: "PUT",
@@ -141,12 +144,12 @@ export function AgentActivity({ matterId, isOwner }: { matterId: string; isOwner
           reason,
         }),
       }),
-    onSuccess: () => {
+    onSuccess: (_data, _variables, origin) => {
       setPolicyOpen(false);
       setReason("");
       void qc.invalidateQueries({ queryKey: ["approval-policy", matterId] });
       refresh();
-      notifySuccess("Policy change recorded.");
+      notifySuccess("Policy change recorded.", origin);
     },
     onError: (error) => toast.error(error.message),
   });
@@ -172,6 +175,7 @@ export function AgentActivity({ matterId, isOwner }: { matterId: string; isOwner
       (item) => item.status === "pending" && item.mayDecide && !item.stale && !item.policyChanged
     );
   const decideBatch = useMutation({
+    onMutate: () => captureActionOrigin(),
     mutationFn: async (decision: "approve" | "reject") => {
       if (!batchCompatible)
         throw new Error(
@@ -203,12 +207,12 @@ export function AgentActivity({ matterId, isOwner }: { matterId: string; isOwner
         body: JSON.stringify({ decisions }),
       });
     },
-    onSuccess: () => {
+    onSuccess: (_data, _variables, origin) => {
       setBatchIds([]);
       setConfirmBatch(undefined);
       setBatchNote("");
       refresh();
-      notifySuccess("Every batch decision was recorded.");
+      notifySuccess("Every batch decision was recorded.", origin);
     },
     onError: (error) => {
       refresh();

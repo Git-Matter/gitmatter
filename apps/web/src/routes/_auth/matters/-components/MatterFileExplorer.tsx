@@ -1,4 +1,4 @@
-import { notifySuccess } from "@/lib/feedback";
+import { captureActionOrigin, notifySuccess } from "@/lib/feedback";
 import { Input } from "@/components/ui/input";
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -78,9 +78,10 @@ export function MatterFileExplorer({
   }, [contextMenu]);
 
   const upload = useMutation({
+    onMutate: () => captureActionOrigin(),
     mutationFn: (file: File) => api.uploadDocument(file, undefined, matterId, selectedFolderId),
-    onSuccess: () => {
-      notifySuccess("Uploaded — extracting…");
+    onSuccess: (_data, _variables, origin) => {
+      notifySuccess("Uploaded — extracting…", origin);
       void qc.invalidateQueries({ queryKey: ["matter-docs", matterId, "all"] });
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Upload failed"),

@@ -153,3 +153,179 @@ The source findings use the repository's current DESIGN.md, design/philosophy.md
 focus, input and feedback expectations. The [WAI modal-dialog pattern](https://www.w3.org/WAI/ARIA/apg/patterns/dialog-modal/)
 explains why background feedback is outside an active modal's interaction scope. This review does
 not reinterpret those sources as a complete WCAG audit.
+
+## Implementation dispositions — 2026-11-17
+
+Work is in the original `/Users/applecakes/projects/gitmatter` checkout, as requested. The earlier
+read-only findings and evidence notes above are retained as historical observations. This addendum
+records source implementation and type checks; it does not convert any earlier receipt into a new run.
+
+| Finding                 | Current disposition                                                                                                                                                                                                                                                                                                                                                                                                   |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1: Inert search         | Root-owned fix already present. Preserved the Clients/Documents toolbars outside the blocked results body.                                                                                                                                                                                                                                                                                                            |
+| 2: Client detail denial | Implemented with the existing readableSnapshot/snapshotIsCurrent helper and SnapshotNotice, without editing either shared file. Transient failures retain the local draft and pause actions; authoritative denial hides private fields/work. Client object links now let the route guard decide before the dialog unmounts.                                                                                           |
+| 3: Rename/autosave race | Implemented one queueWrite path for all workflow metadata writes, including rename/details. Cache publication is in that ordered path; autosave status still respects the latest prompt/column revision.                                                                                                                                                                                                              |
+| 4: Async success origin | Added typed ActionOrigin and captureActionOrigin. Owned mutations capture origin through TanStack onMutate and pass that result to onSuccess; uploads, sharing and async clipboard/workflow operations capture before awaiting. Six calls in protected files still require their owners to adopt the compatible second argument; see handoff below.                                                                   |
+| 5: Sharing metadata     | Team and directory queries retain their state, distinguish loading/error/denial, provide retry and pause dependent changes until current. Denial hides private membership/picker content; unknown data no longer says everyone already has access.                                                                                                                                                                    |
+| 6: Modal-local success  | Sharing publishes an explicit polite status within the open modal, while retaining the workspace receipt for after close. Pending/dirty sharing has the existing single Keep/Discard policy; actions stay on the same APIs.                                                                                                                                                                                           |
+| 7: Partial uploads      | Added a feature-local UploadFeedback view and retained per-file records. Confirmed, rejected, unconfirmed and unattempted files are distinct. New picks do not erase unresolved files. Retry sends only the chosen file, with its captured matter/origin; accepted files are not retried. Pending work blocks exit; leaving unresolved results requires a deliberate discard. No automatic retry of uncertain writes. |
+
+### Protected-owner origin handoff
+
+To respect the explicit ownership exclusions, these six existing single-argument calls were not
+edited in this pass:
+
+- `apps/web/src/routes/_auth/documents/-components/DocumentDrawer.tsx`: new-version upload success.
+- `apps/web/src/routes/_auth/reviews/$id.tsx`: rule retry and prompt-update success.
+- `apps/web/src/routes/_auth/settings/-components/AiSettings.tsx`: jurisdiction, provider-key save
+  and provider-key removal success.
+
+Each owner can import `captureActionOrigin`, return it from the corresponding mutation's `onMutate`,
+receive that result as the third `onSuccess` parameter, and pass it to `notifySuccess(message, origin)`.
+Preserve any existing onMutate bookkeeping; combine its returned context rather than replace it if
+an owner has since introduced one. The optional origin argument keeps these files type-compatible
+in the meantime, but their legacy calls still derive their label at completion. Finding 4 should not
+be called globally closed until these owner changes and the delayed-completion replay pass.
+
+### Focused browser scenarios prepared, not executed
+
+`test/acceptance/design-workflows/feedback-recovery.js` is ready for the coordinated app-ui fixture.
+It covers client 503/403/draft/route recovery; independently unavailable sharing metadata; success in
+an open modal; delayed origin attribution; held autosave plus queued rename; and a three-file partial
+upload with explicit retries and an unsent third file. The app-ui fixture adds a small prepareSuccess
+adapter to exercise the real captured-origin helper. No replay runner or MVP fixture was edited.
+
+**Browser status: UNRUN.** The root workflow session retains sole ownership of port 4280. No server,
+fixture, browser, live credential operation or provider call was started by this implementation pass.
+No branch, index or commit operation was performed. APIs, permission enforcement and audit commits
+were preserved; no schema change or migration was introduced.
+
+### Readability review and checks
+
+Applied `$simplify-code` from the installed skill after the combined changes. Removed a redundant
+client-seeding ref in favor of the existing baseline, named the upload operations and ref state
+explicitly, kept the retry rule with the upload feature and reused it in the dispatcher/results UI,
+and consolidated repeated sharing-feedback resets. No speculative global component or backend
+abstraction was added. Other changes to origin capture use the existing mutation lifecycle rather
+than a custom mutation framework.
+
+Actually run after the simplifications:
+
+- `vp run typecheck`: passed, six tasks successful (latest log:
+  `/tmp/gitmatter-feedback-recovery-types-final.log`).
+- `vp exec tsc --project test/acceptance/app-ui-fixture/tsconfig.json --noEmit`: passed
+  (`/tmp/gitmatter-feedback-recovery-fixture-types-final.log`).
+- `vp fmt` on the owned modified files: passed.
+
+Full `vp check`, `vp test`, design policy and browser replay remain for the coordinated validation
+window. Earlier 371-test/four-replay receipts were not relabelled or rewritten by this pass.
+
+## Frozen source handoff — 2026-11-17
+
+The original implementation, app-ui fixture and browser scripts are frozen. No further UI changes
+are planned in this session. Root requested the fresh independent UAT/replay window and retains
+integration, index, commit and push ownership. `$commit-and-push` was loaded; its explicit-hold rule
+was honored. Branch/HEAD observed at this phase: `docs/staging-verification-handoff`, `527459d`.
+
+### Final implementation additions from specialist review
+
+- TypeScript specialist: add/remove success handlers now await team invalidation, keeping controls
+  paused until the post-write membership refresh settles. Local confirmation appears immediately.
+- Product designer: retained sharing rows/counts are labelled Last loaded during that refresh.
+  The Documents page now scrolls with a minimum usable grid height while upload recovery is visible,
+  so checking existing documents does not require clearing the retry list.
+- Unknown upload results now open a file-specific duplicate-risk decision. Keep result/escape sends
+  nothing; only Retry anyway dispatches that file. Rejected and unattempted retries remain direct.
+- Root's independent review identified missing names on the client Type/Status comboboxes. Visible
+  labels are now bound with htmlFor/trigger IDs. The focused browser script checks both role names
+  and keyboard selection, without altering the Select primitive.
+
+The global TypeScript engineer, product designer and independent UI/UX reviewer critiqued the actual
+patch/rendered states. Their findings were reconciled into the bounded fixes above. The UI/UX reviewer
+also consulted `agents/references/ui-quality-review.md` and reported observed passing for useful
+labels, actionable recovery, explicit retry decisions and mobile document access in its review window.
+Those observations do not establish live authorization, representative-user usability or full WCAG.
+
+`$simplify-code` was applied to the combined owned patch. The final additions were reviewed again;
+no further structural edit justified thawing the stable source window. Recovery components remain
+feature-local. Existing press/selection, progress/completion and dialog feedback were retained.
+The updated shared motion/gesture guidance was consulted: network/access notices retain persistent
+text, existing reduced-motion behavior remains, and file dragging retains the visible picker/keyboard
+alternative. New motion or gestures were not added to these recovery states.
+
+### Current verification and remaining gate
+
+The host restarted during the combined replay. Temporary process handles/logs disappeared and no
+`design/evidence/feedback-recovery.json` was produced. That attempt is **INTERRUPTED**, not accepted.
+The later cold replay stopped in the client Status keyboard selection check (expected inactive,
+observed active), although the same sequence and independent named-control review had passed in
+other windows. Keep this as an intermittent keyboard/automation acceptance gap for the fresh reviewer;
+do not relax the assertion or claim the full group passed without resolving it.
+
+Actually completed after restart, with sources frozen:
+
+- Scoped `vp fmt --check`: passed for 35 owned files/hunks.
+- `vp exec tsc --project apps/web/tsconfig.json --noEmit`: passed.
+- TypeScript parser syntax check of feedback-recovery.js and replay.mjs: passed.
+- Earlier app/fixture type checks and design checks passed in their windows; no post-restart browser
+  or integrated test receipt is inferred from them.
+
+The prior global `vp check` attempt stopped on formatting of the separate root-owned
+`.plans/2026-11-17-ui-ux-uat-review.md`. I left that report unchanged. Root should format its own report
+and run the complete required gates after integration. Do not reuse the earlier 371-test/four-replay
+receipts or root's separate 504-test revision as proof of this final working tree.
+
+Persistent local artifacts: `output/playwright/design-workflows/replay-feedback-recovery/` contains
+scoped-format.log, types-scoped.log, runner.log and a source-only frozen-sources.json. The source hashes
+are a handoff snapshot, not runtime acceptance. Six legacy origin calls in protected owner files remain
+as listed in the previous owner handoff section; those owners should finish that migration.
+
+### Runtime release
+
+Stopped only the restored owned app-ui fixture PID 4981, verified its launcher exited 143, and closed
+only the owned design-feedback-recovery browser. The immediate release check found no 4280 listener.
+A later listener PID 18924 appeared from the next owner and was left untouched. No alternate port,
+main app, database or provider was started. Root's fresh reviewer/template slot and eventual main-app
+restoration remain under root coordination.
+
+### Owned file/hunk list
+
+The following list includes only this task's source/script scope; preserve peer changes within shared
+files, particularly template access work and the earlier search-toolbar move. No shared snapshot
+helper, MVP fixture, review/document detail or marketing file was edited by this session.
+
+- `apps/web/src/components/SharePeopleDialog.tsx`
+- `apps/web/src/lib/feedback.ts`
+- `apps/web/src/routes/_auth/clients/-components/ClientDialog.tsx`
+- `apps/web/src/routes/_auth/clients/-components/CreateClient.tsx`
+- `apps/web/src/routes/_auth/clients/index.tsx`
+- `apps/web/src/routes/_auth/documents/-components/UploadFeedback.tsx`
+- `apps/web/src/routes/_auth/documents/-hooks/useDocumentUpload.ts`
+- `apps/web/src/routes/_auth/documents/index.tsx`
+- `apps/web/src/routes/_auth/library/-components/TemplateDetail.tsx`
+- `apps/web/src/routes/_auth/library/-components/TemplateEditor.tsx`
+- `apps/web/src/routes/_auth/library/-components/TemplateTeam.tsx`
+- `apps/web/src/routes/_auth/library/index.tsx`
+- `apps/web/src/routes/_auth/matters/$id/index.tsx`
+- `apps/web/src/routes/_auth/matters/-components/AddDocumentsModal.tsx`
+- `apps/web/src/routes/_auth/matters/-components/AgentActivity.tsx`
+- `apps/web/src/routes/_auth/matters/-components/AgentHandoff.tsx`
+- `apps/web/src/routes/_auth/matters/-components/CreateMatterModal.tsx`
+- `apps/web/src/routes/_auth/matters/-components/EditMatterModal.tsx`
+- `apps/web/src/routes/_auth/matters/-components/MatterFileExplorer.tsx`
+- `apps/web/src/routes/_auth/matters/-components/MatterOverview.tsx`
+- `apps/web/src/routes/_auth/matters/index.tsx`
+- `apps/web/src/routes/_auth/reviews/-components/CreateReviewDialog.tsx`
+- `apps/web/src/routes/_auth/settings/-components/AccountSettings.tsx`
+- `apps/web/src/routes/_auth/settings/-components/ConnectAgent.tsx`
+- `apps/web/src/routes/_auth/settings/-components/JobControls.tsx`
+- `apps/web/src/routes/_auth/settings/-components/LegalResearchCard.tsx`
+- `apps/web/src/routes/_auth/settings/-components/OrganizationCard.tsx`
+- `apps/web/src/routes/_auth/settings/-components/TwoFactorCard.tsx`
+- `apps/web/src/routes/_auth/workflows/-components/WorkflowDetailPage.tsx`
+- `apps/web/src/routes/_auth/workflows/-components/WorkflowDetailsModal.tsx`
+- `apps/web/src/routes/_auth/workflows/-components/WorkflowFormModal.tsx`
+- `apps/web/src/routes/_auth/workflows/index.tsx`
+- `test/acceptance/app-ui-fixture/main.tsx`
+- `test/acceptance/design-workflows/feedback-recovery.js`
+- `test/acceptance/design-workflows/replay.mjs`

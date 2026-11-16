@@ -345,6 +345,7 @@ export function TemplatesSection({
           onRetryRefresh={() => void detail.refetch()}
           item={active}
           latestHead={selectedSummary?.headCommitId}
+          latestAccess={selectedSummary}
           onClose={() => selectTemplate(null)}
           onEdit={(snapshot) => {
             selectTemplate(null);

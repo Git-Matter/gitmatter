@@ -1,4 +1,5 @@
 import { createRoot } from "react-dom/client";
+import { captureActionOrigin, notifySuccess } from "@/lib/feedback";
 import {
   createBrowserHistory,
   createRootRoute,
@@ -362,6 +363,10 @@ const router = createRouter({
 });
 Object.assign(window, {
   appFixture: {
+    prepareSuccess: (message: string) => {
+      const origin = captureActionOrigin();
+      return () => notifySuccess(message, origin);
+    },
     back: () => router.history.back(),
     refresh: () => cache.invalidateQueries(),
     resetForNavigation: () => {

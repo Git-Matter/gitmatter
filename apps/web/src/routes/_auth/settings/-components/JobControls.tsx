@@ -1,4 +1,4 @@
-import { notifySuccess } from "@/lib/feedback";
+import { captureActionOrigin, notifySuccess } from "@/lib/feedback";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -106,14 +106,15 @@ function ControlsForm({
   const parsed = jobControlPolicySchema.safeParse(policy);
   const changed = JSON.stringify(policy) !== JSON.stringify(snapshot.effective);
   const save = useMutation({
+    onMutate: () => captureActionOrigin(),
     mutationFn: () =>
       api.setJobControls({ expectedRevision: snapshot.revision, reason: reason.trim(), policy }),
-    onSuccess: (updated) => {
+    onSuccess: (updated, _variables, origin) => {
       setSnapshot(updated);
       setPolicy(updated.effective);
       setReason("");
       qc.setQueryData(["job-controls"], updated);
-      notifySuccess("Review limits saved");
+      notifySuccess("Review limits saved", origin);
     },
     onError: () => {
       toast.error("Limits could not be saved. Reload to check for changes by another admin.");

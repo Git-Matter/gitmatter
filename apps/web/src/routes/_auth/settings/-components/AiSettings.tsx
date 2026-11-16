@@ -124,13 +124,25 @@ export function JurisdictionCard() {
 }
 
 const PROVIDER_META: Record<LlmProvider, { label: string; placeholder: string; note?: string }> = {
-  anthropic: { label: "Claude (Anthropic)", placeholder: "sk-ant-..." },
-  openai: { label: "OpenAI", placeholder: "sk-..." },
-  gemini: { label: "Google Gemini", placeholder: "AIza..." },
+  anthropic: {
+    label: "Claude (Anthropic)",
+    placeholder: "sk-ant-...",
+    note: "Retention depends on your Anthropic agreement, model and features. A saved key does not establish zero retention.",
+  },
+  openai: {
+    label: "OpenAI",
+    placeholder: "sk-...",
+    note: "Requests disable response storage. Abuse-monitoring retention and any approved zero-retention arrangement are separate.",
+  },
+  gemini: {
+    label: "Google Gemini",
+    placeholder: "AIza...",
+    note: "Verify your project's billing status and data-use terms with Google. gitmatter does not check paid-service eligibility.",
+  },
   openrouter: {
     label: "OpenRouter",
     placeholder: "sk-or-...",
-    note: "Zero data retention by default - the safest out-of-the-box choice.",
+    note: "Data-collection filtering is enabled. This does not establish zero retention; review OpenRouter, the routed provider and your account settings.",
   },
 };
 
@@ -149,7 +161,8 @@ export function ProviderKeys() {
       <CardContent className="flex flex-col gap-stack">
         <p className="text-sm text-muted-foreground">
           Bring your own key for any provider. Encrypted at rest, used to run chat and cell
-          extraction. Your key overrides any server key; pick the model per chat or review.
+          extraction. Your saved key takes precedence; removing it can make a configured server key
+          active. Pick the model per chat or review and verify its service and account terms.
         </p>
         <SettingsQueryNotice query={query} label="Provider configuration" />
         {providers.map((provider) => (

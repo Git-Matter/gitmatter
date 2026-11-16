@@ -1,5 +1,5 @@
 import { FieldDescription } from "@/components/ui/field";
-import { notifySuccess } from "@/lib/feedback";
+import { captureActionOrigin, notifySuccess } from "@/lib/feedback";
 import { useDraftExit } from "@/lib/hooks/useDraftExit";
 import { FormFeedback } from "@/components/FormFeedback";
 import { useWorkspaceViewState } from "@/lib/hooks/state/useWorkspaceViewState";
@@ -361,17 +361,19 @@ function ClausesSection({
   };
 
   const approveMutation = useMutation({
+    onMutate: () => captureActionOrigin(),
     mutationFn: (id: string) => api.updateClause(id, { status: "approved" }),
-    onSuccess: () => {
-      notifySuccess("Clause approved");
+    onSuccess: (_data, _variables, origin) => {
+      notifySuccess("Clause approved", origin);
       invalidate();
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
   });
   const deprecateMutation = useMutation({
+    onMutate: () => captureActionOrigin(),
     mutationFn: (id: string) => api.updateClause(id, { status: "deprecated" }),
-    onSuccess: () => {
-      notifySuccess("Clause deprecated");
+    onSuccess: (_data, _variables, origin) => {
+      notifySuccess("Clause deprecated", origin);
       invalidate();
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
@@ -699,6 +701,7 @@ function ClauseFormDialog({
     })
   ).current;
   const saveMutation = useMutation({
+    onMutate: () => captureActionOrigin(),
     mutationFn: async () => {
       const input: ClauseInput = {
         title,
@@ -715,9 +718,9 @@ function ClauseFormDialog({
       if (clause) await api.updateClause(clause.id, input);
       else await api.createClause(input);
     },
-    onSuccess: () => {
+    onSuccess: (_data, _variables, origin) => {
       exit.resolve();
-      notifySuccess(clause ? "Clause updated" : "Clause created (draft)");
+      notifySuccess(clause ? "Clause updated" : "Clause created (draft)", origin);
       onSaved();
       onClose();
     },
@@ -963,10 +966,11 @@ function PlaybooksSection({
   const invalidate = () => void qc.invalidateQueries({ queryKey: queryKeys.workflows });
 
   const statusMutation = useMutation({
+    onMutate: () => captureActionOrigin(),
     mutationFn: (v: { id: string; status: "approved" | "deprecated" }) =>
       api.updateWorkflow(v.id, { status: v.status }),
-    onSuccess: () => {
-      notifySuccess("Playbook status updated");
+    onSuccess: (_data, _variables, origin) => {
+      notifySuccess("Playbook status updated", origin);
       invalidate();
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
@@ -1301,13 +1305,14 @@ function PlaybookFormDialog({
 
   const initialDraft = useRef(JSON.stringify({ title, rules })).current;
   const saveMutation = useMutation({
+    onMutate: () => captureActionOrigin(),
     mutationFn: async () => {
       if (playbook) await api.updateWorkflow(playbook.id, { title, rules });
       else await api.createWorkflow({ title, type: "playbook", rules });
     },
-    onSuccess: () => {
+    onSuccess: (_data, _variables, origin) => {
       exit.resolve();
-      notifySuccess(playbook ? "Playbook updated" : "Playbook created (draft)");
+      notifySuccess(playbook ? "Playbook updated" : "Playbook created (draft)", origin);
       onSaved();
       onClose();
     },
@@ -1525,9 +1530,10 @@ function RunPlaybookDialog({
   });
 
   const runMutation = useMutation({
+    onMutate: () => captureActionOrigin(),
     mutationFn: () => api.runPlaybook(playbook.id, { matterId: matterId!, documentIds: docIds }),
-    onSuccess: ({ reviewId }) => {
-      notifySuccess("Playbook review created — press Run to extract verdicts");
+    onSuccess: ({ reviewId }, _variables, origin) => {
+      notifySuccess("Playbook review created — press Run to extract verdicts", origin);
       onClose();
       void navigate({ to: "/reviews/$id", params: { id: reviewId } });
     },

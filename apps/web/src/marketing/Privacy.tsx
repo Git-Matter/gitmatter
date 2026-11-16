@@ -4,12 +4,12 @@ import { LegalPage } from "./LegalPage";
 // Cloud-only marketing page. Review with counsel before production launch.
 export default function Privacy() {
   return (
-    <LegalPage title="Privacy Policy" lastUpdated="July 17, 2026">
+    <LegalPage title="Privacy Policy" lastUpdated="November 16, 2026">
       <h2>1. Scope of this policy</h2>
       <p>
         This Privacy Policy explains how gitmatter handles information for the marketing website and
-        the hosted application at gitmatter.com. It does not cover self-hosted deployments, where
-        you run gitmatter on your own infrastructure and the gitmatter maintainers receive no data.
+        the hosted application at gitmatter.com. It does not cover deployments you operate on your
+        own infrastructure.
       </p>
 
       <h2>2. Controller and processor roles</h2>
@@ -23,10 +23,9 @@ export default function Privacy() {
 
       <h2>3. Self-hosted deployments</h2>
       <p>
-        If you self-host gitmatter on your own infrastructure, database, object storage, and model
-        provider keys, the gitmatter maintainers do not collect your account data, documents,
-        prompts, chats, audit logs, or usage data. Your data handling depends on the systems,
-        hosting providers, model providers, and configuration you choose for your deployment.
+        When you self-host, you choose the database, object storage, AI services, and optional
+        telemetry destinations. Review your deployment's configuration and each external service's
+        policies to understand which account data, content, and diagnostics leave your systems.
       </p>
 
       <h2>4. Hosted service notice</h2>
@@ -47,8 +46,9 @@ export default function Privacy() {
         <li>The audit spine: commits, authors, messages, field-level diffs, and blame</li>
         <li>Security-event and usage logs, settings, and preferences</li>
         <li>
-          Error and diagnostic data (crash reports), with document content, keys, request bodies,
-          and credentials stripped before they leave our servers
+          Error and diagnostic data (crash reports). The server's Sentry filter removes request
+          bodies, cookies, and selected sensitive headers. This filter does not cover every error
+          field or reporting destination.
         </li>
         <li>Messages you send us by email</li>
       </ul>
@@ -65,10 +65,17 @@ export default function Privacy() {
       <h2>7. AI providers, keys, and training</h2>
       <p>
         gitmatter does not train foundation models on your prompts, documents, chats, or outputs.
-        When a feature runs, your document and prompt content is sent to the AI provider you select
-        (Anthropic, Google, OpenAI, or OpenRouter) so the provider can generate a response. With
-        bring-your-own-key, requests go out under your own provider account, and we request
-        zero-data-retention handling where the provider supports it.
+        Built-in AI features send prompt and document content to the selected provider: Anthropic,
+        Google, OpenAI, or OpenRouter. OpenRouter forwards requests to a model provider. Your saved
+        key takes precedence over a configured server key; removing it can make that server key
+        active. Retention and training depend on the provider, model, account settings, and terms.
+        These request settings do not establish a zero-data-retention agreement.
+      </p>
+      <p>
+        When you connect an external assistant such as ChatGPT or Claude, it receives the tool
+        results it requests from gitmatter. The assistant's own service terms and settings govern
+        its handling of that content. Connected research tools and other external services have
+        their own data policies.
       </p>
       <p>
         Third-party model handling, retention, logging, and training policies are governed by that
@@ -170,10 +177,21 @@ export default function Privacy() {
 
       <h2>14. Data retention and deletion</h2>
       <p>
-        Deleted documents are purged after a soft-delete window; aged audit logs and revoked tokens
-        are purged on a schedule. Organization admins can export all tenant data at any time, and
-        deleting your account removes your records, except where a longer retention period is
-        required or permitted by law.
+        Documents become eligible for permanent deletion 30 days after soft deletion. Cleanup runs
+        at server startup and after document deletion requests; it is best-effort and does not
+        guarantee a deletion deadline. Audit-log, chat, and revoked-token cleanup runs at startup
+        according to deployment settings. Chat history has no automatic expiry by default.
+      </p>
+      <p>
+        Organization admins can export selected client and matter fields, tabular review grids, and
+        a document metadata manifest as CSV files. This export excludes document files and versions,
+        chats, workflows, commit history, and security audit logs.
+      </p>
+      <p>
+        Account deletion is separate from deleting an organization's shared records. Some shared
+        records remain after account removal. Deletion from active records does not establish
+        removal from stored files, backups, or external services. Contact us about the scope and
+        handling of an erasure request, including records retained under applicable law.
       </p>
 
       <h2>15. Your rights and how to exercise them</h2>

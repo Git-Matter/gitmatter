@@ -16,7 +16,7 @@ import ClipFigure from "@/marketing/components/ClipFigure";
 const WHY = [
   {
     title: "Who decided?",
-    body: "The record distinguishes the person or AI agent that acted. Check proposed changes and record your own review; an AI accepting an edit is not evidence of practitioner sign-off.",
+    body: "Inspect findings and proposed redlines beside their sources. Accepting or rejecting document edits is a human action; other agent writes follow the matter's permissions and approval policy.",
   },
   {
     title: "Who changed this clause?",
@@ -24,7 +24,7 @@ const WHY = [
   },
   {
     title: "Where did the documents go?",
-    body: "The selected AI route receives the content needed for the task. Its account terms, retention, processing locations, and intermediaries need to be checked separately from gitmatter's document storage.",
+    body: "Built-in AI uses your saved provider key, then a server key if configured. Saved keys are encrypted. Retention and training depend on the service, model, account controls and agreement. You can also self-host gitmatter.",
   },
 ];
 
@@ -82,8 +82,8 @@ export default function Platform() {
           </h1>
           <div className="flex flex-col items-start gap-6 lg:pt-3">
             <p className="max-w-[46ch] text-lg leading-relaxed text-muted-foreground">
-              Review, redline, extract, and draft with the AI your firm already trusts — every step
-              saved with who did it, what changed, and when.
+              Review, redline, extract and draft with the AI your firm already uses. Legal content
+              changes keep their author, before and after, and place in the matter history.
             </p>
             <Button
               size="lg"
@@ -170,8 +170,8 @@ export default function Platform() {
             <div className="flex flex-col gap-1 border-t border-border pt-4">
               <h3 className="font-heading text-lg tracking-tight">Connect as an agent</h3>
               <p className="text-sm leading-relaxed text-muted-foreground">
-                Over MCP, with a secure sign-in — the agent drives gitmatter's tools and every
-                action lands on the record.
+                Authorize your assistant over MCP. It uses permitted gitmatter tools, and content
+                mutations keep their member and agent attribution.
               </p>
               <ul className="mt-4 flex flex-wrap gap-x-5 gap-y-2">
                 {WORKS_WITH.agents.map((a) => (
@@ -184,8 +184,11 @@ export default function Platform() {
             <div className="flex flex-col gap-1 border-t border-border pt-4">
               <h3 className="font-heading text-lg tracking-tight">Run on your own key</h3>
               <p className="text-sm leading-relaxed text-muted-foreground">
-                gitmatter's own features use the selected provider account. Keys are encrypted;
-                retention depends on that account's terms, settings, and agreements.
+                Built-in AI uses your saved provider key, then a server key if configured. Saved
+                keys are encrypted. OpenAI requests disable response storage; OpenRouter requests
+                filter data collection. These controls do not establish account-level zero
+                retention. Check the selected service, model and agreement before sending client
+                material.
               </p>
               <ul className="mt-4 flex flex-wrap gap-x-5 gap-y-2">
                 {WORKS_WITH.providers.map((p) => (

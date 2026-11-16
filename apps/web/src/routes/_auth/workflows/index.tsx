@@ -1,4 +1,4 @@
-import { notifySuccess } from "@/lib/feedback";
+import { captureActionOrigin, notifySuccess } from "@/lib/feedback";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { FormFeedback } from "@/components/FormFeedback";
 import { CollectionPanel, collectionBlocked } from "@/components/CollectionPanel";
@@ -75,6 +75,7 @@ function Workflows() {
     onSuccess: invalidate,
   });
   const removeMutation = useMutation({
+    onMutate: () => captureActionOrigin(),
     mutationFn: async () => {
       setRemoveError(null);
       const results = await Promise.allSettled(
@@ -84,7 +85,7 @@ function Workflows() {
       );
       return removal.filter((_item, index) => results[index]?.status === "rejected");
     },
-    onSuccess: (failed) => {
+    onSuccess: (failed, _variables, origin) => {
       void invalidate();
       setRowSelection({});
       setRemoval(failed);
@@ -94,7 +95,7 @@ function Workflows() {
             `${failed.length} workflow(s) could not be removed. Successful changes are retained; retry affects only the remaining items.`
           )
         );
-      else notifySuccess("Selected workflows removed");
+      else notifySuccess("Selected workflows removed", origin);
     },
   });
 

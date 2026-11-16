@@ -13,9 +13,9 @@ Every change, whether made by a person in the UI or by an AI agent, is recorded 
 
 User secrets (LLM keys and MCP credentials) are encrypted with AES-256-GCM, a strong industry-standard encryption method. "At rest" means stored scrambled, so they are unreadable if the database is stolen. The encryption key is derived from your configured `ENCRYPTION_KEY` using a scrypt key-derivation function (which turns your setting into a proper encryption key). Keys are loaded only when needed and never stored in plaintext (never stored readable).
 
-## Bring your own account, with verified handling
+## Bring your own key and review provider terms
 
-gitmatter's own features (chat and review) use the selected AI provider. A user's saved provider key overrides a deployment-level key. Application privacy settings are not proof of an account-level zero-retention agreement. Review the provider route, current account terms, settings, retention, and processing locations before using client material. A connected external assistant has its own account handling as well. See [AI data handling](/admin/ai-data-handling).
+gitmatter's built-in chat and review support Claude, Gemini, OpenAI, and OpenRouter. Your saved key takes precedence over a configured server key. Removing your saved key can make the server key active; it does not disable every AI feature. Provider retention and training depend on the service, model, account controls, and terms. See [AI data handling](/admin/ai-data-handling) for the request settings gitmatter sends and the controls you must verify with your provider.
 
 ## SSRF guards on consumed MCP servers
 

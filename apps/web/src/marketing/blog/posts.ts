@@ -49,10 +49,9 @@ const POSTS: Record<string, PostMeta> = {
     ogEyebrow: "blog",
   },
   "byok-zero-data-retention-legal-ai": {
-    title:
-      "Bring Your Own Key: What Zero Data Retention Actually Means for Privilege and Confidentiality",
+    title: "Bring your own key: provider retention and confidentiality",
     description:
-      "Legal AI sends client documents through someone's model. Whose account, whose terms, and whose storage policy decide whether that is defensible. A plain-English guide to bring-your-own-key and zero data retention.",
+      "Understand whose account processes your documents, what provider retention controls cover, and what to check before using bring-your-own-key legal AI.",
     date: "2026-06-24",
     author: "The gitmatter team",
     tags: ["confidentiality", "bring your own key"],

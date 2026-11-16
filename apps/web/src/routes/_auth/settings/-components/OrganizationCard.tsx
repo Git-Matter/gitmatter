@@ -1,5 +1,5 @@
 import { FieldDescription } from "@/components/ui/field";
-import { notifySuccess } from "@/lib/feedback";
+import { captureActionOrigin, notifySuccess } from "@/lib/feedback";
 import { FormFeedback } from "@/components/FormFeedback";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -54,20 +54,22 @@ export function OrganizationCard() {
   const invalidate = () => qc.invalidateQueries({ queryKey: ["invites"] });
 
   const create = useMutation({
+    onMutate: () => captureActionOrigin(),
     mutationFn: () => api.createInvite(email.trim()),
-    onSuccess: (inv) => {
+    onSuccess: (inv, _variables, origin) => {
       setEmail("");
       // With a real email provider the server emails the link and omits the token.
       setFresh("token" in inv ? inv.token : null);
       void invalidate();
-      notifySuccess("Invite created");
+      notifySuccess("Invite created", origin);
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
   });
   const revoke = useMutation({
+    onMutate: () => captureActionOrigin(),
     mutationFn: (id: string) => api.revokeInvite(id),
-    onSuccess: () => {
-      notifySuccess("Invite revoked");
+    onSuccess: (_data, _variables, origin) => {
+      notifySuccess("Invite revoked", origin);
       return invalidate();
     },
   });
