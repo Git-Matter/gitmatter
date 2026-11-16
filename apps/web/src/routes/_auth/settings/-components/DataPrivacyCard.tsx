@@ -25,8 +25,9 @@ export function DataPrivacyCard() {
         <div className="flex flex-col gap-2">
           <Label>Export</Label>
           <p className="text-sm text-muted-foreground">
-            Download all of your organization's data as a zip of CSVs — clients, matters, tabular
-            reviews, and a documents manifest. Document files are not included.
+            Download selected client and matter fields, review grids, and a document metadata
+            manifest as CSVs. Document files and versions, chats, workflows, commit history, and
+            security audit logs are not included.
           </p>
           {isAdmin ? (
             <Button

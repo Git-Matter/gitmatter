@@ -21,8 +21,9 @@ export default function About() {
         <h2 className="font-heading text-2xl tracking-tight">Built in the open</h2>
         <p className="text-muted-foreground">
           You can install gitmatter yourself on your own computer or server and connect the AI
-          account your firm already uses. Your documents stay yours — never kept or used to train
-          anyone's model.
+          account your firm already uses. gitmatter stores your documents and work history. AI
+          provider retention and training depend on the service, model, account settings, and terms
+          you choose.
         </p>
         <p className="text-muted-foreground">
           The source lives on{" "}

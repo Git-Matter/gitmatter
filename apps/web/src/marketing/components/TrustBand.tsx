@@ -5,19 +5,19 @@ import { ArrowRight } from "lucide-react";
 const GUARANTEES = [
   {
     title: "Encrypted LLM keys",
-    body: "Your provider key is stored encrypted, never logged, never sent to the browser.",
+    body: "Saved provider keys are encrypted with AES-256-GCM. Settings shows their configured status, not their saved values.",
   },
   {
-    title: "Provider retention controls",
-    body: "AI runs on your provider account, with zero-data-retention handling where supported. Review your provider's settings and terms.",
+    title: "Provider data handling",
+    body: "OpenAI requests disable response storage; OpenRouter requests filter data collection. Retention also depends on the service, model, account controls and agreement.",
   },
   {
     title: "Field-level audit trail",
-    body: "Every change carries an author, a reason, and the exact before and after. No write path around it.",
+    body: "Legal content changes through the shared engine keep their author, reason, and exact before and after.",
   },
   {
     title: "Scoped agent access",
-    body: "A connected AI acts as the member who connected it — that member's matters, nothing more.",
+    body: "A connected agent's authority is limited by current member permissions, selected matters and the token's role.",
   },
   {
     title: "Open source",
@@ -25,7 +25,7 @@ const GUARANTEES = [
   },
   {
     title: "Self-hostable",
-    body: "Run the whole system on your own infrastructure when a client or policy requires it.",
+    body: "Host gitmatter on your infrastructure and configure storage, model providers and connected services for your deployment.",
   },
 ];
 

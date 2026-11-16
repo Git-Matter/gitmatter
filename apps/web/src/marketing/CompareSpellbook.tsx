@@ -6,7 +6,6 @@ import ComparePage, { type CompareRow } from "@/marketing/components/ComparePage
 // as of mid-2026.
 const ROWS: CompareRow[] = [
   { point: "Contract redline, review, and drafting", gitmatter: true, them: true },
-  { point: "GDPR/CCPA, zero data retention", gitmatter: true, them: true },
   {
     point: "Native Microsoft Word add-in",
     gitmatter: false,

@@ -13,7 +13,7 @@ export const Route = createFileRoute("/(marketing)/solutions/")({
     marketingHead({
       title: "Solutions · gitmatter — AI contract redline, extraction, drafting & audit trail",
       description:
-        "AI contract redline, clause and tabular extraction, and document generation on a git-style audit trail. Connect ChatGPT or Claude over MCP and run it on your own LLM key with zero data retention.",
+        "Review, redline, extract, and draft with a git-style audit trail. Connect ChatGPT or Claude over MCP, or use gitmatter's built-in AI with your own provider key.",
       path: "/solutions",
       og: { title: "The legal work you already do — on the record.", eyebrow: "solutions" },
     }),

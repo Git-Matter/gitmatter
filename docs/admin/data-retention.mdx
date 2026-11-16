@@ -1,20 +1,22 @@
 ---
 title: Data retention
-description: How long each kind of data is kept, and how automatic cleanups work.
+description: Retention settings, startup cleanup, and the limits of exports and deletion.
 ---
 
-gitmatter removes old data on a rolling basis. In short: every kind of data has a time limit, and once data is past its limit it gets deleted. There is no separate scheduler or cron job. These cleanups ("purges") run every time the app starts up. A deployment that stays up keeps sweeping over time; one that restarts sweeps on startup. Each retention window (how long data is kept) is set with an environment variable, measured in days. Setting a window to `0` turns that purge off, so the data is kept forever.
+gitmatter runs best-effort cleanup when the server starts. It has no recurring retention scheduler in the application. Document deletion requests also trigger an opportunistic sweep of eligible documents. A server that stays up does not continuously sweep audit logs, chats, or revoked tokens.
+
+The windows below determine when records become eligible for cleanup, not a guaranteed deletion deadline. Configurable windows use days; setting one to `0` disables that cleanup. Some records have no automatic expiry.
 
 ## Retention windows
 
-| Data                     | Variable               | Default             | Measured from                      | Notes                                                                                                                                                                                                                        |
-| ------------------------ | ---------------------- | ------------------- | ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Documents (soft-deleted) | —                      | 30 days             | `deleted_at`                       | "Soft-deleted" means marked deleted and hidden, but still recoverable. After the 30-day window, the database row and the S3 file bytes are hard-deleted (permanently removed). This is built in and not configurable by env. |
-| Chat history             | `CHAT_RETENTION_DAYS`  | `0` (keep forever)  | Last activity (`chats.updated_at`) | Pinned chats are never purged. Messages are removed with their chat.                                                                                                                                                         |
-| Audit events             | `AUDIT_RETENTION_DAYS` | `365`               | `audit_events.created_at`          | The security and operations log: logins, token and key lifecycle, OAuth, uploads.                                                                                                                                            |
-| OAuth auth codes         | —                      | Purged once expired | `expires_at`                       | Short-lived single-use codes, removed as soon as they expire.                                                                                                                                                                |
-| OAuth access tokens      | `TOKEN_RETENTION_DAYS` | `30`                | `revoked_at`                       | Only **revoked** tokens are purged. A token whose access has merely expired is kept while its refresh token is still valid.                                                                                                  |
-| Static MCP tokens        | `TOKEN_RETENTION_DAYS` | `30`                | `revoked_at`                       | Only **revoked** tokens are purged after the window.                                                                                                                                                                         |
+| Data                     | Variable               | Default               | Measured from                      | Notes                                                                                                                                                                                                                             |
+| ------------------------ | ---------------------- | --------------------- | ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Documents (soft-deleted) | —                      | 30 days               | `deleted_at`                       | Hidden records become eligible for cleanup after 30 days. The sweep attempts to delete version file bytes before removing the database row. This window is not configurable by env; failed file deletion is not proof of erasure. |
+| Chat history             | `CHAT_RETENTION_DAYS`  | `0` (keep forever)    | Last activity (`chats.updated_at`) | Pinned chats are never purged. Messages are removed with their chat.                                                                                                                                                              |
+| Audit events             | `AUDIT_RETENTION_DAYS` | `365`                 | `audit_events.created_at`          | The security and operations log: logins, token and key lifecycle, OAuth, uploads.                                                                                                                                                 |
+| OAuth auth codes         | —                      | Eligible once expired | `expires_at`                       | Startup cleanup removes expired codes; expiry does not trigger an immediate purge.                                                                                                                                                |
+| OAuth access tokens      | `TOKEN_RETENTION_DAYS` | `30`                  | `revoked_at`                       | Only **revoked** tokens are purged. A token whose access has merely expired is kept while its refresh token is still valid.                                                                                                       |
+| Static MCP tokens        | `TOKEN_RETENTION_DAYS` | `30`                  | `revoked_at`                       | Only **revoked** tokens are purged after the window.                                                                                                                                                                              |
 
 ## What is never purged automatically
 
@@ -24,6 +26,12 @@ gitmatter removes old data on a rolling basis. In short: every kind of data has 
 
 ## Operational notes
 
-- Purges are idempotent (running one twice does no harm) and best-effort. If one fails, the failure is ignored so it never blocks startup, and the next sweep retries.
-- If deleting a file from object storage genuinely fails (as opposed to the file already being gone), it is recorded in the audit log as `storage.delete_failed`.
-- To enforce a stricter policy, lower the relevant `*_RETENTION_DAYS` value in your deployment environment and restart.
+- Startup cleanup errors do not block the app from starting. A later startup can retry records that remain eligible.
+- A failed object-storage deletion records `storage.delete_failed`, but the document row can still be removed. This path does not establish a durable retry or guarantee that every stored file was erased.
+- Lowering a `*_RETENTION_DAYS` value changes eligibility at the next sweep. It does not add a scheduler or establish a deletion deadline.
+
+## Exports and account deletion
+
+Organization admins can download selected client and matter fields, review grids, and a document metadata manifest as CSVs from Settings &rarr; Data &amp; Privacy. The export excludes document files and versions, chats, workflows, commit history, and security audit logs. It is not a complete backup; see [backup and restore](/admin/backup-restore).
+
+Deleting an account is separate from deleting an organization's shared records. Some shared records retain their content with the former author's reference removed. Account removal does not establish erasure of object-storage files, backups, or copies held by external services. The application cleanup windows do not define backup retention.

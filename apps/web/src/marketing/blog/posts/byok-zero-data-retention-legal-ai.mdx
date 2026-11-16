@@ -4,13 +4,13 @@ legal questions that matter all live in that one sentence. Whose model? Under wh
 terms? And what happens to the document after the answer comes back?
 
 Two phrases keep coming up when firms try to answer those questions: "bring your own
-key" and "zero data retention." Both sound technical. Both are actually simple, and
-both matter for privilege and confidentiality. This guide explains them in plain
-English and gives you the questions to ask any legal AI vendor.
+key" and "zero data retention." They describe different controls, with different
+limits. This guide explains them in plain English and gives you the questions to ask
+any legal AI vendor.
 
 <Clip
   src="/blog/byok.mp4"
-  caption="The bring-your-own-key path in thirty seconds: your key, encrypted, straight to your provider, with no route to model training."
+  caption="The bring-your-own-key path: connect your provider account and review the terms that govern its use."
 />
 
 ## The usual arrangement, and why it worries firms
@@ -29,34 +29,33 @@ to a third party under terms nobody at the firm has read.
 document passes through. When the vendor sits between you and the AI company, that is
 one more party holding client material.
 
-**The training question.** Without clear terms saying otherwise, content sent to AI
-services may be used to train future models. For client documents that risk is simply
-unacceptable, not because leakage is likely, but because the duty of confidentiality
-does not run on likelihoods.
+**The training question.** Services differ in whether they use submitted content to
+improve models. A no-training policy also does not mean that requests are never stored.
+Check training, storage, safety logging, and deletion separately.
 
-Bar guidance across jurisdictions has settled in the same place: using AI is allowed,
-but lawyers must take reasonable steps to protect confidentiality. That means actually
-knowing the answers to the questions above.
+Assess those terms against your firm's client instructions and confidentiality
+requirements before submitting material.
 
 ## What "bring your own key" means
 
-Start with the term itself. An "API key" is like an account number: it is how a company
-opens its own direct account with an AI provider such as Anthropic (which makes
-Claude), Google (Gemini), or OpenAI (which makes ChatGPT's models).
+An API key authorizes requests under an account with a provider such as Anthropic
+(Claude), Google (Gemini), or OpenAI. Supplying your firm's key lets a legal platform
+send requests under that account.
 
-"Bring your own key" (BYOK) means the legal platform does not send your documents
-through its own account with the AI company. It uses your firm's account instead. Three
-things shift in the firm's favor.
+With bring your own key (BYOK), requests using your saved key run under your firm's
+provider account. Check whether the platform can also use a server key or another
+provider when that key is removed. Three controls deserve attention:
 
-1. **Your contract governs.** The agreement between your firm and the AI provider, the
-   one your firm actually reviewed and signed, controls what happens to document text.
-   Business accounts work under different rules than consumer chat apps: at the major
-   providers, business API content is not used for training by default.
+1. **Your provider terms.** Review the agreement and settings for the service, model,
+   and account used. A consumer assistant subscription and a provider API account can
+   have different data policies.
 2. **Your choice of provider.** Firms have preferences, and sometimes client
    instructions, about where data may go. With your own key, the firm picks the
    provider and can switch later.
-3. **Your off switch.** Cancel the key and every AI feature stops immediately, under
-   the firm's control, not the vendor's.
+3. **Your revocation control.** Revoking a key at the provider blocks future requests
+   authorized by that key. It does not stop other providers, connected assistants, or
+   requests already in progress. Removing a saved key from gitmatter can make a
+   configured server key active.
 
 One practical note: a platform that holds your key must store it carefully. The key
 should be stored encrypted, never written into logs, and never visible in the browser.
@@ -64,45 +63,40 @@ Ask about all three.
 
 ## What "zero data retention" means
 
-Zero data retention (ZDR) is a setting on the firm's account with the AI provider.
-With it in place, the provider processes each request and then discards it. What you
-sent and what came back are not stored, not used for training, and cannot be produced
-later, because they no longer exist.
+Zero data retention (ZDR) is a provider arrangement that limits routine retention of
+covered request content. Its scope depends on the account, model, features, and terms.
+Provider policies can include metadata, caching, safety, or legal exceptions.
 
-For a legal team, the plain-English version is this: ZDR turns the AI model from a
-filing cabinet into a pipe. Documents flow through and are gone. A subpoena served on
-the provider cannot produce documents the provider never kept. For a privilege
-analysis, sending material to a service that processes and discards it under a
-confidentiality agreement is a far stronger position than depositing it, open-ended,
-into a third party's data store.
+For example, OpenAI's `store: false` request setting does not establish account-level
+ZDR. OpenRouter's data-collection filter is separate from its ZDR routing controls and
+Safety Retention settings. Review [gitmatter's AI data-handling guide](/docs/admin/ai-data-handling)
+for dated provider sources and the controls the application sends. A ZDR label does
+not establish a legal outcome or guarantee that no copy exists anywhere.
 
 ### What zero data retention does not do
 
 Honest limits, because vendors often blur them:
 
-- It covers the **AI provider**, not the legal platform. The platform still stores
-  your documents (it has to, to be useful), and that storage stands on the platform's
-  own security: encryption, access controls, and an audit trail.
+- A provider agreement covers only the services and data within its scope. gitmatter
+  still stores your documents and work history. Connected assistants and external tools
+  have separate policies.
 - It does not make the AI's output correct. It answers where data goes, not whether
   the work is good. The duty of competence is untouched.
-- It is a **setting, not a law of nature**. It should be verifiable in the provider
-  agreement your firm holds, which is exactly what having your own key makes possible.
+- A key does not verify an account's retention arrangement. Confirm coverage with the
+  provider, including model and feature restrictions.
 
-## The full picture: your key, no retention, and a record
+## The full picture: your key, provider terms, and a record
 
 Confidentiality is about where data goes. Accountability is about what was done with
 it. A defensible AI setup needs both:
 
-- **Your own key** puts the provider relationship, the terms, and the off switch in
-  the firm's hands.
-- **Zero data retention** means processed documents are discarded, not accumulated.
-- **An audit trail** records every AI action on the matter, who ran it, what changed,
-  and why, so supervision can be shown rather than claimed.
+- **Your own key** identifies the provider account authorizing the request.
+- **Verified provider controls** establish which training and retention terms apply.
+- **An audit trail** makes changes attributable and reviewable within the matter.
 
-The three reinforce each other. It is hard to claim careful, confidential AI use when
-the work ran through a personal chat subscription with default storage and no record of
-what the AI touched. It is easy when every run used the firm's key, under a
-no-retention setting, and landed as a named, reviewable entry in the matter history.
+Keep those records together: the service and account used, the applicable data policy,
+and the changes made. BYOK and an audit history support that assessment; neither
+establishes zero retention or legal compliance on its own.
 
 ## Eight questions to ask any legal AI vendor
 
@@ -120,12 +114,14 @@ A vendor comfortable with legal customers will have crisp answers to all eight.
 
 ## How gitmatter is built
 
-gitmatter runs on bring-your-own-key by design. The firm's key, whether for Claude,
-Gemini, OpenAI, or OpenRouter, is stored encrypted, used with zero data retention, and
-never written to logs or exposed to the browser. Every AI action runs inside the matter
-and lands in the audit trail with a name, a reason, and the exact change. And for firms
-whose clients require it, gitmatter is open source and can run entirely on the firm's
-own servers.
+gitmatter supports your own key for Claude, Gemini, OpenAI, or OpenRouter and stores
+saved provider keys encrypted. Your saved key takes precedence over a configured
+server key. Provider retention and training depend on the service, model, account
+settings, and terms; gitmatter does not verify your account's ZDR arrangement.
+
+Changes to legal artifacts have an attributable history. gitmatter is also open
+source and self-hostable. Your choice of hosting, AI services, connected assistants,
+and telemetry still determines where content is processed and stored.
 
 If your firm is writing its AI policy right now, the fastest way to pressure-test it is
 to see this setup working end to end.

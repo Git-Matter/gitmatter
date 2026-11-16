@@ -13,7 +13,7 @@ export const Route = createFileRoute("/(marketing)/privacy")({
     marketingHead({
       title: "Privacy · gitmatter",
       description:
-        "How gitmatter handles your data: zero data retention, your own LLM key, self-hostable end to end.",
+        "How gitmatter stores your work, uses your selected AI provider, and handles retention, exports, and deletion.",
       path: "/privacy",
     }),
   component: Page,

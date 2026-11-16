@@ -15,8 +15,9 @@ What makes it different:
   own assistant; the agent drives gitmatter's tools; gitmatter does the work and records every
   action. The firm's AI on the front, gitmatter's audited legal engine behind.
 - **Bring your own key.** gitmatter's own features (review, chat) run on the firm's LLM key —
-  multi-provider (Claude / Gemini / OpenAI / OpenRouter), stored encrypted, configured for zero
-  data retention.
+  multi-provider (Claude / Gemini / OpenAI / OpenRouter), stored encrypted. Provider retention and
+  training depend on the service, model, account settings, and terms. See
+  [AI data handling](docs/admin/ai-data-handling.mdx) for the controls gitmatter sends.
 - **Built for how firms work.** Organized as **Client → Matter → artifacts**, with a legal team
   staffed per matter and every change traceable to a member.
 
