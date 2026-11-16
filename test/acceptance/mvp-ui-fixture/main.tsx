@@ -1440,6 +1440,21 @@ function FixtureRoot() {
               Refresh finding revision
             </Button>
           ) : null}
+          {["review", "document", "inspector"].includes(surface) ? (
+            <Button
+              variant="outline"
+              onClick={() => {
+                void queryClient.invalidateQueries({
+                  predicate: (query) =>
+                    ["review", "review-completion", "document", "document-versions"].includes(
+                      String(query.queryKey[0])
+                    ),
+                });
+              }}
+            >
+              Refresh current details
+            </Button>
+          ) : null}
           {surface === "guide" ? (
             <div aria-label="Fixture progress controls" className="flex flex-wrap gap-2">
               <Button

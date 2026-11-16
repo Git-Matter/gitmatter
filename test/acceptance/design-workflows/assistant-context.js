@@ -8,7 +8,7 @@ async function assistantContext(page) {
 
   const go = async (path, mode) => {
     await page.evaluate(() => window.assistantFixture.resetForNavigation());
-    await page.goto(`http://127.0.0.1:4299${path}?scenario=${mode}`);
+    await page.goto(`http://127.0.0.1:4280${path}?scenario=${mode}`);
   };
   const input = page.getByRole("textbox", { name: "Message for the assistant", exact: true });
   await page.setViewportSize({ width: 1440, height: 1000 });

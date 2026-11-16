@@ -8,3 +8,23 @@ export function canRetainSnapshotAfterError(error: unknown): boolean {
     (error.status >= 500 || error.status === 408 || error.status === 429)
   );
 }
+
+type SnapshotQuery<T> = {
+  data: T | undefined;
+  error: unknown;
+  isFetching: boolean;
+  isFetchedAfterMount?: boolean;
+};
+
+export function readableSnapshot<T>(query: SnapshotQuery<T>): T | undefined {
+  return query.error && !canRetainSnapshotAfterError(query.error) ? undefined : query.data;
+}
+
+export function snapshotIsCurrent(query: SnapshotQuery<unknown>): boolean {
+  // Verify a cached record on entry; routine polling must not interrupt editing.
+  return (
+    query.data !== undefined &&
+    !query.error &&
+    (!query.isFetching || query.isFetchedAfterMount === true)
+  );
+}

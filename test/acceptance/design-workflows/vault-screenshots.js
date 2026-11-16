@@ -2,7 +2,7 @@
 async function vaultScreenshots(page) {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto(
-    "http://127.0.0.1:4286/reviews/10000000-0000-4000-8000-000000000002?preview=vault&model=claude-sonnet-5"
+    "http://127.0.0.1:4280/reviews/10000000-0000-4000-8000-000000000002?preview=vault&model=claude-sonnet-5"
   );
   const table = page.getByRole("region", { name: "Review table", exact: true });
   await table.getByRole("button", { name: /Review 14/ }).waitFor();

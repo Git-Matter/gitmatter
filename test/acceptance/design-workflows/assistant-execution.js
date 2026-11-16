@@ -6,7 +6,7 @@ async function assistantExecution(page) {
 
   const go = async (mode) => {
     await page.evaluate(() => window.assistantFixture.resetForNavigation());
-    await page.goto(`http://127.0.0.1:4299/assistant?scenario=${mode}`);
+    await page.goto(`http://127.0.0.1:4280/assistant?scenario=${mode}`);
   };
   const input = page.getByRole("textbox", { name: "Message for the assistant", exact: true });
   const count = () => page.evaluate(() => window.assistantFixture.requests.length);

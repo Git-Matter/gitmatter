@@ -181,22 +181,22 @@ function Documents() {
         }
       />
 
-      <CollectionPanel query={viewQuery} label="Documents">
-        {showTable && (
-          <ToolbarTabs
-            tabs={[
-              { id: "all" as const, label: "All" },
-              { id: "mine" as const, label: "Mine" },
-              { id: "shared" as const, label: "Shared with me" },
-            ]}
-            active={scope}
-            onChange={setScope}
-            actions={
-              <TableSearch value={query} onChange={setQuery} placeholder="Search documents…" />
-            }
-          />
-        )}
+      {showTable && (
+        <ToolbarTabs
+          tabs={[
+            { id: "all" as const, label: "All" },
+            { id: "mine" as const, label: "Mine" },
+            { id: "shared" as const, label: "Shared with me" },
+          ]}
+          active={scope}
+          onChange={setScope}
+          actions={
+            <TableSearch value={query} onChange={setQuery} placeholder="Search documents…" />
+          }
+        />
+      )}
 
+      <CollectionPanel query={viewQuery} label="Documents">
         {showTable && (
           <>
             <DataTable

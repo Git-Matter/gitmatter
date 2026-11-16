@@ -37,8 +37,8 @@ async function settingsLimits(page) {
   const writes = [];
   await page.route("**/*", async (route) => {
     const request = route.request();
-    if (!request.url().startsWith("http://127.0.0.1:4300/")) return route.abort();
-    const path = request.url().replace("http://127.0.0.1:4300", "").split("?")[0];
+    if (!request.url().startsWith("http://127.0.0.1:4280/")) return route.abort();
+    const path = request.url().replace("http://127.0.0.1:4280", "").split("?")[0];
     if (!path.startsWith("/api/")) return route.continue();
     const json = (body, code = 200) =>
       route.fulfill({ status: code, contentType: "application/json", body: JSON.stringify(body) });
@@ -80,7 +80,7 @@ async function settingsLimits(page) {
     return json({ error: "Unhandled fictional request" }, 599);
   });
   await page.setViewportSize({ width: 1440, height: 1000 });
-  await page.goto("http://127.0.0.1:4300/settings?tab=organization");
+  await page.goto("http://127.0.0.1:4280/settings?tab=organization");
   await page.getByLabel("Window in minutes").fill("120");
   await page.getByLabel("Reason for this change").fill("Fictional limits adjustment");
   await page.getByRole("link", { name: "Account", exact: true }).click();

@@ -45,6 +45,7 @@ They are checkpoints, not complete transitive bundle attestations. Format genera
 | first-review-saving  | Local close and discard disabled while saving; confirmed save navigates despite an earlier blocked exit                                                                                                      | Delay models pending metadata save, not paid work cancellation                       |
 | template-unsaved     | Named dialog; Escape/Keep retains draft; discard closes; unload event prevention/cleanup; fresh reopen                                                                                                       | No template API mutation or full approval/download lifecycle                         |
 | first-review-refresh | Cached 503 refresh failure retains instructions, disables stale preparation and recovers; 403 removes private content; setup opener is distinct and absent while open                                        | One denied/transient API fixture, not real session revocation proof                  |
+| detail-recovery      | Initial error/retry; cached detail and completion outages pause actions; retained drafts, denied-content removal and authorized recovery; background polling focus; denied drawer close                      | Fictional network outcomes and zero recovery writes, not production authorization    |
 | review-workspace     | Finding comparison retains rationale; quotation opens the highlighted captured text with explicit focus; mobile return preserves selection; human disposition saves                                          | Fictional audit response, not legal correctness proof                                |
 | review-drafts        | Failed save retains rationale/choices; unchanged retry keeps identity; route Keep/Discard and unload lifecycle; pending save protected across comparison; earlier revision input remains recoverable         | Ephemeral local input; no browser-storage or offline recovery claim                  |
 | review-inspector     | Named finding/document dialogs; captured-version download; read-only rerun disabled; source and Escape return focus; 1440/390px, current/stale source and no overflow                                        | Production drawers with a fixed source preview, not a private vendor or auth session |
@@ -78,12 +79,12 @@ cannot accidentally mix the app and fixture's prebundled React graphs.
 
 ## Additional surfaces
 
-`replay.mjs marketing-media` uses the current cloud-mode public app at `http://localhost:4285/`.
-Start it from `apps/web` with `DEPLOYMENT=cloud vp dev --host localhost --port 4285 --strictPort`
+`replay.mjs marketing-media` uses the current cloud-mode public app at `http://127.0.0.1:4280/`.
+Start it from `apps/web` with `DEPLOYMENT=cloud vp dev --host localhost --port 4280 --strictPort`
 when no existing task server is listening. It checks five page families at desktop and mobile and
 records playback/disclosure results, not proof of live product capabilities.
 
-`replay.mjs template-library` uses the tracked local integration harness on port 4296. See
+`replay.mjs template-library` uses the tracked local integration harness on port 4280. See
 [the setup and evidence boundaries](../template-library/design-acceptance.md). This group uses real
 loopback Postgres and original fictional files, rather than the API-response fixture used by the
 first-review and review/output groups. It still does not establish production authentication.
@@ -92,7 +93,7 @@ first-review and review/output groups. It still does not establish production au
 
 Start `vp dev --config test/acceptance/assistant-ui-fixture/vite.config.ts`, then run
 `PLAYWRIGHT_CLI=/path/to/playwright-cli node test/acceptance/design-workflows/replay.mjs assistant`.
-The fixture is at port 4299 and uses a fictional identity, model catalog, extraction subscription
+The fixture is at port 4280 and uses a fictional identity, model catalog, extraction subscription
 and streamed answers. Its fetch adapter blocks remote URLs and unimplemented API paths. It does not invoke
 a model, credential API, mail service or real authentication. Scenario resets suppress native unload
 prompts only to discard fictional setup state; client route Keep/Discard behavior remains real.
@@ -108,7 +109,7 @@ The recorder closes its own named browser before each group for a fresh test env
 
 Start `vp dev --config test/acceptance/account-ui-fixture/vite.config.ts`, then run
 `PLAYWRIGHT_CLI=/path/to/playwright-cli node test/acceptance/design-workflows/replay.mjs access`.
-Port 4300 uses actual settings/authentication components and the Better Auth browser client,
+Port 4280 uses actual settings/authentication components and the Better Auth browser client,
 fictional shell session resolution, and a memory router. Browser scripts intercept all API calls
 before navigation and block remote requests, including the actual challenge service. Unhandled
 API paths fail with 599; this fixture has no application backend or environment loading.
@@ -136,7 +137,7 @@ explicit fixture resets.
 [The study packet](../../../design/usability-study.md) contains neutral practitioner tasks and an
 unfilled observation form. It is marked NOT RUN. Automated setup does not count as a participant.
 
-For its settings/sign-out tasks, start the port-4300 fixture, then open a dedicated headed session:
+For its settings/sign-out tasks, start the port-4280 fixture, then open a dedicated headed session:
 
 ```sh
 /path/to/playwright-cli --session design-study open about:blank --headed

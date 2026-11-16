@@ -1,6 +1,8 @@
 import { notifySuccess } from "@/lib/feedback";
 import { useMediaQuery } from "@/lib/hooks/useMediaQuery";
 import { configuredModelAvailable } from "@/lib/data/configured-model";
+import { readableSnapshot, snapshotIsCurrent } from "@/lib/data/snapshot-refresh";
+import { SnapshotNotice } from "@/components/SnapshotNotice";
 import {
   ContractReviewActions,
   ContractReviewCompletion,
@@ -107,7 +109,7 @@ function ReviewView() {
   const qc = useQueryClient();
   const { data: session } = useSession();
   const reviewKey = ["review", id];
-  const { data, dataUpdatedAt } = useQuery({
+  const reviewQuery = useQuery({
     queryKey: reviewKey,
     queryFn: () => api.getReview(id),
     refetchInterval: (query) =>
@@ -117,18 +119,24 @@ function ReviewView() {
         ? 2500
         : false,
   });
-  const { data: completion } = useQuery({
+  const data = readableSnapshot(reviewQuery);
+  const { dataUpdatedAt } = reviewQuery;
+  const completionQuery = useQuery({
     queryKey: ["review-completion", id],
     queryFn: () => api.getReviewCompletion(id),
+    enabled: !!data,
     refetchInterval: 5000,
   });
+  const completion = readableSnapshot(completionQuery);
+  const current = snapshotIsCurrent(reviewQuery) && snapshotIsCurrent(completionQuery);
   useEffect(() => {
     void qc.invalidateQueries({ queryKey: ["review-completion", id] });
   }, [qc, id, dataUpdatedAt]);
-  const { data: history = [] } = useQuery({
+  const historyQuery = useQuery({
     queryKey: ["review-history", id],
     queryFn: () => api.history(id),
   });
+  const history = readableSnapshot(historyQuery) ?? [];
   const [running, setRunning] = useState<Set<string>>(new Set());
   const retryRequests = useRef(new Map<string, string>());
   const retryFailed = useMutation({
@@ -189,10 +197,12 @@ function ReviewView() {
     !catalog.error &&
     configuredModel &&
     verifiedHint;
-  const canRun = applicationMode && modelAvailable && completion?.canEscalate !== false;
-  const runUnavailableReason = !applicationMode
-    ? "Use your connected agent, or explicitly switch to an application model before running paid calls."
-    : "Choose an available model before running this review.";
+  const canRun = current && applicationMode && modelAvailable && completion?.canEscalate !== false;
+  const runUnavailableReason = !current
+    ? "Refresh the review and its decision permissions before running it."
+    : !applicationMode
+      ? "Use your connected agent, or explicitly switch to an application model before running paid calls."
+      : "Choose an available model before running this review.";
   function chooseModel(next: string) {
     setExplicitModel({ reviewId: id, model: next });
     setSavedModel(next);
@@ -400,7 +410,7 @@ function ReviewView() {
     for (const col of review?.columnsConfig ?? []) {
       cols.push({
         id: `col-${col.index}`,
-        header: () => (
+        header: ({ table }) => (
           <ColumnHeader
             reviewId={id}
             columnIndex={col.index}
@@ -408,6 +418,7 @@ function ReviewView() {
             prompt={col.prompt}
             format={col.format}
             tags={col.tags}
+            current={(table.options.meta as ReviewMeta).current}
           />
         ),
         size: 176,
@@ -442,6 +453,7 @@ function ReviewView() {
       sourceOf: (docId: string) => completion?.documents.find((doc) => doc.documentId === docId),
       running,
       canRun,
+      current,
       cellOf,
       preview: (docId: string) => setPreview({ docId }),
       openDetail: (docId: string, columnIndex: number) => {
@@ -455,7 +467,7 @@ function ReviewView() {
 
   const inspector = detail && !documentView && (
     <CellDetailDrawer
-      open
+      open={!reviewQuery.error && !completionQuery.error}
       inline={wide}
       columnName={
         review?.columnsConfig.find((c) => c.index === detail.columnIndex)?.name ??
@@ -515,11 +527,18 @@ function ReviewView() {
   if (!data || !review)
     return (
       <div className="grid min-h-0 w-full min-w-0 flex-1 gap-6 overflow-x-hidden overflow-y-auto pt-6 lg:grid-cols-[minmax(0,1fr)_280px]">
-        <div className="flex flex-col gap-4">
-          <Skeleton className="h-8 w-64" />
-          <Skeleton className="h-72 w-full" />
-        </div>
-        <Skeleton className="h-40 w-full" />
+        <UnsavedNavigationGuard {...actionDrafts.guardProps} allowSearchNavigation />
+        {reviewQuery.error ? (
+          <SnapshotNotice query={reviewQuery} label="Review" />
+        ) : (
+          <>
+            <div className="flex flex-col gap-4">
+              <Skeleton className="h-8 w-64" />
+              <Skeleton className="h-72 w-full" />
+            </div>
+            <Skeleton className="h-40 w-full" />
+          </>
+        )}
       </div>
     );
 
@@ -532,7 +551,13 @@ function ReviewView() {
       }`}
     >
       <UnsavedNavigationGuard {...actionDrafts.guardProps} allowSearchNavigation />
-      <div className="flex min-h-0 min-w-0 flex-col">
+      {(reviewQuery.error || completionQuery.error) && (
+        <div className="space-y-3 lg:col-span-full">
+          <SnapshotNotice query={reviewQuery} label="Review" />
+          <SnapshotNotice query={completionQuery} label="Review permissions and output" />
+        </div>
+      )}
+      <div inert={!current} className="flex min-h-0 min-w-0 flex-col">
         <div className="mb-3">
           <PageHeader
             breadcrumbs={[{ label: "Reviews", to: "/reviews" }, { label: review.title }]}
@@ -543,7 +568,7 @@ function ReviewView() {
                 <DropdownMenu>
                   <DropdownMenuTrigger
                     render={
-                      <Button size="sm" variant="outline">
+                      <Button size="sm" variant="outline" disabled={!current}>
                         <Download className="size-3.5" />
                         Export
                         <ChevronDown className="size-3.5 opacity-60" />
@@ -552,14 +577,23 @@ function ReviewView() {
                   />
                   <DropdownMenuContent align="end">
                     {completion && (
-                      <DropdownMenuItem render={<a href={api.reviewReportUrl(id)} />}>
+                      <DropdownMenuItem
+                        disabled={!current}
+                        render={<a href={api.reviewReportUrl(id)} />}
+                      >
                         Review report and manifest
                       </DropdownMenuItem>
                     )}
-                    <DropdownMenuItem render={<a href={api.reviewExportUrl(id, "csv")} />}>
+                    <DropdownMenuItem
+                      disabled={!current}
+                      render={<a href={api.reviewExportUrl(id, "csv")} />}
+                    >
                       CSV
                     </DropdownMenuItem>
-                    <DropdownMenuItem render={<a href={api.reviewExportUrl(id, "xlsx")} />}>
+                    <DropdownMenuItem
+                      disabled={!current}
+                      render={<a href={api.reviewExportUrl(id, "xlsx")} />}
+                    >
                       XLSX
                     </DropdownMenuItem>
                   </DropdownMenuContent>
@@ -721,6 +755,7 @@ function ReviewView() {
               <ChevronRight className="size-3.5" />
             </Button>
           </div>
+          <SnapshotNotice query={historyQuery} label="Review history" />
           <CommitHistory commits={history} currentUserId={session?.user.id} />
         </aside>
       )}
@@ -728,12 +763,13 @@ function ReviewView() {
       <details className="max-h-64 overflow-y-auto border-t border-border pt-2 text-xs lg:hidden">
         <summary className="cursor-pointer font-medium">History</summary>
         <div className="mt-3">
+          <SnapshotNotice query={historyQuery} label="Review history" />
           <CommitHistory commits={history} currentUserId={session?.user.id} />
         </div>
       </details>
 
       <DocumentDrawer
-        docId={preview?.docId ?? null}
+        docId={!reviewQuery.error && !completionQuery.error ? (preview?.docId ?? null) : null}
         page={preview?.page}
         onClose={() => setPreview(null)}
       />
@@ -747,6 +783,7 @@ type ReviewMeta = {
   run: (docId: string, columnIndex: number) => void;
   running: Set<string>;
   canRun: boolean;
+  current: boolean;
   selectedId?: string;
   sourceOf: (
     docId: string
@@ -766,6 +803,7 @@ function ColumnHeader({
   prompt,
   format,
   tags,
+  current,
 }: {
   reviewId: string;
   columnIndex: number;
@@ -773,13 +811,16 @@ function ColumnHeader({
   prompt: string;
   format?: string;
   tags?: string[];
+  current: boolean;
 }) {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(prompt);
   const save = useMutation({
-    mutationFn: (nextPrompt: string) =>
-      api.updateReviewColumn(reviewId, columnIndex, { prompt: nextPrompt }),
+    mutationFn: (nextPrompt: string) => {
+      if (!current) throw new Error("Refresh the review before changing its prompt.");
+      return api.updateReviewColumn(reviewId, columnIndex, { prompt: nextPrompt });
+    },
     onSuccess: (updated) => {
       qc.setQueryData(["review", reviewId], updated);
       void qc.invalidateQueries({ queryKey: ["review-history", reviewId] });
@@ -794,7 +835,7 @@ function ColumnHeader({
       <Text className="size-3.5 shrink-0 text-muted-foreground" />
       <span className="min-w-0 leading-snug whitespace-normal">{name}</span>
       <Popover
-        open={open}
+        open={open && current}
         onOpenChange={(next) => {
           // Seed the editor from the current prompt each time it opens.
           if (next) setDraft(prompt);
@@ -835,7 +876,7 @@ function ColumnHeader({
             </Button>
             <Button
               size="xs"
-              disabled={!promptChanged || !draft.trim() || save.isPending}
+              disabled={!current || !promptChanged || !draft.trim() || save.isPending}
               onClick={() => save.mutate(draft.trim())}
             >
               {save.isPending ? "Saving…" : "Save"}
@@ -899,13 +940,14 @@ function ReviewCell({
       data-review-finding
       onClick={onDetail}
       aria-expanded={selected}
-      aria-label={`${cell.content.summary} · ${sourceCount} source${sourceCount === 1 ? "" : "s"}`}
+      aria-label={`${cell.content.summary} · ${cell.content.flag} flag · ${sourceCount} source${sourceCount === 1 ? "" : "s"}`}
       className="flex h-review-row w-full items-center gap-2 px-3 text-start text-xs hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none focus-visible:ring-inset aria-expanded:bg-accent"
     >
       <span
-        aria-label={`${cell.content.flag} flag`}
+        aria-hidden="true"
         className={`size-1.5 shrink-0 rounded-full ${FLAG_COLOR[cell.content.flag] ?? "bg-muted-foreground/50"}`}
       />
+      <span className="shrink-0 text-xs text-muted-foreground">{cell.content.flag}</span>
       <span className="min-w-0 flex-1 truncate">{cell.content.summary}</span>
       <span className="shrink-0 text-xs text-muted-foreground tabular-nums">{sourceCount}</span>
     </button>

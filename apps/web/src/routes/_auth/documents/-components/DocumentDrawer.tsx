@@ -22,6 +22,8 @@ import {
   hasExtensionChanged,
 } from "../../../../lib/format/documentLabels";
 import { formatBytes, formatDateTime } from "../../../../lib/format/format";
+import { SnapshotNotice } from "@/components/SnapshotNotice";
+import { readableSnapshot, snapshotIsCurrent } from "@/lib/data/snapshot-refresh";
 
 /**
  * Slide-in drawer with a document's preview + metadata + version history — a
@@ -101,15 +103,24 @@ function DrawerBody({
   const docKey = ["document", docId];
   const versionsKey = ["document-versions", docId];
   const historyKey = ["document-history", docId];
-  const { data } = useQuery({ queryKey: docKey, queryFn: () => api.getDocumentDetail(docId) });
-  const { data: versions = [] } = useQuery({
+  const documentQuery = useQuery({ queryKey: docKey, queryFn: () => api.getDocumentDetail(docId) });
+  const data = readableSnapshot(documentQuery);
+  const versionsQuery = useQuery({
     queryKey: versionsKey,
     queryFn: () => api.listDocVersions(docId),
+    enabled: !!data,
   });
-  const { data: history = [] } = useQuery({
+  const versions = readableSnapshot(versionsQuery) ?? [];
+  const historyQuery = useQuery({
     queryKey: historyKey,
     queryFn: () => api.documentHistory(docId),
+    enabled: !!data,
   });
+  const history = readableSnapshot(historyQuery) ?? [];
+  const current = snapshotIsCurrent(documentQuery) && snapshotIsCurrent(versionsQuery);
+  const requireCurrent = () => {
+    if (!current) throw new Error("Refresh the document and versions before making changes.");
+  };
 
   // Both the global documents list (["documents"]) and a matter's document list
   // (["matter-docs", …]) show these docs — refresh whichever is mounted.
@@ -128,7 +139,10 @@ function DrawerBody({
   };
 
   const renameMut = useMutation({
-    mutationFn: (title: string) => api.renameDocument(docId, title),
+    mutationFn: (title: string) => {
+      requireCurrent();
+      return api.renameDocument(docId, title);
+    },
     onSuccess: (updated) => {
       qc.setQueryData(docKey, updated);
       void qc.invalidateQueries({ queryKey: historyKey });
@@ -140,7 +154,10 @@ function DrawerBody({
   });
 
   const uploadMut = useMutation({
-    mutationFn: (file: File) => api.uploadDocumentVersion(docId, file),
+    mutationFn: (file: File) => {
+      requireCurrent();
+      return api.uploadDocumentVersion(docId, file);
+    },
     onSuccess: () => {
       invalidate();
       notifySuccess("New version uploaded — extracting…");
@@ -149,7 +166,10 @@ function DrawerBody({
   });
 
   const deleteVersionMut = useMutation({
-    mutationFn: (versionId: string) => api.deleteDocVersion(docId, versionId),
+    mutationFn: (versionId: string) => {
+      requireCurrent();
+      return api.deleteDocVersion(docId, versionId);
+    },
     onSuccess: () => {
       invalidate();
       setPendingDelete(null);
@@ -158,7 +178,10 @@ function DrawerBody({
   });
 
   const deleteDocMut = useMutation({
-    mutationFn: () => api.deleteDocument(docId),
+    mutationFn: () => {
+      requireCurrent();
+      return api.deleteDocument(docId);
+    },
     onSuccess: () => {
       void invalidateLists();
       onClose();
@@ -169,8 +192,21 @@ function DrawerBody({
   if (!data) {
     return (
       <div className="flex flex-1 flex-col gap-4 p-6">
-        <Skeleton className="h-7 w-72" />
-        <Skeleton className="min-h-0 w-full flex-1" />
+        <div className="flex items-center justify-between gap-3">
+          <SheetTitle>Document</SheetTitle>
+          <Button variant="ghost" size="icon-sm" onClick={onClose} tooltip="Close">
+            <X className="size-4" />
+          </Button>
+        </div>
+        <SheetDescription className="sr-only">Document preview and details</SheetDescription>
+        {documentQuery.error ? (
+          <SnapshotNotice query={documentQuery} label="Document" />
+        ) : (
+          <>
+            <Skeleton className="h-7 w-72" />
+            <Skeleton className="min-h-0 w-full flex-1" />
+          </>
+        )}
       </div>
     );
   }
@@ -207,7 +243,14 @@ function DrawerBody({
 
   return (
     <>
-      <input ref={fileRef} type="file" accept={accept} className="hidden" onChange={onPick} />
+      <input
+        ref={fileRef}
+        type="file"
+        accept={accept}
+        className="hidden"
+        disabled={!current}
+        onChange={onPick}
+      />
 
       <header className="flex h-14 shrink-0 items-center gap-3 border-b border-border px-4">
         {currentVersion && (
@@ -239,8 +282,13 @@ function DrawerBody({
         </Button>
       </header>
 
+      <div className="flex shrink-0 flex-col gap-3 px-4">
+        <SnapshotNotice query={documentQuery} label="Document" />
+        <SnapshotNotice query={versionsQuery} label="Document versions" />
+      </div>
+
       {/* Mobile pane switch — both panes show side-by-side from lg up. */}
-      <div className="flex shrink-0 gap-1 border-b border-border p-2 lg:hidden">
+      <div inert={!current} className="flex shrink-0 gap-1 border-b border-border p-2 lg:hidden">
         {(["document", "details"] as const).map((p) => (
           <Button
             key={p}
@@ -257,7 +305,10 @@ function DrawerBody({
       {/* minmax(0,1fr): let the preview shrink (it scrolls) instead of the
           fixed-width DOCX page forcing the grid wider than the panel and
           pushing the details column off-screen. */}
-      <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_clamp(280px,32%,360px)]">
+      <div
+        inert={!current}
+        className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_clamp(280px,32%,360px)]"
+      >
         <div
           className={cn(
             "flex min-h-0 min-w-0 flex-col border-border bg-muted/30 lg:border-e",
@@ -326,6 +377,7 @@ function DrawerBody({
                   <div className="flex items-center gap-2">
                     <Input
                       value={name}
+                      disabled={!current || renameMut.isPending}
                       onChange={(e) => setName(e.target.value)}
                       autoFocus
                       onKeyDown={(e) => {
@@ -397,6 +449,7 @@ function DrawerBody({
 
               <section className="flex flex-col gap-1.5">
                 <h3 className="text-sm font-medium">History</h3>
+                <SnapshotNotice query={historyQuery} label="Document history" />
                 <CommitHistory commits={history} currentUserId={session?.user.id} />
               </section>
             </div>
@@ -425,7 +478,7 @@ function DrawerBody({
       </div>
 
       <ConfirmDialog
-        open={pendingDelete !== null}
+        open={current && pendingDelete !== null}
         onOpenChange={(next) => !next && setPendingDelete(null)}
         title={pendingDelete === "doc" ? "Delete document?" : "Delete version?"}
         description={
@@ -443,7 +496,7 @@ function DrawerBody({
       />
 
       <ConfirmDialog
-        open={extWarnTitle !== null}
+        open={current && extWarnTitle !== null}
         onOpenChange={(next) => !next && setExtWarnTitle(null)}
         title="Change file extension?"
         description={`Renaming changes the file extension. The stored file type stays ${fileTypeLabel(doc.fileType)} — only the displayed name changes.`}

@@ -11,7 +11,7 @@ async function marketingMedia(page) {
   for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: width === 390 ? 844 : 1000 });
     for (const path of paths) {
-      await page.goto(`http://localhost:4285${path}`);
+      await page.goto(`http://127.0.0.1:4280${path}`);
       await page.locator('figure[data-media-origin="illustration"] video').first().waitFor();
       const state = await page.locator("video").evaluateAll((videos) =>
         videos.map((video) => {

@@ -22,6 +22,7 @@ const groups = {
   "marketing-media": ["marketing-media"],
   "template-library": ["template-lifecycle", "template-stale"],
   "review-and-output": [
+    "detail-recovery",
     "review-table",
     "review-workspace",
     "review-drafts",
@@ -37,18 +38,13 @@ if (!groups[group] || !cli) {
   );
 }
 const root = resolve(import.meta.dirname, "../../..");
-const fixtureUrl =
+const fixtureUrl = `http://127.0.0.1:4280${
   group === "app-wide" || group === "ux-nine" || group === "feedback"
-    ? "http://127.0.0.1:4280/clients"
-    : group === "access"
-      ? "http://127.0.0.1:4300/"
-      : group === "assistant"
-        ? "http://127.0.0.1:4299/assistant"
-        : group === "marketing-media"
-          ? "http://localhost:4285/"
-          : group === "template-library"
-            ? "http://127.0.0.1:4296/"
-            : "http://127.0.0.1:4286/";
+    ? "/clients"
+    : group === "assistant"
+      ? "/assistant"
+      : "/"
+}`;
 if (!(await fetch(fixtureUrl)).ok)
   throw new Error(`Start the required local surface first: ${fixtureUrl}`);
 const session = `design-${group}`;
@@ -62,6 +58,8 @@ const common = [
   "apps/web/src/components/PageHeader.tsx",
   "apps/web/src/components/ModelPicker.tsx",
   "apps/web/src/lib/data/api.ts",
+  "apps/web/src/lib/data/snapshot-refresh.ts",
+  "apps/web/src/components/SnapshotNotice.tsx",
   "apps/web/src/components/UnsavedChangesGuard.tsx",
   "test/acceptance/mvp-ui-fixture/main.tsx",
   "test/acceptance/mvp-ui-fixture/vite.config.ts",
