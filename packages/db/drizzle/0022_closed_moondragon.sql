@@ -1,0 +1,3 @@
+CREATE INDEX "document_chunk_embeddings_hnsw_768" ON "document_chunk_embeddings" USING hnsw (("embedding"::vector(768)) vector_cosine_ops) WHERE "document_chunk_embeddings"."dimensions" = 768;--> statement-breakpoint
+CREATE INDEX "document_chunk_embeddings_hnsw_1024" ON "document_chunk_embeddings" USING hnsw (("embedding"::vector(1024)) vector_cosine_ops) WHERE "document_chunk_embeddings"."dimensions" = 1024;--> statement-breakpoint
+CREATE INDEX "document_chunk_embeddings_hnsw_1536" ON "document_chunk_embeddings" USING hnsw (("embedding"::vector(1536)) vector_cosine_ops) WHERE "document_chunk_embeddings"."dimensions" = 1536;

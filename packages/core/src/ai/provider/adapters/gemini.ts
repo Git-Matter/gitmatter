@@ -5,6 +5,7 @@ import type {
   CompleteRequest,
   CompleteResult,
   LlmClient,
+  UsageInfo,
   StreamHandlers,
 } from "../types.js";
 
@@ -125,7 +126,7 @@ export class GeminiClient implements LlmClient {
     });
     const res = await ai.models.generateContent(this.buildRequest(req));
     const out = this.finalize(res.candidates?.[0]?.content?.parts ?? []);
-    out.usage = geminiUsage(res.usageMetadata);
+    out.usage = geminiUsage(res.usageMetadata, req);
     return out;
   }
 
@@ -151,6 +152,7 @@ export class GeminiClient implements LlmClient {
           candidatesTokenCount?: number;
           thoughtsTokenCount?: number;
           totalTokenCount?: number;
+          cachedContentTokenCount?: number;
         }
       | undefined;
     for await (const chunk of gen) {
@@ -161,7 +163,7 @@ export class GeminiClient implements LlmClient {
       if (chunk.usageMetadata) usageMeta = chunk.usageMetadata; // last chunk carries the totals
     }
     const out = this.finalize(parts);
-    out.usage = geminiUsage(usageMeta);
+    out.usage = geminiUsage(usageMeta, req);
     return out;
   }
 }
@@ -174,9 +176,11 @@ function geminiUsage(
         candidatesTokenCount?: number;
         thoughtsTokenCount?: number;
         totalTokenCount?: number;
+        cachedContentTokenCount?: number;
       }
-    | undefined
-): { inputTokens: number; outputTokens: number } | undefined {
+    | undefined,
+  req: CompleteRequest
+): UsageInfo | undefined {
   if (!m || m.promptTokenCount === undefined || m.candidatesTokenCount === undefined)
     return undefined;
   if (m.thoughtsTokenCount === undefined && m.totalTokenCount === undefined) return undefined;
@@ -186,6 +190,13 @@ function geminiUsage(
     (m.totalTokenCount ?? inputTokens) - inputTokens
   );
   return [inputTokens, outputTokens].every((n) => Number.isSafeInteger(n) && n >= 0)
-    ? { inputTokens, outputTokens }
+    ? {
+        inputTokens,
+        outputTokens,
+        cachedInputTokens: m.cachedContentTokenCount,
+        cacheReadTokens: m.cachedContentTokenCount,
+        cacheMode: "automatic",
+        cacheKey: req.cacheKey,
+      }
     : undefined;
 }

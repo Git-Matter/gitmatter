@@ -28,6 +28,8 @@ import { recordFunnel } from "../core/funnel.js";
 import { emitDocStatus } from "./extractionEvents.js";
 import { assertFileTypeMatches, extractMarkdown, type SupportedFileType } from "./extract.js";
 import { inspectVersionWordBytes } from "./docx/inspection.js";
+import { replaceDocumentChunks } from "./chunks.js";
+import { enqueueEmbedding } from "../platform/queue.js";
 
 const WORKER = Symbol.for("gitmatter.extractionWorker");
 type WorkerControl = { stop: () => void; wake: () => void };
@@ -207,6 +209,12 @@ export async function runExtractionOnce(documentId?: string): Promise<boolean> {
               ocrSuggested,
             })
             .where(eq(documents.id, job.artifactId));
+          await replaceDocumentChunks(commitTx, {
+            documentId: job.artifactId,
+            versionId: job.inputVersionId,
+            markdown,
+            fileType: version.fileType,
+          });
           return {
             changes: [
               { path: "markdown", before: current.markdown, after: markdown },
@@ -237,6 +245,7 @@ export async function runExtractionOnce(documentId?: string): Promise<boolean> {
       });
       return recorded.commit!.id;
     });
+    void enqueueEmbedding(job.artifactId);
     recordFunnel("extraction_ready", {
       actorType: "agent",
       documentId: job.artifactId,

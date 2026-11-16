@@ -879,6 +879,9 @@ async function runAssistant(
       toolCallCount: res.toolCalls.length,
       inputTokens: res.usage?.inputTokens,
       outputTokens: res.usage?.outputTokens,
+      cachedInputTokens: res.usage?.cachedInputTokens,
+      cacheReadTokens: res.usage?.cacheReadTokens,
+      cacheWriteTokens: res.usage?.cacheWriteTokens,
     });
     messages.push({
       role: "assistant",

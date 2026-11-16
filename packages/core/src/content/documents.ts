@@ -52,6 +52,7 @@ import { assertStorageWithinQuota } from "../platform/usage.js";
 import { accessCountSql, accessSummaryByArtifact, sharedArtifactIds } from "../platform/shares.js";
 import { type Actor, recordCommit, recordCommitInTransaction } from "../core/commit.js";
 import { logEvent } from "../core/log.js";
+import { getDocumentContext, replaceDocumentChunks, type ContextMode } from "./chunks.js";
 import { extractMarkdown, type SupportedFileType } from "./extract.js";
 import { generateDocx, type DocxSpec } from "./docx/generate.js";
 import {
@@ -354,6 +355,12 @@ export async function createDocument(
       await tx
         .insert(matterDocuments)
         .values({ matterId: input.matterId, documentId: docId, folderId: input.folderId ?? null });
+      await replaceDocumentChunks(tx, {
+        documentId: docId,
+        versionId: null,
+        markdown: input.markdown,
+        fileType: input.fileType,
+      });
       return {
         changes: [
           { path: "markdown", before: null, after: input.markdown },
@@ -1382,6 +1389,12 @@ async function proposeDocxEdit(
         .update(documents)
         .set({ markdown: newMarkdown, currentVersionId: nv!.id })
         .where(eq(documents.id, doc.id));
+      await replaceDocumentChunks(tx, {
+        documentId: doc.id,
+        versionId: nv!.id,
+        markdown: newMarkdown,
+        fileType: doc.fileType,
+      });
       return {
         changes: [
           ...baselineChanges,
@@ -1494,6 +1507,12 @@ async function resolveDocxEdits(
         ...doc,
         markdown: newMarkdown,
         currentVersionId: nv!.id,
+      });
+      await replaceDocumentChunks(tx, {
+        documentId: doc.id,
+        versionId: nv!.id,
+        markdown: newMarkdown,
+        fileType: doc.fileType,
       });
       const decisionChanges = await recordDocumentEditDecisions(tx, actor, {
         ...context,
@@ -1776,6 +1795,12 @@ export async function resolveEdits(
                     .update(documents)
                     .set({ markdown: md })
                     .where(eq(documents.id, documentId));
+                  await replaceDocumentChunks(tx, {
+                    documentId,
+                    versionId: doc.currentVersionId,
+                    markdown: md,
+                    fileType: doc.fileType,
+                  });
                   changes.push({ path: "markdown", before: doc.markdown, after: md });
                 }
               }
@@ -1860,7 +1885,11 @@ export async function resolveAllEdits(
 }
 
 /** Document with its tracked edits and per-edit blame (commit that last touched each). */
-export async function getDocumentDetail(documentId: string, actor?: Actor) {
+export async function getDocumentDetail(
+  documentId: string,
+  actor?: Actor,
+  opts: { mode?: ContextMode; query?: string; chunkRefs?: Array<string | number> } = {}
+) {
   if (actor && !(await canAccessArtifact(actor, "document", documentId)))
     throw new Error("access_denied");
   const doc = await getDocument(documentId);
@@ -1947,8 +1976,29 @@ export async function getDocumentDetail(documentId: string, actor?: Actor) {
     };
   }
 
+  const context = await getDocumentContext(doc, {
+    mode: opts.mode ?? "auto",
+    query: opts.query,
+    chunkRefs: opts.chunkRefs,
+    task: "chat",
+    repeated: true,
+  });
+
   return {
-    document: { ...doc, ownerName: owner?.name ?? null, ownerEmail: owner?.email ?? null },
+    document: {
+      ...doc,
+      ownerName: owner?.name ?? null,
+      ownerEmail: owner?.email ?? null,
+      // Raw `doc.markdown` stays full for the human viewer. The bounded,
+      // possibly-chunked AI view lives on its own field so consumers pick.
+      context: {
+        text: context.text,
+        mode: context.mode,
+        pipeline: context.pipeline,
+        tokenEstimate: context.tokenEstimate,
+        chunks: context.chunks,
+      },
+    },
     edits: edits.map((e) => ({
       ...e,
       // Captured cross-matter context is server evidence; never expose hidden

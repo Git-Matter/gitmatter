@@ -17,6 +17,7 @@ allowBuilds:
   "@google/genai": false
   "@openrouter/sdk": false
   protobufjs: false
+  msgpackr-extract: false
 addMissingPeerTypes: true
 
 # Keep Vite+ native bindings and editor peers in the project resolution tree.

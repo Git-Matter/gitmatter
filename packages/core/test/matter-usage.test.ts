@@ -4,7 +4,12 @@ import { db, sql } from "@workspace/db/client";
 import { usageEvents } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 import { estimateCostUsd, priceForModel } from "@workspace/registry";
-import { matterUsageSummary, recordLlmUsage, recordToolCall } from "../src/platform/usage.js";
+import {
+  matterUsageSummary,
+  recordEmbeddingUsage,
+  recordLlmUsage,
+  recordToolCall,
+} from "../src/platform/usage.js";
 
 // Pure-row test: usage_events has no FKs, so a random matter id suffices.
 const matterId = randomUUID();
@@ -41,6 +46,13 @@ describe("per-matter usage", () => {
       inputTokens: 10,
       outputTokens: 10,
     });
+    await recordEmbeddingUsage({
+      userId,
+      matterId,
+      provider: "openai",
+      model: "text-embedding-3-small",
+      inputTokens: 900,
+    });
     await recordToolCall({ userId, matterId, tool: "get_document" });
     await recordToolCall({ userId, matterId, tool: "get_document" });
     await recordToolCall({ userId, matterId, tool: "write_cell" });
@@ -63,6 +75,12 @@ describe("per-matter usage", () => {
 
     const docTool = s.tools.find((t) => t.tool === "get_document");
     expect(docTool?.calls).toBe(2);
+
+    const embedding = s.embeddings.find((r) => r.model === "text-embedding-3-small");
+    expect(embedding?.calls).toBe(1);
+    expect(embedding?.inputTokens).toBe(900);
+    expect(s.totals.embeddingCalls).toBe(1);
+    expect(s.totals.embeddingInputTokens).toBe(900);
   });
 
   test("events without the matter stay out of the summary", async () => {

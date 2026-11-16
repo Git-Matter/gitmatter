@@ -15,6 +15,7 @@ import {
   seedBuiltinWorkflows,
   setFunnelSink,
   startExtractionWorker,
+  startEmbeddingWorker,
 } from "@workspace/core";
 import { resolveJurisdiction } from "@workspace/registry";
 import { chatRoute } from "./routes/chat.js";
@@ -87,6 +88,15 @@ if (!g[SWEPT]) {
   void purgeExpiredTokens().catch(() => {});
   void purgeOldAuditEvents().catch(() => {});
   void purgeOldChats().catch(() => {});
+}
+
+// Start the background embedding worker once per process. No-op when REDIS_URL is
+// unset (embedding then happens lazily on first query). Guarded like the sweeps
+// above so a dev HMR reload doesn't spawn duplicate workers.
+const EMBED_WORKER = Symbol.for("gitmatter.embedWorkerStarted");
+if (!g[EMBED_WORKER]) {
+  g[EMBED_WORKER] = true;
+  startEmbeddingWorker();
 }
 
 // All server endpoints live under /api and are dispatched here from the

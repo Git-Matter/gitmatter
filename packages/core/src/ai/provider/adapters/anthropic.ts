@@ -5,6 +5,7 @@ import type {
   CompleteRequest,
   CompleteResult,
   LlmClient,
+  UsageInfo,
   StreamHandlers,
 } from "../types.js";
 
@@ -157,7 +158,7 @@ export class AnthropicClient implements LlmClient {
     });
     const res = await anthropic.messages.create(this.buildParams(req));
     const out = this.finalize(req, res.content, res.stop_reason);
-    out.usage = anthropicUsage(res.usage, !!req.cache);
+    out.usage = anthropicUsage(res.usage, req);
     return out;
   }
 
@@ -172,7 +173,7 @@ export class AnthropicClient implements LlmClient {
     if (handlers.onReasoning) s.on("thinking", (delta) => handlers.onReasoning!(delta));
     const msg = await s.finalMessage();
     const out = this.finalize(req, msg.content, msg.stop_reason);
-    out.usage = anthropicUsage(msg.usage, !!req.cache);
+    out.usage = anthropicUsage(msg.usage, req);
     return out;
   }
 }
@@ -185,13 +186,20 @@ function anthropicUsage(
     cache_creation_input_tokens?: number | null;
     cache_read_input_tokens?: number | null;
   },
-  cacheExpected: boolean
-) {
+  req: CompleteRequest
+): UsageInfo | undefined {
   const cached = [usage.cache_creation_input_tokens, usage.cache_read_input_tokens];
-  if (cacheExpected && cached.some((n) => n == null)) return undefined;
+  if (req.cache && cached.some((n) => n == null)) return undefined;
   const inputTokens = usage.input_tokens + (cached[0] ?? 0) + (cached[1] ?? 0);
   const outputTokens = usage.output_tokens;
   return [inputTokens, outputTokens].every((n) => Number.isSafeInteger(n) && n >= 0)
-    ? { inputTokens, outputTokens }
+    ? {
+        inputTokens,
+        outputTokens,
+        cacheReadTokens: cached[1] ?? undefined,
+        cacheWriteTokens: cached[0] ?? undefined,
+        cacheMode: req.cache ? ("explicit" as const) : ("none" as const),
+        cacheKey: req.cacheKey,
+      }
     : undefined;
 }

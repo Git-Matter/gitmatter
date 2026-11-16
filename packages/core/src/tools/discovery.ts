@@ -7,7 +7,7 @@ import { searchMatterWork } from "../core/search.js";
 import { z } from "zod";
 import { canAccessArtifact } from "../core/index.js";
 import { getReview } from "../ai/index.js";
-import { getDocument } from "../content/index.js";
+import { getDocument, getDocumentContext } from "../content/index.js";
 import type { ToolContext, ToolSpec } from "./types.js";
 
 // Cross-artifact discovery (the ChatGPT company-knowledge schema): `search`
@@ -70,12 +70,21 @@ export function buildDiscoveryTools({ actor }: ToolContext): ToolSpec[] {
           if (!(await canReadDocument(actor, artifactId))) return { error: "Not found" };
           const d = await getDocument(artifactId);
           if (!d) return { error: "Not found" };
+          // `fetch` means "give me the content": small docs return full text,
+          // large docs return bounded chunks + refs (page more via get_document).
+          const context = await getDocumentContext(d, { mode: "auto", task: "chat" });
           return {
             id,
             title: d.title,
-            text: d.markdown ?? "",
+            text: context.text,
             url: `/documents/${artifactId}`,
-            metadata: { type: "document", status: d.status },
+            metadata: {
+              type: "document",
+              status: d.status,
+              contextMode: context.mode,
+              contextPipeline: context.pipeline,
+              chunks: context.chunks.map((c) => c.ref),
+            },
           };
         }
         if (kind === "cell") {

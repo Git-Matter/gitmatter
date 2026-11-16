@@ -142,6 +142,23 @@ OPENROUTER_API_KEY=...
 
 A user's own key always **overrides** the server key. Pick the model per chat message or per review run. OpenRouter is the zero-data-retention default (the provider that, by default, keeps and trains on nothing).
 
+### Semantic search embeddings
+
+Large-document query mode can use embeddings to find relevant chunks before the
+chat model reads them. This uses the deployment's server key only; gitmatter does
+not build a shared document index with an individual user's personal key.
+
+```bash
+EMBEDDING_PROVIDER=openai      # optional: openai, gemini or voyage
+EMBEDDING_MODEL=text-embedding-3-small
+EMBEDDING_DIMENSIONS=1536
+```
+
+Leave `EMBEDDING_PROVIDER` blank to disable paid embeddings and use keyword chunk
+search. Configuring a provider explicitly enables embeddings for generation and
+background indexing. Read-only document tools, including subscription connector
+reads, always use keyword retrieval without an embedding-provider call.
+
 For the full per-provider privacy detail, see [AI data handling](/admin/ai-data-handling).
 
 ## Local development

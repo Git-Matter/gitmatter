@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { and, desc, eq, gte, isNotNull, type SQL, sql } from "drizzle-orm";
 import { estimateCostUsd, type ProviderId } from "@workspace/registry";
 import { db } from "@workspace/db/client";
@@ -20,6 +21,11 @@ import { recordAudit } from "./audit.js";
 
 const windowMinutes = () => getEnvNumber("BUDGET_WINDOW_MINUTES", 60);
 const since = (minutes: number) => new Date(Date.now() - minutes * 60_000);
+
+function shortHash(value?: string | null): string | null {
+  if (!value) return null;
+  return createHash("sha256").update(value).digest("hex").slice(0, 16);
+}
 
 async function flag(
   scope: string,
@@ -64,6 +70,11 @@ export async function recordLlmUsage(e: {
   model?: string | null;
   inputTokens?: number;
   outputTokens?: number;
+  cachedInputTokens?: number;
+  cacheWriteTokens?: number;
+  cacheReadTokens?: number;
+  cacheMode?: string | null;
+  cacheKey?: string | null;
 }): Promise<void> {
   try {
     await db.insert(usageEvents).values({
@@ -75,6 +86,11 @@ export async function recordLlmUsage(e: {
       model: e.model ?? null,
       inputTokens: e.inputTokens ?? 0,
       outputTokens: e.outputTokens ?? 0,
+      cachedInputTokens: e.cachedInputTokens ?? null,
+      cacheWriteTokens: e.cacheWriteTokens ?? null,
+      cacheReadTokens: e.cacheReadTokens ?? null,
+      cacheMode: e.cacheMode ?? null,
+      cacheKey: shortHash(e.cacheKey),
     });
     const after = since(windowMinutes());
     const userBudget = getEnvNumber("USER_LLM_TOKEN_BUDGET", 0);
@@ -99,6 +115,31 @@ export async function recordLlmUsage(e: {
     }
   } catch {
     // best-effort: never let metering break a completed LLM call
+  }
+}
+
+/** Record one embedding request. Kept separate from LLM completions for spend clarity. */
+export async function recordEmbeddingUsage(e: {
+  userId: string;
+  tenantId?: string | null;
+  matterId?: string | null;
+  provider?: string | null;
+  model?: string | null;
+  inputTokens?: number;
+}): Promise<void> {
+  try {
+    await db.insert(usageEvents).values({
+      kind: "embedding",
+      userId: e.userId,
+      tenantId: e.tenantId ?? null,
+      matterId: e.matterId ?? null,
+      provider: e.provider ?? null,
+      model: e.model ?? null,
+      inputTokens: e.inputTokens ?? 0,
+      outputTokens: 0,
+    });
+  } catch {
+    // best-effort: semantic indexing should never fail because metering did
   }
 }
 
@@ -201,16 +242,30 @@ export type MatterUsageSummary = {
     calls: number;
     inputTokens: number;
     outputTokens: number;
+    cachedInputTokens: number;
+    cacheReadTokens: number;
+    cacheWriteTokens: number;
     /** Estimated USD, or null when the model is unpriced. */
     costUsd: number | null;
+  }>;
+  embeddings: Array<{
+    provider: string | null;
+    model: string | null;
+    calls: number;
+    inputTokens: number;
   }>;
   tools: Array<{ tool: string | null; calls: number }>;
   totals: {
     llmCalls: number;
     inputTokens: number;
     outputTokens: number;
+    cachedInputTokens: number;
+    cacheReadTokens: number;
+    cacheWriteTokens: number;
     /** Sum over priced models only; null when nothing is priced. */
     costUsd: number | null;
+    embeddingCalls: number;
+    embeddingInputTokens: number;
     toolCalls: number;
   };
 };
@@ -223,6 +278,9 @@ export async function matterUsageSummary(matterId: string): Promise<MatterUsageS
       calls: sql<number>`count(*)`,
       inputTokens: sql<number>`coalesce(sum(${usageEvents.inputTokens}), 0)`,
       outputTokens: sql<number>`coalesce(sum(${usageEvents.outputTokens}), 0)`,
+      cachedInputTokens: sql<number>`coalesce(sum(${usageEvents.cachedInputTokens}), 0)`,
+      cacheReadTokens: sql<number>`coalesce(sum(${usageEvents.cacheReadTokens}), 0)`,
+      cacheWriteTokens: sql<number>`coalesce(sum(${usageEvents.cacheWriteTokens}), 0)`,
     })
     .from(usageEvents)
     .where(and(eq(usageEvents.kind, "llm"), eq(usageEvents.matterId, matterId)))
@@ -240,26 +298,53 @@ export async function matterUsageSummary(matterId: string): Promise<MatterUsageS
     .groupBy(usageEvents.tool)
     .orderBy(desc(sql`count(*)`));
 
+  const embeddingRows = await db
+    .select({
+      provider: usageEvents.provider,
+      model: usageEvents.model,
+      calls: sql<number>`count(*)`,
+      inputTokens: sql<number>`coalesce(sum(${usageEvents.inputTokens}), 0)`,
+    })
+    .from(usageEvents)
+    .where(and(eq(usageEvents.kind, "embedding"), eq(usageEvents.matterId, matterId)))
+    .groupBy(usageEvents.provider, usageEvents.model)
+    .orderBy(desc(sql`sum(coalesce(${usageEvents.inputTokens}, 0))`));
+
   const llm = llmRows.map((r) => ({
     provider: r.provider,
     model: r.model,
     calls: Number(r.calls),
     inputTokens: Number(r.inputTokens),
     outputTokens: Number(r.outputTokens),
+    cachedInputTokens: Number(r.cachedInputTokens),
+    cacheReadTokens: Number(r.cacheReadTokens),
+    cacheWriteTokens: Number(r.cacheWriteTokens),
     costUsd: r.model
       ? estimateCostUsd(r.model, Number(r.inputTokens), Number(r.outputTokens))
       : null,
+  }));
+  const embeddings = embeddingRows.map((r) => ({
+    provider: r.provider,
+    model: r.model,
+    calls: Number(r.calls),
+    inputTokens: Number(r.inputTokens),
   }));
   const tools = toolRows.map((r) => ({ tool: r.tool, calls: Number(r.calls) }));
   const priced = llm.filter((r) => r.costUsd !== null);
   return {
     llm,
+    embeddings,
     tools,
     totals: {
       llmCalls: llm.reduce((n, r) => n + r.calls, 0),
       inputTokens: llm.reduce((n, r) => n + r.inputTokens, 0),
       outputTokens: llm.reduce((n, r) => n + r.outputTokens, 0),
+      cachedInputTokens: llm.reduce((n, r) => n + r.cachedInputTokens, 0),
+      cacheReadTokens: llm.reduce((n, r) => n + r.cacheReadTokens, 0),
+      cacheWriteTokens: llm.reduce((n, r) => n + r.cacheWriteTokens, 0),
       costUsd: priced.length ? priced.reduce((n, r) => n + (r.costUsd ?? 0), 0) : null,
+      embeddingCalls: embeddings.reduce((n, r) => n + r.calls, 0),
+      embeddingInputTokens: embeddings.reduce((n, r) => n + r.inputTokens, 0),
       toolCalls: tools.reduce((n, r) => n + r.calls, 0),
     },
   };

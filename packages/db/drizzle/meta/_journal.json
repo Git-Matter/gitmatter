@@ -148,6 +148,20 @@
       "when": 1793825966596,
       "tag": "0020_dashing_iron_man",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1794830691401,
+      "tag": "0021_big_norman_osborn",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1794830789200,
+      "tag": "0022_closed_moondragon",
+      "breakpoints": true
     }
   ]
 }

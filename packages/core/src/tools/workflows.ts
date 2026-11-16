@@ -2,6 +2,7 @@ import { z } from "zod";
 import { reviewInstructionsSchema } from "@workspace/contracts";
 import type { PlaybookRule } from "@workspace/db/schema";
 import { canAccessArtifact, canReadDocument, getPendingWorkflowProposal } from "../core/index.js";
+import { getDocumentContext } from "../content/chunks.js";
 import { getDocument } from "../content/documents.js";
 import { generatePlaybookRules, runPlaybook } from "../ai/tabular/playbook.js";
 import { resolveRunModel } from "../ai/provider/index.js";
@@ -143,10 +144,20 @@ export function buildWorkflowTools({
         if (!(await canReadDocument(actor, documentId as string))) return { error: "Not found" };
         const doc = await getDocument(documentId as string);
         if (!doc?.markdown) return { error: "Document has no extracted text" };
+        const context = await getDocumentContext(doc, {
+          mode: "query",
+          query: [contractType, "standard position fallback unacceptable guidance clause"]
+            .filter(Boolean)
+            .join(" "),
+          task: "playbook",
+          repeated: true,
+          maxChunks: 24,
+          allowEmbedding: true,
+        });
         const run = await resolveRunModel(actor.userId, model as string | undefined);
         const rules = await generatePlaybookRules({
           spendContext: { actor, credentialId, matterId: doc.matterId, sourceKind: "generation" },
-          documentText: doc.markdown,
+          documentText: context.text,
           filename: doc.title,
           contractType: contractType as string | undefined,
           model: run.model,

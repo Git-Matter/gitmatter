@@ -22,11 +22,13 @@ import {
   mcpAccessTokens,
 } from "@workspace/db/schema";
 import { type Actor, recordCommit, recordCommitInTransaction } from "../../core/commit.js";
+import { getDocumentContext } from "../../content/chunks.js";
 import {
   DEFAULT_MODEL,
   providerForModel,
   resolveLlmKey,
   resolveRunModel,
+  type UsageInfo,
 } from "../provider/index.js";
 import { coerceCitations, coerceFlag, queryCell, queryRow } from "./extract.js";
 import { capturedReviewInstructions } from "../prompts/tabular.js";
@@ -37,7 +39,7 @@ import { quoteOnlyCitations } from "../../content/citations.js";
 function meterFor(
   actor: Actor,
   review: { id: string; tenantId: string | null; matterId: string | null }
-): (u: { provider: string; model: string; inputTokens: number; outputTokens: number }) => void {
+): (u: UsageInfo & { provider: string; model: string }) => void {
   return (u) => {
     recordFunnel("review_usage", {
       actorType: actor.type,
@@ -400,8 +402,15 @@ export async function runCell(
       },
       model,
       filename: doc.title,
-      documentText:
-        review.inputSnapshot?.documents.find((d) => d.id === doc.id)?.text ?? doc.markdown ?? "",
+      documentText: (
+        await getDocumentContext(doc, {
+          mode: "query",
+          query: col.prompt,
+          task: "tabular",
+          repeated: true,
+          allowEmbedding: true,
+        })
+      ).text,
       columnPrompt: col.prompt,
       reviewInstructions: capturedReviewInstructions(review.inputSnapshot),
       format: col.format,
@@ -521,8 +530,18 @@ export async function runDocument(
       },
       model,
       filename: doc.title,
-      documentText:
-        review.inputSnapshot?.documents.find((d) => d.id === doc.id)?.text ?? doc.markdown ?? "",
+      documentText: (
+        await getDocumentContext(doc, {
+          mode: "query",
+          query: review.columnsConfig
+            .map((column) => `${column.name}: ${column.prompt}`)
+            .join("\n"),
+          task: "tabular",
+          repeated: true,
+          allowEmbedding: true,
+          maxChunks: 16,
+        })
+      ).text,
       columns: review.columnsConfig,
       reviewInstructions: capturedReviewInstructions(review.inputSnapshot),
       apiKey: key,
