@@ -61,7 +61,13 @@ describe("billable usage normalization (synthetic SDKs, no network)", () => {
         cache: true,
       };
       const result = mode === "stream" ? await client.stream!(req, {}) : await client.complete(req);
-      expect(result.usage).toEqual({ inputTokens: 60, outputTokens: 5 });
+      expect(result.usage).toEqual({
+        inputTokens: 60,
+        outputTokens: 5,
+        cacheReadTokens: 30,
+        cacheWriteTokens: 20,
+        cacheMode: "explicit",
+      });
     });
     test(`${mode} includes Gemini reasoning tokens`, async () => {
       const client = getLlmClient("gemini", "synthetic-sdk-fixture");
@@ -71,7 +77,7 @@ describe("billable usage normalization (synthetic SDKs, no network)", () => {
         reasoning: "high" as const,
       };
       const result = mode === "stream" ? await client.stream!(req, {}) : await client.complete(req);
-      expect(result.usage).toEqual({ inputTokens: 10, outputTokens: 25 });
+      expect(result.usage).toEqual({ inputTokens: 10, outputTokens: 25, cacheMode: "automatic" });
     });
   }
   test("missing cache or reasoning totals retain uncertainty instead of refunding the reservation", async () => {
