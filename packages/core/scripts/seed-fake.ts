@@ -2,7 +2,7 @@
  * Seed fake clients/matters/documents to test the table UIs.
  * Idempotent: every seeded client gets a `SEED-` clientNumber prefix; re-running
  * deletes prior seed clients first (matters/docs cascade off them).
- * Run: bun packages/core/scripts/seed-fake.ts
+ * Run: pnpm exec tsx packages/core/scripts/seed-fake.ts
  */
 import { and, eq, like } from "drizzle-orm";
 import { db, sql } from "@workspace/db/client";

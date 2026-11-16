@@ -44,7 +44,7 @@ Long term maintainability is a core priority. If you add new functionality, firs
 
 ## Package Roles
 
-This is a Bun + Turborepo monorepo (`apps/*`, `packages/*`, `services/*`).
+This is a pnpm + Turborepo monorepo (`apps/*`, `packages/*`, `services/*`).
 
 - `apps/web`: React app on TanStack Start (Router, Query, Form, Table, Store). Owns the legal-review UI, chat, document rendering (tiptap, docx-preview, streamdown), auth (better-auth), and the embedded Hono server that exposes gitmatter's tools over MCP (`@hono/mcp`, `@modelcontextprotocol/sdk`).
 - `apps/docs`: documentation site, rendered under `/docs`.
@@ -55,7 +55,7 @@ This is a Bun + Turborepo monorepo (`apps/*`, `packages/*`, `services/*`).
 - `packages/registry` (`@workspace/registry`): shared registry consumed across packages.
 - `cli` (`gitmatter-cli`): packaged binary with per-platform build targets (darwin-arm64/x64, linux-x64, win-x64).
 - `infrastructure`: infrastructure-as-code.
-- `scripts`: operational scripts (`db-backup`, `db-restore`, `dev`, `wipe-s3`), run with `bun scripts/<name>.ts`.
+- `scripts`: operational scripts (`db-backup`, `db-restore`, `dev`, `wipe-s3`), run with `pnpm exec tsx scripts/<name>.ts`.
 
 ## Reference Docs
 

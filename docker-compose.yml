@@ -11,7 +11,7 @@
 # GITMATTER_IMAGE (e.g. ghcr.io/git-matter/gitmatter:v1.2.3).
 #
 # Postgres publishes on 127.0.0.1 only — never reachable from outside the host.
-# The loopback port lets a locally-run `bun dev` (outside the compose network)
+# The loopback port lets a locally-run `pnpm dev` (outside the compose network)
 # reach it; the in-compose web service uses the internal hostname.
 services:
   postgres:

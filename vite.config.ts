@@ -6,7 +6,7 @@ export default defineConfig({
   },
   test: {
     // Load root .env into process.env for integration tests (db, auth).
-    // bun test did this implicitly; vitest does not expose non-VITE_ vars.
+    // Vitest does not expose non-VITE_ vars without this explicit loader.
     setupFiles: [new URL("./vitest.setup.ts", import.meta.url).pathname],
   },
   lint: {

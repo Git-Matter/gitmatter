@@ -6,11 +6,12 @@ agent (every command takes `--json` and prints actionable fixes).
 
 ## Install
 
-Grab the binary for your OS from Releases, or build it:
+Grab the binary for your OS from Releases, or build it. Run `pnpm install` in this
+directory first; pnpm supplies the pinned Node.js 26.13 build runtime:
 
 ```sh
-bun run build         # this platform -> dist/gitmatter
-bun run build:all     # mac (arm64/x64), linux x64, windows x64
+pnpm run build         # this platform -> dist/gitmatter
+pnpm run build:all     # mac (arm64/x64), linux x64, windows x64
 ```
 
 Drop the binary on PATH as `gitmatter`.

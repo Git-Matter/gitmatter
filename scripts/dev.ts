@@ -1,9 +1,10 @@
-#!/usr/bin/env bun
+#!/usr/bin/env node
+import "dotenv/config";
 import { parseArgs } from "node:util";
-import { $ } from "bun";
+import { run } from "../cli/src/process.ts";
 
 // Local dev launcher: brings up docker deps (Postgres), applies the DB schema,
-// then runs the app. `bun run dev` calls this.
+// then runs the app. `pnpm run dev` calls this.
 //
 // Flags:
 //   --skip-deps      don't touch docker (deps already running)
@@ -29,7 +30,7 @@ async function step(label: string, run: () => Promise<unknown>): Promise<void> {
 }
 
 async function dockerIsRunning(): Promise<boolean> {
-  return (await $`docker info`.quiet().nothrow()).exitCode === 0;
+  return (await run(["docker", "info"], { stdio: "ignore" }).catch(() => 1)) === 0;
 }
 
 if (!flags["skip-deps"]) {
@@ -38,19 +39,18 @@ if (!flags["skip-deps"]) {
     process.exit(1);
   }
   // --wait blocks until Postgres is healthy (it has a healthcheck).
-  await step("starting deps (postgres)", () => $`docker compose up -d --wait postgres`);
+  await step("starting deps (postgres)", () => run(["docker", "compose", "up", "-d", "--wait", "postgres"]));
 } else {
   log("skipping deps (--skip-deps)");
 }
 
 if (!flags["skip-migrate"]) {
-  await step("applying schema", () => $`bun run migrate`.cwd("packages/db"));
+  await step("applying schema", () => run(["pnpm", "run", "migrate"], { cwd: "packages/db", shell: process.platform === "win32" }));
 } else {
   log("skipping migrate (--skip-migrate)");
 }
 
-// Launch the app via Bun.spawn (not `$`) so turbo inherits the terminal's TTY
-// and renders its TUI (turbo.json sets "ui": "tui"); `$` would force stream mode.
+// Inherit the terminal so Turbo can render its interactive UI.
 // --cloud sets DEPLOYMENT=cloud so vite serves the marketing landing at "/"
 // (vite.config.ts reads process.env.DEPLOYMENT; default is the local flavor).
 log(
@@ -59,11 +59,9 @@ log(
     : `starting app${flags.cloud ? " (cloud)" : ""}`
 );
 if (!flags["dry-run"]) {
-  const proc = Bun.spawn(["bunx", "turbo", "run", "dev"], {
-    stdin: "inherit",
-    stdout: "inherit",
-    stderr: "inherit",
+  const code = await run(["pnpm", "exec", "turbo", "run", "dev"], {
+    shell: process.platform === "win32",
     env: { ...process.env, ...(flags.cloud ? { DEPLOYMENT: "cloud" } : {}) },
   });
-  process.exit(await proc.exited);
+  process.exit(code);
 }
