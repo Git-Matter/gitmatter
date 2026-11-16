@@ -184,11 +184,7 @@ function ReviewView() {
       (!guide.isPending &&
         !guide.isFetching &&
         !guide.error &&
-        (guide.data?.application.providers.some(
-          (provider) =>
-            provider.available && provider.models.some((candidate) => candidate.id === model)
-        ) ??
-          false)));
+        configuredModelAvailable(model, guide.data?.application.providers ?? [], false)));
   const modelAvailable =
     model.length > 0 &&
     model.length <= 200 &&

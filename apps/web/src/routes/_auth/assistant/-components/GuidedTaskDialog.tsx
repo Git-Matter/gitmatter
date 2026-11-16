@@ -75,15 +75,17 @@ export function GuidedTaskDialog({
       setPrepared(null);
     },
   });
+  function prepareCurrentSelection() {
+    return guidedApi.prepare({
+      task: taskId,
+      matterId,
+      documentIds,
+      jurisdiction: effectiveJurisdiction,
+      instructions,
+    });
+  }
   const prepare = useMutation({
-    mutationFn: () =>
-      guidedApi.prepare({
-        task: taskId,
-        matterId,
-        documentIds,
-        jurisdiction: effectiveJurisdiction,
-        instructions,
-      }),
+    mutationFn: prepareCurrentSelection,
     onSuccess: (result) => {
       setPrepared(result);
       setPrompt(result.prompt);
@@ -91,14 +93,7 @@ export function GuidedTaskDialog({
   });
   const start = useMutation({
     // Recheck permissions and readiness immediately before launching the model.
-    mutationFn: () =>
-      guidedApi.prepare({
-        task: taskId,
-        matterId,
-        documentIds,
-        jurisdiction: effectiveJurisdiction,
-        instructions,
-      }),
+    mutationFn: prepareCurrentSelection,
     onSuccess: (result) => {
       exit.resolve();
       onStart({ ...result, prompt: prompt.trim() });

@@ -339,16 +339,8 @@ async function storeMissingChunkEmbeddings(
   return true;
 }
 
-// Background embed entry point: build the vector index for a document's current
-// chunks so the retrieval path stays warm. Called off the request path (from the
-// embed queue) after extraction/edit rebuilds chunks. No-op when no embedding
-// profile is configured or the document has no chunks yet.
-export async function embedDocumentChunks(documentId: string): Promise<void> {
-  const profile = resolveEmbeddingProfile();
-  if (!profile) return;
-  const [doc] = await db.select().from(documents).where(eq(documents.id, documentId)).limit(1);
-  if (!doc) return;
-  const rows = await db
+function listCurrentDocumentChunks(doc: Document) {
+  return db
     .select()
     .from(documentChunks)
     .where(
@@ -360,6 +352,16 @@ export async function embedDocumentChunks(documentId: string): Promise<void> {
       )
     )
     .orderBy(asc(documentChunks.index));
+}
+
+// Extraction queues this after its source transaction commits. Indexing skips
+// documents without chunks or an explicitly configured embedding profile.
+export async function embedDocumentChunks(documentId: string): Promise<void> {
+  const profile = resolveEmbeddingProfile();
+  if (!profile) return;
+  const [doc] = await db.select().from(documents).where(eq(documents.id, documentId)).limit(1);
+  if (!doc) return;
+  const rows = await listCurrentDocumentChunks(doc);
   if (!rows.length) return;
   await storeMissingChunkEmbeddings(doc, rows, profile);
 }
@@ -444,18 +446,7 @@ export async function getDocumentContext(
     };
   }
 
-  const rows = await db
-    .select()
-    .from(documentChunks)
-    .where(
-      and(
-        eq(documentChunks.documentId, doc.id),
-        doc.currentVersionId
-          ? eq(documentChunks.versionId, doc.currentVersionId)
-          : isNull(documentChunks.versionId)
-      )
-    )
-    .orderBy(asc(documentChunks.index));
+  const rows = await listCurrentDocumentChunks(doc);
 
   if (!rows.length) {
     return {

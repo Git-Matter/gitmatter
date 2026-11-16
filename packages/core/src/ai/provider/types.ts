@@ -65,8 +65,8 @@ export type CompleteResult = {
   toolCalls: ToolCall[];
   stop: "end" | "tool_use";
   reasoning?: unknown[];
-  // Token usage as reported by the provider, when it exposes it. Optional —
-  // absent providers leave it undefined; metering treats that as zero.
+  // Provider-reported usage is optional. Missing usage retains an unknown spend
+  // reservation rather than reporting a free completion.
   usage?: UsageInfo;
 };
 

@@ -4,10 +4,9 @@ import { logEvent } from "../core/log.js";
 
 // Background job queue (BullMQ over Redis). Today it carries one job type:
 // embedding a document's chunks off the request path so the retrieval index
-// stays warm. Optional infrastructure — when REDIS_URL is unset every entry
-// point below is a no-op and embedding falls back to the lazy query-time path
-// (see ensureEmbeddings). Job payloads carry IDs only, never document text or
-// keys, so nothing sensitive is written to Redis.
+// stays warm. Without REDIS_URL these entry points are no-ops; explicit generation
+// can still fill missing vectors lazily. Job payloads carry IDs only, never
+// document text or keys.
 
 const EMBEDDING_QUEUE = "embedding";
 
@@ -42,9 +41,9 @@ function getEmbeddingQueue(): Queue<EmbeddingJob> | null {
 
 // Producer. Enqueue a document for background embedding. The jobId is derived from
 // the document id so re-enqueuing a document already waiting collapses into one
-// job (dedup) — extraction and each edit both fire this, and only the latest
-// state needs embedding. Never throws: a Redis outage logs and returns, leaving
-// the lazy query-time path to fill the gap.
+// job (dedup). Extraction enqueues after its source transaction commits; edits
+// rebuild chunks and leave missing vectors to explicit generation-time lookup.
+// Redis failures log and return, leaving that lazy path to fill the gap.
 export async function enqueueEmbedding(documentId: string): Promise<void> {
   const queue = getEmbeddingQueue();
   if (!queue) return;
@@ -70,10 +69,8 @@ export async function enqueueEmbedding(documentId: string): Promise<void> {
 
 let worker: Worker<EmbeddingJob> | null | undefined;
 
-// Consumer. Start the embedding worker once per process. Safe to call when
-// REDIS_URL is unset (no-op) and idempotent across dev HMR reloads. The handler
-// dynamic-imports the embed function to avoid a static platform -> content ->
-// platform module cycle.
+// Start one worker per loaded module, or skip it when REDIS_URL is unset.
+// The handler imports the embed function lazily to avoid a runtime module cycle.
 export function startEmbeddingWorker(): void {
   if (worker !== undefined) return;
   const redisConnection = getConnection();

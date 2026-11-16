@@ -77,6 +77,21 @@ async function inspectStoredWord(documentId: string): Promise<WordInspection> {
   }
 }
 
+function reviewBlockedReason(
+  doc: typeof documents.$inferSelect,
+  edits: Array<{ status: string }>,
+  inspection: WordInspection
+): string | null {
+  if (doc.status !== "ready") return "Wait until the document has finished processing.";
+  if (!doc.markdown?.trim()) return "The document has no extracted text to review.";
+  if (edits.some((edit) => edit.status === "pending"))
+    return "Resolve pending tracked changes before recording practitioner review.";
+  if (doc.fileType !== "docx") return null;
+  if (!inspection || inspection.versionId !== doc.currentVersionId)
+    return "The Word version changed while it was being checked. Reload the document.";
+  return inspection.blockedReason;
+}
+
 // The content revision excludes review commits themselves, so recording review
 // does not immediately invalidate it. Including the revision also prevents an
 // edit followed by an exact reversal from reviving an old attestation.
@@ -120,21 +135,7 @@ async function snapshot(tx: Tx, documentId: string, inspection: WordInspection) 
       })
     )
     .digest("hex")}`;
-  const wordBlockedReason =
-    doc.fileType !== "docx"
-      ? null
-      : !inspection || inspection.versionId !== doc.currentVersionId
-        ? "The Word version changed while it was being checked. Reload the document."
-        : inspection.blockedReason;
-  const blockedReason =
-    doc.status !== "ready"
-      ? "Wait until the document has finished processing."
-      : !doc.markdown?.trim()
-        ? "The document has no extracted text to review."
-        : edits.some((edit) => edit.status === "pending")
-          ? "Resolve pending tracked changes before recording practitioner review."
-          : wordBlockedReason;
-  return { doc, stateToken, blockedReason };
+  return { doc, stateToken, blockedReason: reviewBlockedReason(doc, edits, inspection) };
 }
 
 async function lockDocument(tx: Tx, documentId: string) {
