@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "sourceRoot": "apps/web/src",
+  "excludedDirectories": ["components/ai-elements"],
+  "excludedFiles": ["routeTree.gen.ts"],
+  "rules": {
+    "DG001": "Display text uses solid, readable ink rather than clipped decorative fills.",
+    "DG002": "Authored work surfaces are opaque; backdrop blur belongs only to overlays.",
+    "DG003": "No bouncing or pinging idle decorations.",
+    "DG004": "Product videos start paused and offer explicit playback controls.",
+    "DG005": "Use literal agent labels or a bot icon instead of a magic/sparkle metaphor.",
+    "DG006": "Elevation uses the shared scale; no per-screen arbitrary shadows.",
+    "DG007": "A native link cannot contain a button and a button cannot contain a link.",
+    "DG008": "Canonical tokens must generate the checked-in CSS exactly.",
+    "DG009": "Semantic text and essential control edges meet the configured contrast thresholds.",
+    "DG010": "Public product videos use the shared disclosed player and reviewed media registry."
+  },
+  "contrastPairs": [
+    { "foreground": "--foreground", "background": "--background", "minimum": 4.5 },
+    { "foreground": "--ink-secondary", "background": "--background", "minimum": 4.5 },
+    { "foreground": "--muted-foreground", "background": "--background", "minimum": 4.5 },
+    { "foreground": "--muted-foreground", "background": "--secondary", "minimum": 4.5 },
+    { "foreground": "--primary-foreground", "background": "--primary", "minimum": 4.5 },
+    { "foreground": "--success", "background": "--success-surface", "minimum": 4.5 },
+    { "foreground": "--warning", "background": "--warning-surface", "minimum": 4.5 },
+    { "foreground": "--destructive", "background": "--destructive-surface", "minimum": 4.5 },
+    { "foreground": "--input", "background": "--background", "minimum": 3 },
+    { "foreground": "--input", "background": "--secondary", "minimum": 3 },
+    { "foreground": "--ring", "background": "--background", "minimum": 3 }
+  ],
+  "exceptions": []
+}

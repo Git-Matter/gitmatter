@@ -31,18 +31,24 @@ function TwoFactorVerification() {
   const [error, setError] = useState<string | null>(null);
 
   async function verify() {
+    if (busy || !code.trim()) return;
     setBusy(true);
     setError(null);
-    const result =
-      method === "totp"
-        ? await twoFactor.verifyTotp({ code: code.replace(/\s/g, ""), trustDevice: false })
-        : await twoFactor.verifyBackupCode({ code: code.trim(), trustDevice: false });
-    setBusy(false);
-    if (result.error) {
-      setError(result.error.message ?? "The code was not accepted");
-      return;
+    try {
+      const result =
+        method === "totp"
+          ? await twoFactor.verifyTotp({ code: code.replace(/\s/g, ""), trustDevice: false })
+          : await twoFactor.verifyBackupCode({ code: code.trim(), trustDevice: false });
+      if (result.error) {
+        setError(result.error.message ?? "The code was not accepted");
+        return;
+      }
+      window.location.href = safeLoginNext(next);
+    } catch {
+      setError("Could not connect. Try this code again, or use another verification method.");
+    } finally {
+      setBusy(false);
     }
-    window.location.href = safeLoginNext(next);
   }
 
   return (
@@ -60,6 +66,7 @@ function TwoFactorVerification() {
             </Label>
             <Input
               id="two-factor-code"
+              disabled={busy}
               value={code}
               onChange={(event) => setCode(event.target.value)}
               inputMode={method === "totp" ? "numeric" : "text"}
@@ -78,6 +85,7 @@ function TwoFactorVerification() {
           <Button
             type="button"
             variant="ghost"
+            disabled={busy}
             className="w-full"
             onClick={() => {
               setMethod((current) => (current === "totp" ? "backup" : "totp"));

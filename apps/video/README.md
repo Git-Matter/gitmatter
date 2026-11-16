@@ -22,7 +22,7 @@ npm i
 **Start Preview**
 
 ```console
-npm run dev
+pnpm run dev
 ```
 
 **Render video**

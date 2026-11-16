@@ -1,6 +1,5 @@
 import { Link } from "@tanstack/react-router";
 import { ArrowRight } from "lucide-react";
-import Eyebrow from "@/marketing/components/Eyebrow";
 import CTASection from "@/marketing/components/CTASection";
 import { posts } from "@/marketing/blog/posts";
 import { formatPostDate } from "@/marketing/blog/format";
@@ -11,7 +10,6 @@ export default function Blog() {
   return (
     <div className="flex flex-col">
       <header className="mx-auto flex max-w-3xl flex-col gap-stack px-6 pt-section pb-24 text-center">
-        <Eyebrow>blog</Eyebrow>
         <h1 className="font-heading text-4xl tracking-tight text-balance sm:text-5xl">
           Legal AI, on the record.
         </h1>
@@ -27,7 +25,7 @@ export default function Blog() {
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
               <time dateTime={post.meta.date}>{formatPostDate(post.meta.date)}</time>
               {post.meta.tags.map((tag) => (
-                <span key={tag} className="tracking-[0.15em] text-bronze uppercase">
+                <span key={tag} className="text-muted-foreground">
                   {tag}
                 </span>
               ))}

@@ -1,25 +1,18 @@
 import { type ElementType, lazy, Suspense, useMemo } from "react";
 import { Link, useParams } from "@tanstack/react-router";
 import { ArrowLeft, ArrowRight } from "lucide-react";
-import Eyebrow from "@/marketing/components/Eyebrow";
 import CTASection from "@/marketing/components/CTASection";
 import { getPost, posts } from "@/marketing/blog/posts";
 import { loadPostBody, type PostBody } from "@/marketing/blog/bodies";
 import { formatPostDate } from "@/marketing/blog/format";
+import ProductVideo from "@/marketing/components/ProductVideo";
 
 // Product clip with a caption, for use inside posts as
 // <Clip src="/blog/audit-dive.mp4" caption="..." />. Post clips live in
 // /public/blog; the shorter looping feature clips in /public/features also
 // work here.
 function Clip({ src, caption }: { src: string; caption: string }) {
-  return (
-    <figure className="mx-0 mt-8 overflow-hidden rounded-lg border border-border bg-card shadow-xs">
-      <video className="w-full" src={src} controls muted playsInline preload="metadata" />
-      <figcaption className="border-t border-border px-4 py-2.5 text-xs text-muted-foreground">
-        {caption}
-      </figcaption>
-    </figure>
-  );
+  return <ProductVideo src={src} label={caption} caption={caption} figureClassName="mx-0 mt-8" />;
 }
 
 // Map MDX elements onto the marketing design system so posts read like the
@@ -48,7 +41,7 @@ const mdxComponents: Record<string, ElementType> = {
   a: (props) => <a {...props} className="text-foreground underline underline-offset-4" />,
   strong: ({ children }) => <strong className="font-medium text-foreground">{children}</strong>,
   blockquote: ({ children }) => (
-    <blockquote className="mt-5 border-l-2 border-bronze pl-5 italic">{children}</blockquote>
+    <blockquote className="mt-5 border-l border-border pl-5 italic">{children}</blockquote>
   ),
   code: ({ children }) => (
     <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[0.85em] text-foreground">
@@ -95,7 +88,7 @@ export default function BlogPost() {
             <ArrowLeft className="size-4" />
             All posts
           </Link>
-          <Eyebrow>{post.meta.tags[0] ?? "blog"}</Eyebrow>
+
           <h1 className="font-heading text-4xl tracking-tight text-balance sm:text-5xl">
             {post.meta.title}
           </h1>
@@ -113,7 +106,7 @@ export default function BlogPost() {
 
         {readNext.length > 0 && (
           <footer className="border-t border-border py-12">
-            <Eyebrow>read next</Eyebrow>
+            <h2 className="text-title">Read next</h2>
             <div className="mt-stack flex flex-col gap-6">
               {readNext.map((p) => (
                 <Link

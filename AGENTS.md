@@ -19,6 +19,13 @@ Docs are local at `node_modules/vite-plus/docs` or online at <https://viteplus.d
 - Use `vp test` for the built-in Vite+ test command and `vp run test` when you specifically need the `test` package script (runs `turbo run test`).
 - Database-touching changes: regenerate and check migrations in `packages/db` (`vp run --filter=@workspace/db generate`) when the schema changes.
 
+## Local app instance
+
+- Keep one gitmatter app instance at `http://127.0.0.1:4280` during interactive development.
+  Reuse a healthy existing instance instead of starting another. Do not switch ports when it is busy.
+- Stop the main app before using an isolated UI fixture, then stop the fixture and restore the app.
+  Do not leave separate settings, assistant, review or template preview servers running.
+
 ## Project Snapshot
 
 gitmatter is the audited legal backend that any AI agent plugs into. It does AI-assisted legal review — contract redline, tabular extraction, document generation, and reusable workflows — on a **git-style audit spine**: every change, by a person in the UI or by an AI agent, is a commit with author, message, field-level diff, and blame, in one history.
@@ -44,7 +51,7 @@ Long term maintainability is a core priority. If you add new functionality, firs
 
 ## Package Roles
 
-This is a Bun + Turborepo monorepo (`apps/*`, `packages/*`, `services/*`).
+This is a pnpm + Turborepo monorepo (with Node.js as the runtime) (`apps/*`, `packages/*`, `services/*`).
 
 - `apps/web`: React app on TanStack Start (Router, Query, Form, Table, Store). Owns the legal-review UI, chat, document rendering (tiptap, docx-preview, streamdown), auth (better-auth), and the embedded Hono server that exposes gitmatter's tools over MCP (`@hono/mcp`, `@modelcontextprotocol/sdk`).
 - `apps/docs`: documentation site, rendered under `/docs`.
@@ -55,7 +62,22 @@ This is a Bun + Turborepo monorepo (`apps/*`, `packages/*`, `services/*`).
 - `packages/registry` (`@workspace/registry`): shared registry consumed across packages.
 - `cli` (`gitmatter-cli`): packaged binary with per-platform build targets (darwin-arm64/x64, linux-x64, win-x64).
 - `infrastructure`: infrastructure-as-code.
-- `scripts`: operational scripts (`db-backup`, `db-restore`, `dev`, `wipe-s3`), run with `bun scripts/<name>.ts`.
+- `scripts`: operational scripts (`db-backup`, `db-restore`, `dev`, `wipe-s3`), run with `pnpm exec tsx scripts/<name>.ts`.
+
+## Design authoring requirements
+
+- Read `DESIGN.md`, `design/philosophy.md`, and the applicable `design/workflows` brief before UI work.
+- Compose interaction patterns from cited research; keep one gitmatter vocabulary and component system.
+- Physical foundation values live in `design/tokens.json`. Run `vp run design:generate`; never edit
+  generated `apps/web/src/styles/tokens.css` directly.
+- Run `vp run design:check` alongside the existing validation commands. Do not add broad exceptions
+  to bypass a design failure. Exact scoped exceptions need a concrete reason and supporting evidence.
+- Preserve Client → Matter → artifact context, source/version identity, unsaved input, and return focus.
+  Local UI choices must not create paid runs, approvals, publication, or completed legal progress.
+- Record normal, error, partial, denied, stale, cancelled and resumed state checks where applicable.
+  Browser screenshots and a policy scan alone do not establish usability or a complete WCAG audit.
+- Use shadcn's default radius scale from `design/tokens.json`: a 0.625rem base, with derived
+  component radii (8px fields). This supersedes the earlier custom 16/24/28px geometry.
 
 ## Reference Docs
 

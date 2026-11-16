@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import type { PaginationState, SortingState } from "@tanstack/react-table";
 import { useDebouncedValue } from "../state/useDebouncedValue";
@@ -26,17 +26,21 @@ export function useTablePageParams({
   extraDeps?: readonly unknown[];
   extraParams?: Record<string, string | undefined>;
 }): TablePageParams {
-  const search = useDebouncedValue(query, 300);
+  const search = useDebouncedValue(query.trim(), 300);
   const sort = sorting[0];
 
+  const identity = JSON.stringify([search, sort?.desc, sort?.id, ...extraDeps]);
+  const previous = useRef(identity);
   useEffect(() => {
+    if (previous.current === identity) return;
+    previous.current = identity;
     setPagination((current) => ({ ...current, pageIndex: 0 }));
-  }, [search, sort?.desc, sort?.id, setPagination, ...extraDeps]);
+  }, [identity, setPagination]);
 
   return {
     q: search,
     ...extraParams,
-    page: pagination.pageIndex,
+    page: previous.current !== identity ? 0 : pagination.pageIndex,
     pageSize: pagination.pageSize,
     sort: sort?.id,
     dir: sort?.desc ? "desc" : "asc",

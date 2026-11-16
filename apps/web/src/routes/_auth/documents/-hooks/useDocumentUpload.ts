@@ -1,3 +1,4 @@
+import { notifySuccess } from "@/lib/feedback";
 import { useRef, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import { useMutation } from "@tanstack/react-query";
@@ -36,7 +37,7 @@ export function useDocumentUpload({
         await uploadMutation.mutateAsync(file);
       }
       setPagination((current) => ({ ...current, pageIndex: 0 }));
-      toast.success(`Uploaded ${ok.length} file${ok.length > 1 ? "s" : ""} - extracting...`);
+      notifySuccess(`Uploaded ${ok.length} file${ok.length > 1 ? "s" : ""} - extracting...`);
     } catch (err) {
       onUploaded();
       toast.error(err instanceof Error ? err.message : "Upload failed");

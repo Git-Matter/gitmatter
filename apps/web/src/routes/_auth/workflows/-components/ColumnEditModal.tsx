@@ -1,4 +1,6 @@
-import { useEffect, useState } from "react";
+import { FormFeedback } from "@/components/FormFeedback";
+import { Input } from "@/components/ui/input";
+import { useEffect, useRef, useState } from "react";
 import { ChevronDown, Plus, X } from "lucide-react";
 import { api, type Column } from "@/lib/data/api";
 import { cn } from "@/lib/util/utils";
@@ -32,6 +34,8 @@ interface Props {
 
 export function ColumnEditModal({ column, onClose, onSave, onDelete }: Props) {
   const [draft, setDraft] = useState<ColumnDraft>(() => createDraft(column));
+  const initial = useRef(JSON.stringify(createDraft(column))).current;
+  const [generationError, setGenerationError] = useState<unknown>(null);
   const [generating, setGenerating] = useState(false);
 
   useEffect(() => {
@@ -68,6 +72,7 @@ export function ColumnEditModal({ column, onClose, onSave, onDelete }: Props) {
     const title = draft.name.trim();
     if (!title) return;
     setGenerating(true);
+    setGenerationError(null);
     try {
       const { prompt } = await api.generateColumnPrompt({
         title,
@@ -75,6 +80,8 @@ export function ColumnEditModal({ column, onClose, onSave, onDelete }: Props) {
         tags: draft.format === "tag" ? draft.tags : undefined,
       });
       update({ prompt });
+    } catch (error) {
+      setGenerationError(error);
     } finally {
       setGenerating(false);
     }
@@ -92,6 +99,10 @@ export function ColumnEditModal({ column, onClose, onSave, onDelete }: Props) {
     <WorkflowModal
       open
       onClose={onClose}
+      dirty={JSON.stringify(draft) !== initial}
+      saving={generating}
+      pendingTitle="Prompt generation in progress"
+      pendingDescription="The request has been sent. Wait for its result; closing the editor would not cancel it."
       breadcrumbs={["Workflows", "Edit column"]}
       secondaryAction={{ label: "Delete", variant: "danger", onClick: onDelete }}
       primaryAction={{
@@ -102,24 +113,27 @@ export function ColumnEditModal({ column, onClose, onSave, onDelete }: Props) {
       }}
     >
       <form id={formId} onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col py-1">
-        <ColumnNameField draft={draft} onChange={update} />
-        <ColumnFormatField value={draft.format} onChange={(format) => update({ format })} />
-        {draft.format === "tag" && (
-          <ColumnTagsField
-            tags={draft.tags}
-            tagInput={draft.tagInput}
-            onChange={update}
-            onKeyDown={handleTagKeyDown}
-            onBlur={commitTag}
+        <FormFeedback error={generationError} title="Prompt was not generated" />
+        <fieldset disabled={generating} className="flex min-w-0 flex-col">
+          <ColumnNameField draft={draft} onChange={update} />
+          <ColumnFormatField value={draft.format} onChange={(format) => update({ format })} />
+          {draft.format === "tag" && (
+            <ColumnTagsField
+              tags={draft.tags}
+              tagInput={draft.tagInput}
+              onChange={update}
+              onKeyDown={handleTagKeyDown}
+              onBlur={commitTag}
+            />
+          )}
+          <ColumnPromptField
+            value={draft.prompt}
+            canGenerate={!!draft.name.trim()}
+            generating={generating}
+            onChange={(prompt) => update({ prompt })}
+            onGenerate={autoGeneratePrompt}
           />
-        )}
-        <ColumnPromptField
-          value={draft.prompt}
-          canGenerate={!!draft.name.trim()}
-          generating={generating}
-          onChange={(prompt) => update({ prompt })}
-          onGenerate={autoGeneratePrompt}
-        />
+        </fieldset>
       </form>
     </WorkflowModal>
   );
@@ -166,12 +180,12 @@ function ColumnNameField({
 }) {
   return (
     <div className="flex items-start gap-2">
-      <input
+      <Input
         type="text"
         value={draft.name}
         onChange={(event) => onChange(presetDraft(event.target.value))}
         placeholder="Column name"
-        className="flex-1 bg-transparent font-serif text-2xl text-foreground placeholder:text-muted-foreground/50 focus:outline-none"
+        className="flex-1 bg-transparent font-serif text-2xl text-foreground placeholder:text-muted-foreground focus:outline-none"
         autoFocus
       />
       <DropdownMenu>
@@ -296,7 +310,7 @@ function ColumnTagsField({
             </button>
           </span>
         ))}
-        <input
+        <Input
           type="text"
           value={tagInput}
           onChange={(event) => onChange({ tagInput: event.target.value })}

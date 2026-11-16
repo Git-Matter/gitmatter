@@ -1,3 +1,4 @@
+import { useWorkspaceViewState } from "../state/useWorkspaceViewState";
 import { useEffect, useRef, useState } from "react";
 import type { PaginationState, SortingState } from "@tanstack/react-table";
 
@@ -10,7 +11,7 @@ import type { PaginationState, SortingState } from "@tanstack/react-table";
 // gate their list query on it so the single fetch already carries the restored
 // sort/pageSize instead of fetching the default first and refetching.
 //
-// Only sort + pageSize are remembered; pageIndex always resets to 0 on load.
+// Sort/page-size preferences persist locally; page/search context stays in workspace memory.
 
 type StoredState = { sorting?: SortingState; pageSize?: number };
 
@@ -19,8 +20,11 @@ export function useTableState(
   opts: { defaultSorting: SortingState; defaultPageSize?: number }
 ) {
   const storeKey = `gitmatter.table.${key}`;
-  const [sorting, setSorting] = useState<SortingState>(opts.defaultSorting);
-  const [pagination, setPagination] = useState<PaginationState>({
+  const [sorting, setSorting] = useWorkspaceViewState<SortingState>(
+    `${key}:sorting`,
+    opts.defaultSorting
+  );
+  const [pagination, setPagination] = useWorkspaceViewState<PaginationState>(`${key}:pagination`, {
     pageIndex: 0,
     pageSize: opts.defaultPageSize ?? 50,
   });

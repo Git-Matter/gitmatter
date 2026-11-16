@@ -11,6 +11,8 @@ import {
   matterMembers,
   matters,
   tabularReviews,
+  templates,
+  templateMembers,
   user,
   workflows,
 } from "@workspace/db/schema";
@@ -207,6 +209,30 @@ export async function canAccessArtifact(
   if (artifactType === "matter") return hasMatterAccess(subject, artifactId, min, reader);
   const userId = subjectUserId(subject);
   const scope = subjectScope(subject);
+  // Template history contains unpublished content. Only its owner or a firm
+  // admin may use the generic history/share guards; readers use published views.
+  if (artifactType === "template") {
+    if (!scopeAllowsMatter(scope, null)) return false;
+    const [row] = await reader
+      .select({ ownerId: templates.ownerId, tenantId: templates.tenantId })
+      .from(templates)
+      .where(eq(templates.id, artifactId));
+    const [account] = await reader.select().from(user).where(eq(user.id, userId));
+    if (!row || account?.tenantId !== row.tenantId) return false;
+    const [member] = await reader
+      .select()
+      .from(templateMembers)
+      .where(and(eq(templateMembers.templateId, artifactId), eq(templateMembers.userId, userId)));
+    const rank =
+      account.tenantRole === "admin" || row.ownerId === userId
+        ? ROLE_RANK.owner
+        : member?.role === "editor"
+          ? ROLE_RANK.editor
+          : member
+            ? ROLE_RANK.viewer
+            : -1;
+    return rank >= 0 && clampRank(scope, rank) >= ROLE_RANK[min];
+  }
   const table = MATTER_TABLE[artifactType];
   if (!table) throw new Error(`canAccessArtifact: unsupported artifact type "${artifactType}"`);
   const [row] = await reader

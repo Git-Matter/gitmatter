@@ -1,3 +1,6 @@
+import { notifySuccess } from "@/lib/feedback";
+import { Checkbox } from "@/components/ui/checkbox";
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
@@ -103,7 +106,7 @@ export function AgentActivity({ matterId, isOwner }: { matterId: string; isOwner
       });
     },
     onSuccess: (result) => {
-      toast.success(
+      notifySuccess(
         result.outcome === "applied"
           ? "Proposal applied and recorded."
           : "Proposal rejected and recorded."
@@ -143,7 +146,7 @@ export function AgentActivity({ matterId, isOwner }: { matterId: string; isOwner
       setReason("");
       void qc.invalidateQueries({ queryKey: ["approval-policy", matterId] });
       refresh();
-      toast.success("Policy change recorded.");
+      notifySuccess("Policy change recorded.");
     },
     onError: (error) => toast.error(error.message),
   });
@@ -205,7 +208,7 @@ export function AgentActivity({ matterId, isOwner }: { matterId: string; isOwner
       setConfirmBatch(undefined);
       setBatchNote("");
       refresh();
-      toast.success("Every batch decision was recorded.");
+      notifySuccess("Every batch decision was recorded.");
     },
     onError: (error) => {
       refresh();
@@ -230,9 +233,8 @@ export function AgentActivity({ matterId, isOwner }: { matterId: string; isOwner
         </div>
         <div className="flex items-center gap-2">
           <Label htmlFor={`proposal-status-${matterId}`}>Show</Label>
-          <select
+          <NativeSelect
             id={`proposal-status-${matterId}`}
-            className="h-9 rounded-md border border-input bg-background px-2 text-sm"
             value={status}
             onChange={(e) => {
               setStatus(e.target.value as ProposalStatus);
@@ -241,11 +243,11 @@ export function AgentActivity({ matterId, isOwner }: { matterId: string; isOwner
               setBatchIds([]);
             }}
           >
-            <option value="pending">Needs decision</option>
-            <option value="applied">Applied</option>
-            <option value="rejected">Rejected</option>
-            <option value="withdrawn">Withdrawn</option>
-          </select>
+            <NativeSelectOption value="pending">Needs decision</NativeSelectOption>
+            <NativeSelectOption value="applied">Applied</NativeSelectOption>
+            <NativeSelectOption value="rejected">Rejected</NativeSelectOption>
+            <NativeSelectOption value="withdrawn">Withdrawn</NativeSelectOption>
+          </NativeSelect>
           {isOwner && (
             <Button
               variant="outline"
@@ -326,17 +328,14 @@ export function AgentActivity({ matterId, isOwner }: { matterId: string; isOwner
           {queue?.items.map((item) => (
             <div key={item.id} className="flex items-start gap-2">
               {status === "pending" && item.kind === "cell" && (
-                <input
-                  type="checkbox"
-                  className="mt-4 size-4 accent-primary"
+                <Checkbox
+                  className="mt-4"
                   aria-label={`Select ${proposalTitle(item)} for batch decision`}
                   checked={batchIds.includes(item.id)}
                   disabled={!item.mayDecide || item.policyChanged || item.stale}
-                  onChange={(e) =>
+                  onCheckedChange={(e) =>
                     setBatchIds(
-                      e.target.checked
-                        ? [...batchIds, item.id]
-                        : batchIds.filter((id) => id !== item.id)
+                      e ? [...batchIds, item.id] : batchIds.filter((id) => id !== item.id)
                     )
                   }
                 />
@@ -675,62 +674,65 @@ export function AgentActivity({ matterId, isOwner }: { matterId: string; isOwner
             always require a person. Firm Library publication retains its separate admin authority.
           </p>
           <Label htmlFor="cell-approval-gate">Required decision</Label>
-          <select
+          <NativeSelect
             id="cell-approval-gate"
-            className="h-9 rounded-md border border-input bg-background px-2 text-sm"
             value={gate}
             onChange={(e) => setGate(e.target.value as ApprovalPolicy["agentCells"])}
           >
-            <option value="direct">Direct, audited agent writes</option>
-            <option value="editor">Human editor approval</option>
-            <option value="owner">Human matter owner approval</option>
-          </select>
+            <NativeSelectOption value="direct">Direct, audited agent writes</NativeSelectOption>
+            <NativeSelectOption value="editor">Human editor approval</NativeSelectOption>
+            <NativeSelectOption value="owner">Human matter owner approval</NativeSelectOption>
+          </NativeSelect>
           <Label htmlFor="document-approval-role">Document changes</Label>
-          <select
+          <NativeSelect
             id="document-approval-role"
-            className="h-9 rounded-md border border-input bg-background px-2 text-sm"
             value={documentRole}
             onChange={(e) => setDocumentRole(e.target.value as "editor" | "owner")}
           >
-            <option value="editor">Human editor resolution</option>
-            <option value="owner">Human matter owner resolution</option>
-          </select>
+            <NativeSelectOption value="editor">Human editor resolution</NativeSelectOption>
+            <NativeSelectOption value="owner">Human matter owner resolution</NativeSelectOption>
+          </NativeSelect>
           <Label htmlFor="workflow-approval-gate">Agent matter workflow changes</Label>
-          <select
+          <NativeSelect
             id="workflow-approval-gate"
-            className="h-9 rounded-md border border-input bg-background px-2 text-sm"
             value={workflowGate}
             onChange={(e) => setWorkflowGate(e.target.value as "direct" | "editor" | "owner")}
           >
-            <option value="direct">Direct, audited agent writes</option>
-            <option value="editor">Human editor approval</option>
-            <option value="owner">Human matter owner approval</option>
-          </select>
+            <NativeSelectOption value="direct">Direct, audited agent writes</NativeSelectOption>
+            <NativeSelectOption value="editor">Human editor approval</NativeSelectOption>
+            <NativeSelectOption value="owner">Human matter owner approval</NativeSelectOption>
+          </NativeSelect>
           <Label htmlFor="export-approval-gate">Clean DOCX export</Label>
-          <select
+          <NativeSelect
             id="export-approval-gate"
-            className="h-9 rounded-md border border-input bg-background px-2 text-sm"
             value={exportGate}
             onChange={(e) => setExportGate(e.target.value as "direct" | "editor" | "owner")}
           >
-            <option value="direct">Allow one resolved DOCX within limits</option>
-            <option value="editor">Human editor approves each exact output</option>
-            <option value="owner">Human matter owner approves each exact output</option>
-          </select>
+            <NativeSelectOption value="direct">
+              Allow one resolved DOCX within limits
+            </NativeSelectOption>
+            <NativeSelectOption value="editor">
+              Human editor approves each exact output
+            </NativeSelectOption>
+            <NativeSelectOption value="owner">
+              Human matter owner approves each exact output
+            </NativeSelectOption>
+          </NativeSelect>
           <p className="text-xs text-muted-foreground">
             This output supports one document and makes no model call. Each approval binds its
             document version and review history; changed inputs require a new request.
           </p>
           <Label htmlFor="finding-approval-role">Finding and escalation decisions</Label>
-          <select
+          <NativeSelect
             id="finding-approval-role"
-            className="h-9 rounded-md border border-input bg-background px-2 text-sm"
             value={findingRole}
             onChange={(e) => setFindingRole(e.target.value as "editor" | "owner")}
           >
-            <option value="editor">Human editor can decide to leave language unchanged</option>
-            <option value="owner">Human matter owner must decide</option>
-          </select>
+            <NativeSelectOption value="editor">
+              Human editor can decide to leave language unchanged
+            </NativeSelectOption>
+            <NativeSelectOption value="owner">Human matter owner must decide</NativeSelectOption>
+          </NativeSelect>
           <p className="text-xs text-muted-foreground">
             Editors can always request escalation. Resolving it uses this required role.
           </p>

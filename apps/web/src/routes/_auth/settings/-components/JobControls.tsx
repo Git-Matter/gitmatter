@@ -1,3 +1,4 @@
+import { notifySuccess } from "@/lib/feedback";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -21,6 +22,9 @@ import {
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Separator } from "@/components/ui/separator";
+import { DiscardChangesDialog } from "@/components/UnsavedChangesGuard";
+import { canRetainSnapshotAfterError } from "@/lib/data/snapshot-refresh";
+import { useSettingsDraft } from "./SettingsDrafts";
 import {
   Table,
   TableBody,
@@ -49,7 +53,7 @@ export function JobControls() {
   const query = useQuery({ queryKey: ["job-controls"], queryFn: api.getJobControls, retry: false });
   if (query.isPending)
     return <Skeleton className="h-24 w-full" aria-label="Loading review limits" />;
-  if (query.isError)
+  if (query.isError && (!query.data || !canRetainSnapshotAfterError(query.error)))
     return (
       <Alert>
         <AlertTitle>Review limits unavailable</AlertTitle>
@@ -62,11 +66,35 @@ export function JobControls() {
         </AlertDescription>
       </Alert>
     );
-  return <ControlsForm key={query.data.revision} snapshot={query.data} />;
+  if (!query.data) return null;
+  return (
+    <>
+      {query.isError && (
+        <Alert>
+          <AlertTitle>Review limits could not be refreshed</AlertTitle>
+          <AlertDescription>
+            Your draft is retained. Saving is unavailable until the current limits can be checked.
+            <Button variant="outline" size="sm" onClick={() => void query.refetch()}>
+              Retry review limits
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
+      <ControlsForm snapshot={query.data} unavailable={query.isError} />
+    </>
+  );
 }
 
-function ControlsForm({ snapshot }: { snapshot: JobControlsSnapshot }) {
+function ControlsForm({
+  snapshot: latest,
+  unavailable,
+}: {
+  snapshot: JobControlsSnapshot;
+  unavailable: boolean;
+}) {
   const qc = useQueryClient();
+  const [snapshot, setSnapshot] = useState(latest);
+  const [reloadOpen, setReloadOpen] = useState(false);
   const [policy, setPolicy] = useState(snapshot.effective);
   const [reason, setReason] = useState("");
   const [showAttribution, setShowAttribution] = useState(false);
@@ -81,17 +109,23 @@ function ControlsForm({ snapshot }: { snapshot: JobControlsSnapshot }) {
     mutationFn: () =>
       api.setJobControls({ expectedRevision: snapshot.revision, reason: reason.trim(), policy }),
     onSuccess: (updated) => {
+      setSnapshot(updated);
+      setPolicy(updated.effective);
+      setReason("");
       qc.setQueryData(["job-controls"], updated);
-      toast.success("Review limits saved");
+      notifySuccess("Review limits saved");
     },
     onError: () => {
       toast.error("Limits could not be saved. Reload to check for changes by another admin.");
     },
   });
+  const stale = latest.revision !== snapshot.revision;
+  const blocked = save.isPending || unavailable || stale;
+  useSettingsDraft(changed || Boolean(reason), save.isPending);
   const change = (key: keyof JobControlPolicy, value: number) =>
     setPolicy((previous) => ({ ...previous, [key]: value }));
   return (
-    <Card>
+    <Card variant="section">
       <CardHeader>
         <CardTitle>AI limits and usage</CardTitle>
         <CardDescription>
@@ -101,6 +135,30 @@ function ControlsForm({ snapshot }: { snapshot: JobControlsSnapshot }) {
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-stack">
+        {stale && (
+          <Alert>
+            <AlertTitle>Review limits changed elsewhere</AlertTitle>
+            <AlertDescription>
+              Your draft still refers to revision {snapshot.revision}. Check the latest limits
+              before saving.
+              <Button variant="outline" size="sm" onClick={() => setReloadOpen(true)}>
+                Load latest limits
+              </Button>
+            </AlertDescription>
+          </Alert>
+        )}
+        <DiscardChangesDialog
+          open={reloadOpen}
+          onKeep={() => setReloadOpen(false)}
+          onDiscard={() => {
+            setSnapshot(latest);
+            setPolicy(latest.effective);
+            setReason("");
+            setReloadOpen(false);
+          }}
+          title="Replace your limits draft?"
+          description="Loading the latest limits discards this draft and its reason. You can keep editing or load the current revision."
+        />
         <dl className="grid grid-cols-2 gap-3 text-sm">
           <div>
             <dt className="text-muted-foreground">Known usage in this window</dt>
@@ -208,10 +266,10 @@ function ControlsForm({ snapshot }: { snapshot: JobControlsSnapshot }) {
           className="flex flex-col gap-stack"
           onSubmit={(event) => {
             event.preventDefault();
-            if (parsed.success && changed && reason.trim()) save.mutate();
+            if (!blocked && parsed.success && changed && reason.trim()) save.mutate();
           }}
         >
-          <FieldSet disabled={save.isPending}>
+          <FieldSet disabled={blocked}>
             <FieldLegend>Spend window</FieldLegend>
             <FieldDescription>
               Token and dollar limits apply within this window. Zero disables a spend limit.
@@ -263,7 +321,7 @@ function ControlsForm({ snapshot }: { snapshot: JobControlsSnapshot }) {
           </FieldSet>
           <details>
             <summary className="cursor-pointer text-sm font-medium">Concurrent work</summary>
-            <FieldSet className="mt-4" disabled={save.isPending}>
+            <FieldSet className="mt-4" disabled={blocked}>
               <FieldGroup>
                 <Field>
                   <FieldLabel htmlFor="tenant-concurrency">
@@ -335,7 +393,7 @@ function ControlsForm({ snapshot }: { snapshot: JobControlsSnapshot }) {
               value={reason}
               maxLength={1000}
               required
-              disabled={save.isPending}
+              disabled={blocked}
               onChange={(event) => setReason(event.target.value)}
             />
             <FieldDescription>
@@ -361,9 +419,17 @@ function ControlsForm({ snapshot }: { snapshot: JobControlsSnapshot }) {
               Reload current limits
             </Button>
           )}
+          <FieldDescription id="limits-save-hint">
+            {stale
+              ? "Load the current limits before saving this draft."
+              : !changed
+                ? "Change a limit and enter a reason to enable Save review limits."
+                : "Enter a reason for the audit history and correct any invalid limits before saving."}
+          </FieldDescription>
           <Button
             type="submit"
-            disabled={save.isPending || !parsed.success || !changed || !reason.trim()}
+            aria-describedby="limits-save-hint"
+            disabled={blocked || !parsed.success || !changed || !reason.trim()}
           >
             {save.isPending ? "Saving…" : "Save review limits"}
           </Button>

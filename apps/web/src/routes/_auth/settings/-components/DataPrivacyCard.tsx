@@ -4,22 +4,24 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { api } from "@/lib/data/api";
+import { SettingsQueryNotice } from "./SettingsQueryNotice";
 
 export function DataPrivacyCard() {
   // Admin gate, mirroring OrganizationCard: listInvites 403s for non-admins.
-  const { isError } = useQuery({
+  const access = useQuery({
     queryKey: ["invites"],
     queryFn: () => api.listInvites(),
     retry: false,
   });
-  const isAdmin = !isError;
+  const isAdmin = access.isSuccess;
 
   return (
-    <Card>
+    <Card variant="section">
       <CardHeader>
         <CardTitle>Data &amp; Privacy</CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-stack">
+        <SettingsQueryNotice query={access} label="Data export access" />
         <div className="flex flex-col gap-2">
           <Label>Export</Label>
           <p className="text-sm text-muted-foreground">

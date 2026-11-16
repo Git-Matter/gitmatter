@@ -1,6 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import BrandMark from "@/components/BrandMark";
 import { Badge } from "@/components/ui/badge";
 import {
   Conversation,
@@ -13,7 +12,9 @@ import { ActivityPanel } from "./-components/ActivityPanel";
 import { ActivityPanelProvider } from "./-components/activity-context";
 import { useChatSession } from "./-components/useChatSession";
 import { type ChatAttachment, type ChatDetail } from "@/lib/data/api";
-import { useSession } from "@/lib/auth/auth-client";
+import { Button } from "@/components/ui/button";
+import { UnsavedNavigationGuard } from "@/components/UnsavedChangesGuard";
+import { ResponseNotice } from "./-components/ResponseNotice";
 
 // Fresh chat. Resuming a conversation lives at /assistant/$id (assistant.$id.tsx),
 // which seeds AssistantView from its loader. Keyed "new" so state starts clean.
@@ -21,74 +22,201 @@ export const Route = createFileRoute("/_auth/assistant/")({
   component: () => <AssistantView key="new" loaded={null} />,
 });
 
-export function AssistantView({ loaded }: { loaded: ChatDetail | null }) {
-  const { data: session } = useSession();
+export function AssistantView({
+  loaded,
+  current = true,
+}: {
+  loaded: ChatDetail | null;
+  current?: boolean;
+}) {
   const navigate = useNavigate();
 
-  // Multi-step workflow run: prompts still queued to send (after the current one)
-  // and the new chat id to navigate to once the last step is sent. Navigation is
-  // held until then — navigating mid-run would unmount this view and drop the queue.
   const stepsRef = useRef<string[]>([]);
   const navIdRef = useRef<string | null>(null);
-
+  const [workflow, setWorkflow] = useState<{
+    steps: string[];
+    state: "ready" | "running" | "paused";
+  } | null>(null);
+  const [pendingAutoSend, setPendingAutoSend] = useState(false);
   const s = useChatSession({
     loaded,
+    current,
     onFirstChat: (id) => {
-      if (stepsRef.current.length > 0) navIdRef.current = id;
-      else void navigate({ to: "/assistant/$id", params: { id }, replace: true });
+      navIdRef.current = id;
     },
   });
-
-  const firstName =
-    session?.user.name?.split(" ")[0] || session?.user.email?.split("@")[0] || "there";
   const empty = s.turns.length === 0;
 
-  // A workflow "Use" launch stashes a seed (ordered prompt steps + document
-  // attachments) then navigates here; consume it once on a fresh chat. The first
-  // step auto-sends; the rest are queued and sent one-by-one as each completes.
-  const [pendingAutoSend, setPendingAutoSend] = useState(false);
   useEffect(() => {
     if (loaded) return;
     const raw = sessionStorage.getItem("workflowChatSeed");
     if (!raw) return;
     sessionStorage.removeItem("workflowChatSeed");
     try {
-      const seed = JSON.parse(raw) as { steps?: string[]; attachments?: ChatAttachment[] };
-      const steps = seed.steps ?? [];
+      const seed = JSON.parse(raw) as { steps?: unknown; attachments?: unknown };
+      const steps = Array.isArray(seed.steps)
+        ? seed.steps.filter((step): step is string => typeof step === "string" && !!step.trim())
+        : [];
       if (!steps.length) return;
       s.setInput(steps[0]);
-      s.setAttachments(seed.attachments ?? []);
+      const attachments = Array.isArray(seed.attachments)
+        ? seed.attachments.filter(
+            (a): a is ChatAttachment =>
+              !!a &&
+              typeof a.id === "string" &&
+              typeof a.label === "string" &&
+              ["document", "matter", "client", "review"].includes(a.kind)
+          )
+        : [];
+      s.setAttachments(attachments);
       stepsRef.current = steps.slice(1);
-      setPendingAutoSend(true);
+      setWorkflow({ steps, state: "ready" });
     } catch {
-      /* ignore malformed seed */
+      /* A malformed preparation is ignored; it never dispatches. */
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loaded]);
-  useEffect(() => {
-    if (pendingAutoSend && s.input.trim() && !s.busy) {
-      setPendingAutoSend(false);
-      void s.send();
+
+  function send() {
+    if (workflow?.state === "running") return;
+    if (
+      !s.modelReady ||
+      !s.input.trim() ||
+      s.busy ||
+      s.hasProcessingAttachment ||
+      s.hasFailedAttachment
+    )
+      return;
+    if (workflow?.state === "ready") setWorkflow({ ...workflow, state: "running" });
+    else if (workflow?.state === "paused") {
+      stepsRef.current = [];
+      setWorkflow(null);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pendingAutoSend, s.input, s.busy]);
-  // After a step finishes, send the next queued step into the same chat (context
-  // carries via chatId). Once the queue is empty, run the deferred navigation.
+    void s.send();
+  }
+  function stop() {
+    if (pendingAutoSend && s.input.trim()) stepsRef.current.unshift(s.input.trim());
+    setPendingAutoSend(false);
+    setWorkflow((value) => (value ? { ...value, state: "paused" } : null));
+    s.stop();
+  }
   useEffect(() => {
-    if (s.busy || pendingAutoSend) return;
-    if (stepsRef.current.length > 0 && s.chatId) {
-      const next = stepsRef.current.shift()!;
-      s.setInput(next);
-      setPendingAutoSend(true);
+    if (!pendingAutoSend || s.busy) return;
+    if (s.modelChecking) return;
+    if (!s.modelReady || s.hasFailedAttachment) {
+      setPendingAutoSend(false);
+      setWorkflow((value) => (value ? { ...value, state: "paused" } : null));
       return;
     }
-    if (stepsRef.current.length === 0 && navIdRef.current) {
+    if (!s.input.trim() || s.hasProcessingAttachment) return;
+    setPendingAutoSend(false);
+    void s.send();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    pendingAutoSend,
+    s.input,
+    s.busy,
+    s.modelReady,
+    s.modelChecking,
+    s.hasProcessingAttachment,
+    s.hasFailedAttachment,
+  ]);
+  useEffect(() => {
+    if (s.busy || pendingAutoSend) return;
+    if (workflow?.state === "running") {
+      if (s.outcome === "failed" || s.outcome === "stopped") {
+        setWorkflow({ ...workflow, state: "paused" });
+        return;
+      }
+      if (s.outcome !== "completed") return;
+      if (stepsRef.current.length) {
+        // A follow-up draft entered during the response is never overwritten by a queued step.
+        if (s.input.trim() || s.attachments.length) {
+          setWorkflow({ ...workflow, state: "paused" });
+          return;
+        }
+        s.setInput(stepsRef.current.shift()!);
+        setPendingAutoSend(true);
+        return;
+      }
+      setWorkflow(null);
+    }
+    if (
+      navIdRef.current &&
+      s.outcome === "completed" &&
+      !s.input.trim() &&
+      !s.attachments.length &&
+      workflow?.state !== "ready" &&
+      workflow?.state !== "paused"
+    ) {
       const id = navIdRef.current;
       navIdRef.current = null;
       void navigate({ to: "/assistant/$id", params: { id }, replace: true });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [s.busy, pendingAutoSend, s.chatId]);
+  }, [s.busy, s.outcome, s.chatId, s.input, s.attachments.length, pendingAutoSend, workflow]);
+
+  const workflowPanel = workflow && (
+    <section aria-label="Prepared workflow" className="mb-4 space-y-3 text-sm">
+      <p className="font-medium">
+        {workflow.state === "ready"
+          ? "Workflow ready"
+          : workflow.state === "running"
+            ? "Workflow running"
+            : "Workflow paused"}{" "}
+        · {workflow.steps.length} planned steps
+      </p>
+      <p className="text-muted-foreground">
+        {workflow.state === "ready"
+          ? "Review the steps and selected model. Start workflow sends them in order; provider usage applies."
+          : workflow.state === "paused"
+            ? "Further steps are paused. Review the response and any unsent steps before continuing."
+            : "Only a completed response advances to the next step. Stop pauses further dispatch."}
+      </p>
+      <details>
+        <summary className="cursor-pointer">Review workflow steps</summary>
+        <ol className="mt-2 max-h-48 list-decimal space-y-2 overflow-auto ps-5">
+          {workflow.steps.map((step, index) => (
+            <li key={index} className="whitespace-pre-wrap">
+              {step}
+            </li>
+          ))}
+        </ol>
+      </details>
+      {workflow.state === "ready" && (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => {
+            stepsRef.current = [];
+            setWorkflow(null);
+          }}
+        >
+          Keep first message only
+        </Button>
+      )}
+      {workflow.state === "running" && (
+        <Button variant="outline" size="sm" onClick={stop}>
+          Pause workflow
+        </Button>
+      )}
+      {workflow.state === "paused" && !!stepsRef.current.length && (
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={!s.chatId || !!s.input.trim() || !!s.attachments.length}
+          onClick={() => {
+            const remaining = [...stepsRef.current];
+            s.setInput(remaining[0]);
+            stepsRef.current = remaining.slice(1);
+            setWorkflow({ steps: remaining, state: "ready" });
+          }}
+        >
+          Prepare unsent steps
+        </Button>
+      )}
+    </section>
+  );
 
   const composer = (
     <Composer
@@ -109,21 +237,42 @@ export function AssistantView({ loaded }: { loaded: ChatDetail | null }) {
       onUpload={s.uploadFile}
       hasProcessing={s.hasProcessingAttachment}
       busy={s.busy}
-      onSend={s.send}
-      onStop={s.stop}
+      onSend={send}
+      onStop={stop}
+      canSend={s.modelReady && !s.hasFailedAttachment && workflow?.state !== "running"}
+      modelSetupNeeded={s.modelSetupNeeded}
+      onRetryModel={s.modelCheckFailed ? s.retryModel : undefined}
+      lockContext={workflow?.state === "running"}
+      sendLabel={workflow?.state === "ready" ? "Start workflow" : "Send"}
+      availabilityMessage={
+        s.hasFailedAttachment
+          ? "Remove or replace failed attachments before sending."
+          : s.modelMessage
+      }
+    />
+  );
+
+  const guard = (
+    <UnsavedNavigationGuard
+      isDirty={() =>
+        !!s.input.trim() ||
+        !!s.attachments.length ||
+        !!(workflow && workflow.state !== "running" && stepsRef.current.length)
+      }
+      title="Keep your message draft?"
+      description="Your unsent message and context are still here. Keep editing, or discard this local draft before leaving."
     />
   );
 
   if (empty) {
     return (
       <div className="mx-auto flex h-full w-full max-w-xl flex-col items-center justify-center gap-section md:max-w-2xl lg:max-w-3xl xl:max-w-4xl">
-        <h1 className="flex items-center gap-3 font-heading text-4xl font-light tracking-tight">
-          <span className="grid size-9 place-items-center rounded-lg bg-primary text-primary-foreground">
-            <BrandMark className="size-6" />
-          </span>
-          Hi, {firstName}
-        </h1>
-        <div className="w-full">{composer}</div>
+        {guard}
+        <h1 className="font-heading text-3xl">Workspace assistant</h1>
+        <div className="w-full">
+          {workflowPanel}
+          {composer}
+        </div>
         <p className="text-sm text-muted-foreground">
           AI can make mistakes. Answers are not legal advice.
         </p>
@@ -133,9 +282,13 @@ export function AssistantView({ loaded }: { loaded: ChatDetail | null }) {
 
   return (
     <ActivityPanelProvider>
+      {guard}
       <div className="flex h-full min-h-0">
         <div className="min-w-0 flex-1 overflow-hidden">
           <div className="mx-auto flex h-full min-h-0 w-full max-w-3xl flex-col">
+            <h1 className="shrink-0 pb-4 font-heading text-2xl break-words">
+              {loaded?.title ?? "Workspace conversation"}
+            </h1>
             <Conversation className="min-h-0 flex-1">
               <ConversationContent className="gap-6 px-0">
                 {(s.jurisdiction || s.tools.length > 0) && (
@@ -151,6 +304,8 @@ export function AssistantView({ loaded }: { loaded: ChatDetail | null }) {
               <ConversationScrollButton />
             </Conversation>
             <div className="flex shrink-0 flex-col gap-2 pt-2">
+              {workflowPanel}
+              <ResponseNotice outcome={s.outcome} error={s.responseError} />
               {composer}
               <p className="text-center text-xs text-muted-foreground">
                 AI can make mistakes. Answers are not legal advice.

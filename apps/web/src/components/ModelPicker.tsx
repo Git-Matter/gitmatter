@@ -1,3 +1,4 @@
+import { Input } from "@/components/ui/input";
 import { useEffect, useMemo, useState } from "react";
 import { useDebouncedValue } from "@tanstack/react-pacer";
 import { AlertTriangle, Check, ChevronDown, Search } from "lucide-react";
@@ -153,11 +154,14 @@ export function ModelPicker({
         <span className="max-w-[10rem] truncate">{label}</span>
         <ChevronDown className="size-3.5 shrink-0 opacity-60" />
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-[26rem] gap-0 overflow-hidden p-0">
+      <PopoverContent
+        align="start"
+        className="w-[26rem] max-w-[calc(100vw-2rem)] gap-0 overflow-hidden p-0"
+      >
         {/* Search header */}
         <div className="flex items-center gap-2 border-b border-border px-3 py-2.5">
           <Search className="size-4 shrink-0 text-muted-foreground" />
-          <input
+          <Input
             autoFocus
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -179,7 +183,7 @@ export function ModelPicker({
               />
             ))}
             {orFams.length > 0 && (
-              <div className="px-2 pt-2 pb-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">
+              <div className="px-2 pt-2 pb-1 text-xs font-medium text-muted-foreground">
                 OpenRouter
               </div>
             )}

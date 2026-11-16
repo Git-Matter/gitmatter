@@ -1,3 +1,6 @@
+import { notifySuccess } from "@/lib/feedback";
+import { CollectionPanel } from "@/components/CollectionPanel";
+import { useWorkspaceViewState } from "@/lib/hooks/state/useWorkspaceViewState";
 import { MatterWorkSearch } from "../-components/MatterWorkSearch";
 import { MatterOverview } from "../-components/MatterOverview";
 import { ContractReviewSetup } from "../-components/ContractReviewSetup";
@@ -74,7 +77,7 @@ function MatterWorkspace() {
   // New Chat opens the matter's own 3-pane assistant workspace.
   const openMatterChat = () => void navigate({ to: "/matters/$id/assistant", params: { id } });
 
-  const { data: matter, isError: notFound } = useQuery({
+  const matterQuery = useQuery({
     queryKey: ["matter", id],
     queryFn: () => api.getMatter(id),
   });
@@ -88,14 +91,12 @@ function MatterWorkspace() {
     refreshMatters();
   };
 
-  if (notFound)
+  const matter = matterQuery.data;
+  if (matterQuery.isPending || matterQuery.isError)
     return (
-      <p className="text-muted-foreground">
-        Matter not found, or you don't have access.{" "}
-        <Link to="/matters" className="underline">
-          Back to matters
-        </Link>
-      </p>
+      <CollectionPanel query={matterQuery} label="Matter">
+        <Link to="/matters">Back to matters</Link>
+      </CollectionPanel>
     );
   if (!matter) return null;
 
@@ -108,12 +109,12 @@ function MatterWorkspace() {
       mode="fill"
       bodyClassName="gap-stack"
       header={
-        /* Inline "Matters › Name" trail + two action groups: a frosted icon pill
+        /* Inline "Matters › Name" trail + two action groups: icon actions
            (search / people / …) and New Chat / New Review. */
         <PageHeader
           breadcrumbs={[{ label: "Matters", to: "/matters" }, { label: matter.name }]}
           actions={[
-            <div key="icons" className="flex items-center gap-0.5 rounded-full glass-panel p-1">
+            <div key="icons" className="flex items-center gap-0.5 p-1">
               <Button
                 variant="ghost"
                 size="icon-sm"
@@ -155,7 +156,7 @@ function MatterWorkspace() {
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>,
-            <div key="create" className="flex items-center gap-0.5 rounded-full glass-panel p-1">
+            <div key="create" className="flex items-center gap-0.5 p-1">
               <Button
                 variant="ghost"
                 size="icon-sm"
@@ -310,11 +311,11 @@ function DocumentsTab({ matterId, canEdit }: { matterId: string; canEdit: boolea
   const versionInputRef = useRef<HTMLInputElement>(null);
   const versionTargetId = useRef<string | null>(null);
 
-  const { data: folders = [] } = useQuery({
+  const foldersQuery = useQuery({
     queryKey: ["folders", matterId],
     queryFn: () => api.listFolders(matterId),
   });
-  const { data: docs = [] } = useQuery({
+  const docsQuery = useQuery({
     queryKey: ["matter-docs", matterId, folderId],
     queryFn: () => api.listMatterDocuments(matterId, folderId),
     // Auto-advance rows while extraction runs (Queued/Extracting -> Ready/Failed)
@@ -322,6 +323,16 @@ function DocumentsTab({ matterId, canEdit }: { matterId: string; canEdit: boolea
     refetchInterval: (q) =>
       q.state.data?.some((d) => d.status === "pending" || d.status === "processing") ? 2000 : false,
   });
+  const folders = foldersQuery.data ?? [];
+  const docs = docsQuery.data ?? [];
+  const documentsQuery = {
+    ...docsQuery,
+    isPending: docsQuery.isPending || foldersQuery.isPending,
+    isError: docsQuery.isError || foldersQuery.isError,
+    isFetching: docsQuery.isFetching || foldersQuery.isFetching,
+    error: foldersQuery.error ?? docsQuery.error,
+    refetch: () => Promise.all([foldersQuery.refetch(), docsQuery.refetch()]),
+  };
 
   const invalidateDocs = () =>
     qc.invalidateQueries({ queryKey: ["matter-docs", matterId, folderId] });
@@ -329,7 +340,7 @@ function DocumentsTab({ matterId, canEdit }: { matterId: string; canEdit: boolea
   const uploadDoc = useMutation({
     mutationFn: (file: File) => api.uploadDocument(file, undefined, matterId, folderId),
     onSuccess: () => {
-      toast.success("Uploaded");
+      notifySuccess("Uploaded");
       void invalidateDocs();
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Upload failed"),
@@ -338,7 +349,7 @@ function DocumentsTab({ matterId, canEdit }: { matterId: string; canEdit: boolea
   const addFolderMut = useMutation({
     mutationFn: (name: string) => api.createFolder(matterId, name, folderId),
     onSuccess: () => {
-      toast.success("Folder added");
+      notifySuccess("Folder added");
       void qc.invalidateQueries({ queryKey: ["folders", matterId] });
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
@@ -347,7 +358,7 @@ function DocumentsTab({ matterId, canEdit }: { matterId: string; canEdit: boolea
   const renameDoc = useMutation({
     mutationFn: (v: { id: string; title: string }) => api.renameDocument(v.id, v.title),
     onSuccess: () => {
-      toast.success("Renamed");
+      notifySuccess("Renamed");
       void invalidateDocs();
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Rename failed"),
@@ -356,7 +367,7 @@ function DocumentsTab({ matterId, canEdit }: { matterId: string; canEdit: boolea
   const uploadVersion = useMutation({
     mutationFn: (v: { id: string; file: File }) => api.uploadDocumentVersion(v.id, v.file),
     onSuccess: () => {
-      toast.success("New version uploaded — extracting…");
+      notifySuccess("New version uploaded — extracting…");
       void invalidateDocs();
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Upload failed"),
@@ -365,7 +376,7 @@ function DocumentsTab({ matterId, canEdit }: { matterId: string; canEdit: boolea
   const deleteDoc = useMutation({
     mutationFn: (id: string) => api.deleteDocument(id),
     onSuccess: () => {
-      toast.success("Document deleted");
+      notifySuccess("Document deleted");
       void invalidateDocs();
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Delete failed"),
@@ -374,7 +385,7 @@ function DocumentsTab({ matterId, canEdit }: { matterId: string; canEdit: boolea
   const retryExtract = useMutation({
     mutationFn: (id: string) => api.retryDocument(id),
     onSuccess: () => {
-      toast.success("Re-extracting…");
+      notifySuccess("Re-extracting…");
       void invalidateDocs();
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Re-extract failed"),
@@ -404,6 +415,10 @@ function DocumentsTab({ matterId, canEdit }: { matterId: string; canEdit: boolea
   const columns = useMemo(
     () =>
       matterDocumentColumns({
+        onOpen: (row) => {
+          if (row.kind === "folder") setFolderId(row.folder.id);
+          else if (row.kind === "doc") setPreviewId(row.doc.id);
+        },
         canEdit,
         onReExtract: (id) => retryExtract.mutate(id),
         onRename: (doc) => {
@@ -512,14 +527,16 @@ function DocumentsTab({ matterId, canEdit }: { matterId: string; canEdit: boolea
         }}
       />
 
-      <DataTable
-        table={table}
-        empty={`No documents yet.${canEdit ? " Add documents to get started." : ""}`}
-        onRowClick={(r) => {
-          if (r.kind === "folder") setFolderId(r.folder.id);
-          else if (r.kind === "doc") setPreviewId(r.doc.id);
-        }}
-      />
+      <CollectionPanel query={documentsQuery} label="Documents">
+        <DataTable
+          table={table}
+          empty={`No documents yet.${canEdit ? " Add documents to get started." : ""}`}
+          onRowClick={(r) => {
+            if (r.kind === "folder") setFolderId(r.folder.id);
+            else if (r.kind === "doc") setPreviewId(r.doc.id);
+          }}
+        />
+      </CollectionPanel>
 
       {/* Selection footer (shadcn data-table pattern). */}
       <div className="shrink-0 text-sm text-muted-foreground">
@@ -630,8 +647,9 @@ function ChatsTab({ matterId }: { matterId: string }) {
   // See Documents tab: opt out of React Compiler memoization for the DataTable.
   "use no memo";
   const navigate = useNavigate();
-  const { data: chats = [] } = useChats(matterId);
-  const [search, setSearch] = useState("");
+  const chatsQuery = useChats(matterId);
+  const chats = chatsQuery.data ?? [];
+  const [search, setSearch] = useWorkspaceViewState(`matter:${matterId}:chatSearch`, "");
   const { sorting, setSorting } = useTableState("matter-chats", {
     defaultSorting: [{ id: "updatedAt", desc: true }],
   });
@@ -660,16 +678,20 @@ function ChatsTab({ matterId }: { matterId: string }) {
         </Button>
       </div>
 
-      <DataTable
-        table={table}
-        empty="No chats yet."
-        onRowClick={(ch) =>
-          navigate({
-            to: "/matters/$id/assistant/$chatId",
-            params: { id: matterId, chatId: ch.id },
-          })
-        }
-      />
+      <CollectionPanel query={chatsQuery} label="Chats">
+        <DataTable
+          rowActionColumn="title"
+          getRowHref={(row) => `/matters/${matterId}/assistant/${row.id}`}
+          table={table}
+          empty="No chats yet."
+          onRowClick={(ch) =>
+            navigate({
+              to: "/matters/$id/assistant/$chatId",
+              params: { id: matterId, chatId: ch.id },
+            })
+          }
+        />
+      </CollectionPanel>
     </div>
   );
 }
@@ -696,12 +718,13 @@ function ReviewsTab({ matterId }: { matterId: string }) {
   "use no memo";
   const navigate = useNavigate();
   const { setCurrent } = useMatters();
-  const { data: reviews = [] } = useQuery({
+  const reviewsQuery = useQuery({
     queryKey: ["reviews"],
     queryFn: () => api.listReviews(),
   });
 
-  const [search, setSearch] = useState("");
+  const reviews = reviewsQuery.data ?? [];
+  const [search, setSearch] = useWorkspaceViewState(`matter:${matterId}:reviewSearch`, "");
   const { sorting, setSorting } = useTableState("matter-reviews", {
     defaultSorting: [{ id: "createdAt", desc: true }],
   });
@@ -735,11 +758,15 @@ function ReviewsTab({ matterId }: { matterId: string }) {
         </Button>
       </div>
 
-      <DataTable
-        table={table}
-        empty="No reviews yet."
-        onRowClick={(r) => navigate({ to: "/reviews/$id", params: { id: r.id } })}
-      />
+      <CollectionPanel query={reviewsQuery} label="Reviews">
+        <DataTable
+          rowActionColumn="title"
+          getRowHref={(row) => `/reviews/${row.id}`}
+          table={table}
+          empty="No reviews yet."
+          onRowClick={(r) => navigate({ to: "/reviews/$id", params: { id: r.id } })}
+        />
+      </CollectionPanel>
     </div>
   );
 }

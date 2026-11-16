@@ -15,6 +15,8 @@ import {
   useSelectedReasoning,
 } from "../../../../lib/hooks/state/useSelectedModel";
 import { queryKeys } from "../../../../lib/data/queries";
+import { useModelCatalog } from "@/lib/data/queries";
+import { configuredModelAvailable } from "@/lib/data/configured-model";
 
 // One product-facing event in the assistant's execution timeline. The server
 // sends curated activity events instead of exposing raw model scratch work.
@@ -27,6 +29,8 @@ export type Turn = {
   documents?: Array<{ id: string; title: string; download: string }>;
   edits?: ChatEdit[];
   citations?: Citation[];
+  context?: ChatAttachment[];
+  earlierCalls?: Array<{ tool: string; input: unknown }>;
 };
 
 /**
@@ -40,11 +44,13 @@ export function useChatSession({
   matterId,
   activeDocumentId,
   onFirstChat,
+  current = true,
 }: {
   loaded: ChatDetail | null;
   matterId?: string;
   activeDocumentId?: string;
   onFirstChat?: (chatId: string) => void;
+  current?: boolean;
 }) {
   const queryClient = useQueryClient();
   const [input, setInput] = useState("");
@@ -54,20 +60,9 @@ export function useChatSession({
     (loaded?.turns ?? []).map((t) => ({
       role: t.role,
       text: t.text,
-      // New chats persist trace events. Older saved chats only have tool calls,
-      // so keep a fallback timeline for those rows.
-      steps:
-        t.trace ??
-        t.toolCalls?.map(
-          (tc, index): Step => ({
-            id: `${t.role}-${index}-${tc.tool}`,
-            kind: "tool_call",
-            status: "done",
-            label: "Ran tool",
-            summary: tc.tool.replace(/_/g, " "),
-            detail: { tool: tc.tool, input: tc.input },
-          })
-        ),
+      // Earlier call inputs do not establish a completed tool outcome.
+      steps: t.trace,
+      earlierCalls: t.trace?.length ? undefined : t.toolCalls,
       edits: t.edits,
       citations: t.citations,
     }))
@@ -87,9 +82,33 @@ export function useChatSession({
     setSourceIds(null);
   }
   const [model, setModel] = useSelectedModel();
+  const catalog = useModelCatalog();
+  const modelReady =
+    current &&
+    !catalog.isFetching &&
+    !catalog.error &&
+    !!catalog.data &&
+    configuredModelAvailable(model, catalog.data);
+  const modelMessage = !current
+    ? "Refresh this conversation before sending."
+    : catalog.isPending || catalog.isFetching
+      ? "Checking model access…"
+      : catalog.error
+        ? "Model access could not be checked."
+        : !catalog.data?.some((provider) => provider.available)
+          ? "Configure an application provider before sending."
+          : !model
+            ? "Choose a configured model before sending."
+            : !modelReady
+              ? "The selected model is unavailable. Choose a configured model."
+              : null;
   const [reasoning, setReasoning] = useSelectedReasoning();
   const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
   const [busy, setBusy] = useState(false);
+  const [outcome, setOutcome] = useState<"idle" | "running" | "completed" | "failed" | "stopped">(
+    "idle"
+  );
+  const [responseError, setResponseError] = useState<string | null>(null);
   const [chatId, setChatId] = useState<string | undefined>(loaded?.id);
   // Aborts an in-flight stream so navigating away (or unmounting) doesn't leave
   // the reader loop and its captured setState closures running in the background.
@@ -97,7 +116,8 @@ export function useChatSession({
   useEffect(() => () => streamAbort.current?.abort(), []);
 
   // Ids of staged uploads made in this composer that the user has NOT yet sent.
-  // Sending commits them (server-side) and clears them here; removing a chip or
+  // A received turn commits them server-side; after dispatch their outcome may be unknown.
+  // Clear them here to avoid deleting a document the server may have committed; removing a chip or
   // unmounting discards them (hard delete + S3). Picked library docs aren't here,
   // so removing them only unlinks.
   const stagedIds = useRef<Set<string>>(new Set());
@@ -186,19 +206,28 @@ export function useChatSession({
   const hasProcessingAttachment = attachments.some(
     (a) => a.kind === "document" && (a.status === "pending" || a.status === "processing")
   );
+  const hasFailedAttachment = attachments.some(
+    (a) => a.kind === "document" && a.status === "failed"
+  );
 
   async function send() {
     const message = input.trim();
-    if (!message || busy || hasProcessingAttachment) return;
+    if (!message || busy || hasProcessingAttachment || hasFailedAttachment || !modelReady) return;
     setInput("");
     setBusy(true);
+    setOutcome("running");
+    setResponseError(null);
     const sent = attachments;
     setAttachments([]);
     // The server commits these staged uploads into the library on receiving the
     // turn, so stop tracking them here — they're no longer ours to discard.
     for (const a of sent) if (a.kind === "document") stagedIds.current.delete(a.id);
     // Append the user turn plus an empty assistant turn that fills in as it streams.
-    setTurns((t) => [...t, { role: "user", text: message }, { role: "assistant", text: "" }]);
+    setTurns((t) => [
+      ...t,
+      { role: "user", text: message, context: sent },
+      { role: "assistant", text: "" },
+    ]);
 
     // Update the trailing assistant turn in place as deltas arrive.
     const patchLast = (patch: Partial<Turn>) =>
@@ -220,6 +249,8 @@ export function useChatSession({
     };
 
     const controller = new AbortController();
+    let completed = false;
+    let failure: string | null = null;
     streamAbort.current = controller;
     try {
       await api.streamChat(
@@ -245,6 +276,7 @@ export function useChatSession({
           },
           onTool: () => {},
           onDone: (r) => {
+            completed = true;
             patchLast({
               text: r.text || acc,
               steps: r.trace.length ? r.trace : [...steps],
@@ -262,6 +294,7 @@ export function useChatSession({
               queryClient.setQueryData<ChatDetail>(queryKeys.chat(r.chatId), {
                 id: r.chatId,
                 title: null,
+                matterId: matterId ?? null,
                 turns: [
                   { role: "user", text: message },
                   {
@@ -275,29 +308,44 @@ export function useChatSession({
                 ],
               });
               setChatId(r.chatId);
-              // Invalidate the whole "chats" prefix so every chat list refreshes:
-              // the sidebar's `allChats` (["chats","all"]), the global list, and the
-              // matter-scoped list. A matter-specific key would miss `allChats`, so a
-              // new matter chat would never appear in the sidebar without a reload.
-              void queryClient.invalidateQueries({ queryKey: queryKeys.chats });
-              onFirstChat?.(r.chatId);
+              if (!failure) onFirstChat?.(r.chatId);
             } else {
-              // Continuing an existing chat: drop the stale snapshot so the next
-              // resume refetches the server copy with these new turns.
-              queryClient.removeQueries({ queryKey: queryKeys.chat(r.chatId) });
+              // Active views keep their observer; a future mount must not seed from an older turn list.
+              queryClient.removeQueries({
+                queryKey: queryKeys.chat(r.chatId),
+                exact: true,
+                type: "inactive",
+              });
+              void queryClient.invalidateQueries({
+                queryKey: queryKeys.chat(r.chatId),
+                exact: true,
+                type: "active",
+              });
             }
           },
-          onError: (msg) => toast.error(msg),
+          onError: (msg) => {
+            failure = msg;
+          },
         },
         controller.signal
       );
     } catch (e) {
       if ((e as Error)?.name !== "AbortError") {
-        toast.error(e instanceof Error ? e.message : "Failed");
+        failure = e instanceof Error ? e.message : "The request failed.";
       }
     } finally {
       if (streamAbort.current === controller) streamAbort.current = null;
+      if (completed && !failure) setOutcome("completed");
+      else if (controller.signal.aborted) setOutcome("stopped");
+      else {
+        setOutcome("failed");
+        setResponseError(
+          failure ?? "The connection ended before a completed response was received."
+        );
+      }
       setBusy(false);
+      // Even an interrupted request may have created a saved conversation.
+      void queryClient.invalidateQueries({ queryKey: queryKeys.chats });
     }
   }
 
@@ -322,7 +370,20 @@ export function useChatSession({
     removeAttachment,
     uploadFile,
     hasProcessingAttachment,
+    hasFailedAttachment,
     busy,
+    outcome,
+    responseError,
+    modelReady,
+    modelChecking: catalog.isPending || catalog.isFetching,
+    modelMessage,
+    modelSetupNeeded:
+      current &&
+      !catalog.isPending &&
+      !catalog.error &&
+      !(catalog.data?.some((provider) => provider.available) ?? false),
+    modelCheckFailed: !!catalog.error,
+    retryModel: () => void catalog.refetch(),
     chatId,
     send,
     stop,

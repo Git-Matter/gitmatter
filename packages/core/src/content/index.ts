@@ -8,3 +8,5 @@ export * from "./extractionQueue.js";
 export * from "./reviewExport.js";
 export * from "./reviewReport.js";
 export * from "./docx/inspection.js";
+
+export * from "./templates.js";

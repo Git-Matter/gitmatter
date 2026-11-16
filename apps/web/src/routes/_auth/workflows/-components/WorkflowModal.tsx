@@ -1,5 +1,6 @@
+import { useDraftExit } from "@/lib/hooks/useDraftExit";
 import type { ReactNode } from "react";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/util/utils";
 
@@ -17,12 +18,17 @@ export type ModalAction = {
 
 interface ModalProps {
   open: boolean;
-  onClose: () => void;
+  onClose: () => boolean | void;
   children: ReactNode;
   breadcrumbs?: ReactNode[];
   size?: ModalSize;
   className?: string;
   footerStatus?: ReactNode;
+  dirty?: boolean;
+  saving?: boolean;
+  onDiscard?: () => void;
+  pendingTitle?: string;
+  pendingDescription?: string;
   primaryAction?: ModalAction;
   secondaryAction?: ModalAction;
   cancelAction?: ModalAction | false;
@@ -67,57 +73,87 @@ export function WorkflowModal({
   primaryAction,
   secondaryAction,
   cancelAction,
+  dirty = false,
+  saving = false,
+  onDiscard,
+  pendingTitle,
+  pendingDescription,
 }: ModalProps) {
+  const exit = useDraftExit({
+    dirty: open && dirty,
+    pendingTitle,
+    pendingDescription,
+    saving: open && saving,
+    discard: () => {
+      onDiscard?.();
+      onClose();
+    },
+  });
+  const requestClose = () =>
+    dirty || saving
+      ? exit.requestClose(() => {
+          onClose();
+        })
+      : onClose();
   const hasFooter =
     !!footerStatus || !!primaryAction || !!secondaryAction || cancelAction !== false;
   const resolvedCancel =
     cancelAction === undefined && primaryAction
-      ? { label: "Cancel", onClick: onClose }
+      ? { label: "Cancel", onClick: requestClose }
       : cancelAction;
 
   return (
-    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent
-        showCloseButton
-        className={cn(
-          "flex h-[600px] max-h-[85vh] w-full flex-col gap-0 p-0",
-          sizeClassName[size],
-          className
-        )}
+    <>
+      {exit.guard}
+      <Dialog
+        open={open}
+        onOpenChange={(open, details) => {
+          if (!open && requestClose() === false) details.cancel();
+        }}
       >
-        {breadcrumbs?.length ? (
-          <div className="flex min-w-0 flex-wrap items-center gap-1.5 px-6 py-4 pe-12 text-xs text-muted-foreground">
-            {breadcrumbs.map((segment, index) => (
-              <span key={index} className="flex items-center gap-1.5">
-                {index > 0 && <span className="text-border">›</span>}
-                <span className="truncate">{segment}</span>
-              </span>
-            ))}
-          </div>
-        ) : null}
-
-        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-6">{children}</div>
-
-        {hasFooter && (
-          <div
-            className={cn(
-              "flex items-center gap-3 border-t border-border p-3",
-              secondaryAction ? "justify-between" : "justify-end"
-            )}
-          >
-            {secondaryAction && (
-              <div className="flex min-w-0 items-center gap-2">
-                {actionButton(secondaryAction, "secondary")}
-              </div>
-            )}
-            <div className="flex items-center gap-2">
-              {footerStatus}
-              {resolvedCancel && actionButton(resolvedCancel, "cancel")}
-              {primaryAction && actionButton(primaryAction, "primary")}
+        <DialogContent
+          showCloseButton
+          className={cn(
+            "flex h-[600px] max-h-[85vh] w-full flex-col gap-0 p-0",
+            sizeClassName[size],
+            className
+          )}
+        >
+          <DialogTitle className="sr-only">{breadcrumbs?.at(-1) ?? "Workflow"}</DialogTitle>
+          {breadcrumbs?.length ? (
+            <div className="flex min-w-0 flex-wrap items-center gap-1.5 px-6 py-4 pe-12 text-xs text-muted-foreground">
+              {breadcrumbs.map((segment, index) => (
+                <span key={index} className="flex items-center gap-1.5">
+                  {index > 0 && <span className="text-border">›</span>}
+                  <span className="truncate">{segment}</span>
+                </span>
+              ))}
             </div>
-          </div>
-        )}
-      </DialogContent>
-    </Dialog>
+          ) : null}
+
+          <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-6">{children}</div>
+
+          {hasFooter && (
+            <div
+              className={cn(
+                "flex items-center gap-3 border-t border-border p-3",
+                secondaryAction ? "justify-between" : "justify-end"
+              )}
+            >
+              {secondaryAction && (
+                <div className="flex min-w-0 items-center gap-2">
+                  {actionButton(secondaryAction, "secondary")}
+                </div>
+              )}
+              <div className="flex items-center gap-2">
+                {footerStatus}
+                {resolvedCancel && actionButton(resolvedCancel, "cancel")}
+                {primaryAction && actionButton(primaryAction, "primary")}
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

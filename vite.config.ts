@@ -8,7 +8,7 @@ export default defineConfig({
   test: {
     exclude: [...configDefaults.exclude, ".claude/**"],
     // Load root .env into process.env for integration tests (db, auth).
-    // bun test did this implicitly; vitest does not expose non-VITE_ vars.
+    // Vitest needs the non-VITE_ variables loaded explicitly by the test setup.
     setupFiles: [new URL("./vitest.setup.ts", import.meta.url).pathname],
   },
   lint: {

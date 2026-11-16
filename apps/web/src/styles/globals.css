@@ -1,9 +1,9 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
-@import "@fontsource-variable/geist";
+@import "@fontsource-variable/newsreader";
 @import "@fontsource-variable/inter";
-/* Our custom design tokens (kept apart from the shadcn baseline below). */
+/* Generated from design/tokens.json; use vp run design:generate to change foundations. */
 @import "./tokens.css";
 
 @custom-variant dark (&:is(.dark *));
@@ -46,87 +46,6 @@
   --color-card: var(--card);
   --color-foreground: var(--foreground);
   --color-background: var(--background);
-  --radius-sm: calc(var(--radius) * 0.6);
-  --radius-md: calc(var(--radius) * 0.8);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
-  --radius-2xl: calc(var(--radius) * 1.8);
-  --radius-3xl: calc(var(--radius) * 2.2);
-  --radius-4xl: calc(var(--radius) * 2.6);
-  --font-sans: "Inter Variable", sans-serif;
-  --font-serif: "Geist Variable", sans-serif;
-}
-
-/* "Cool Slate": cool-white paper + slate ink, every neutral tinted toward hue
-   264 (cool blue-grey). Never pure white or black. Accent is slate-blue (see
-   --bronze in tokens.css). */
-:root {
-  --background: oklch(0.986 0.003 264);
-  --foreground: oklch(0.21 0.012 264);
-  --card: oklch(0.999 0.001 264);
-  --card-foreground: oklch(0.21 0.012 264);
-  --popover: oklch(0.999 0.001 264);
-  --popover-foreground: oklch(0.21 0.012 264);
-  --primary: oklch(0.24 0.015 264);
-  --primary-foreground: oklch(0.986 0.003 264);
-  --secondary: oklch(0.965 0.004 264);
-  --secondary-foreground: oklch(0.24 0.015 264);
-  --muted: oklch(0.965 0.004 264);
-  --muted-foreground: oklch(0.5 0.012 264);
-  --accent: oklch(0.965 0.004 264);
-  --accent-foreground: oklch(0.24 0.015 264);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.915 0.005 264);
-  --input: oklch(0.915 0.005 264);
-  --ring: oklch(0.6 0.012 264);
-  --chart-1: oklch(0.55 0.11 264);
-  --chart-2: oklch(0.65 0.09 255);
-  --chart-3: oklch(0.45 0.1 270);
-  --chart-4: oklch(0.72 0.07 250);
-  --chart-5: oklch(0.38 0.08 268);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.975 0.004 264);
-  --sidebar-foreground: oklch(0.21 0.012 264);
-  --sidebar-primary: oklch(0.24 0.015 264);
-  --sidebar-primary-foreground: oklch(0.986 0.003 264);
-  --sidebar-accent: oklch(0.955 0.005 264);
-  --sidebar-accent-foreground: oklch(0.21 0.012 264);
-  --sidebar-border: oklch(0.915 0.005 264);
-  --sidebar-ring: oklch(0.6 0.012 264);
-}
-
-.dark {
-  --background: oklch(0.16 0.006 264);
-  --foreground: oklch(0.97 0.004 264);
-  --card: oklch(0.21 0.008 264);
-  --card-foreground: oklch(0.97 0.004 264);
-  --popover: oklch(0.21 0.008 264);
-  --popover-foreground: oklch(0.97 0.004 264);
-  --primary: oklch(0.92 0.005 264);
-  --primary-foreground: oklch(0.21 0.008 264);
-  --secondary: oklch(0.26 0.008 264);
-  --secondary-foreground: oklch(0.97 0.004 264);
-  --muted: oklch(0.26 0.008 264);
-  --muted-foreground: oklch(0.71 0.008 264);
-  --accent: oklch(0.26 0.008 264);
-  --accent-foreground: oklch(0.97 0.004 264);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(0.97 0.004 264 / 10%);
-  --input: oklch(0.97 0.004 264 / 15%);
-  --ring: oklch(0.55 0.008 264);
-  --chart-1: oklch(0.65 0.12 264);
-  --chart-2: oklch(0.72 0.1 255);
-  --chart-3: oklch(0.6 0.1 270);
-  --chart-4: oklch(0.78 0.08 250);
-  --chart-5: oklch(0.55 0.09 268);
-  --sidebar: oklch(0.19 0.007 264);
-  --sidebar-foreground: oklch(0.97 0.004 264);
-  --sidebar-primary: oklch(0.65 0.12 264);
-  --sidebar-primary-foreground: oklch(0.16 0.006 264);
-  --sidebar-accent: oklch(0.26 0.008 264);
-  --sidebar-accent-foreground: oklch(0.97 0.004 264);
-  --sidebar-border: oklch(0.97 0.004 264 / 10%);
-  --sidebar-ring: oklch(0.55 0.008 264);
 }
 
 @layer base {
@@ -142,11 +61,15 @@
   }
   html {
     @apply font-sans;
+    font-optical-sizing: auto;
   }
-  /* Geist headings by default; pages can opt out with font-sans. */
+  /* Display voice; operational headings can opt into font-sans. */
   h1,
   h2 {
     @apply font-serif font-normal tracking-tight;
+  }
+  [data-app-frame] :where(h1, h2) {
+    @apply font-sans;
   }
 }
 
@@ -178,4 +101,30 @@
 .workflow-editor-content p.is-editor-empty:first-child::before {
   content: attr(data-placeholder);
   @apply pointer-events-none float-left h-0 text-muted-foreground;
+}
+
+@layer base {
+  :where(a, button, input, textarea, select, summary, [tabindex]):focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 3px;
+  }
+  :where(section[id]) {
+    scroll-margin-top: 6rem;
+  }
+  ::selection {
+    background: var(--accent);
+    color: var(--accent-foreground);
+  }
+}
+
+/* Nothing waits for a scroll animation to become readable. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

@@ -1,0 +1,162 @@
+{
+  "version": 1,
+  "recordedOn": "2026-11-16",
+  "scope": "Current production template UI/Hono/core with real loopback Postgres, original fictional DOCX files and a tenant-scoped disk object adapter. Injected loopback personas, not production authentication, remote object storage, deployment or a legal-user study. Hashes identify relevant files, not the complete transitive runtime.",
+  "localRun": {
+    "runId": "275675c4",
+    "tenantId": "fec0f7ff-7a6a-4c5d-9f61-d075c898d404"
+  },
+  "sourceSHA256": {
+    "design/tokens.json": "daadcd3714db609d93e28ff20fa29dddc72c9fa6aba802676ab8b1a982e370ed",
+    "apps/web/src/styles/tokens.css": "041c2a3ee55a1c0a2ed8c15b0194860e34c0143610ffddafd6eafde9770bf6d1",
+    "apps/web/src/components/UnsavedChangesGuard.tsx": "55e8f6ce41387d6179c24331017545b2128787f649d9f14ff05e91dc057c6dcc",
+    "apps/web/src/lib/data/snapshot-refresh.ts": "c6aa6e49c5307a12e295182ee75638d69b02d4f6e3df20568a0f1256a2c8c94e",
+    "apps/web/src/routes/_auth/library/-components/TemplatesSection.tsx": "7f2b496c8dae329d47cb6f3803fef05db4b3f566a8914d9ad659ff2092636ff9",
+    "apps/web/src/routes/_auth/library/-components/TemplateDetail.tsx": "563d9cc1cced2b71e6dd8c1e1b69b73955df7d0bb17a0c4b5f3e17a59b390c55",
+    "apps/web/src/routes/_auth/library/-components/TemplateEditor.tsx": "60a02254cd126bb8e2dfd6d3a2a3141f3c5c37e67e65b2f545970b35fc61bcfd",
+    "apps/web/src/routes/_auth/library/-components/TemplateTeam.tsx": "754cfb223a02a4fe4cf3d11cd9b2ec7fbd8855f8bdb68c862e0404a7009519a2",
+    "apps/web/src/routes/_auth/library/-components/TemplateHistory.tsx": "77a646bd3b6cf2fd119902443198ed3b1ca45ce93b28e85844b248b77f5f21bc",
+    "apps/web/src/routes/_auth/library/-components/template-ui.tsx": "4dc81a8c2cbe339afcf8dde3046a54ccf4e04652cc3669a8c130e539f15fd974",
+    "apps/web/src/routes/_auth/library/index.tsx": "2fdce8036fead07f1ebb5c02f9b46ab52a36700044139814057b5e0847354248",
+    "apps/web/src/server/http/routes/templates.ts": "ba3396712b61f38f790364e04a978591dad57d2317ce1c8f2b15bbe41470930a",
+    "packages/core/src/content/templates.ts": "1db4a42603315075043a577b311f80d35cff136e9873f3ac977201bbbcb510d5",
+    "packages/contracts/src/templates.ts": "e9386d762cbcf3c2b1394ee058c7a55fd2b963fd37bfd24fa484f23f105f1131",
+    "packages/db/src/schema/templates.ts": "03351ed1bbe8b22ab35542fdf13f5e64145b470f20244a3bd9c51a385ab0003f",
+    "packages/core/src/core/commit.ts": "bb35db63932fb7bfa82908e48b119145efba837232cff570d3542e2924a97e55",
+    "packages/core/src/core/template-storage.ts": "10d4058285ee6d62371334370e41002eae3bd0784efff054a4969580f105f31a",
+    "test/acceptance/template-library/harness/server.ts": "6f9031bffe984ecdf0f4dbc208581087e48924bfd6089e141ec308be3f3746ec",
+    "test/acceptance/template-library/harness/loader.mjs": "94cc7c758e7372be1c8ddc427314096d44dbffd544270da59283682f20cef610",
+    "test/acceptance/template-library/harness/storage-adapter.ts": "0cb5a0bac77315b468d5b6ac65ba3376064f707ba0f69ce1701dedf7ed741b7a",
+    "test/acceptance/template-library/harness/package.json": "609158e6c5fbc237939fa3ddf7faab80ab690bdc0c8d584414a885130103c4e8",
+    "test/acceptance/template-library/harness/tsconfig.json": "0b81ecaf3b1dbbbe1e20d82b236cba93dafe458ad75e2d49549f6f194a641c61",
+    "test/acceptance/template-library/harness/browser/main.tsx": "27953122d310543683890df87e524c3d35aa68038cae7070fd20a93399d443e1",
+    "test/acceptance/template-library/harness/browser/index.html": "833328ecc4043261f743a5e3df5aec117532d50c329ab926cb639134f5ae1b10",
+    "test/acceptance/template-library/harness/browser/vite.config.ts": "c5b5d2f8fbc01ff6915f93ebd74ff2147f2f9ec7592a66fcc814c7afbad49dba",
+    "test/acceptance/template-library/fixtures/manifest.json": "1b5384147fc13a3effac0633e42b289e7ed572c88e391478f555eaa75ec998d9",
+    "test/acceptance/template-library/fixtures/northstar-mutual-nda-v1.docx": "3a8510877a5fe176f303414a5359f78065201fc1992ad243669ed10b5896a636",
+    "test/acceptance/template-library/fixtures/northstar-mutual-nda-v2.docx": "336baaafced68ff7d63aeef19ed6326db88d3251d7b3911fb54f3440c2c74a92",
+    "test/acceptance/template-library/fixtures/northstar-mutual-nda-v3.docx": "ab0d2efcdbf184e9f4c5b78a4eeed1dd4587143f49d72a9aca5f4e5fd2dceb9c",
+    "apps/web/src/styles/globals.css": "399faa1aa751ab40fd875d5bc3a20de4d3bf342719bf2d127cdca3a1400bcf42",
+    "apps/web/src/components/ui/card.tsx": "7c4c2118b887fe48ac2fd707f3cbff2b6cb85e49e44b34a3f414cad23551b52f",
+    "apps/web/src/components/ui/sidebar.tsx": "fd5a129abd678cca18e3f27ccfe3add1dea393bdec827eaf01e9238ad1bf5504",
+    "apps/web/src/hooks/use-mobile.ts": "21eff740f9e5c965c7f0782925a7e8f67ddfcdf0f58b6613550f99c3e1c454e9",
+    "apps/web/src/components/ui/native-select.tsx": "7e28c79cd01d434c6eb2fb51d2ea15fc753cfa105f329451769262b9d2039b05",
+    "apps/web/src/components/ui/checkbox.tsx": "6bb7309a5c25701d01590fb6b4ebf10ad7c3836aa7e9f454b32fc97850088780",
+    "apps/web/src/components/ui/empty.tsx": "586c8e395658ff6374d235978273e73bec7b3cc2980fd0b66e3694e6be86d1b6",
+    "apps/web/src/components/ui/toggle-group.tsx": "ed68cd1e20167d87a60b3234f6632d0df997cfc27ce52cb0a0b331c369173485",
+    "apps/web/src/components/ToolbarTabs.tsx": "5cf8e8a26f8ce69b727fd6506a7644a698c53b2bc68043ef19429dae9468dee9",
+    "apps/web/src/components/TableSearch.tsx": "a0fdb4bcd0a1610859b4983f8bba5bb476321635ebc5e507e06cb7c38b55cb11",
+    "apps/web/src/components/TablePager.tsx": "ece10e78024e04f784cf5d63ddbbf648a6c5180d3f1cfba040b27ee84b2056a1",
+    "apps/web/src/components/AppFrame.tsx": "f3a6bae7a8f75c57a35c5c6618a5111e2538fd815c78e67a753b4b9bc59236b1",
+    "apps/web/src/components/PageShell.tsx": "70307dc8ea75097544317efc3598a5f41ef4e2fd13b81ad24a202ce349d41329",
+    "apps/web/src/lib/hooks/useMediaQuery.ts": "092f707ce31f97db7a337ac87f2159a9b007c036e980f73242ff44372ce93c91",
+    "apps/web/src/components/AppSidebar.tsx": "7906d8486273b2439219fd937b644cfea2830927328d477b4e05e639c7bee891"
+  },
+  "checks": [
+    {
+      "script": "test/acceptance/design-workflows/template-lifecycle.js",
+      "sha256": "63e8d427bc048db0a45978ad382ccea8313bd54a889bf25edf4dd40ffbcf7037",
+      "result": {
+        "passed": true,
+        "controlledRouteFlow": true,
+        "templateId": "4fb19045-0b4a-4454-b950-2db7f976951c",
+        "title": "Northstar Design Audit 1794786231183",
+        "downloadedFilename": "Northstar-Design-Audit-1794786231183-v2.docx",
+        "failedDownloadRetainedContext": true,
+        "downloadReceipts": [
+          {
+            "version": 2,
+            "revisionId": "51fbd140-1733-4f63-8f07-02d4d13b9b17",
+            "sourceSha256": "336baaafced68ff7d63aeef19ed6326db88d3251d7b3911fb54f3440c2c74a92",
+            "downloadSha256": "336baaafced68ff7d63aeef19ed6326db88d3251d7b3911fb54f3440c2c74a92",
+            "filename": "attachment; filename=\"Northstar-Design-Audit-1794786231183-v2.docx\"",
+            "exactHashMatch": true,
+            "privateDraftHidden": true,
+            "status": 200
+          },
+          {
+            "version": 2,
+            "revisionId": "51fbd140-1733-4f63-8f07-02d4d13b9b17",
+            "sourceSha256": "336baaafced68ff7d63aeef19ed6326db88d3251d7b3911fb54f3440c2c74a92",
+            "downloadSha256": "336baaafced68ff7d63aeef19ed6326db88d3251d7b3911fb54f3440c2c74a92",
+            "filename": "attachment; filename=\"Northstar-Design-Audit-1794786231183-v2.docx\"",
+            "exactHashMatch": true,
+            "privateDraftHidden": true,
+            "status": 200
+          }
+        ],
+        "archivedReaderDownloadStatus": 404,
+        "chapters": [
+          {
+            "text": "1 / Start with the original Word document — not reconstructed text",
+            "at": "2026-11-15T23:43:51.201Z",
+            "elapsedMs": 0
+          },
+          {
+            "text": "2 / Delegate editing and review — no workspace-admin promotion",
+            "at": "2026-11-15T23:43:52.722Z",
+            "elapsedMs": 0
+          },
+          {
+            "text": "3 / Reviewer feedback stays with the next working revision",
+            "at": "2026-11-15T23:43:54.885Z",
+            "elapsedMs": 0
+          },
+          {
+            "text": "4 / Review and approve the exact original revision v2",
+            "at": "2026-11-15T23:44:00.188Z",
+            "elapsedMs": 0
+          },
+          {
+            "text": "5 / Sales gets the approved original, with its name and version",
+            "at": "2026-11-15T23:44:00.570Z",
+            "elapsedMs": 0
+          },
+          {
+            "text": "6 / A new working draft cannot replace the approved download",
+            "at": "2026-11-15T23:44:01.015Z",
+            "elapsedMs": 0
+          },
+          {
+            "text": "7 / Withdraw retired templates while keeping their history",
+            "at": "2026-11-15T23:44:05.946Z",
+            "elapsedMs": 0
+          },
+          {
+            "text": "Verified locally: approved originals, delegated review, private drafts, attributable history",
+            "at": "2026-11-15T23:44:06.524Z",
+            "elapsedMs": 0
+          }
+        ],
+        "readerVisibleTemplates": 0,
+        "evidenceTier": "Local DB + disk test object adapter + injected personas; not production authentication"
+      }
+    },
+    {
+      "script": "test/acceptance/design-workflows/template-stale.js",
+      "sha256": "d2708d74f189b47869790064fe35e2100c17ef52bf24f8c9d251bd7479f4090b",
+      "result": {
+        "id": "011eb0f7-2d24-4652-ac43-c7130cf3dc96",
+        "frozenSourcePreserved": true,
+        "noteRetainedAndCopyable": true,
+        "staleApprovalStatus": 409,
+        "reloadKeepAndDiscard": true,
+        "freshV2Confirmation": true,
+        "mobileOverflow": false,
+        "mobileContextAndClosePinned": true,
+        "searchAndFilterRetained": true,
+        "openerFocusReturned": true,
+        "controlledRouteExitProtected": true,
+        "transientRefreshRetainedAndBlocked": true,
+        "refreshRecoveryPreserved": true,
+        "pendingMutationProtected": true,
+        "pendingActionLabelTruthful": true,
+        "revokedPrivateViewCleared": true,
+        "removedRowFocusFallback": true,
+        "deniedReaderStatus": 403,
+        "restoreRequiresApproval": true,
+        "scope": "Current UI/Hono/core + local Postgres and disk adapter; injected fictional personas, not production authentication"
+      }
+    }
+  ]
+}

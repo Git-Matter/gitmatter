@@ -2,6 +2,7 @@ import { and, desc, eq, gte, isNotNull, type SQL, sql } from "drizzle-orm";
 import { estimateCostUsd } from "@workspace/registry";
 import { db } from "@workspace/db/client";
 import { documentVersions, documents, type UsageKind, usageEvents } from "@workspace/db/schema";
+import { templateStorageBytes } from "../core/template-storage.js";
 import { getEnvNumber } from "../core/config.js";
 import { logEvent } from "../core/log.js";
 import { recordAudit } from "./audit.js";
@@ -310,7 +311,7 @@ export async function tenantStorageBytes(tenantId: string): Promise<number> {
     .from(documentVersions)
     .innerJoin(documents, eq(documents.id, documentVersions.documentId))
     .where(and(eq(documents.tenantId, tenantId), isNotNull(documentVersions.storagePath)));
-  return Number(row?.total ?? 0);
+  return Number(row?.total ?? 0) + (await templateStorageBytes(db, tenantId));
 }
 
 /** Thrown when a store would exceed the tenant's quota. Routes map it to HTTP 507. */

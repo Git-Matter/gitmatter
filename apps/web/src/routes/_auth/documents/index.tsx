@@ -1,3 +1,6 @@
+import { notifySuccess } from "@/lib/feedback";
+import { useWorkspaceViewState } from "@/lib/hooks/state/useWorkspaceViewState";
+import { CollectionPanel, collectionBlocked } from "@/components/CollectionPanel";
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -38,8 +41,11 @@ function Documents() {
   const matterId = useWorkingMatterId();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const { view = "all" } = Route.useSearch();
-  const [query, setQuery] = useState("");
-  const [scope, setScope] = useState<"all" | "mine" | "shared">("all");
+  const [query, setQuery] = useWorkspaceViewState("documents:query", "");
+  const [scope, setScope] = useWorkspaceViewState<"all" | "mine" | "shared">(
+    "documents:scope",
+    "all"
+  );
   const { sorting, setSorting, pagination, setPagination, ready } = useTableState("documents", {
     defaultSorting: [{ id: "createdAt", desc: true }],
   });
@@ -53,12 +59,20 @@ function Documents() {
     extraParams: { status: view, scope },
   });
 
-  const { data, isPending } = useQuery({
+  const listQuery = useQuery({
     queryKey: queryKeys.documentsPage(pageParams),
     queryFn: () => api.listDocumentsPage(pageParams),
     placeholderData: keepPreviousData,
     enabled: ready,
   });
+  const { data } = listQuery;
+  const inputPending = query.trim() !== pageParams.q;
+  const viewQuery = {
+    ...listQuery,
+    isFetching: listQuery.isFetching || inputPending,
+    isPlaceholderData: listQuery.isPlaceholderData || inputPending,
+  };
+  const blocked = collectionBlocked(viewQuery);
   const docs = data?.rows ?? [];
   const rowCount = data?.rowCount ?? 0;
   const invalidateDocs = () => qc.invalidateQueries({ queryKey: queryKeys.documents });
@@ -83,7 +97,7 @@ function Documents() {
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api.deleteDocument(id),
     onSuccess: () => {
-      toast.success("Document deleted");
+      notifySuccess("Document deleted");
       void invalidateDocs();
       setConfirmDelete(null);
     },
@@ -101,7 +115,10 @@ function Documents() {
       documentColumns({
         onRetry: (id) => retryMutation.mutate(id),
         onDownload: (id) => window.open(api.documentDownloadUrl(id), "_blank"),
-        onDelete: (doc) => setConfirmDelete(doc),
+        onDelete: (doc) => {
+          deleteMutation.reset();
+          setConfirmDelete(doc);
+        },
         onManagePeople: (doc) => setShareFor(doc),
       }),
     [retryMutation]
@@ -148,11 +165,10 @@ function Documents() {
         action={
           <Button
             variant="outline"
-            size="icon-sm"
-            className="rounded-full"
-            disabled={uploading}
-            title={uploading ? "Uploading…" : "Upload"}
-            aria-label={uploading ? "Uploading…" : "Upload"}
+            size="sm"
+            disabled={uploading || blocked}
+            title={uploading ? "Uploading…" : "Upload documents"}
+            aria-label={uploading ? "Uploading…" : "Upload documents"}
             onClick={() => fileRef.current?.click()}
           >
             {uploading ? (
@@ -160,41 +176,40 @@ function Documents() {
             ) : (
               <Upload className="size-4" />
             )}
+            {uploading ? "Uploading…" : "Upload documents"}
           </Button>
         }
       />
 
-      {showTable && (
-        <ToolbarTabs
-          tabs={[
-            { id: "all" as const, label: "All" },
-            { id: "mine" as const, label: "Mine" },
-            { id: "shared" as const, label: "Shared with me" },
-          ]}
-          active={scope}
-          onChange={setScope}
-          actions={
-            <TableSearch value={query} onChange={setQuery} placeholder="Search documents…" />
-          }
-        />
-      )}
-
-      {showTable && (
-        <>
-          <DataTable
-            table={table}
-            onRowClick={(doc) => setSelectedId(doc.id)}
-            empty={query.trim() ? `No documents match "${query}".` : "No documents in this view."}
+      <CollectionPanel query={viewQuery} label="Documents">
+        {showTable && (
+          <ToolbarTabs
+            tabs={[
+              { id: "all" as const, label: "All" },
+              { id: "mine" as const, label: "Mine" },
+              { id: "shared" as const, label: "Shared with me" },
+            ]}
+            active={scope}
+            onChange={setScope}
+            actions={
+              <TableSearch value={query} onChange={setQuery} placeholder="Search documents…" />
+            }
           />
-          <TablePager table={table} />
-        </>
-      )}
-      {isPending ? (
-        <div className="flex flex-1 items-center justify-center text-muted-foreground">
-          <Loader2 className="size-6 animate-spin" />
-        </div>
-      ) : (
-        !showTable && (
+        )}
+
+        {showTable && (
+          <>
+            <DataTable
+              rowActionColumn="title"
+              scrollKey={`documents:${JSON.stringify(pageParams)}`}
+              table={table}
+              onRowClick={(doc) => setSelectedId(doc.id)}
+              empty={query.trim() ? `No documents match "${query}".` : "No documents in this view."}
+            />
+            <TablePager table={table} />
+          </>
+        )}
+        {!showTable && (
           <button
             type="button"
             onClick={() => fileRef.current?.click()}
@@ -203,8 +218,8 @@ function Documents() {
             <Upload className="size-5" />
             Drop files here or click to upload. PDF or DOCX.
           </button>
-        )
-      )}
+        )}
+      </CollectionPanel>
       <DocumentDrawer docId={selectedId} onClose={() => setSelectedId(null)} />
 
       {shareFor && (
@@ -225,7 +240,8 @@ function Documents() {
         }
         confirmLabel="Delete"
         pending={deleteMutation.isPending}
-        onConfirm={() => confirmDelete && deleteMutation.mutate(confirmDelete.id)}
+        error={deleteMutation.error}
+        onConfirm={() => (confirmDelete ? deleteMutation.mutateAsync(confirmDelete.id) : undefined)}
         onCancel={() => setConfirmDelete(null)}
       />
     </div>

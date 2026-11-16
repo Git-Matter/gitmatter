@@ -48,3 +48,4 @@ test-results/
 # Local browser acceptance artifacts
 .playwright-cli/
 output/playwright/
+output/template-library/

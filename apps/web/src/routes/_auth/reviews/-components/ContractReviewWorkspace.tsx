@@ -1,10 +1,14 @@
-import { useEffect, useRef, useState } from "react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { useEffect, useId, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import { ActorBadge } from "@/components/ActorBadge";
 import { api, type Cell, type ReviewCompletion } from "@/lib/data/api";
 import { ContractReviewActions } from "./ContractReviewActions";
+import { useReviewActionDrafts } from "./useReviewActionDrafts";
+import { UnsavedNavigationGuard } from "@/components/UnsavedChangesGuard";
 import { WordInspectionNotice } from "@/routes/_auth/documents/-components/WordInspectionNotice";
 
 /** Keep legal text and the selected rule together, including on small screens. */
@@ -16,6 +20,9 @@ export function ContractReviewWorkspace({
   onRetry,
   retrying,
   canRetry = true,
+  drafts,
+  guardNavigation = true,
+  onSelectFinding,
 }: {
   completion: ReviewCompletion;
   cells: Cell[];
@@ -24,12 +31,18 @@ export function ContractReviewWorkspace({
   onRetry: (acknowledgeUnknown: boolean) => void;
   retrying: boolean;
   canRetry?: boolean;
+  drafts?: ReturnType<typeof useReviewActionDrafts>;
+  guardNavigation?: boolean;
+  onSelectFinding?: (documentId: string, columnIndex: number) => void;
 }) {
   const initial = cells.find((cell) => cell.id === initialFindingId);
+  const findingsLabel = useId();
   const [documentId, setDocumentId] = useState(initial?.documentId);
   const [columnIndex, setColumnIndex] = useState(initial?.columnIndex);
   const [mobilePane, setMobilePane] = useState<"document" | "findings">("findings");
   const [quote, setQuote] = useState("");
+  const localDrafts = useReviewActionDrafts(completion.reviewId);
+  const actionDrafts = drafts ?? localDrafts;
   useEffect(() => {
     if (initial) {
       setDocumentId(initial.documentId);
@@ -48,6 +61,7 @@ export function ContractReviewWorkspace({
       (job) => job.state === "failed" && job.errorCode === "provider_outcome_unknown"
     ) ?? false;
   const quoteRef = useRef<HTMLElement>(null);
+  const sourceTextRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (quote && mobilePane === "document")
       quoteRef.current?.scrollIntoView({ block: "center", behavior: "instant" });
@@ -67,103 +81,129 @@ export function ContractReviewWorkspace({
   function openQuote(nextQuote: string) {
     setQuote(nextQuote);
     setMobilePane("document");
+    requestAnimationFrame(() => {
+      sourceTextRef.current?.focus({ preventScroll: true });
+      quoteRef.current?.scrollIntoView({ block: "center", behavior: "instant" });
+    });
   }
+  const selectFinding = (index: number) => {
+    setColumnIndex(index);
+    onSelectFinding?.(document.documentId, index);
+    setQuote("");
+    void fetch(
+      `/api/tabular/reviews/${completion.reviewId}/findings/${document.documentId}/${index}/opened`,
+      { method: "POST" }
+    ).catch(() => {});
+  };
+
   return (
-    <section className="space-y-4" aria-label="Contract review workspace">
-      <details className="rounded-md border border-border p-3 text-sm">
-        <summary className="cursor-pointer font-medium">Captured review instructions</summary>
-        {completion.reviewInstructions ? (
-          <dl className="mt-3 grid gap-2 sm:grid-cols-[auto_1fr]">
-            <dt>Party we represent</dt>
-            <dd className="break-words whitespace-pre-wrap">
-              {completion.reviewInstructions.representedParty ?? "Unknown or not instructed"}
-            </dd>
-            <dt>Disclosure role</dt>
-            <dd>{completion.reviewInstructions.disclosureRole}</dd>
-            <dt>NDA structure</dt>
-            <dd>{completion.reviewInstructions.ndaStructure}</dd>
-            <dt>Business purpose</dt>
-            <dd className="break-words whitespace-pre-wrap">
-              {completion.reviewInstructions.businessPurpose ?? "Unknown or not instructed"}
-            </dd>
-            <dt>Governing law context</dt>
-            <dd className="break-words whitespace-pre-wrap">
-              {completion.reviewInstructions.governingLaw ?? "Unknown or not instructed"}
-            </dd>
-            {completion.reviewInstructions.additionalInstructions && (
-              <>
-                <dt>Additional instructions</dt>
-                <dd className="break-words whitespace-pre-wrap">
-                  {completion.reviewInstructions.additionalInstructions}
-                </dd>
-              </>
-            )}
-          </dl>
-        ) : (
-          <p className="mt-3 text-muted-foreground">
-            No instructions were captured for this review. Party, role, structure, business purpose
-            and governing law remain unknown.
-          </p>
-        )}
-        <p className="mt-3 text-muted-foreground">
-          These inputs are fixed for this review. Prepare a new review to change instructions;
-          approved positions and permissions still apply.
-        </p>
-      </details>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <label className="flex min-w-0 items-center gap-2 text-sm">
-          <span className="shrink-0 font-medium">Document</span>
-          <select
-            className="h-9 min-w-0 rounded-md border border-input bg-background px-2"
-            value={document.documentId}
-            onChange={(event) => {
-              setDocumentId(event.target.value);
-              setColumnIndex(undefined);
-              setQuote("");
-            }}
-          >
-            {completion.documents.map((doc) => (
-              <option key={doc.documentId} value={doc.documentId}>
-                {doc.title}
-              </option>
-            ))}
-          </select>
-        </label>
-        {failed > 0 && completion.canEscalate && (
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={
-              !canRetry ||
-              retrying ||
-              jobs.isPending ||
-              !!jobs.error ||
-              (unknownOutcome && !acknowledgeUnknown)
-            }
-            onClick={() => onRetry(acknowledgeUnknown)}
-          >
-            {retrying ? "Queuing retry…" : `Retry ${failed} failed rule${failed === 1 ? "" : "s"}`}
-          </Button>
-        )}
-      </div>
-      {document.fileType === "docx" && (
-        <div className="flex flex-col gap-2">
-          {document.reviewedVersionId !== document.currentVersionId && (
-            <p className="text-sm text-muted-foreground">
-              This inspection describes the current draft. Findings and quotations remain bound to
-              the version captured for this review.
+    <section className="flex min-h-0 flex-1 flex-col gap-3" aria-label="Contract review workspace">
+      {guardNavigation && <UnsavedNavigationGuard {...actionDrafts.guardProps} />}
+      <div className="flex shrink-0 flex-wrap items-start gap-x-5 gap-y-2">
+        <details className="order-3 ms-auto max-w-full text-sm open:w-full">
+          <summary className="cursor-pointer text-xs font-medium text-muted-foreground">
+            Captured review instructions
+          </summary>
+          {completion.reviewInstructions ? (
+            <dl className="mt-3 grid gap-2 sm:grid-cols-[auto_1fr]">
+              <dt>Party we represent</dt>
+              <dd className="break-words whitespace-pre-wrap">
+                {completion.reviewInstructions.representedParty ?? "Unknown or not instructed"}
+              </dd>
+              <dt>Disclosure role</dt>
+              <dd>{completion.reviewInstructions.disclosureRole}</dd>
+              <dt>NDA structure</dt>
+              <dd>{completion.reviewInstructions.ndaStructure}</dd>
+              <dt>Business purpose</dt>
+              <dd className="break-words whitespace-pre-wrap">
+                {completion.reviewInstructions.businessPurpose ?? "Unknown or not instructed"}
+              </dd>
+              <dt>Governing law context</dt>
+              <dd className="break-words whitespace-pre-wrap">
+                {completion.reviewInstructions.governingLaw ?? "Unknown or not instructed"}
+              </dd>
+              {completion.reviewInstructions.additionalInstructions && (
+                <>
+                  <dt>Additional instructions</dt>
+                  <dd className="break-words whitespace-pre-wrap">
+                    {completion.reviewInstructions.additionalInstructions}
+                  </dd>
+                </>
+              )}
+            </dl>
+          ) : (
+            <p className="mt-3 text-muted-foreground">
+              No instructions were captured for this review. Party, role, structure, business
+              purpose and governing law remain unknown.
             </p>
           )}
-          <WordInspectionNotice inspection={document.wordInspection} />
+          <p className="mt-3 text-muted-foreground">
+            These inputs are fixed for this review. Prepare a new review to change instructions;
+            approved positions and permissions still apply.
+          </p>
+        </details>
+        <div className="order-1 flex min-w-0 flex-wrap items-center gap-3">
+          <label className="flex min-w-0 items-center gap-2 text-sm">
+            <span className="shrink-0 font-medium">Document</span>
+            <NativeSelect
+              className="min-w-0"
+              value={document.documentId}
+              onChange={(event) => {
+                setDocumentId(event.target.value);
+                const first = completion.documents.find(
+                  (doc) => doc.documentId === event.target.value
+                )?.findings[0];
+                if (first) onSelectFinding?.(event.target.value, first.columnIndex);
+                setColumnIndex(undefined);
+                setQuote("");
+              }}
+            >
+              {completion.documents.map((doc) => (
+                <NativeSelectOption key={doc.documentId} value={doc.documentId}>
+                  {doc.title}
+                </NativeSelectOption>
+              ))}
+            </NativeSelect>
+          </label>
+          {failed > 0 && completion.canEscalate && (
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={
+                !canRetry ||
+                retrying ||
+                jobs.isPending ||
+                !!jobs.error ||
+                (unknownOutcome && !acknowledgeUnknown)
+              }
+              onClick={() => onRetry(acknowledgeUnknown)}
+            >
+              {retrying
+                ? "Queuing retry…"
+                : `Retry ${failed} failed rule${failed === 1 ? "" : "s"}`}
+            </Button>
+          )}
         </div>
-      )}
+        {document.fileType === "docx" && (
+          <div
+            className={`order-2 min-w-0 flex-1 ${document.wordInspection?.safeToEdit && document.wordInspection.safeClean ? "basis-56" : "basis-full"}`}
+          >
+            {document.reviewedVersionId !== document.currentVersionId && (
+              <p className="text-sm text-muted-foreground">
+                This inspection describes the current draft. Findings and quotations remain bound to
+                the version captured for this review.
+              </p>
+            )}
+            <WordInspectionNotice inspection={document.wordInspection} inline />
+          </div>
+        )}
+      </div>
       {unknownOutcome && (
         <label className="flex max-w-prose items-start gap-2 text-sm">
-          <input
-            type="checkbox"
-            className="mt-1 size-4 accent-primary"
+          <Checkbox
+            className="mt-1"
             checked={acknowledgeUnknown}
-            onChange={(event) => setAcknowledgeUnknown(event.target.checked)}
+            onCheckedChange={(event) => setAcknowledgeUnknown(event)}
           />
           <span>
             A previous provider outcome is unknown. I understand that retrying may incur another
@@ -179,7 +219,7 @@ export function ContractReviewWorkspace({
           </button>
         </p>
       )}
-      <div className="flex gap-2 lg:hidden" aria-label="Review view">
+      <div className="flex gap-2 xl:hidden" aria-label="Review view">
         <Button
           size="sm"
           variant={mobilePane === "document" ? "secondary" : "ghost"}
@@ -197,13 +237,13 @@ export function ContractReviewWorkspace({
           Findings
         </Button>
       </div>
-      <div className="grid min-w-0 gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(320px,0.85fr)]">
+      <div className="grid min-h-0 min-w-0 flex-1 gap-5 border-t border-border pt-4 xl:grid-cols-[minmax(0,1fr)_var(--spacing-inspector)]">
         <section
-          className={`${mobilePane === "document" ? "block" : "hidden"} min-w-0 lg:block`}
+          className={`${mobilePane === "document" ? "flex" : "hidden"} min-h-0 min-w-0 flex-col xl:flex`}
           aria-label="Reviewed document"
         >
           <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
-            <h2 className="font-serif text-xl">Reviewed source</h2>
+            <h2 className="font-sans text-sm font-semibold">Reviewed source</h2>
             <div className="flex flex-wrap gap-3 text-xs">
               {document.reviewedVersionId && (
                 <a
@@ -246,11 +286,12 @@ export function ContractReviewWorkspace({
             </p>
           )}
           <div
-            className="max-h-[68vh] overflow-y-auto rounded-xl bg-card p-5 shadow-sm sm:p-7"
+            ref={sourceTextRef}
+            className="min-h-0 overflow-y-auto rounded-xl border border-border bg-background p-5 sm:p-6 xl:flex-1"
             tabIndex={0}
             aria-label="Captured source text"
           >
-            <p className="max-w-[70ch] font-serif text-base leading-relaxed break-words whitespace-pre-wrap">
+            <p className="mx-auto max-w-[70ch] font-serif text-base leading-relaxed break-words whitespace-pre-wrap">
               {quoteIndex >= 0 ? (
                 <>
                   {document.reviewedText.slice(0, quoteIndex)}
@@ -266,12 +307,28 @@ export function ContractReviewWorkspace({
           </div>
         </section>
         <section
-          className={`${mobilePane === "findings" ? "block" : "hidden"} min-w-0 space-y-5 lg:block`}
+          className={`${mobilePane === "findings" ? "block" : "hidden"} min-h-0 min-w-0 space-y-4 overflow-y-auto pe-1 xl:block xl:border-s xl:border-border xl:ps-5`}
           aria-label="Findings and decisions"
         >
           <div>
-            <h2 className="mb-3 font-serif text-xl">Findings</h2>
-            <div className="flex max-h-52 flex-col overflow-y-auto">
+            <h2 id={findingsLabel} className="mb-2 font-sans text-sm font-semibold">
+              Findings
+            </h2>
+            <NativeSelect
+              aria-labelledby={findingsLabel}
+              value={selected?.columnIndex ?? ""}
+              onChange={(event) => {
+                selectFinding(Number(event.target.value));
+              }}
+              className="w-full xl:hidden"
+            >
+              {document.findings.map((finding) => (
+                <NativeSelectOption key={finding.columnIndex} value={finding.columnIndex}>
+                  {finding.name}
+                </NativeSelectOption>
+              ))}
+            </NativeSelect>
+            <div className="hidden max-h-52 flex-col overflow-y-auto xl:flex">
               {document.findings.map((finding) => {
                 const result = cells.find(
                   (item) =>
@@ -283,14 +340,7 @@ export function ContractReviewWorkspace({
                     key={finding.ruleId}
                     aria-pressed={selected?.columnIndex === finding.columnIndex}
                     className={`rounded-md px-3 py-2 text-left transition-colors hover:bg-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring ${selected?.columnIndex === finding.columnIndex ? "bg-muted" : ""}`}
-                    onClick={() => {
-                      setColumnIndex(finding.columnIndex);
-                      setQuote("");
-                      void fetch(
-                        `/api/tabular/reviews/${completion.reviewId}/findings/${document.documentId}/${finding.columnIndex}/opened`,
-                        { method: "POST" }
-                      ).catch(() => {});
-                    }}
+                    onClick={() => selectFinding(finding.columnIndex)}
                   >
                     <span className="block text-sm font-medium">{finding.name}</span>
                     <span className="mt-0.5 block text-xs text-muted-foreground">
@@ -311,6 +361,10 @@ export function ContractReviewWorkspace({
           {selected && (
             <div className="space-y-5 border-t border-border pt-5">
               <h3 className="text-base font-semibold">{selected.name}</h3>
+              <p className="text-xs text-muted-foreground xl:hidden">
+                {selected.severity === "red" ? "High risk" : "Negotiable"} ·{" "}
+                {selected.disposition.replaceAll("_", " ")}
+              </p>
               <details className="text-sm">
                 <summary className="cursor-pointer font-medium">Firm standard position</summary>
                 <p className="mt-2 leading-relaxed whitespace-pre-wrap">
@@ -393,6 +447,11 @@ export function ContractReviewWorkspace({
               )}
               <ContractReviewActions
                 key={`${document.documentId}:${selected.finding?.revisionId ?? selected.columnIndex}`}
+                {...actionDrafts.bind(
+                  document.documentId,
+                  selected.finding?.revisionId,
+                  selected.columnIndex
+                )}
                 reviewId={completion.reviewId}
                 document={document}
                 finding={selected}

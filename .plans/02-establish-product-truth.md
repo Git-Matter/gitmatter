@@ -37,13 +37,13 @@ Guided first review is implemented and locally checked: current server-derived p
 matter and execution choice, firm-approved standards, actual upload, captured instructions, human decisions
 and Word output. Reuse existing privacy/provider/budget controls and keep configuration presence
 separate from provider verification. See [the coordinated scope](review-setup-and-word-intake.md) and
-[source/browser evidence](evidence/2026-10-14-review-setup-and-word-intake.md). Authenticated first-use
+source/browser evidence. Authenticated first-use
 acceptance remains open.
 
-[Bounded local runtime acceptance on 2026-10-15](evidence/2026-10-15-review-workflow-signoff.md) verifies
+Bounded local runtime acceptance on 2026-10-15 verifies
 actual login, onboarding, upload, saved instructions and execution-route guards. Live provider and
 native Word evidence are recorded separately in the same report. The full staging/real-firm exit
-gates remain open. The [2026-10-18 final visual check](evidence/2026-10-18-final-visual-and-staging-verification.md)
+gates remain open. The 2026-10-18 final visual check
 also confirms persisted guide/instructions and quotation navigation. Staging's public frontend
 does not yet expose the integrated features, so staging acceptance cannot be signed off.
 

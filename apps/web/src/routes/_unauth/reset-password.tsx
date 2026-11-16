@@ -29,14 +29,21 @@ function ResetPassword() {
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    if (busy || searchError) return;
     if (!token) return setError("This reset link is missing a token.");
+    if (password.length < 8) return setError("Use at least 8 characters.");
     if (password !== confirmPassword) return setError("Passwords do not match.");
     setError(null);
     setBusy(true);
-    const { error: resetError } = await resetPassword({ newPassword: password, token });
-    setBusy(false);
-    if (resetError) return setError(resetError.message ?? "Could not reset password");
-    setDone(true);
+    try {
+      const { error: resetError } = await resetPassword({ newPassword: password, token });
+      if (resetError) return setError(resetError.message ?? "Could not reset password");
+      setDone(true);
+    } catch {
+      setError("Could not connect. Your input is still here; try again.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   const linkError = searchError ? "This reset link is invalid or expired." : null;
@@ -56,7 +63,10 @@ function ResetPassword() {
             </div>
           ) : (
             <form onSubmit={submit} className="flex flex-col gap-stack">
-              <FormError>{linkError}</FormError>
+              <FormError>
+                {linkError ??
+                  (!token ? "This reset link is missing a token. Request a new link below." : null)}
+              </FormError>
               <div className="flex flex-col gap-field">
                 <Label htmlFor="password">New password</Label>
                 <Input

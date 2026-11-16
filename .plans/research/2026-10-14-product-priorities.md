@@ -6,7 +6,7 @@ Audience: small-to-mid law firms from `PRODUCT.md`; commercial NDA work is the f
 The code-gap assessment below describes the source before the accepted implementation. Review
 instructions, guided first review and bounded Word inspection were subsequently implemented under
 [the coordinated scope](../review-setup-and-word-intake.md); their
-[source and local evidence](../evidence/2026-10-14-review-setup-and-word-intake.md) records the updated
+source and local evidence records the updated
 behavior and remaining runtime/release gates. Research recommendations retain their original context.
 
 The most worthwhile additions help a lawyer set the correct review position, exchange a usable
@@ -17,7 +17,7 @@ and a large integration catalogue should follow observed demand.
 The first priority remains proving the existing workflow on a deployed application and real Word
 files. Source implementation, a synthetic browser fixture and a passing test suite are different
 from lawyer acceptance. The staging registry failure is recorded in the
-[integration evidence](../evidence/2026-10-14-dev-integration-and-staging.md).
+integration evidence.
 
 ## Evidence behind the priorities
 

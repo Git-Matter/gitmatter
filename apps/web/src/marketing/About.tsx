@@ -6,9 +6,7 @@ export default function About() {
   return (
     <div className="mx-auto flex max-w-2xl flex-col gap-section px-6 py-section">
       <header className="flex flex-col gap-stack">
-        <span className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-          About
-        </span>
+        <span className="text-sm font-medium text-muted-foreground">About</span>
         <h1 className="font-heading text-4xl tracking-tight text-balance">
           Legal AI that keeps a clear record.
         </h1>

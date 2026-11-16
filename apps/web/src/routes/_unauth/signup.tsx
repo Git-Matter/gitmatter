@@ -18,7 +18,8 @@ export const Route = createFileRoute("/_unauth/signup")({
 });
 
 function Signup() {
-  const [signupsOpen, setSignupsOpen] = useState<boolean | null>(null);
+  const [signupsOpen, setSignupsOpen] = useState<boolean | null | "error">(null);
+  const [configAttempt, setConfigAttempt] = useState(0);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -40,40 +41,47 @@ function Signup() {
         if (!ignore) setSignupsOpen(state.open);
       })
       .catch(() => {
-        if (!ignore) setSignupsOpen(false);
+        if (!ignore) setSignupsOpen("error");
       });
     return () => {
       ignore = true;
     };
-  }, []);
+  }, [configAttempt]);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    if (busy || signupsOpen !== true || (turnstileEnabled && !captchaToken)) return;
     setError(null);
-    if (signupsOpen === false) return setError("Signups are closed.");
     const trimmedName = name.trim();
     const trimmedEmail = email.trim();
     if (!trimmedName) return setError("Please enter your name.");
     if (!trimmedEmail) return setError("Please enter your email.");
     setBusy(true);
-    const { data, error: signUpError } = await signUp.email(
-      { name: trimmedName, email: trimmedEmail, password },
-      captchaToken ? { headers: { "x-captcha-response": captchaToken } } : undefined
-    );
-    setBusy(false);
-    if (signUpError) {
+    try {
+      const { data, error: signUpError } = await signUp.email(
+        { name: trimmedName, email: trimmedEmail, password },
+        captchaToken ? { headers: { "x-captcha-response": captchaToken } } : undefined
+      );
+      if (signUpError) {
+        setCaptchaToken(null);
+        setCaptchaKey((k) => k + 1);
+        return setError(signUpError.message ?? "Sign up failed");
+      }
+      // A token in the response means auto sign-in happened (email verification not
+      // required) — go straight to the app. No token means verification is needed.
+      if (data?.token) {
+        window.location.href = "/onboarding";
+        return;
+      }
+      const params = new URLSearchParams({ email: trimmedEmail, sent: "1", next: "/onboarding" });
+      window.location.href = `/verify-email?${params}`;
+    } catch {
       setCaptchaToken(null);
       setCaptchaKey((k) => k + 1);
-      return setError(signUpError.message ?? "Sign up failed");
+      setError("Could not connect. Your input is still here; try again.");
+    } finally {
+      setBusy(false);
     }
-    // A token in the response means auto sign-in happened (email verification not
-    // required) — go straight to the app. No token means verification is needed.
-    if (data?.token) {
-      window.location.href = "/onboarding";
-      return;
-    }
-    const params = new URLSearchParams({ email: trimmedEmail, sent: "1", next: "/onboarding" });
-    window.location.href = `/verify-email?${params}`;
   }
 
   return (
@@ -85,6 +93,19 @@ function Signup() {
               className="h-44 animate-pulse rounded-md bg-muted"
               aria-label="Loading signup form"
             />
+          ) : signupsOpen === "error" ? (
+            <div className="flex flex-col gap-4" role="status">
+              <p>Account availability could not be checked.</p>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setSignupsOpen(null);
+                  setConfigAttempt((attempt) => attempt + 1);
+                }}
+              >
+                Retry availability check
+              </Button>
+            </div>
           ) : signupsOpen === false ? (
             <div className="flex flex-col gap-4 text-center">
               <div>

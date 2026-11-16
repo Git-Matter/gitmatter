@@ -2,12 +2,12 @@
 
 **Status: Runtime-verified (local, bounded synthetic scope)** as of 2026-10-18. Authenticated staging,
 broader Word/provider quality and pilot/release proof remain open. See
-[the implementation evidence](evidence/2026-10-14-review-setup-and-word-intake.md).
+the implementation evidence.
 
-[Sign-off checks on 2026-10-15](evidence/2026-10-15-review-workflow-signoff.md) cover the actual local
+Sign-off checks on 2026-10-15 cover the actual local
 account/guide, live provider runs, native Word save/reopen and re-import. A discovered citation-page
 defect was corrected without rewriting audit history. The
-[final visual check on 2026-10-18](evidence/2026-10-18-final-visual-and-staging-verification.md)
+final visual check on 2026-10-18
 passed, including quotation highlighting, persisted guide/instructions and Word inspection controls.
 Staging still lacks the integrated feature frontend; registry credential repair, a CI readiness
 HTTP 403 and authenticated staging acceptance remain open.

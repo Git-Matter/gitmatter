@@ -1,3 +1,4 @@
+import { Input } from "@/components/ui/input";
 import { useState } from "react";
 import { createColumnHelper } from "@tanstack/react-table";
 import {
@@ -47,7 +48,7 @@ function NewFolderInput({
   return (
     <span className="flex items-center gap-2">
       <FolderPlus className="size-4 shrink-0 text-bronze" />
-      <input
+      <Input
         autoFocus
         className="min-w-0 flex-1 border-b border-border bg-transparent text-sm font-medium outline-none"
         placeholder="Folder name"
@@ -74,6 +75,7 @@ export function DocStatusCue({ status }: { status: Doc["status"] }) {
 const columnHelper = createColumnHelper<DocRow>();
 
 export function matterDocumentColumns(handlers: {
+  onOpen: (row: DocRow) => void;
   canEdit: boolean;
   onReExtract: (id: string) => void;
   onRename: (doc: Doc) => void;
@@ -91,15 +93,16 @@ export function matterDocumentColumns(handlers: {
       header: ({ table }) => (
         <Checkbox
           checked={table.getIsAllRowsSelected()}
-          onChange={table.getToggleAllRowsSelectedHandler()}
-          aria-label="Select all"
+          indeterminate={table.getIsSomeRowsSelected() && !table.getIsAllRowsSelected()}
+          onCheckedChange={(checked) => table.toggleAllRowsSelected(checked)}
+          aria-label="Select all rows on this page"
         />
       ),
       cell: ({ row }) =>
         row.original.kind === "doc" ? (
           <Checkbox
             checked={row.getIsSelected()}
-            onChange={row.getToggleSelectedHandler()}
+            onCheckedChange={(checked) => row.toggleSelected(checked)}
             onClick={(e) => e.stopPropagation()}
             aria-label="Select row"
           />
@@ -123,14 +126,27 @@ export function matterDocumentColumns(handlers: {
               onCancel={handlers.onCreateFolderCancel}
             />
           );
-        return r.kind === "folder" ? (
-          <span className="flex items-center gap-2 truncate font-medium">
-            <FolderPlus className="size-4 shrink-0 text-bronze" /> {r.folder.name}
-          </span>
-        ) : (
-          <span className="flex items-center gap-2 truncate font-medium">
-            <FileText className="size-4 shrink-0 text-destructive" /> {r.doc.title}
-          </span>
+        const content =
+          r.kind === "folder" ? (
+            <span className="flex items-center gap-2 truncate font-medium">
+              <FolderPlus className="size-4 shrink-0 text-bronze" /> {r.folder.name}
+            </span>
+          ) : (
+            <span className="flex items-center gap-2 truncate font-medium">
+              <FileText className="size-4 shrink-0 text-destructive" /> {r.doc.title}
+            </span>
+          );
+        return (
+          <Button
+            variant="link"
+            className="h-auto min-h-6 max-w-full justify-start p-0"
+            onClick={(event) => {
+              event.stopPropagation();
+              handlers.onOpen(r);
+            }}
+          >
+            {content}
+          </Button>
         );
       },
     }),

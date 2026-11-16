@@ -1,4 +1,7 @@
-import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { notifySuccess } from "@/lib/feedback";
+import { FieldDescription } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { Users } from "lucide-react";
 import { type WorkflowDetail } from "@/lib/data/api";
 import { useSession } from "@/lib/auth/auth-client";
@@ -39,6 +42,8 @@ export function WorkflowDetailsModal({
     <WorkflowModal
       open={open}
       onClose={onClose}
+      dirty={canEdit && !titleForm.saved && titleForm.titleDraft !== workflow.title}
+      saving={titleForm.saving}
       size="lg"
       breadcrumbs={["Workflows", workflow.title, "Details"]}
       secondaryAction={
@@ -69,6 +74,11 @@ export function WorkflowDetailsModal({
       cancelAction={canEdit ? undefined : false}
     >
       <div className="flex flex-col gap-5 py-1">
+        {canEdit && (
+          <FieldDescription id="workflow-details-hint">
+            Change the workflow name to enable Update. The name cannot be empty.
+          </FieldDescription>
+        )}
         <div className="flex flex-col gap-3">
           <label
             htmlFor="workflow-details-title"
@@ -76,8 +86,9 @@ export function WorkflowDetailsModal({
           >
             Workflow Name
           </label>
-          <input
+          <Input
             id="workflow-details-title"
+            aria-describedby={canEdit ? "workflow-details-hint" : undefined}
             value={titleForm.titleDraft}
             onChange={(event) => titleForm.setTitle(event.target.value)}
             disabled={!canEdit || titleForm.saving}
@@ -108,8 +119,14 @@ function useWorkflowTitleForm({ open, workflow, canEdit, onSave }: UseWorkflowTi
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const seeded = useRef<string | null>(null);
   useEffect(() => {
-    if (!open || !workflow) return;
+    if (!open) {
+      seeded.current = null;
+      return;
+    }
+    if (!workflow || seeded.current === workflow.id) return;
+    seeded.current = workflow.id;
     setTitleDraft(workflow.title);
     setSaved(false);
     setError(null);
@@ -136,6 +153,7 @@ function useWorkflowTitleForm({ open, workflow, canEdit, onSave }: UseWorkflowTi
     try {
       await onSave({ title: trimmedTitle });
       setSaved(true);
+      notifySuccess("Workflow details updated");
     } catch {
       setError("Could not update workflow details.");
     } finally {

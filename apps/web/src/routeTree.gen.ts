@@ -9,6 +9,8 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as SignOutRouteImport } from './routes/sign-out'
+import { Route as DesignSystemRouteImport } from './routes/design-system'
 import { Route as UnauthRouteRouteImport } from './routes/_unauth/route'
 import { Route as AuthRouteRouteImport } from './routes/_auth/route'
 import { Route as marketingRouteRouteImport } from './routes/(marketing)/route'
@@ -63,6 +65,16 @@ import { Route as AuthWorkflowsAssistantIdRouteImport } from './routes/_auth/wor
 import { Route as AuthMattersIdAssistantIndexRouteImport } from './routes/_auth/matters/$id/assistant/index'
 import { Route as AuthMattersIdAssistantChatIdRouteImport } from './routes/_auth/matters/$id/assistant/$chatId'
 
+const SignOutRoute = SignOutRouteImport.update({
+  id: '/sign-out',
+  path: '/sign-out',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DesignSystemRoute = DesignSystemRouteImport.update({
+  id: '/design-system',
+  path: '/design-system',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const UnauthRouteRoute = UnauthRouteRouteImport.update({
   id: '/_unauth',
   getParentRoute: () => rootRouteImport,
@@ -336,6 +348,8 @@ const AuthMattersIdAssistantChatIdRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof marketingIndexRoute
+  '/design-system': typeof DesignSystemRoute
+  '/sign-out': typeof SignOutRoute
   '/about': typeof marketingAboutRoute
   '/features': typeof marketingFeaturesRoute
   '/legal-ai': typeof marketingLegalAiRoute
@@ -388,6 +402,8 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof marketingIndexRoute
+  '/design-system': typeof DesignSystemRoute
+  '/sign-out': typeof SignOutRoute
   '/about': typeof marketingAboutRoute
   '/features': typeof marketingFeaturesRoute
   '/legal-ai': typeof marketingLegalAiRoute
@@ -443,6 +459,8 @@ export interface FileRoutesById {
   '/(marketing)': typeof marketingRouteRouteWithChildren
   '/_auth': typeof AuthRouteRouteWithChildren
   '/_unauth': typeof UnauthRouteRouteWithChildren
+  '/design-system': typeof DesignSystemRoute
+  '/sign-out': typeof SignOutRoute
   '/(marketing)/about': typeof marketingAboutRoute
   '/(marketing)/features': typeof marketingFeaturesRoute
   '/(marketing)/legal-ai': typeof marketingLegalAiRoute
@@ -498,6 +516,8 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/design-system'
+    | '/sign-out'
     | '/about'
     | '/features'
     | '/legal-ai'
@@ -550,6 +570,8 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/design-system'
+    | '/sign-out'
     | '/about'
     | '/features'
     | '/legal-ai'
@@ -604,6 +626,8 @@ export interface FileRouteTypes {
     | '/(marketing)'
     | '/_auth'
     | '/_unauth'
+    | '/design-system'
+    | '/sign-out'
     | '/(marketing)/about'
     | '/(marketing)/features'
     | '/(marketing)/legal-ai'
@@ -660,12 +684,28 @@ export interface RootRouteChildren {
   marketingRouteRoute: typeof marketingRouteRouteWithChildren
   AuthRouteRoute: typeof AuthRouteRouteWithChildren
   UnauthRouteRoute: typeof UnauthRouteRouteWithChildren
+  DesignSystemRoute: typeof DesignSystemRoute
+  SignOutRoute: typeof SignOutRoute
   DotwellKnownSplatRoute: typeof DotwellKnownSplatRoute
   ApiSplatRoute: typeof ApiSplatRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/sign-out': {
+      id: '/sign-out'
+      path: '/sign-out'
+      fullPath: '/sign-out'
+      preLoaderRoute: typeof SignOutRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/design-system': {
+      id: '/design-system'
+      path: '/design-system'
+      fullPath: '/design-system'
+      preLoaderRoute: typeof DesignSystemRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_unauth': {
       id: '/_unauth'
       path: ''
@@ -1170,6 +1210,8 @@ const rootRouteChildren: RootRouteChildren = {
   marketingRouteRoute: marketingRouteRouteWithChildren,
   AuthRouteRoute: AuthRouteRouteWithChildren,
   UnauthRouteRoute: UnauthRouteRouteWithChildren,
+  DesignSystemRoute: DesignSystemRoute,
+  SignOutRoute: SignOutRoute,
   DotwellKnownSplatRoute: DotwellKnownSplatRoute,
   ApiSplatRoute: ApiSplatRoute,
 }

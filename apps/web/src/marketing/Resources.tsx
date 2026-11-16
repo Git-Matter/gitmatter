@@ -1,4 +1,4 @@
-import { type ReactNode, useRef } from "react";
+import { type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { ArrowRight } from "lucide-react";
 // NOTE: the data module is named resourceCatalog (not "resources") because
@@ -6,40 +6,22 @@ import { ArrowRight } from "lucide-react";
 // filesystems, producing an undefined self-import.
 import { RESOURCES, type Resource } from "@/marketing/resourceCatalog";
 import CTASection from "@/marketing/components/CTASection";
-import Eyebrow from "@/marketing/components/Eyebrow";
 
 // Cloud-only /resources hub in the Harvey register: oversized serif hero, a
 // featured item beside a compact list, then a card grid. Every card is real
 // content — posts, product videos, docs guides, comparisons.
 
-// Media thumb: paused video that plays while hovered (no always-on decoding),
-// or a quiet typographic tile when there is no clip.
+// Static posters link to the watch page, where media origin and playback controls are visible.
 function Thumb({ item, className }: { item: Resource; className?: string }) {
-  const ref = useRef<HTMLVideoElement>(null);
-  if (!item.media) {
-    return (
-      <div
-        className={`flex items-end rounded-lg border border-border bg-secondary/60 p-5 ${className ?? "aspect-[4/3]"}`}
-      >
-        <span className="max-w-[16ch] font-heading text-2xl tracking-tight text-balance">
-          {item.title}
-        </span>
-      </div>
-    );
-  }
+  if (!item.poster) return null;
   return (
-    <video
-      ref={ref}
-      className={`w-full rounded-lg border border-border bg-card object-cover ${className ?? "aspect-[4/3]"}`}
-      src={item.media}
-      poster={item.poster}
-      muted
-      loop
-      playsInline
-      preload="none"
-      aria-label={item.title}
-      onMouseEnter={() => void ref.current?.play().catch(() => {})}
-      onMouseLeave={() => ref.current?.pause()}
+    <img
+      src={item.poster}
+      alt=""
+      width={960}
+      height={720}
+      loading="lazy"
+      className={`w-full rounded-lg object-cover ${className ?? "aspect-[4/3]"}`}
     />
   );
 }
@@ -69,7 +51,11 @@ function CardLink({
 }
 
 function TypeLabel({ type }: { type: Resource["type"] }) {
-  return <span className="text-xs font-medium tracking-[0.2em] text-bronze uppercase">{type}</span>;
+  return (
+    <span className="text-sm font-medium text-muted-foreground">
+      {type === "Video" ? "Illustrative video" : type}
+    </span>
+  );
 }
 
 export default function Resources() {
@@ -122,10 +108,14 @@ export default function Resources() {
 
       {/* The grid. */}
       <section className="mx-auto w-full max-w-7xl px-6 pt-20">
-        <Eyebrow>all resources</Eyebrow>
+        <h2 className="text-title">Browse resources</h2>
         <div className="mt-8 grid gap-x-8 gap-y-12 border-t border-border pt-12 sm:grid-cols-2 lg:grid-cols-3">
           {grid.map((item) => (
-            <CardLink key={item.title} item={item} className="group flex flex-col gap-3">
+            <CardLink
+              key={item.title}
+              item={item}
+              className="group flex flex-col gap-3 border-t border-border pt-5"
+            >
               <Thumb item={item} />
               <div className="flex flex-col gap-1.5">
                 <TypeLabel type={item.type} />

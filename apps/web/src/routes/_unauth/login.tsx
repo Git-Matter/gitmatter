@@ -32,41 +32,54 @@ function Login() {
   const form = useForm({
     defaultValues: { email: "", password: "" },
     onSubmit: async ({ value }) => {
+      if (passkeyBusy || (turnstileEnabled && !captchaToken)) return;
       setError(null);
-      const { data, error: signInError } = await signIn.email(
-        { email: value.email, password: value.password },
-        captchaToken ? { headers: { "x-captcha-response": captchaToken } } : undefined
-      );
-      if (signInError) {
-        setCaptchaToken(null);
-        setCaptchaKey((k) => k + 1);
-        if (isEmailVerificationError(signInError)) {
-          const params = new URLSearchParams({ email: value.email, sent: "1" });
-          if (next) params.set("next", safeLoginNext(next));
-          window.location.href = `/verify-email?${params}`;
+      try {
+        const { data, error: signInError } = await signIn.email(
+          { email: value.email, password: value.password },
+          captchaToken ? { headers: { "x-captcha-response": captchaToken } } : undefined
+        );
+        if (signInError) {
+          setCaptchaToken(null);
+          setCaptchaKey((k) => k + 1);
+          if (isEmailVerificationError(signInError)) {
+            const params = new URLSearchParams({ email: value.email, sent: "1" });
+            if (next) params.set("next", safeLoginNext(next));
+            window.location.href = `/verify-email?${params}`;
+            return;
+          }
+          setError(signInError.message ?? "Sign in failed");
           return;
         }
-        setError(signInError.message ?? "Sign in failed");
-        return;
+        // The two-factor client has already started the full-page redirect. Do not
+        // overwrite it with the normal post-login destination.
+        if (data && "twoFactorRedirect" in data && data.twoFactorRedirect) return;
+        // Full reload (not a client nav) so the server beforeLoad re-resolves the
+        // now-authenticated session and SSRs the app shell. Bounce to a local
+        // `next` (gated route or OAuth /authorize); only local paths, to avoid an
+        // open redirect.
+        window.location.href = safeLoginNext(next);
+      } catch {
+        setCaptchaToken(null);
+        setCaptchaKey((k) => k + 1);
+        setError("Could not connect. Your input is still here; try signing in again.");
       }
-      // The two-factor client has already started the full-page redirect. Do not
-      // overwrite it with the normal post-login destination.
-      if (data && "twoFactorRedirect" in data && data.twoFactorRedirect) return;
-      // Full reload (not a client nav) so the server beforeLoad re-resolves the
-      // now-authenticated session and SSRs the app shell. Bounce to a local
-      // `next` (gated route or OAuth /authorize); only local paths, to avoid an
-      // open redirect.
-      window.location.href = safeLoginNext(next);
     },
   });
 
   async function signInWithPasskey() {
+    if (passkeyBusy || form.state.isSubmitting) return;
     setError(null);
     setPasskeyBusy(true);
-    const { error: signInError } = await signIn.passkey();
-    setPasskeyBusy(false);
-    if (signInError) return setError(signInError.message ?? "Passkey sign in failed");
-    window.location.href = safeLoginNext(next);
+    try {
+      const { error: signInError } = await signIn.passkey();
+      if (signInError) return setError(signInError.message ?? "Passkey sign in failed");
+      window.location.href = safeLoginNext(next);
+    } catch {
+      setError("Passkey sign in did not finish. Try again or use your password.");
+    } finally {
+      setPasskeyBusy(false);
+    }
   }
 
   return (

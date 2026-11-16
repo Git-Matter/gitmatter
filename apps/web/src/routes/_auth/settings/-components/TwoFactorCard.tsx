@@ -1,3 +1,6 @@
+import { FieldDescription } from "@/components/ui/field";
+import { notifySuccess } from "@/lib/feedback";
+import { FormFeedback } from "@/components/FormFeedback";
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
@@ -9,6 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { twoFactor } from "@/lib/auth/auth-client";
+import { useSettingsDraft } from "./SettingsDrafts";
 
 interface Enrollment {
   totpURI: string;
@@ -31,7 +35,7 @@ export function TwoFactorCard({ enabled }: { enabled: boolean }) {
     },
     onSuccess: (details) => {
       setEnrollment(details);
-      toast.success("Authenticator created. Verify a code to finish.");
+      notifySuccess("Authenticator created. Verify a code to finish.");
     },
     onError: (error) => toast.error(messageFor(error)),
   });
@@ -46,7 +50,7 @@ export function TwoFactorCard({ enabled }: { enabled: boolean }) {
       setCode("");
       setEnrollment(null);
       await router.invalidate();
-      toast.success("Two-factor authentication enabled");
+      notifySuccess("Two-factor authentication enabled");
     },
     onError: (error) => toast.error(messageFor(error)),
   });
@@ -60,7 +64,7 @@ export function TwoFactorCard({ enabled }: { enabled: boolean }) {
       setPassword("");
       setReplacementCodes(null);
       await router.invalidate();
-      toast.success("Two-factor authentication disabled");
+      notifySuccess("Two-factor authentication disabled");
     },
     onError: (error) => toast.error(messageFor(error)),
   });
@@ -75,15 +79,16 @@ export function TwoFactorCard({ enabled }: { enabled: boolean }) {
     onSuccess: (codes) => {
       setPassword("");
       setReplacementCodes(codes);
-      toast.success("Previous backup codes are now invalid");
+      notifySuccess("Previous backup codes are now invalid");
     },
     onError: (error) => toast.error(messageFor(error)),
   });
 
   const busy = enable.isPending || verify.isPending || disable.isPending || regenerate.isPending;
+  useSettingsDraft(Boolean(password || code || enrollment), busy);
 
   return (
-    <Card>
+    <Card variant="section">
       <CardHeader>
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
@@ -96,13 +101,23 @@ export function TwoFactorCard({ enabled }: { enabled: boolean }) {
         </div>
       </CardHeader>
       <CardContent className="flex flex-col gap-field">
-        <p className="text-sm text-muted-foreground">
-          Use an authenticator app for a second code after signing in with your password.
+        <FormFeedback
+          error={enable.error || verify.error || disable.error || regenerate.error}
+          title="Security change was not completed"
+        />
+        <p id="mfa-description" className="text-sm text-muted-foreground">
+          Use an authenticator app for a second code after signing in with your password. Enter your
+          current password to enable security changes.
         </p>
 
         {!enabled && !enrollment ? (
           <div className="flex items-end gap-2">
-            <PasswordField value={password} onChange={setPassword} id="mfa-enable-password" />
+            <PasswordField
+              disabled={busy}
+              value={password}
+              onChange={setPassword}
+              id="mfa-enable-password"
+            />
             <Button onClick={() => enable.mutate()} disabled={busy || !password}>
               {enable.isPending ? "Starting..." : "Enable"}
             </Button>
@@ -129,10 +144,12 @@ export function TwoFactorCard({ enabled }: { enabled: boolean }) {
             </div>
             <BackupCodes codes={enrollment.backupCodes} />
             <div className="flex items-end gap-2">
-              <div className="flex flex-1 flex-col gap-1.5">
+              <div className="grid flex-1 gap-1.5 sm:grid-cols-[9rem_1fr] sm:items-center sm:gap-4">
                 <Label htmlFor="mfa-verification-code">Authenticator code</Label>
                 <Input
                   id="mfa-verification-code"
+                  aria-describedby="mfa-code-hint"
+                  disabled={busy}
                   value={code}
                   onChange={(event) => setCode(event.target.value)}
                   inputMode="numeric"
@@ -148,12 +165,21 @@ export function TwoFactorCard({ enabled }: { enabled: boolean }) {
                 {verify.isPending ? "Verifying..." : "Verify and enable"}
               </Button>
             </div>
+            <FieldDescription id="mfa-code-hint">
+              Enter the six-digit code from your authenticator. Setup is complete only after the
+              code is accepted.
+            </FieldDescription>
           </div>
         ) : null}
 
         {enabled ? (
           <div className="flex flex-col gap-4 border-t pt-5">
-            <PasswordField value={password} onChange={setPassword} id="mfa-manage-password" />
+            <PasswordField
+              disabled={busy}
+              value={password}
+              onChange={setPassword}
+              id="mfa-manage-password"
+            />
             <div className="flex flex-wrap gap-2">
               <Button
                 variant="outline"
@@ -182,16 +208,20 @@ function PasswordField({
   value,
   onChange,
   id,
+  disabled,
 }: {
   value: string;
   onChange: (value: string) => void;
   id: string;
+  disabled?: boolean;
 }) {
   return (
-    <div className="flex flex-1 flex-col gap-1.5">
+    <div className="grid flex-1 gap-1.5 sm:grid-cols-[9rem_1fr] sm:items-center sm:gap-4">
       <Label htmlFor={id}>Current password</Label>
       <Input
         id={id}
+        aria-describedby="mfa-description"
+        disabled={disabled}
         type="password"
         autoComplete="current-password"
         value={value}
@@ -205,7 +235,7 @@ function BackupCodes({ codes }: { codes: string[] }) {
   async function copyCodes() {
     try {
       await navigator.clipboard.writeText(codes.join("\n"));
-      toast.success("Backup codes copied");
+      notifySuccess("Backup codes copied");
     } catch {
       toast.error("Could not copy backup codes");
     }

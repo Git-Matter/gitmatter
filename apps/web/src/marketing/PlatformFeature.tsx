@@ -1,3 +1,4 @@
+import ProductVideo from "@/marketing/components/ProductVideo";
 import { Link, useParams } from "@tanstack/react-router";
 import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -36,27 +37,20 @@ export default function PlatformFeature() {
             <p className="max-w-[46ch] text-lg leading-relaxed text-muted-foreground">
               {feature.intro}
             </p>
-            <a href={SITE.bookDemo} target="_blank" rel="noreferrer">
-              <Button size="lg">Book demo</Button>
-            </a>
+            <Button
+              size="lg"
+              nativeButton={false}
+              render={<a href={SITE.bookDemo} target="_blank" rel="noreferrer" />}
+            >
+              Book demo
+            </Button>
           </div>
         </div>
       </header>
 
       {/* The clip, full width like Harvey's hero screenshot. */}
       <div className="mx-auto w-full max-w-7xl px-6">
-        <figure className="m-0 overflow-hidden rounded-lg border border-border bg-card shadow-xs">
-          <video
-            className="w-full"
-            src={feature.clip}
-            autoPlay
-            muted
-            loop
-            playsInline
-            preload="metadata"
-            aria-label={`${feature.tag} demo`}
-          />
-        </figure>
+        {feature.clip ? <ProductVideo src={feature.clip} label={`${feature.tag} preview`} /> : null}
       </div>
 
       {/* Capability sections: heading + lead left, points right. */}
@@ -108,8 +102,8 @@ export default function PlatformFeature() {
 
       {/* The rest of the platform. */}
       <section className="mx-auto w-full max-w-7xl px-6 pt-16">
-        <span className="text-xs font-medium tracking-[0.2em] text-bronze uppercase">
-          more of the platform
+        <span className="text-sm font-medium text-muted-foreground">
+          More tools for your matter
         </span>
         <div className="mt-6 grid gap-x-8 gap-y-4 sm:grid-cols-2 lg:grid-cols-3">
           {others.map((f) => (

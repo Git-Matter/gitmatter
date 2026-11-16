@@ -93,6 +93,46 @@ Discovery and the OAuth endpoints are public.
 | POST   | `/api/documents/:id/shares/by-email`              | Share by email (owner).                                           |
 | DELETE | `/api/documents/:id/shares/:userId`               | Remove a share (owner).                                           |
 
+## Templates
+
+Template mutations use the audited commit path. A workspace member can create a
+draft. Owners and workspace admins manage the template team; editors prepare
+revisions, and assigned human reviewers decide reviews. Other members see only
+the current published content when its audience includes the workspace.
+
+| Method | Path                          | Purpose                                                                 |
+| ------ | ----------------------------- | ----------------------------------------------------------------------- |
+| GET    | `/api/templates`              | Page through permitted template summaries without document bodies.      |
+| GET    | `/api/templates/:id`          | Load one permitted template with full revision content.                 |
+| POST   | `/api/templates`              | Create an audited text-template draft.                                  |
+| POST   | `/api/templates/upload`       | Create a draft from an original DOCX using multipart form data.         |
+| PUT    | `/api/templates/:id`          | Save a text or metadata revision with an expected head and reason.      |
+| POST   | `/api/templates/:id/upload`   | Replace a working source with a revised DOCX.                           |
+| POST   | `/api/templates/:id/actions`  | Submit, publish, request changes, manage the team, or change lifecycle. |
+| GET    | `/api/templates/:id/history`  | Read permitted version and decision history.                            |
+| GET    | `/api/templates/:id/download` | Download the exact current published file.                              |
+
+The list returns `{ items, nextCursor }`. Use `cursor` and `limit` (up to 100)
+to page, `q` to search names/categories/people, and `view` to select `all`,
+`review`, `returned`, or `archived`. Full bodies and usage guidance are loaded
+through the individual template endpoint.
+
+Uploads include a `file` part and a JSON `content` part. Replacement uploads also
+include `expectedHead` and `message`. Files must be DOCX, fit the upload limit,
+and have their tracked changes resolved. Extracted text is server-derived;
+clients cannot supply an arbitrary storage key or source hash.
+
+Actions carry `expectedHead`, `action`, and a non-empty `message`. Review
+submission selects `reviewerId`; publication and request-changes decisions also
+name the reviewed `revisionId`. Stale decisions and concurrent saves are rejected.
+
+The download endpoint accepts an optional `revisionId` for authorized template
+collaborators reviewing a specific working or historical revision. A reader
+cannot use it to retrieve a private draft or a withdrawn publication. Downloads
+identify the template version in the filename and return `X-Template-Revision`.
+
+See [Template library](/user-guide/templates) for the complete workflow.
+
 ## Tabular reviews
 
 | Method | Path                                       | Purpose                                                      |

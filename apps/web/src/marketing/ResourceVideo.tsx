@@ -1,7 +1,7 @@
+import ProductVideo from "@/marketing/components/ProductVideo";
 import { Link, useParams } from "@tanstack/react-router";
 import { ArrowLeft, ArrowRight } from "lucide-react";
 import { getVideo, VIDEOS } from "@/marketing/resourceCatalog";
-import Eyebrow from "@/marketing/components/Eyebrow";
 import CTASection from "@/marketing/components/CTASection";
 
 // Cloud-only /resources/$slug watch page: the video with controls, what it
@@ -24,26 +24,15 @@ export default function ResourceVideo() {
           Resources
         </Link>
         <header className="flex flex-col gap-stack py-10">
-          <Eyebrow>video</Eyebrow>
           <h1 className="max-w-[22ch] font-heading text-4xl tracking-tight text-balance sm:text-5xl">
             {video.title}
           </h1>
           <p className="max-w-[56ch] text-lg leading-relaxed text-muted-foreground">{video.desc}</p>
         </header>
-        <figure className="m-0 overflow-hidden rounded-lg border border-border bg-card shadow-xs">
-          <video
-            className="w-full"
-            src={video.media}
-            poster={video.poster}
-            controls
-            playsInline
-            preload="metadata"
-            aria-label={video.title}
-          />
-        </figure>
+        <ProductVideo src={video.media} poster={video.poster} label={video.title} muted={false} />
 
         <section className="pt-12">
-          <Eyebrow>what it shows</Eyebrow>
+          <h2 className="text-title">In this video</h2>
           <ul className="mt-6 flex flex-col">
             {video.points.map((point) => (
               <li
@@ -57,7 +46,7 @@ export default function ResourceVideo() {
         </section>
 
         <section className="pt-12">
-          <Eyebrow>more videos</Eyebrow>
+          <h2 className="text-title">More videos</h2>
           <div className="mt-6 grid gap-x-8 gap-y-4 sm:grid-cols-2">
             {others.map((v) => (
               <Link

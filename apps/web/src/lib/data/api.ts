@@ -1,4 +1,12 @@
 import type {
+  TemplateContent,
+  TemplateView,
+  TemplatePage,
+  templateActionSchema,
+  templateListQuerySchema,
+} from "@workspace/contracts";
+import type { z } from "zod";
+import type {
   DocumentApprovalContext,
   DocumentResolutionInput,
   ReviewInstructions,
@@ -437,6 +445,59 @@ async function upload<T>(path: string, form: FormData): Promise<T> {
 }
 
 export const api = {
+  listTemplates: (input: Partial<z.infer<typeof templateListQuerySchema>> = {}) => {
+    const search = new URLSearchParams();
+    for (const [key, value] of Object.entries(input))
+      if (value !== undefined && value !== "") search.set(key, String(value));
+    return req<TemplatePage>(`/api/templates?${search}`);
+  },
+  getTemplate: (id: string) => req<TemplateView>(`/api/templates/${id}`),
+  createTemplate: (content: TemplateContent) =>
+    req<{ id: string }>("/api/templates", { method: "POST", body: JSON.stringify(content) }),
+  saveTemplate: (id: string, expectedHead: string, content: TemplateContent, message: string) =>
+    req<{ ok: true }>(`/api/templates/${id}`, {
+      method: "PUT",
+      body: JSON.stringify({ expectedHead, content, message }),
+    }),
+  createTemplateFromFile: (content: TemplateContent, file: File) => {
+    const form = new FormData();
+    form.set("content", JSON.stringify(content));
+    form.set("file", file);
+    return upload<{ id: string }>("/api/templates/upload", form);
+  },
+  saveTemplateFromFile: (
+    id: string,
+    expectedHead: string,
+    content: TemplateContent,
+    message: string,
+    file: File
+  ) => {
+    const form = new FormData();
+    form.set("content", JSON.stringify(content));
+    form.set("file", file);
+    form.set("expectedHead", expectedHead);
+    form.set("message", message);
+    return upload<{ ok: true }>(`/api/templates/${id}/upload`, form);
+  },
+  downloadTemplate: async (id: string, revisionId?: string) => {
+    const response = await fetch(
+      `/api/templates/${id}/download${revisionId ? `?revisionId=${encodeURIComponent(revisionId)}` : ""}`
+    );
+    if (!response.ok) throw await httpError(response);
+    const filename =
+      response.headers.get("Content-Disposition")?.match(/filename="([^"]+)"/)?.[1] ??
+      "template.docx";
+    return { blob: await response.blob(), filename };
+  },
+  templateAction: (id: string, input: z.infer<typeof templateActionSchema>) =>
+    req<{ ok: true }>(`/api/templates/${id}/actions`, {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+  templateHistory: (id: string) =>
+    req<Array<Blame & { changes: Array<{ path: string; before: unknown; after: unknown }> }>>(
+      `/api/templates/${id}/history`
+    ),
   getJobControls: () => req<JobControlsSnapshot>("/api/admin/job-controls"),
   getJobUsageAttribution: () => req<JobUsageAttribution[]>("/api/admin/job-controls/usage"),
   setJobControls: (input: { expectedRevision: number; reason: string; policy: JobControlPolicy }) =>
@@ -1073,7 +1134,12 @@ export type ChatTurn = {
   edits?: ChatEdit[];
   citations?: Citation[];
 };
-export type ChatDetail = { id: string; title: string | null; turns: ChatTurn[] };
+export type ChatDetail = {
+  id: string;
+  title: string | null;
+  matterId: string | null;
+  turns: ChatTurn[];
+};
 
 export type ChatStreamHandlers = {
   onText?: (delta: string) => void;
@@ -1185,7 +1251,7 @@ async function streamChat(
     signal,
   });
   if (!r.ok || !r.body) {
-    handlers.onError?.(await r.text().catch(() => "stream failed"));
+    handlers.onError?.(!r.ok ? (await httpError(r)).message : "The assistant response was empty.");
     return;
   }
 

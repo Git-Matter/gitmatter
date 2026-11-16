@@ -1,4 +1,3 @@
-import { useRef, type RefObject } from "react";
 import { Link } from "@tanstack/react-router";
 import { ArrowRight, ChevronDown, GitBranch, Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -22,9 +21,7 @@ const itemClass = "group/item flex flex-col gap-1 py-1";
 function FooterSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <nav className="flex flex-col gap-3" aria-label={title}>
-      <p className="text-xs font-medium tracking-[0.16em] text-muted-foreground uppercase">
-        {title}
-      </p>
+      <p className="text-sm font-medium text-foreground">{title}</p>
       <div className="flex flex-col items-start gap-2.5 text-sm">{children}</div>
     </nav>
   );
@@ -60,34 +57,19 @@ function MenuItem({ item }: { item: NavMenuItem }) {
   );
 }
 
-// Featured card on the right of a panel (the Harvey pattern): looping clip,
-// title, one-line description. The video loads nothing and stays paused until
-// the menu is actually hovered (see NavDropdown) — three always-decoding
-// videos in a header that mounts on every page is a real memory/CPU cost.
-function FeaturedCard({
-  featured,
-  videoRef,
-}: {
-  featured: NavFeatured;
-  videoRef: RefObject<HTMLVideoElement | null>;
-}) {
+// A static product still keeps navigation calm and does not start media playback.
+function FeaturedCard({ featured }: { featured: NavFeatured }) {
   return (
     <Link to={featured.to} className="group/item flex flex-col gap-2.5">
-      <video
-        ref={videoRef}
-        className="aspect-[4/3] w-full rounded-lg border border-border bg-card"
-        src={featured.media}
-        poster={featured.poster}
-        muted
-        loop
-        playsInline
-        preload="none"
-        aria-label={featured.title}
+      <img
+        className="aspect-[4/3] w-full rounded-lg object-cover"
+        src={featured.poster}
+        alt=""
+        width={640}
+        height={480}
+        loading="lazy"
       />
-      <span className="inline-flex items-center gap-1.5 text-[15px] font-medium text-foreground">
-        {featured.title}
-        <ArrowRight className="size-3.5 -translate-x-1 opacity-0 transition-all duration-150 group-hover/item:translate-x-0 group-hover/item:opacity-100" />
-      </span>
+      <span className="text-sm font-medium">{featured.title}</span>
       <span className="text-sm leading-relaxed text-muted-foreground">{featured.desc}</span>
     </Link>
   );
@@ -110,16 +92,11 @@ function NavDropdown({
   featured: NavFeatured;
   columns?: 1 | 2;
 }) {
-  const videoRef = useRef<HTMLVideoElement>(null);
   return (
     // Not `relative`: the panel positions against the nav (the nearest
     // positioned ancestor), which is centered in the page — centering a wide
     // panel on its own trigger clips it off the viewport edge.
-    <div
-      className="group"
-      onMouseEnter={() => void videoRef.current?.play().catch(() => {})}
-      onMouseLeave={() => videoRef.current?.pause()}
-    >
+    <div className="group">
       <Link
         to={to}
         className="inline-flex items-center gap-1 rounded-md px-3 py-2 text-muted-foreground group-hover:text-foreground"
@@ -130,7 +107,7 @@ function NavDropdown({
       {/* Full-bleed panel bar under the header (the Harvey pattern): spans
           the viewport, content aligned to the page grid. */}
       <div className="invisible absolute top-full left-1/2 z-50 w-screen -translate-x-1/2 pt-4 opacity-0 transition-opacity duration-150 group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100">
-        <div className="border-y border-border bg-background shadow-lg">
+        <div className="border-y border-border bg-background shadow-float">
           <div className="mx-auto grid max-w-7xl grid-cols-[1fr_320px] gap-x-16 px-6 py-12">
             <div
               className={
@@ -141,7 +118,7 @@ function NavDropdown({
                 <MenuItem key={item.label} item={item} />
               ))}
             </div>
-            <FeaturedCard featured={featured} videoRef={videoRef} />
+            <FeaturedCard featured={featured} />
           </div>
         </div>
       </div>
@@ -157,13 +134,13 @@ function CompactNav() {
     <details className="relative lg:hidden">
       <summary
         aria-label="Open navigation"
-        className="flex size-8 cursor-pointer list-none items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground [&::-webkit-details-marker]:hidden"
+        className="flex size-11 cursor-pointer list-none items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground [&::-webkit-details-marker]:hidden"
       >
         <Menu className="size-5" />
       </summary>
       <nav
         aria-label="Mobile navigation"
-        className="absolute top-full right-0 mt-2 flex w-48 flex-col rounded-lg border border-border bg-background p-2 shadow-lg"
+        className="absolute top-full right-0 mt-2 flex w-48 flex-col rounded-lg border border-border bg-background p-2 shadow-float"
       >
         <Link to="/platform" className="rounded-md px-3 py-2 text-sm hover:bg-muted">
           Platform
@@ -191,6 +168,12 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
     // the vertical scrollbar's width — without clipping, that 15px excess
     // gives every page a slight horizontal scroll.
     <div className="flex min-h-dvh flex-col overflow-x-clip">
+      <a
+        href="#main-content"
+        className="sr-only fixed top-4 left-4 z-50 bg-background p-3 text-sm focus:not-sr-only"
+      >
+        Skip to content
+      </a>
       <header className="relative z-40 mx-auto flex w-full max-w-7xl items-center justify-between px-6 py-5">
         <Link to="/" aria-label="gitmatter home" className="shrink-0">
           <Wordmark />
@@ -224,16 +207,23 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
           </Link>
         </nav>
         <div className="flex shrink-0 items-center gap-2">
-          <a href={SITE.bookDemo} target="_blank" rel="noreferrer">
-            <Button size="sm">Book demo</Button>
-          </a>
+          <Button
+            size="sm"
+            variant="outline"
+            nativeButton={false}
+            render={<a href={SITE.bookDemo} target="_blank" rel="noreferrer" />}
+          >
+            Book a demo
+          </Button>
           <CompactNav />
         </div>
       </header>
 
-      <main className="flex-1">{children}</main>
+      <main id="main-content" className="flex-1">
+        {children}
+      </main>
 
-      <footer className="mt-section border-t border-border">
+      <footer className="dark mt-section bg-background text-foreground">
         <div className="mx-auto grid w-full max-w-7xl gap-x-12 gap-y-10 px-6 py-12 sm:grid-cols-2 lg:grid-cols-[minmax(12rem,1.4fr)_repeat(4,minmax(0,1fr))]">
           <div className="flex flex-col gap-3">
             <Wordmark />

@@ -1,3 +1,6 @@
+import { UnsavedNavigationGuard } from "@/components/UnsavedChangesGuard";
+import { CollectionPanel } from "@/components/CollectionPanel";
+import { FormFeedback } from "@/components/FormFeedback";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -15,16 +18,17 @@ import { ColumnEditModal } from "./ColumnEditModal";
 import { WorkflowDetailsModal } from "./WorkflowDetailsModal";
 import { WorkflowStepsEditor } from "./WorkflowStepsEditor";
 
-type SaveStatus = "idle" | "saving" | "saved";
+type SaveStatus = "idle" | "saving" | "saved" | "error";
 
 export function WorkflowDetailPage({ id }: { id: string }) {
   const navigate = useNavigate();
   const qc = useQueryClient();
 
-  const { data, isLoading } = useQuery({
+  const detailQuery = useQuery({
     queryKey: ["workflow", id],
     queryFn: () => api.getWorkflow(id),
   });
+  const { data, isLoading } = detailQuery;
   const workflow = data?.workflow ?? null;
 
   const readOnly = !workflow || workflow.isSystem || workflow.allowEdit === false;
@@ -33,6 +37,11 @@ export function WorkflowDetailPage({ id }: { id: string }) {
   const [steps, setSteps] = useState<WorkflowStep[]>([]);
   const [columns, setColumns] = useState<Column[]>([]);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
+  const [saveError, setSaveError] = useState<unknown>(null);
+  const unsaved = useRef(false);
+  const deleted = useRef(false);
+  const revision = useRef(0);
+  const writeQueue = useRef(Promise.resolve());
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [editingColumn, setEditingColumn] = useState<Column | null>(null);
@@ -41,52 +50,61 @@ export function WorkflowDetailPage({ id }: { id: string }) {
   const [shareOpen, setShareOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteError, setDeleteError] = useState<unknown>(null);
   const [deleteStatus, setDeleteStatus] = useState<ConfirmStatus>("idle");
 
   useEffect(() => {
-    if (!workflow) return;
+    if (!workflow || unsaved.current) return;
     setSteps(workflow.steps?.length ? workflow.steps : [{ promptMd: workflow.promptMd ?? "" }]);
     setColumns((workflow.columnsConfig ?? []).slice().sort((a, b) => a.index - b.index));
   }, [workflow]);
 
+  const persist = useCallback(
+    async (patch: Parameters<typeof api.updateWorkflow>[1], version: number) => {
+      const request = writeQueue.current.then(() => api.updateWorkflow(id, patch));
+      writeQueue.current = request.then(
+        () => undefined,
+        () => undefined
+      );
+      try {
+        const updated = await request;
+        if (revision.current !== version) return;
+        unsaved.current = false;
+        setSaveError(null);
+        setSaveStatus("saved");
+        qc.setQueryData(["workflow", id], updated);
+        void qc.invalidateQueries({ queryKey: ["workflows"] });
+      } catch (error) {
+        if (revision.current !== version) return;
+        setSaveError(error);
+        setSaveStatus("error");
+      }
+    },
+    [id, qc]
+  );
   const save = useCallback(
     (nextSteps: WorkflowStep[]) => {
       if (readOnly) return;
-      if (debounceRef.current) clearTimeout(debounceRef.current);
+      const version = ++revision.current;
+      unsaved.current = true;
+      setSaveError(null);
       setSaveStatus("saving");
-      debounceRef.current = setTimeout(async () => {
-        try {
-          // Keep promptMd in sync with the first step so single-prompt consumers
-          // (preview, legacy reads) still work.
-          await api.updateWorkflow(id, {
-            steps: nextSteps,
-            promptMd: nextSteps[0]?.promptMd ?? "",
-          });
-          void qc.invalidateQueries({ queryKey: ["workflows"] });
-          setSaveStatus("saved");
-          setTimeout(() => setSaveStatus("idle"), 2000);
-        } catch {
-          setSaveStatus("idle");
-        }
-      }, 800);
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      debounceRef.current = setTimeout(
+        () => void persist({ steps: nextSteps, promptMd: nextSteps[0]?.promptMd ?? "" }, version),
+        800
+      );
     },
-    [id, readOnly, qc]
+    [readOnly, persist]
   );
-
   async function saveColumns(next: Column[]) {
     if (readOnly) return;
+    const version = ++revision.current;
+    unsaved.current = true;
+    setSaveError(null);
     setSaveStatus("saving");
-    try {
-      const updated = await api.updateWorkflow(id, { columnsConfig: next });
-      qc.setQueryData(["workflow", id], updated);
-      void qc.invalidateQueries({ queryKey: ["workflows"] });
-      setSaveStatus("saved");
-      setTimeout(() => setSaveStatus("idle"), 2000);
-    } catch {
-      setSaveStatus("idle");
-    }
+    await persist({ columnsConfig: next }, version);
   }
-
   function handleStepsChange(next: WorkflowStep[]) {
     setSteps(next);
     save(next);
@@ -118,12 +136,15 @@ export function WorkflowDetailPage({ id }: { id: string }) {
   async function handleDeleteWorkflow() {
     if (readOnly || !workflow?.isOwner) return;
     setDeleteStatus("loading");
+    setDeleteError(null);
     try {
       await api.deleteWorkflow(id);
+      deleted.current = true;
       void qc.invalidateQueries({ queryKey: ["workflows"] });
       setDeleteStatus("complete");
       setTimeout(() => void navigate({ to: "/workflows" }), 500);
-    } catch {
+    } catch (error) {
+      setDeleteError(error);
       setDeleteStatus("idle");
     }
   }
@@ -140,10 +161,11 @@ export function WorkflowDetailPage({ id }: { id: string }) {
     headerActions.push(
       <span
         key="status"
+        role="status"
         className="inline-flex h-7 items-center gap-1.5 px-1 text-sm text-muted-foreground"
       >
         {saveStatus === "saved" && <Check className="h-3.5 w-3.5 text-green-600" />}
-        {saveStatus === "saving" ? "Saving…" : "Saved"}
+        {saveStatus === "saving" ? "Saving…" : saveStatus === "error" ? "Not saved" : "Saved"}
       </span>
     );
   }
@@ -173,7 +195,7 @@ export function WorkflowDetailPage({ id }: { id: string }) {
             label: "Delete",
             icon: Trash2,
             variant: "danger",
-            disabled: !workflow.isOwner,
+            disabled: !workflow.isOwner || saveStatus === "saving",
             onSelect: () => {
               setDeleteStatus("idle");
               setDeleteOpen(true);
@@ -184,6 +206,34 @@ export function WorkflowDetailPage({ id }: { id: string }) {
     );
   }
 
+  const exitGuard = (
+    <UnsavedNavigationGuard
+      isDirty={() => !deleted.current && unsaved.current}
+      saving={saveStatus === "saving"}
+      onDiscard={() => {
+        if (debounceRef.current) clearTimeout(debounceRef.current);
+        unsaved.current = false;
+        setSaveError(null);
+        setSaveStatus("idle");
+        if (workflow) {
+          setSteps(
+            workflow.steps?.length ? workflow.steps : [{ promptMd: workflow.promptMd ?? "" }]
+          );
+          setColumns(workflow.columnsConfig ?? []);
+        }
+        void qc.invalidateQueries({ queryKey: ["workflow", id] });
+      }}
+    />
+  );
+  if (detailQuery.isPending || detailQuery.isError)
+    return (
+      <>
+        {exitGuard}
+        <CollectionPanel query={detailQuery} label="Workflow">
+          <Button onClick={() => void navigate({ to: "/workflows" })}>Back to workflows</Button>
+        </CollectionPanel>
+      </>
+    );
   return (
     <PageShell
       mode="fill"
@@ -197,6 +247,17 @@ export function WorkflowDetailPage({ id }: { id: string }) {
         />
       }
     >
+      {exitGuard}
+      <FormFeedback error={saveError} title="Workflow changes were not saved" />
+      {!!saveError && (
+        <Button
+          variant="outline"
+          className="self-start"
+          onClick={() => (workflow?.type === "assistant" ? save(steps) : void saveColumns(columns))}
+        >
+          Retry workflow save
+        </Button>
+      )}
       {!workflow ? (
         <p className="py-24 text-center text-sm text-muted-foreground">
           {isLoading ? "Loading…" : "Workflow not found."}
@@ -248,7 +309,17 @@ export function WorkflowDetailPage({ id }: { id: string }) {
                     onClick={() => (readOnly ? setViewingColumn(col) : setEditingColumn(col))}
                     className="group flex h-10 cursor-pointer items-center border-b border-border px-3 transition-colors last:border-b-0 hover:bg-muted/60"
                   >
-                    <span className="w-[40%] truncate text-sm text-foreground">{col.name}</span>
+                    <Button
+                      variant="link"
+                      className="h-auto min-h-6 w-[40%] justify-start p-0"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        if (readOnly) setViewingColumn(col);
+                        else setEditingColumn(col);
+                      }}
+                    >
+                      {col.name}
+                    </Button>
                     <span className="flex w-36 items-center gap-1.5 text-xs text-muted-foreground">
                       <FormatIcon className="h-3.5 w-3.5" />
                       {formatLabel(col.format ?? "text")}
@@ -263,6 +334,7 @@ export function WorkflowDetailPage({ id }: { id: string }) {
                             e.stopPropagation();
                             handleColumnDeleted(col.index);
                           }}
+                          aria-label={`Remove question ${col.name}`}
                           className="p-1 text-muted-foreground/50 transition-colors hover:text-destructive"
                         >
                           <X className="h-3.5 w-3.5" />
@@ -304,7 +376,8 @@ export function WorkflowDetailPage({ id }: { id: string }) {
         message="This workflow will be permanently deleted."
         confirmLabel="Delete"
         confirmStatus={deleteStatus}
-        onConfirm={() => void handleDeleteWorkflow()}
+        onConfirm={handleDeleteWorkflow}
+        error={deleteError}
         onCancel={() => {
           if (deleteStatus === "loading") return;
           setDeleteOpen(false);

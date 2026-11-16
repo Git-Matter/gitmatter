@@ -1,3 +1,5 @@
+import { CollectionPanel, collectionBlocked } from "@/components/CollectionPanel";
+import { useWorkspaceViewState } from "@/lib/hooks/state/useWorkspaceViewState";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
@@ -34,14 +36,15 @@ function reviewColumns(onManagePeople: (r: ReviewListItem) => void) {
       header: ({ table }) => (
         <Checkbox
           checked={table.getIsAllRowsSelected()}
-          onChange={table.getToggleAllRowsSelectedHandler()}
-          aria-label="Select all"
+          indeterminate={table.getIsSomeRowsSelected() && !table.getIsAllRowsSelected()}
+          onCheckedChange={(checked) => table.toggleAllRowsSelected(checked)}
+          aria-label="Select all rows on this page"
         />
       ),
       cell: ({ row }) => (
         <Checkbox
           checked={row.getIsSelected()}
-          onChange={row.getToggleSelectedHandler()}
+          onCheckedChange={(checked) => row.toggleSelected(checked)}
           onClick={(e) => e.stopPropagation()}
           aria-label="Select row"
         />
@@ -97,13 +100,16 @@ function Reviews() {
   "use no memo";
   const router = useRouter();
   const [creating, setCreating] = useState(false);
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useWorkspaceViewState("reviews:query", "");
   const { sorting, setSorting, pagination, setPagination, ready } = useTableState("reviews", {
     defaultSorting: [{ id: "createdAt", desc: true }],
   });
   const [rowSelection, setRowSelection] = useState({});
   const [shareFor, setShareFor] = useState<ReviewListItem | null>(null);
-  const [scope, setScope] = useState<"all" | "mine" | "shared">("all");
+  const [scope, setScope] = useWorkspaceViewState<"all" | "mine" | "shared">(
+    "reviews:scope",
+    "all"
+  );
   const pageParams = useTablePageParams({
     query,
     sorting,
@@ -113,12 +119,20 @@ function Reviews() {
     extraParams: { scope },
   });
 
-  const { data } = useQuery({
+  const listQuery = useQuery({
     queryKey: queryKeys.reviewsPage(pageParams),
     queryFn: () => api.listReviewsPage(pageParams),
     placeholderData: keepPreviousData,
     enabled: ready,
   });
+  const { data } = listQuery;
+  const inputPending = query.trim() !== pageParams.q;
+  const viewQuery = {
+    ...listQuery,
+    isFetching: listQuery.isFetching || inputPending,
+    isPlaceholderData: listQuery.isPlaceholderData || inputPending,
+  };
+  const blocked = collectionBlocked(viewQuery);
   const reviews = data?.rows ?? [];
   const rowCount = data?.rowCount ?? 0;
   const columns = useMemo(() => reviewColumns(setShareFor), []);
@@ -142,16 +156,17 @@ function Reviews() {
       bodyClassName="gap-stack"
       header={
         <PageHeader
-          title="Tabular reviews"
+          title="Reviews"
           action={
             <Button
               variant="outline"
-              size="icon-sm"
-              className="rounded-full"
+              size="sm"
+              disabled={blocked}
               tooltip="New review"
               onClick={() => setCreating(true)}
             >
-              <Plus className="size-4" />
+              <Plus data-icon="inline-start" />
+              New review
             </Button>
           }
         />
@@ -174,12 +189,17 @@ function Reviews() {
         actions={<TableSearch value={query} onChange={setQuery} placeholder="Search reviews…" />}
       />
 
-      <DataTable
-        table={table}
-        empty="No reviews yet. Start one from a contract or ask the assistant."
-        onRowClick={(r) => router.navigate({ to: "/reviews/$id", params: { id: r.id } })}
-      />
-      <TablePager table={table} />
+      <CollectionPanel query={viewQuery} label="Reviews">
+        <DataTable
+          rowActionColumn="title"
+          getRowHref={(row) => `/reviews/${row.id}`}
+          scrollKey={`reviews:${JSON.stringify(pageParams)}`}
+          table={table}
+          empty="No reviews yet. Start one from a contract or ask the assistant."
+          onRowClick={(r) => router.navigate({ to: "/reviews/$id", params: { id: r.id } })}
+        />
+        <TablePager table={table} />
+      </CollectionPanel>
 
       {shareFor && (
         <SharePeopleDialog

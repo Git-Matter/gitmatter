@@ -1,4 +1,6 @@
-import { useId, useRef, useState } from "react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { useEffect, useId, useRef, useState, type RefObject } from "react";
 import { reviewInstructionsSchema, type ReviewInstructions } from "@workspace/contracts";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -15,7 +17,16 @@ import {
   FieldSet,
 } from "@/components/ui/field";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { DiscardChangesDialog, UnsavedNavigationGuard } from "@/components/UnsavedChangesGuard";
 import { api } from "@/lib/data/api";
+
+const EMPTY_INSTRUCTIONS: ReviewInstructions = {
+  representedParty: null,
+  disclosureRole: "unknown",
+  ndaStructure: "unknown",
+  businessPurpose: null,
+  governingLaw: null,
+};
 
 /** Compact input confirmation beside the matter documents; inference remains an explicit run. */
 export function ContractReviewSetup({
@@ -23,29 +34,52 @@ export function ContractReviewSetup({
   onClose,
   executionRoute,
   preferredModel,
+  preparationEnabled = true,
+  returnFocusRef,
 }: {
   matterId: string;
   onClose: () => void;
   executionRoute?: "application" | "agent";
   preferredModel?: string;
+  preparationEnabled?: boolean;
+  returnFocusRef?: RefObject<HTMLElement | null>;
 }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [playbookId, setPlaybookId] = useState("");
   const [selected, setSelected] = useState<string[]>([]);
-  const [reviewInstructions, setReviewInstructions] = useState<ReviewInstructions>({
-    representedParty: null,
-    disclosureRole: "unknown",
-    ndaStructure: "unknown",
-    businessPurpose: null,
-    governingLaw: null,
-  });
+  const [reviewInstructions, setReviewInstructions] =
+    useState<ReviewInstructions>(EMPTY_INSTRUCTIONS);
+  const [discarding, setDiscarding] = useState(false);
+  const confirmedSave = useRef(false);
+  const returnFocus = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    returnFocus.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  }, []);
+  const isDirty = () =>
+    !confirmedSave.current &&
+    (!!playbookId ||
+      selected.length > 0 ||
+      JSON.stringify(reviewInstructions) !== JSON.stringify(EMPTY_INSTRUCTIONS));
+  function close() {
+    onClose();
+    requestAnimationFrame(() => {
+      const target = returnFocusRef?.current ?? returnFocus.current;
+      if (target?.isConnected) target.focus();
+    });
+  }
+  function markChanged() {
+    confirmedSave.current = false;
+    requestId.current = crypto.randomUUID();
+  }
   const parsedInstructions = reviewInstructionsSchema.safeParse(reviewInstructions);
   const requestId = useRef(crypto.randomUUID());
   const {
     data: documents = [],
     isPending: documentsLoading,
     error: documentsError,
+    refetch: refreshDocuments,
   } = useQuery({
     queryKey: ["matter-review-documents", matterId],
     queryFn: () => api.listMatterDocuments(matterId),
@@ -54,6 +88,7 @@ export function ContractReviewSetup({
     data: readiness,
     isPending: workflowsLoading,
     error: workflowsError,
+    refetch: refreshReadiness,
   } = useQuery({
     queryKey: ["first-review", matterId],
     queryFn: () => api.getFirstReviewStatus(matterId),
@@ -68,6 +103,7 @@ export function ContractReviewSetup({
         reviewInstructions: reviewInstructionsSchema.parse(reviewInstructions),
       }),
     onSuccess: (result) => {
+      confirmedSave.current = true;
       void queryClient.invalidateQueries({ queryKey: ["first-review", matterId] });
       void navigate({
         to: "/reviews/$id",
@@ -77,123 +113,159 @@ export function ContractReviewSetup({
     },
   });
   return (
-    <section className="flex flex-col gap-4 py-4" aria-label="Review contract setup">
-      <div className="flex items-center justify-between gap-3">
-        <h2 className="font-serif text-xl">Review contract</h2>
-        <Button variant="ghost" size="sm" onClick={onClose}>
-          Close setup
-        </Button>
-      </div>
-      <p className="max-w-prose text-sm text-muted-foreground">
-        Prepare a version-bound review using the firm's approved positions. On the review, run your
-        selected model or ask your connected agent to populate cited findings.
-      </p>
-      {(documentsLoading || workflowsLoading) && (
-        <p role="status" className="text-sm text-muted-foreground">
-          Loading review inputs…
-        </p>
-      )}
-      {(documentsError || workflowsError) && (
-        <p role="alert" className="text-sm text-destructive">
-          Could not load review inputs. Close and reopen setup to retry.
-        </p>
-      )}
-      {!documentsLoading && !documents.length && (
-        <p className="text-sm">Add a document to this matter first.</p>
-      )}
-      <fieldset className="space-y-2">
-        <legend className="mb-2 text-sm font-medium">Documents</legend>
-        {documents.map((doc) => (
-          <label key={doc.id} className="flex items-center gap-3 text-sm">
-            <input
-              type="checkbox"
-              disabled={doc.status !== "ready" || create.isPending}
-              checked={selected.includes(doc.id)}
-              onChange={(e) => {
-                requestId.current = crypto.randomUUID();
-                setSelected((value) =>
-                  e.target.checked ? [...value, doc.id] : value.filter((id) => id !== doc.id)
-                );
-              }}
-            />
-            <span className="min-w-0 truncate">{doc.title}</span>
-            <span className="text-xs text-muted-foreground">
-              {doc.status === "ready"
-                ? "Ready"
-                : doc.status === "failed"
-                  ? "Extraction failed — retry from Documents"
-                  : "Preparing source"}
-            </span>
-          </label>
-        ))}
-      </fieldset>
-      <label className="block max-w-lg space-y-2 text-sm">
-        <span className="font-medium">Approved playbook</span>
-        <select
-          className="h-9 w-full rounded-md border border-input bg-background px-3"
-          value={playbookId}
-          disabled={create.isPending}
-          onChange={(e) => {
-            requestId.current = crypto.randomUUID();
-            setPlaybookId(e.target.value);
-          }}
-        >
-          <option value="">Choose playbook</option>
-          {approved.map((w) => (
-            <option key={w.id} value={w.id}>
-              {w.title} · {w.ruleCount} rules
-            </option>
-          ))}
-        </select>
-      </label>
-      {!workflowsLoading && !approved.length && (
-        <p className="text-sm text-muted-foreground">
-          No approved playbook is available.{" "}
-          <Link to="/library" className="underline">
-            Open Library to prepare one.
-          </Link>
-        </p>
-      )}
-      {readiness?.matter?.canEdit === false && (
-        <p role="status" className="text-sm text-muted-foreground">
-          You can view this matter. Editor access is required to prepare a review.
-        </p>
-      )}
-      <ReviewInstructionsFields
-        value={reviewInstructions}
-        disabled={create.isPending}
-        onChange={(value) => {
-          requestId.current = crypto.randomUUID();
-          setReviewInstructions(value);
-        }}
+    <>
+      <UnsavedNavigationGuard
+        isDirty={isDirty}
+        title="Keep your review instructions?"
+        description="These inputs have not been prepared as a review. Keep editing, or discard them deliberately."
+        saving={create.isPending}
       />
-      {create.error && (
-        <p role="alert" className="text-sm text-destructive">
-          {create.error instanceof Error ? create.error.message : "Review preparation failed"}
+      <DiscardChangesDialog
+        open={discarding}
+        onKeep={() => setDiscarding(false)}
+        onDiscard={close}
+        title="Keep your review instructions?"
+        description="These inputs have not been prepared as a review. Keep editing, or discard them deliberately."
+        saving={create.isPending}
+      />
+      <section className="flex flex-col gap-4 py-4" aria-label="Review contract setup">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="font-serif text-xl">Review contract</h2>
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={create.isPending}
+            onClick={() => {
+              if (isDirty()) setDiscarding(true);
+              else close();
+            }}
+          >
+            Close setup
+          </Button>
+        </div>
+        <p className="max-w-prose text-sm text-muted-foreground">
+          Prepare a version-bound review using the firm's approved positions. On the review, run
+          your selected model or ask your connected agent to populate cited findings.
         </p>
-      )}
-      <div className="flex flex-wrap items-center gap-3">
-        <Button
-          disabled={
-            readiness?.matter?.canEdit !== true ||
-            !selected.length ||
-            !selected.every((id) =>
-              documents.some((document) => document.id === id && document.status === "ready")
-            ) ||
-            !approved.some((playbook) => playbook.id === playbookId) ||
-            create.isPending ||
-            !parsedInstructions.success
-          }
-          onClick={() => create.mutate()}
-        >
-          {create.isPending ? "Preparing…" : "Prepare review"}
-        </Button>
-        <span className="text-xs text-muted-foreground">
-          Sources, playbook rules and instructions are captured before analysis. Changing
-          instructions requires a new review.
-        </span>
-      </div>
-    </section>
+        {(documentsLoading || workflowsLoading) && (
+          <p role="status" className="text-sm text-muted-foreground">
+            Loading review inputs…
+          </p>
+        )}
+        {(documentsError || workflowsError) && (
+          <p role="alert" className="text-sm text-destructive">
+            Could not refresh review inputs. Your choices are retained.
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                void refreshDocuments();
+                void refreshReadiness();
+              }}
+            >
+              Retry review inputs
+            </Button>
+          </p>
+        )}
+        {!documentsLoading && !documentsError && !documents.length && (
+          <p className="text-sm">Add a document to this matter first.</p>
+        )}
+        <fieldset className="space-y-2">
+          <legend className="mb-2 text-sm font-medium">Documents</legend>
+          {documents.map((doc) => (
+            <label key={doc.id} className="flex items-center gap-3 text-sm">
+              <Checkbox
+                disabled={doc.status !== "ready" || create.isPending}
+                checked={selected.includes(doc.id)}
+                onCheckedChange={(e) => {
+                  markChanged();
+                  setSelected((value) =>
+                    e ? [...value, doc.id] : value.filter((id) => id !== doc.id)
+                  );
+                }}
+              />
+              <span className="min-w-0 truncate">{doc.title}</span>
+              <span className="text-xs text-muted-foreground">
+                {doc.status === "ready"
+                  ? "Ready"
+                  : doc.status === "failed"
+                    ? "Extraction failed — retry from Documents"
+                    : "Preparing source"}
+              </span>
+            </label>
+          ))}
+        </fieldset>
+        <label className="block max-w-lg space-y-2 text-sm">
+          <span className="font-medium">Approved playbook</span>
+          <NativeSelect
+            className="w-full"
+            value={playbookId}
+            disabled={create.isPending}
+            onChange={(e) => {
+              markChanged();
+              setPlaybookId(e.target.value);
+            }}
+          >
+            <NativeSelectOption value="">Choose playbook</NativeSelectOption>
+            {approved.map((w) => (
+              <NativeSelectOption key={w.id} value={w.id}>
+                {w.title} · {w.ruleCount} rules
+              </NativeSelectOption>
+            ))}
+          </NativeSelect>
+        </label>
+        {!workflowsLoading && !workflowsError && !approved.length && (
+          <p className="text-sm text-muted-foreground">
+            No approved playbook is available.{" "}
+            <Link to="/library" className="underline">
+              Open Library to prepare one.
+            </Link>
+          </p>
+        )}
+        {readiness?.matter?.canEdit === false && (
+          <p role="status" className="text-sm text-muted-foreground">
+            You can view this matter. Editor access is required to prepare a review.
+          </p>
+        )}
+        <ReviewInstructionsFields
+          value={reviewInstructions}
+          disabled={create.isPending}
+          onChange={(value) => {
+            markChanged();
+            setReviewInstructions(value);
+          }}
+        />
+        {create.error && (
+          <p role="alert" className="text-sm text-destructive">
+            {create.error instanceof Error ? create.error.message : "Review preparation failed"}
+          </p>
+        )}
+        <div className="flex flex-wrap items-center gap-3">
+          <Button
+            disabled={
+              !preparationEnabled ||
+              !!documentsError ||
+              !!workflowsError ||
+              readiness?.matter?.canEdit !== true ||
+              !selected.length ||
+              !selected.every((id) =>
+                documents.some((document) => document.id === id && document.status === "ready")
+              ) ||
+              !approved.some((playbook) => playbook.id === playbookId) ||
+              create.isPending ||
+              !parsedInstructions.success
+            }
+            onClick={() => create.mutate()}
+          >
+            {create.isPending ? "Preparing…" : "Prepare review"}
+          </Button>
+          <span className="text-xs text-muted-foreground">
+            Sources, playbook rules and instructions are captured before analysis. Changing
+            instructions requires a new review.
+          </span>
+        </div>
+      </section>
+    </>
   );
 }
 
@@ -247,13 +319,12 @@ function ReviewInstructionsFields({
             <Field key={field.key} data-invalid={!!error} data-disabled={disabled}>
               <FieldLabel htmlFor={inputId}>{field.label}</FieldLabel>
               <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
+                <Checkbox
                   aria-label={`${field.label}: unknown or not instructed`}
                   disabled={disabled}
                   checked={value[field.key] === null}
-                  onChange={(event) =>
-                    onChange({ ...value, [field.key]: event.target.checked ? null : "" })
+                  onCheckedChange={(event) =>
+                    onChange({ ...value, [field.key]: event ? null : "" })
                   }
                 />
                 Unknown or not instructed

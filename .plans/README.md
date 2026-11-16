@@ -37,14 +37,14 @@ engineering ownership and promotion gates.
 [Product priorities](research/2026-10-14-product-priorities.md) compare buyer evidence and current
 source gaps. [Review setup and Word intake](review-setup-and-word-intake.md) is the coordinated
 implementation of review instructions, guided first review and incoming Word inspection accepted
-on 2026-10-14. [Source and local proof](evidence/2026-10-14-review-setup-and-word-intake.md) is recorded
+on 2026-10-14. Source and local proof is recorded
 separately from authenticated staging, Word and pilot proof. Named handoff and partner/client briefs
 are planned follow-ups in the existing plans.
 
-[Local runtime checks on 2026-10-15](evidence/2026-10-15-review-workflow-signoff.md) add actual account
+Local runtime checks on 2026-10-15 add actual account
 and guide interactions, metered provider cases and native Word save/reopen/re-import proof. They also
 found and corrected unsupported citation-page claims. Staging and broader pilot/release gates remain
-separate. The [2026-10-18 follow-up](evidence/2026-10-18-final-visual-and-staging-verification.md)
+separate. The 2026-10-18 follow-up
 closes the local visual recheck. Staging's served frontend still lacks these features despite a
 successful image-build/deployment-trigger workflow; staging acceptance remains open.
 
@@ -68,12 +68,12 @@ controls remain distinct from authenticated acceptance, provider/Word quality an
 The dated 2026-10-12 evidence is historical; final checks for the current increment are recorded
 separately. No plan closes a release gate merely by passing module tests.
 
-[`evidence/2026-09-13-subscription-agent.md`](evidence/2026-09-13-subscription-agent.md) records the
-implemented subscription-agent workflow, local validation and staging deployment blockers. The
+The September 13 subscription-agent work covered the
+implemented workflow, local validation and staging deployment blockers. The
 implementation was merged through [PR #10](https://github.com/Git-Matter/gitmatter/pull/10).
 The NDA MVP implementation was merged into `dev` through
 [PR #12](https://github.com/Git-Matter/gitmatter/pull/12) on 2026-10-13 after current-head CI passed.
-[The current implementation record](evidence/2026-10-13-mvp-implementation.md) captures local checks;
+The current implementation record captures local checks;
 staging and authenticated acceptance remain separate gates.
 
 [`../PLANS.md`](../PLANS.md) contains the deeper candidate-feature designs for the audit spine,

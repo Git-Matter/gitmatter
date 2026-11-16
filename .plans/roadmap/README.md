@@ -35,15 +35,15 @@ Numbers are delivery order, not progress rank — a low number is not further al
 On 2026-10-14, review instructions, guided first review and bounded incoming Word inspection were
 implemented and locally checked. They extend plans 02 and 03 under
 [the coordinated scope](../review-setup-and-word-intake.md), with
-[dated implementation evidence](../evidence/2026-10-14-review-setup-and-word-intake.md).
+dated implementation evidence.
 Named reviewer handoff, a personal work
 list, client brief and pilot-selected integration are tracked as later additions to plans 03/05–07.
 Source checks and real Word/pilot/release gates remain separate.
 
-The [2026-10-15 local acceptance record](../evidence/2026-10-15-review-workflow-signoff.md) now covers
+The 2026-10-15 local acceptance record now covers
 authenticated guided preparation, bounded live-provider quality and actual Word save/reopen/re-import.
 A discovered citation-page defect was corrected with history-preserving projections and regressions.
-The [2026-10-18 follow-up](../evidence/2026-10-18-final-visual-and-staging-verification.md) closes the
+The 2026-10-18 follow-up closes the
 local citation-label/source-link visual check and verifies Word inspection controls. Staging still
 lacks the integrated feature frontend; deployment/runtime, authenticated staging and broader
 pilot/release proof remain open. This does not close the numbered plans.
@@ -87,7 +87,7 @@ pilot/release proof remain open. This does not close the numbered plans.
 - **08:** pilot/quality/Word/repeat-use record template prepared; no real pilot or release claimed.
 - Details and precise remaining source/proof gates live in each numbered plan and
   [MVP delivery](../mvp-delivery.md). The
-  [2026-10-12 durable-work evidence](../evidence/2026-10-12-durable-work-and-controls.md) records the
+  2026-10-12 durable-work evidence records the
   earlier increment; it does not prove the current head.
 
 ### 05 Approval and agent queue

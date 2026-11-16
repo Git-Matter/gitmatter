@@ -1,8 +1,15 @@
 import { and, eq, isNotNull, sql } from "drizzle-orm";
 import { db, type Tx } from "@workspace/db/client";
-import { auditEvents, documents, documentVersions, stagedObjects } from "@workspace/db/schema";
+import {
+  auditEvents,
+  documents,
+  documentVersions,
+  templateRevisions,
+  stagedObjects,
+} from "@workspace/db/schema";
 import { putObject, deleteObject, isAlreadyDeleted } from "./storage.js";
 import { StorageQuotaError, tenantStorageQuotaBytes } from "../platform/usage.js";
+import { templateStorageBytes } from "./template-storage.js";
 import { getEnvNumber } from "./config.js";
 
 /** Persist the immutable write intent before I/O, including bytes that never get published. */
@@ -32,7 +39,10 @@ export async function putStagedObject(
           sql`${stagedObjects.state} in ('staged','deleting')`
         )
       );
-    const used = Number(referenced?.total ?? 0) + Number(unpublished?.total ?? 0);
+    const used =
+      Number(referenced?.total ?? 0) +
+      Number(unpublished?.total ?? 0) +
+      (await templateStorageBytes(tx, tenantId));
     const limit = tenantStorageQuotaBytes();
     if (limit > 0 && used + body.length > limit)
       throw new StorageQuotaError(used, body.length, limit);
@@ -79,7 +89,13 @@ export async function putStagedObject(
       .from(documentVersions)
       .where(eq(documentVersions.storagePath, key))
       .limit(1);
-    if (current.state === "attached" || reference) return { live: false, claim: null };
+    const [templateReference] = await tx
+      .select({ id: templateRevisions.id })
+      .from(templateRevisions)
+      .where(eq(templateRevisions.storagePath, key))
+      .limit(1);
+    if (current.state === "attached" || reference || templateReference)
+      return { live: false, claim: null };
     const [claim] = await tx
       .update(stagedObjects)
       .set({
@@ -155,7 +171,12 @@ export async function reconcileStagedObjects(
         .from(documentVersions)
         .where(eq(documentVersions.storagePath, current.storagePath))
         .limit(1);
-      if (reference) {
+      const [templateReference] = await tx
+        .select({ id: templateRevisions.id })
+        .from(templateRevisions)
+        .where(eq(templateRevisions.storagePath, current.storagePath))
+        .limit(1);
+      if (reference || templateReference) {
         await tx
           .update(stagedObjects)
           .set({ state: "attached", updatedAt: sql`now()` })

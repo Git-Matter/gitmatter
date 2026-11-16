@@ -1,3 +1,6 @@
+import { notifySuccess } from "@/lib/feedback";
+import { useWorkspaceViewState } from "@/lib/hooks/state/useWorkspaceViewState";
+import { CollectionPanel, collectionBlocked } from "@/components/CollectionPanel";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -33,9 +36,7 @@ export const Route = createFileRoute("/_auth/matters/")({
 type Scope = "all" | "mine" | "shared";
 
 function Matters() {
-  // React Compiler memoizes <DataTable table={table} />; the TanStack table is a
-  // stable reference whose rows mutate in place, so the compiler can't see data
-  // changes and skips the re-render that fills the table. Opt this component out.
+  // TanStack table rows mutate in place; keep the list responsive to query changes.
   "use no memo";
   const navigate = useNavigate();
   const search = Route.useSearch();
@@ -50,8 +51,8 @@ function Matters() {
     setCreating(true);
     void navigate({ to: "/matters", search: { view: search.view }, replace: true });
   }, [search.new, search.view, navigate]);
-  const [scope, setScope] = useState<Scope>("all");
-  const [query, setQuery] = useState("");
+  const [scope, setScope] = useWorkspaceViewState<Scope>("matters:scope", "all");
+  const [query, setQuery] = useWorkspaceViewState("matters:query", "");
   const { sorting, setSorting, pagination, setPagination, ready } = useTableState("matters", {
     defaultSorting: [{ id: "updatedAt", desc: true }],
   });
@@ -68,12 +69,20 @@ function Matters() {
     extraParams: { scope },
   });
 
-  const { data } = useQuery({
+  const listQuery = useQuery({
     queryKey: queryKeys.mattersPage(pageParams),
     queryFn: () => api.listMattersPage(pageParams),
     placeholderData: keepPreviousData,
     enabled: ready,
   });
+  const { data } = listQuery;
+  const inputPending = query.trim() !== pageParams.q;
+  const viewQuery = {
+    ...listQuery,
+    isFetching: listQuery.isFetching || inputPending,
+    isPlaceholderData: listQuery.isPlaceholderData || inputPending,
+  };
+  const blocked = collectionBlocked(viewQuery);
   const shown = data?.rows ?? [];
   const rowCount = data?.rowCount ?? 0;
 
@@ -90,7 +99,7 @@ function Matters() {
         status: m.matter.status === "closed" ? "open" : "closed",
       }),
     onSuccess: (_, m) => {
-      toast.success(m.matter.status === "closed" ? "Matter reopened" : "Matter closed");
+      notifySuccess(m.matter.status === "closed" ? "Matter reopened" : "Matter closed");
       refreshMatters();
       void qc.invalidateQueries({ queryKey: ["matter", m.matter.id] });
     },
@@ -121,20 +130,21 @@ function Matters() {
   });
 
   return (
-    <div className="-mb-12 flex min-h-0 flex-1 flex-col gap-stack">
+    <div className="flex min-h-0 flex-1 flex-col gap-stack">
       {/* Matters header: serif title + a round add button. */}
       <PageHeader
         title="Matters"
         action={
           <Button
             variant="outline"
-            size="icon-sm"
-            className="rounded-full"
+            size="sm"
             title="New matter"
             aria-label="New matter"
+            disabled={blocked}
             onClick={() => setCreating(true)}
           >
-            <Plus className="size-4" />
+            <Plus data-icon="inline-start" />
+            New matter
           </Button>
         }
       />
@@ -159,16 +169,21 @@ function Matters() {
         }}
       />
 
-      <DataTable
-        table={table}
-        empty={
-          query || scope !== "all"
-            ? "No matters match this filter."
-            : "No matters yet. Create one to start filing work."
-        }
-        onRowClick={(m) => navigate({ to: "/matters/$id", params: { id: m.matter.id } })}
-      />
-      <TablePager table={table} />
+      <CollectionPanel query={viewQuery} label="Matters">
+        <DataTable
+          rowActionColumn="name"
+          getRowHref={(row) => `/matters/${row.matter.id}`}
+          scrollKey={`matters:${JSON.stringify(pageParams)}`}
+          table={table}
+          empty={
+            query || scope !== "all"
+              ? "No matters match this filter."
+              : "No matters yet. Create one to start filing work."
+          }
+          onRowClick={(m) => navigate({ to: "/matters/$id", params: { id: m.matter.id } })}
+        />
+        <TablePager table={table} />
+      </CollectionPanel>
 
       {editing && (
         <EditMatterModal

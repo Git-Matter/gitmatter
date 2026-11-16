@@ -10,6 +10,7 @@ import {
   fieldChanges,
   matters,
   tabularReviews,
+  templates,
   user,
   workflows,
 } from "@workspace/db/schema";
@@ -44,6 +45,7 @@ const HEAD_TABLE = {
   document: documents,
   clause: clauses,
   matter: matters,
+  template: templates,
 } as const;
 
 export interface RecordCommitArgs {

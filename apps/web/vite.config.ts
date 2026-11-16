@@ -1,5 +1,6 @@
 import { config as loadEnv } from "dotenv";
-import { defineConfig } from "vite-plus";
+import { defineConfig, searchForWorkspaceRoot } from "vite-plus";
+import { fileURLToPath } from "node:url";
 import { devtools } from "@tanstack/devtools-vite";
 import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 import viteReact, { reactCompilerPreset } from "@vitejs/plugin-react";
@@ -11,8 +12,8 @@ import remarkGfm from "remark-gfm";
 // Load monorepo-root .env into process.env so server handlers (db, auth) see it.
 loadEnv({ path: "../../.env" });
 
-// Avoid 3000 (the default every other dev app grabs). Configurable via PORT;
-// strictPort is off so a busy port falls through to the next free one.
+// Avoid 3000 (the default every other dev app grabs). Configurable via PORT.
+// Reject a duplicate start rather than silently launching another instance.
 const port = Number(process.env.PORT) || 4280;
 
 // DEPLOYMENT=cloud ships the public marketing landing at "/"; anything else
@@ -39,6 +40,7 @@ const PUBLIC_PRERENDER_PATHS = [
   // Platform + solutions indexes and one path per catalog entry (slugs come
   // from src/marketing/catalog.ts). Keep in sync with public/sitemap.xml.
   "/platform",
+  "/platform/template-library",
   "/platform/assistant",
   "/platform/tabular-review",
   "/platform/redline-and-drafting",
@@ -105,10 +107,28 @@ const config = defineConfig({
   // with ANALYZE=1 vp build. Experimental; needs @vitejs/devtools.
   devtools: !!process.env.ANALYZE,
   resolve: { tsconfigPaths: true },
-  server: { port, strictPort: false },
+  server: {
+    port,
+    strictPort: true,
+    // TanStack devtools already forwards console output. A second relay can
+    // echo browser/server errors back into itself during HMR.
+    forwardConsole: false,
+    fs: {
+      allow: [
+        searchForWorkspaceRoot(process.cwd()),
+        // pnpm can keep Fontsource assets in its global virtual store. Allow
+        // only the two font package directories, never the whole store.
+        ...["inter", "newsreader"].map((font) =>
+          fileURLToPath(
+            new URL(".", import.meta.resolve(`@fontsource-variable/${font}/package.json`))
+          )
+        ),
+      ],
+    },
+  },
   // allowedHosts: the prod/staging containers serve via `vp preview` behind
   // Traefik, which already routes by host — so accept whatever host it forwards.
-  preview: { port, strictPort: false, allowedHosts: true },
+  preview: { port, strictPort: true, allowedHosts: true },
   plugins: [
     // Blog posts are authored as .mdx and compiled to plain React at build time.
     // Must run before the react/babel plugins so they only ever see compiled JS.

@@ -1,8 +1,12 @@
+import { FieldDescription } from "@/components/ui/field";
+import { notifySuccess } from "@/lib/feedback";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { UserPlus, X } from "lucide-react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -66,6 +70,7 @@ export function SharePeopleDialog({
     mutationFn: () => source.addByEmail(email.trim(), role),
     onSuccess: () => {
       setEmail("");
+      notifySuccess("Person added to the team");
       void invalidate();
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Failed to add"),
@@ -73,7 +78,10 @@ export function SharePeopleDialog({
 
   const remove = useMutation({
     mutationFn: (userId: string) => source.remove(userId),
-    onSuccess: () => invalidate(),
+    onSuccess: () => {
+      notifySuccess("Person removed from the team");
+      return invalidate();
+    },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Failed to remove"),
   });
 
@@ -135,10 +143,17 @@ export function SharePeopleDialog({
               title="Add person"
               aria-label="Add person"
               disabled={add.isPending || !email.trim()}
+              aria-describedby="share-add-hint"
             >
               <UserPlus className="size-4" />
             </Button>
           </form>
+        )}
+        {source.canManage && (
+          <FieldDescription id="share-add-hint">
+            Choose an organization member and their role to enable Add person. People already on the
+            team are excluded.
+          </FieldDescription>
         )}
 
         <div>
@@ -149,9 +164,11 @@ export function SharePeopleDialog({
               return (
                 <li key={m.userId} className="flex items-center justify-between py-2.5">
                   <div className="flex min-w-0 items-center gap-3">
-                    <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-foreground text-xs font-medium text-background">
-                      {(m.name || m.email).slice(0, 1).toUpperCase()}
-                    </div>
+                    <Avatar size="sm">
+                      <AvatarFallback>
+                        {(m.name || m.email).slice(0, 1).toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
                     <div className="flex min-w-0 flex-col">
                       <span className="truncate text-sm">
                         {m.name || m.email}
@@ -163,7 +180,9 @@ export function SharePeopleDialog({
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-muted-foreground capitalize">{m.role}</span>
+                    <Badge variant="secondary" className="capitalize">
+                      {m.role}
+                    </Badge>
                     {removable && (
                       <Button
                         size="icon-sm"

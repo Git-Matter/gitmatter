@@ -8,7 +8,7 @@ try {
   const [url, expectedRelease, ...extra] = process.argv.slice(2);
   if (!url || !expectedRelease || extra.length)
     throw new DeploymentVerificationError(
-      "Usage: bun scripts/verify-web-deployment.ts <readiness-url> <expected-release-sha>"
+      "Usage: pnpm exec tsx scripts/verify-web-deployment.ts <readiness-url> <expected-release-sha>"
     );
   const result = await verifyWebDeployment({
     url,

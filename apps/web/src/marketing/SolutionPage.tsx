@@ -1,7 +1,6 @@
 import { Link, useParams } from "@tanstack/react-router";
 import { ArrowLeft, ArrowRight } from "lucide-react";
 import { getSolution, SOLUTIONS } from "@/marketing/catalog";
-import Eyebrow from "@/marketing/components/Eyebrow";
 import CTASection from "@/marketing/components/CTASection";
 
 // Cloud-only /solutions/$slug child page: one use case, who it serves, and
@@ -24,18 +23,17 @@ export default function SolutionPage() {
           Solutions
         </Link>
         <div className="flex flex-col gap-stack py-12">
-          <Eyebrow>{item.tag}</Eyebrow>
           <h1 className="max-w-[24ch] font-heading text-4xl tracking-tight text-balance sm:text-5xl">
             {item.title}
           </h1>
           <p className="max-w-[56ch] text-lg leading-relaxed text-muted-foreground">{item.body}</p>
-          <p className="text-sm text-muted-foreground/80">{item.who}</p>
+          <p className="text-sm text-muted-foreground">{item.who}</p>
         </div>
       </div>
 
       <section className="mx-auto w-full max-w-3xl px-6 pt-4">
         <div className="border-t border-border pt-8">
-          <Eyebrow>more solutions</Eyebrow>
+          <h2 className="text-title">More solutions</h2>
           <div className="mt-6 grid gap-x-8 gap-y-4 sm:grid-cols-2">
             {others.map((s) => (
               <Link

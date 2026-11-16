@@ -104,7 +104,13 @@ export function PromptMarkdownEditor({ value, onChange, readOnly = false }: Prop
       onChange?.(markdown);
     },
     editorProps: {
-      attributes: { class: "workflow-editor-content" },
+      attributes: {
+        class: "workflow-editor-content",
+        role: "textbox",
+        "aria-label": "Workflow prompt",
+        "aria-multiline": "true",
+        "aria-readonly": String(readOnly),
+      },
     },
   });
 
@@ -141,7 +147,7 @@ function syncEditorValue({
   if (value === lastEmittedRef.current) return;
 
   lastEmittedRef.current = value;
-  editor.commands.setContent(value);
+  editor.commands.setContent(value, { emitUpdate: false });
 }
 
 function PromptToolbar({ editor }: { editor: Editor }) {

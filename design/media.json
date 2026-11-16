@@ -1,0 +1,120 @@
+{
+  "version": 1,
+  "description": "Rendered product illustrations. Source mappings were reviewed against the repository compositions; hashes identify the public assets, not a render-chain attestation.",
+  "assets": {
+    "/blog/ai-training-rights-review.mp4": {
+      "kind": "illustration",
+      "composition": "AiTrainingReviewTutorial",
+      "source": "apps/video/src/AiTrainingReviewTutorial.tsx",
+      "sha256": "e20d783331ccd9d68f8a0c9176a7a98606fc27c5ed4713583d7691d2a61bb8c1"
+    },
+    "/blog/audit-dive.mp4": {
+      "kind": "illustration",
+      "composition": "AuditDive",
+      "source": "apps/video/src/AuditDive.tsx",
+      "sha256": "ab052c0e8d790c5750545121a6f765c3e1d3575bd7c15d5fc5a8829dea2c1999"
+    },
+    "/blog/byok.mp4": {
+      "kind": "illustration",
+      "composition": "Byok",
+      "source": "apps/video/src/Byok.tsx",
+      "sha256": "905133a8ea20f62dfe7ccdf9b2b0f4b4c875b95ea2a041409a269072c0aa7ce2"
+    },
+    "/blog/customer-contract-diligence-review.mp4": {
+      "kind": "illustration",
+      "composition": "AcquisitionReviewDemo",
+      "source": "apps/video/src/TabularReviewDemos.tsx",
+      "sha256": "c30195d407f83f0ac644fe6f4bb03a99b71c06930776658e58123d20f44792fe"
+    },
+    "/blog/employment-agreement-review.mp4": {
+      "kind": "illustration",
+      "composition": "EmploymentReviewDemo",
+      "source": "apps/video/src/TabularReviewDemos.tsx",
+      "sha256": "6115450a205f031c3cc3f66a9043b6df41c4c1e06ab47853a357dae8ebbed192"
+    },
+    "/blog/lease-portfolio-review.mp4": {
+      "kind": "illustration",
+      "composition": "LeaseReviewDemo",
+      "source": "apps/video/src/TabularReviewDemos.tsx",
+      "sha256": "fcede1050a95e6a25faf8aab1298eb49a5e9abc98e49b76800b32b9952528905"
+    },
+    "/blog/mcp-session.mp4": {
+      "kind": "illustration",
+      "composition": "McpSession",
+      "source": "apps/video/src/McpSession.tsx",
+      "sha256": "1a9a793f0cb957201e3168f29dbcdc63ce95ffe631ef3275ccf72c0f22997647"
+    },
+    "/blog/redline-loop.mp4": {
+      "kind": "illustration",
+      "composition": "RedlineLoop",
+      "source": "apps/video/src/RedlineLoop.tsx",
+      "sha256": "c7f05f4e0c7ebb22f3e60bbfbcf99365f3b8d354b4aba753b15dfbc0a85a4c4f"
+    },
+    "/demo.mp4": {
+      "kind": "illustration",
+      "composition": "GitmatterDemo",
+      "source": "apps/video/src/GitmatterDemo.tsx",
+      "sha256": "62a72e5414fa33ee89359049ace0b4f859b3b78f08ee458f315a0397bbb09c7b"
+    },
+    "/features/agent.mp4": {
+      "kind": "illustration",
+      "composition": "FeatureAgent",
+      "source": "apps/video/src/clips.tsx",
+      "sha256": "8c15f53721c6690589f8e37bf897a076e8ac8d21770faddc8b3173b42914eef8"
+    },
+    "/features/assistant.mp4": {
+      "kind": "illustration",
+      "composition": "FeatureAssistant",
+      "source": "apps/video/src/clips.tsx",
+      "sha256": "0ddeb1cfd8c6c1ae73bad552cff171a9122f4825ab97b7739fd7a98dc975aef2"
+    },
+    "/features/audit.mp4": {
+      "kind": "illustration",
+      "composition": "FeatureAudit",
+      "source": "apps/video/src/clips.tsx",
+      "sha256": "27d5d51c7ed72bb4263800f0b03184a8fe003bd0836a86ec2f5d6c38825dcbec"
+    },
+    "/features/legal-research.mp4": {
+      "kind": "illustration",
+      "composition": "FeatureLegalResearch",
+      "source": "apps/video/src/clips.tsx",
+      "sha256": "1b1c5b3d512cf840803088bb62b2375d51b2cbae35f6ed2cc1b8856d7300b3e0"
+    },
+    "/features/library.mp4": {
+      "kind": "illustration",
+      "composition": "FeatureLibrary",
+      "source": "apps/video/src/clips.tsx",
+      "sha256": "62efb83c196be4c3445ebcfaba1a3552d324474b7e7167dbffc5940ff8b7ffb8"
+    },
+    "/features/overview.mp4": {
+      "kind": "illustration",
+      "composition": "FeatureOverview",
+      "source": "apps/video/src/Overview.tsx",
+      "sha256": "f82da0f621e8512e2957116abc37bb5c0f721571005a33a7c777b4460ee58ce8"
+    },
+    "/features/redline.mp4": {
+      "kind": "illustration",
+      "composition": "FeatureRedline",
+      "source": "apps/video/src/clips.tsx",
+      "sha256": "adc5cb30560ec1fba959061db60dd8c9f1c23d6e7278fe3c9763184557dcfa88"
+    },
+    "/features/review.mp4": {
+      "kind": "illustration",
+      "composition": "FeatureReview",
+      "source": "apps/video/src/clips.tsx",
+      "sha256": "040774f0c92a2cda9dbcc1a147cf2bbe1fc2fce8e214a30796298ebb6e0cf01e"
+    },
+    "/features/workflow.mp4": {
+      "kind": "illustration",
+      "composition": "FeatureWorkflow",
+      "source": "apps/video/src/clips.tsx",
+      "sha256": "71a5d3a1bb6d42c9099489751a151421499c6fd5e814344f90ece6143e4b9ebf"
+    },
+    "/videos/install.mp4": {
+      "kind": "illustration",
+      "composition": "Install",
+      "source": "apps/video/src/Install.tsx",
+      "sha256": "00f120d55c790b8f0bca30cbf380512dbeff62b1d1a95283610b04a83fa13a47"
+    }
+  }
+}

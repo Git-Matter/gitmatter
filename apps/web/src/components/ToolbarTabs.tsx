@@ -1,10 +1,8 @@
-import { cn } from "@/lib/util/utils";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
-// Thin tab bar: underlined active tab on the left, optional actions on the right.
-// Lighter and denser than the shadcn Tabs primitive — used for the matter
-// workspace and list pages.
 export type ToolbarTab<T extends string> = { id: T; label: string };
 
+/** Controlled filters shared by list pages and matter sections. */
 export function ToolbarTabs<T extends string>({
   tabs,
   active,
@@ -17,25 +15,21 @@ export function ToolbarTabs<T extends string>({
   actions?: React.ReactNode;
 }) {
   return (
-    <div className="flex h-10 items-center border-b border-border">
-      <div className="flex flex-1 items-center gap-5">
+    <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-grid-line pb-3">
+      <ToggleGroup
+        value={[active]}
+        onValueChange={(values) => {
+          if (values[0]) onChange(values[0] as T);
+        }}
+        aria-label="Filter view"
+      >
         {tabs.map((tab) => (
-          <button
-            key={tab.id}
-            type="button"
-            onClick={() => onChange(tab.id)}
-            className={cn(
-              "relative h-10 shrink-0 text-sm whitespace-nowrap transition-colors",
-              active === tab.id
-                ? "font-medium text-foreground after:absolute after:inset-x-0 after:-bottom-px after:h-0.5 after:bg-foreground"
-                : "font-normal text-muted-foreground hover:text-foreground"
-            )}
-          >
+          <ToggleGroupItem key={tab.id} value={tab.id}>
             {tab.label}
-          </button>
+          </ToggleGroupItem>
         ))}
-      </div>
-      {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
+      </ToggleGroup>
+      {actions && <div className="flex min-w-0 flex-wrap items-center gap-2">{actions}</div>}
     </div>
   );
 }

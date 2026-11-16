@@ -1,3 +1,4 @@
+import { Input } from "@/components/ui/input";
 import { useEffect, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
@@ -275,7 +276,7 @@ export function DisplayWorkflowModal({ workflow, onClose }: Props) {
           <div className="shrink-0">
             <div className="flex items-center gap-1.5 rounded-md border border-input bg-background px-2.5 py-1">
               <Search className="h-3 w-3 shrink-0 text-muted-foreground" />
-              <input
+              <Input
                 type="text"
                 placeholder="Search…"
                 value={docSearch}
@@ -309,7 +310,10 @@ export function DisplayWorkflowModal({ workflow, onClose }: Props) {
                     key={d.id}
                     className="flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-sm hover:bg-muted/60"
                   >
-                    <Checkbox checked={selectedDocIds.has(d.id)} onChange={() => toggleDoc(d.id)} />
+                    <Checkbox
+                      checked={selectedDocIds.has(d.id)}
+                      onCheckedChange={() => toggleDoc(d.id)}
+                    />
                     <span className="min-w-0 flex-1 truncate text-foreground">{d.title}</span>
                   </label>
                 ))}

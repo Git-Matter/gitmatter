@@ -1,5 +1,8 @@
+import { notifySuccess } from "@/lib/feedback";
+import { useDraftExit } from "@/lib/hooks/useDraftExit";
+import { FormFeedback } from "@/components/FormFeedback";
 import { Link } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
@@ -43,14 +46,20 @@ export function ClientDialog({ client, onClose }: { client: Client | null; onClo
   const [clientNumber, setClientNumber] = useState("");
   const [status, setStatus] = useState<Client["status"]>("active");
 
-  // Seed the form when a different client opens (or its fresh data arrives).
+  const seeded = useRef<string | null>(null);
+  // Background refresh must not overwrite unsaved local input.
   useEffect(() => {
-    if (!current) return;
+    if (!client) {
+      seeded.current = null;
+      return;
+    }
+    if (!current || seeded.current === current.id) return;
+    seeded.current = current.id;
     setName(current.name);
     setType(current.type);
     setClientNumber(current.clientNumber ?? "");
     setStatus(current.status);
-  }, [current]);
+  }, [current, client]);
 
   const dirty =
     !!current &&
@@ -68,7 +77,8 @@ export function ClientDialog({ client, onClose }: { client: Client | null; onClo
         status,
       }),
     onSuccess: () => {
-      toast.success("Client updated");
+      exit.resolve();
+      notifySuccess("Client updated");
       void qc.invalidateQueries({ queryKey: queryKeys.clients });
       void qc.invalidateQueries({ queryKey: queryKeys.client(client!.id) });
       onClose();
@@ -76,120 +86,146 @@ export function ClientDialog({ client, onClose }: { client: Client | null; onClo
     onError: (e) => toast.error(e instanceof Error ? e.message : "Update failed"),
   });
 
+  const exit = useDraftExit({
+    dirty: !!client && dirty,
+    saving: !!client && save.isPending,
+    discard: () => {
+      if (current) {
+        setName(current.name);
+        setType(current.type);
+        setClientNumber(current.clientNumber ?? "");
+        setStatus(current.status);
+      }
+    },
+  });
   return (
-    <Dialog open={!!client} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent>
-        {client && (
-          <>
-            <DialogHeader>
-              <DialogTitle>Edit client</DialogTitle>
-            </DialogHeader>
+    <>
+      {exit.guard}
+      <Dialog
+        open={!!client}
+        onOpenChange={(open, details) => {
+          if (!open && !exit.requestClose(onClose)) details.cancel();
+        }}
+      >
+        <DialogContent>
+          {client && (
+            <>
+              <DialogHeader>
+                <DialogTitle>Edit client</DialogTitle>
+              </DialogHeader>
 
-            <div className="flex flex-col gap-3">
-              <div className="flex flex-col gap-1.5">
-                <Label>Name</Label>
-                <Input value={name} onChange={(e) => setName(e.target.value)} />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
+              <FormFeedback error={save.error} title="Client was not saved" />
+              <fieldset disabled={save.isPending} className="flex flex-col gap-3">
                 <div className="flex flex-col gap-1.5">
-                  <Label>Type</Label>
-                  <Select value={type} onValueChange={(v) => setType(v as Client["type"])}>
-                    <SelectTrigger className="capitalize">
+                  <Label htmlFor="edit-client-name">Name</Label>
+                  <Input
+                    id="edit-client-name"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-1.5">
+                    <Label>Type</Label>
+                    <Select value={type} onValueChange={(v) => setType(v as Client["type"])}>
+                      <SelectTrigger className="capitalize">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {(["organization", "individual"] as const).map((t) => (
+                          <SelectItem key={t} value={t} className="capitalize">
+                            {t}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="edit-client-number">Client number</Label>
+                    <Input
+                      id="edit-client-number"
+                      value={clientNumber}
+                      onChange={(e) => setClientNumber(e.target.value)}
+                      placeholder="2024-001"
+                    />
+                  </div>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <Label>Status</Label>
+                  <Select value={status} onValueChange={(v) => setStatus(v as Client["status"])}>
+                    <SelectTrigger className="w-32 capitalize">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {(["organization", "individual"] as const).map((t) => (
-                        <SelectItem key={t} value={t} className="capitalize">
-                          {t}
+                      {(["active", "inactive"] as const).map((s) => (
+                        <SelectItem key={s} value={s} className="capitalize">
+                          {s}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label>Client number</Label>
-                  <Input
-                    value={clientNumber}
-                    onChange={(e) => setClientNumber(e.target.value)}
-                    placeholder="2024-001"
-                  />
+              </fieldset>
+
+              {!overview ? (
+                <div className="flex flex-col gap-2">
+                  <Skeleton className="h-5 w-full" />
+                  <Skeleton className="h-5 w-2/3" />
                 </div>
-              </div>
-              <div className="flex items-center justify-between gap-3">
-                <Label>Status</Label>
-                <Select value={status} onValueChange={(v) => setStatus(v as Client["status"])}>
-                  <SelectTrigger className="w-32 capitalize">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(["active", "inactive"] as const).map((s) => (
-                      <SelectItem key={s} value={s} className="capitalize">
-                        {s}
-                      </SelectItem>
+              ) : (
+                <div className="flex max-h-[50vh] flex-col gap-section overflow-x-hidden overflow-y-auto border-t border-border pt-4">
+                  <Section title="Matters" empty="No matters you can access.">
+                    {overview.matters.map(({ matter }) => (
+                      <Row
+                        key={matter.id}
+                        to="/matters/$id"
+                        id={matter.id}
+                        onNavigate={onClose}
+                        label={matter.name}
+                        meta={matter.practiceArea ?? undefined}
+                      />
                     ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
+                  </Section>
+                  <Section title="Documents" empty="No documents.">
+                    {overview.documents.map((d) => (
+                      <Row
+                        key={d.id}
+                        to="/documents/$id"
+                        id={d.id}
+                        onNavigate={onClose}
+                        label={d.title}
+                        meta={d.fileType}
+                      />
+                    ))}
+                  </Section>
+                  <Section title="Reviews" empty="No reviews.">
+                    {overview.reviews.map((rv) => (
+                      <Row
+                        key={rv.id}
+                        to="/reviews/$id"
+                        id={rv.id}
+                        onNavigate={onClose}
+                        label={rv.title}
+                      />
+                    ))}
+                  </Section>
+                </div>
+              )}
 
-            {!overview ? (
-              <div className="flex flex-col gap-2">
-                <Skeleton className="h-5 w-full" />
-                <Skeleton className="h-5 w-2/3" />
-              </div>
-            ) : (
-              <div className="flex max-h-[50vh] flex-col gap-section overflow-x-hidden overflow-y-auto border-t border-border pt-4">
-                <Section title="Matters" empty="No matters you can access.">
-                  {overview.matters.map(({ matter }) => (
-                    <Row
-                      key={matter.id}
-                      to="/matters/$id"
-                      id={matter.id}
-                      onNavigate={onClose}
-                      label={matter.name}
-                      meta={matter.practiceArea ?? undefined}
-                    />
-                  ))}
-                </Section>
-                <Section title="Documents" empty="No documents.">
-                  {overview.documents.map((d) => (
-                    <Row
-                      key={d.id}
-                      to="/documents/$id"
-                      id={d.id}
-                      onNavigate={onClose}
-                      label={d.title}
-                      meta={d.fileType}
-                    />
-                  ))}
-                </Section>
-                <Section title="Reviews" empty="No reviews.">
-                  {overview.reviews.map((rv) => (
-                    <Row
-                      key={rv.id}
-                      to="/reviews/$id"
-                      id={rv.id}
-                      onNavigate={onClose}
-                      label={rv.title}
-                    />
-                  ))}
-                </Section>
-              </div>
-            )}
-
-            <DialogFooter>
-              <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
-              <Button
-                disabled={!dirty || !name.trim() || save.isPending}
-                onClick={() => save.mutate()}
-              >
-                {save.isPending ? "Saving…" : "Save"}
-              </Button>
-            </DialogFooter>
-          </>
-        )}
-      </DialogContent>
-    </Dialog>
+              <DialogFooter>
+                <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
+                <Button
+                  disabled={!dirty || !name.trim() || save.isPending}
+                  onClick={() => save.mutate()}
+                >
+                  {save.isPending ? "Saving…" : "Save"}
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
@@ -204,7 +240,7 @@ function Section({
 }) {
   return (
     <div className="flex flex-col gap-1">
-      <h3 className="text-xs font-medium tracking-wide text-muted-foreground uppercase">{title}</h3>
+      <h3 className="text-xs font-medium text-muted-foreground">{title}</h3>
       {children.length ? (
         <div className="flex flex-col divide-y divide-border">{children}</div>
       ) : (

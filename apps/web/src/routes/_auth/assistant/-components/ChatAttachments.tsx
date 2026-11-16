@@ -1,3 +1,4 @@
+import { Input } from "@/components/ui/input";
 import { useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -133,33 +134,41 @@ export function AttachControls({
   onAdd,
   onUpload,
   matterId,
+  allowUpload = true,
 }: {
   attachments: ChatAttachment[];
   onAdd: (a: ChatAttachment) => void;
   onUpload: (file: File) => void;
   matterId?: string;
+  allowUpload?: boolean;
 }) {
-  const upload = useDocumentUpload(onUpload);
+  const upload = useDocumentUpload((file) => {
+    if (allowUpload) onUpload(file);
+  });
   return (
     <>
       {/* Wide: upload + each source inline. */}
       <div className="hidden items-center gap-0.5 @sm/composer:flex">
-        {upload.input}
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <button
-                type="button"
-                aria-label="Upload a file"
-                onClick={upload.pick}
-                className="flex h-8 shrink-0 items-center rounded-md px-2 text-muted-foreground transition-colors outline-none hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
-              >
-                <Paperclip className="size-4 shrink-0" />
-              </button>
-            }
-          />
-          <TooltipContent>Upload a file</TooltipContent>
-        </Tooltip>
+        {allowUpload && (
+          <>
+            {upload.input}
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <button
+                    type="button"
+                    aria-label="Upload a file"
+                    onClick={upload.pick}
+                    className="flex h-8 shrink-0 items-center rounded-md px-2 text-muted-foreground transition-colors outline-none hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
+                  >
+                    <Paperclip className="size-4 shrink-0" />
+                  </button>
+                }
+              />
+              <TooltipContent>Upload a file</TooltipContent>
+            </Tooltip>
+          </>
+        )}
         {SOURCES.map((s) => (
           <AttachSourceButton
             key={s.kind}
@@ -176,6 +185,7 @@ export function AttachControls({
           attachments={attachments}
           onAdd={onAdd}
           onUpload={onUpload}
+          allowUpload={allowUpload}
           matterId={matterId}
         />
       </div>
@@ -240,17 +250,19 @@ export function AttachMenu({
   onAdd,
   onUpload,
   matterId,
+  allowUpload = true,
 }: {
   attachments: ChatAttachment[];
   onAdd: (a: ChatAttachment) => void;
   onUpload: (file: File) => void;
   matterId?: string;
+  allowUpload?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState<Kind | null>(null);
   const source = active ? SOURCES.find((s) => s.kind === active) : undefined;
   const upload = useDocumentUpload((file) => {
-    onUpload(file);
+    if (allowUpload) onUpload(file);
     onOpenChange(false);
   });
 
@@ -291,16 +303,20 @@ export function AttachMenu({
           />
         ) : (
           <div className="p-1">
-            {upload.input}
-            <button
-              type="button"
-              onClick={upload.pick}
-              className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-muted"
-            >
-              <Paperclip className="size-4 shrink-0 text-muted-foreground" />
-              <span className="flex-1">Upload a file</span>
-            </button>
-            <div className="my-1 h-px bg-border" />
+            {allowUpload && (
+              <>
+                {upload.input}
+                <button
+                  type="button"
+                  onClick={upload.pick}
+                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-muted"
+                >
+                  <Paperclip className="size-4 shrink-0 text-muted-foreground" />
+                  <span className="flex-1">Upload a file</span>
+                </button>
+                <div className="my-1 h-px bg-border" />
+              </>
+            )}
             {SOURCES.map((s) => {
               const Icon = s.icon;
               const count = attachments.filter((a) => a.kind === s.kind).length;
@@ -475,7 +491,7 @@ function SourceList({
           </button>
         )}
         <Search className="size-4 shrink-0 text-muted-foreground" />
-        <input
+        <Input
           autoFocus
           value={query}
           onChange={(e) => setQuery(e.target.value)}

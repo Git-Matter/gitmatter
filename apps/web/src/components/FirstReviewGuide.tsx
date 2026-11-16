@@ -1,16 +1,27 @@
-import { useRef, useState, type ReactNode } from "react";
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { FirstReviewStatus } from "@workspace/contracts";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api } from "@/lib/data/api";
+import { canRetainSnapshotAfterError } from "@/lib/data/snapshot-refresh";
 import { useDocumentUpload } from "@/routes/_auth/documents/-hooks/useDocumentUpload";
 import { ContractReviewSetup } from "@/routes/_auth/matters/-components/ContractReviewSetup";
+
+import {
+  ProgressiveTaskList,
+  ProgressiveTaskStep as GuideStep,
+} from "@/components/ProgressiveTaskList";
+import {
+  FIRST_REVIEW_TASKS,
+  recommendFirstReviewTask,
+  reviewFindingStatus,
+} from "@/design-system/first-review-progress";
 
 type ExecutionRoute = "application" | "agent";
 
@@ -36,7 +47,9 @@ export function FirstReviewGuide({
   });
   if (status.isPending)
     return <Skeleton className="h-48 w-full" aria-label="Loading first-review progress" />;
-  if (status.error || !status.data)
+  const retainedSnapshot =
+    !!status.data && !!status.error && canRetainSnapshotAfterError(status.error);
+  if ((!retainedSnapshot && status.error) || !status.data)
     return (
       <Alert variant="destructive">
         <AlertTitle>Review progress could not be loaded</AlertTitle>
@@ -54,11 +67,28 @@ export function FirstReviewGuide({
       </Alert>
     );
   return (
-    <FirstReviewJourney
-      key={matterId ?? "choose"}
-      status={status.data}
-      onChooseMatter={onChooseMatter}
-    />
+    <div className="flex flex-col gap-4">
+      {retainedSnapshot ? (
+        <Alert>
+          <AlertTitle>Progress could not be refreshed</AlertTitle>
+          <AlertDescription>
+            <p>
+              Your inputs are still here. Saved progress may be out of date; retry before preparing
+              new work.
+            </p>
+            <Button size="sm" variant="outline" onClick={() => void status.refetch()}>
+              Retry progress refresh
+            </Button>
+          </AlertDescription>
+        </Alert>
+      ) : null}
+      <FirstReviewJourney
+        key={matterId ?? "choose"}
+        status={status.data}
+        progressCurrent={!retainedSnapshot}
+        onChooseMatter={onChooseMatter}
+      />
+    </div>
   );
 }
 
@@ -66,8 +96,10 @@ export function FirstReviewGuide({
 export function FirstReviewJourney({
   status,
   onChooseMatter,
+  progressCurrent = true,
 }: {
   status: FirstReviewStatus;
+  progressCurrent?: boolean;
   onChooseMatter: (matterId: string) => void;
 }) {
   const qc = useQueryClient();
@@ -76,6 +108,7 @@ export function FirstReviewJourney({
   const [setupOpen, setSetupOpen] = useState(false);
   const [, setPagination] = useState({ pageIndex: 0, pageSize: 10 });
   const setupRef = useRef<HTMLDivElement>(null);
+  const setupButtonRef = useRef<HTMLButtonElement>(null);
   const upload = useDocumentUpload({
     matterId: status.matter?.id,
     setPagination,
@@ -97,10 +130,14 @@ export function FirstReviewJourney({
         : false;
   const uploadedReady = status.documents.some((document) => document.uploaded && document.ready);
   const canPrepare =
-    !!status.matter?.canEdit && executionReady && status.playbooks.length > 0 && uploadedReady;
+    progressCurrent &&
+    !!status.matter?.canEdit &&
+    executionReady &&
+    status.playbooks.length > 0 &&
+    uploadedReady;
   const review = status.review;
-  const findingsReady =
-    !!review && review.totalFindings > 0 && review.completedFindings === review.totalFindings;
+
+  const recommendedTask = recommendFirstReviewTask(status, executionReady);
 
   function openSetup() {
     setSetupOpen(true);
@@ -137,20 +174,20 @@ export function FirstReviewJourney({
       <FieldGroup>
         <Field>
           <FieldLabel htmlFor="first-review-matter">Matter for this review</FieldLabel>
-          <select
+          <NativeSelect
             id="first-review-matter"
             value={status.matter?.id ?? ""}
             onChange={(event) => onChooseMatter(event.target.value)}
-            className="h-9 max-w-xl rounded-md border border-input bg-background px-3 text-sm"
+            className="max-w-xl"
           >
-            <option value="">Choose a matter</option>
+            <NativeSelectOption value="">Choose a matter</NativeSelectOption>
             {status.matters.map((matter) => (
-              <option key={matter.id} value={matter.id}>
+              <NativeSelectOption key={matter.id} value={matter.id}>
                 {matter.name}
                 {matter.canEdit ? "" : " · read only"}
-              </option>
+              </NativeSelectOption>
             ))}
-          </select>
+          </NativeSelect>
           <FieldDescription>
             Only matters you can currently access appear here.{" "}
             <Link to="/matters" search={{ new: true }} className="underline underline-offset-4">
@@ -177,11 +214,31 @@ export function FirstReviewJourney({
         </Alert>
       ) : null}
 
+      {review?.sourceChanged ? (
+        <Alert variant="destructive">
+          <AlertTitle>The review uses an earlier source version</AlertTitle>
+          <AlertDescription>
+            Keep its captured evidence for reference. A matter editor must prepare a new review
+            before changing the current document.
+          </AlertDescription>
+        </Alert>
+      ) : null}
+
       {status.matter ? (
-        <ol className="flex flex-col gap-6" aria-label="First-review steps">
+        <ProgressiveTaskList
+          label="First-review steps"
+          recommendation={
+            recommendedTask === null
+              ? null
+              : {
+                  number: recommendedTask,
+                  title: FIRST_REVIEW_TASKS[recommendedTask],
+                }
+          }
+        >
           <GuideStep
             number={1}
-            title="Check storage and processing"
+            title={FIRST_REVIEW_TASKS[1]}
             state={status.organization.storageRegion ? "Configured" : "Needs setup"}
           >
             <p>
@@ -202,7 +259,7 @@ export function FirstReviewJourney({
 
           <GuideStep
             number={2}
-            title="Choose how the review runs"
+            title={FIRST_REVIEW_TASKS[2]}
             state={
               executionReady
                 ? "Ready to prepare"
@@ -244,19 +301,19 @@ export function FirstReviewJourney({
                   <FieldGroup>
                     <Field>
                       <FieldLabel htmlFor="first-review-model">Preferred model</FieldLabel>
-                      <select
+                      <NativeSelect
                         id="first-review-model"
                         value={model}
                         onChange={(event) => setModel(event.target.value)}
-                        className="h-9 max-w-xl rounded-md border border-input bg-background px-3 text-sm"
+                        className="max-w-xl"
                       >
-                        <option value="">Choose on the review</option>
+                        <NativeSelectOption value="">Choose on the review</NativeSelectOption>
                         {models.map((candidate) => (
-                          <option key={candidate.id} value={candidate.id}>
+                          <NativeSelectOption key={candidate.id} value={candidate.id}>
                             {candidate.label}
-                          </option>
+                          </NativeSelectOption>
                         ))}
-                      </select>
+                      </NativeSelect>
                       <FieldDescription>
                         Confirm the current model and estimate on the review before running.
                         OpenRouter models can be searched there.
@@ -323,7 +380,7 @@ export function FirstReviewJourney({
 
           <GuideStep
             number={3}
-            title="Use an approved firm standard"
+            title={FIRST_REVIEW_TASKS[3]}
             state={status.playbooks.length ? "Available" : "Needs approval"}
           >
             {status.playbooks.length ? (
@@ -359,7 +416,7 @@ export function FirstReviewJourney({
 
           <GuideStep
             number={4}
-            title="Upload one actual document"
+            title={FIRST_REVIEW_TASKS[4]}
             state={
               uploadedReady
                 ? "Source prepared"
@@ -412,11 +469,12 @@ export function FirstReviewJourney({
                   className="sr-only"
                   aria-label="Upload first-review document"
                   tabIndex={-1}
+                  disabled={!progressCurrent}
                 />
                 <Button
                   size="sm"
                   variant="outline"
-                  disabled={upload.uploading}
+                  disabled={upload.uploading || !progressCurrent}
                   onClick={() => upload.fileRef.current?.click()}
                 >
                   {upload.uploading ? "Uploading…" : "Upload document"}
@@ -444,8 +502,14 @@ export function FirstReviewJourney({
 
           <GuideStep
             number={5}
-            title="Capture review instructions"
-            state={review?.instructionsCaptured ? "Captured" : "Needs instructions"}
+            title={FIRST_REVIEW_TASKS[5]}
+            state={
+              review?.sourceChanged
+                ? "Capture for new source"
+                : review?.instructionsCaptured
+                  ? "Captured"
+                  : "Needs instructions"
+            }
           >
             <p>
               Confirm whom you represent, the disclosure role, the business purpose and
@@ -459,19 +523,24 @@ export function FirstReviewJourney({
               </p>
             ) : null}
             {canPrepare ? (
-              <Button size="sm" variant="outline" onClick={openSetup}>
-                Prepare review and instructions
-              </Button>
+              !setupOpen ? (
+                <Button ref={setupButtonRef} size="sm" variant="outline" onClick={openSetup}>
+                  Set up review
+                </Button>
+              ) : null
             ) : (
               <p>
-                Choose a ready execution route, an approved standard and a prepared uploaded source
-                first. You also need matter editor access.
+                {progressCurrent
+                  ? "Choose a ready execution route, an approved standard and a prepared uploaded source first. You also need matter editor access."
+                  : "Retry the progress refresh before preparing new work. Your entered setup is retained."}
               </p>
             )}
-            {setupOpen && canPrepare && status.matter ? (
+            {setupOpen && status.matter ? (
               <div ref={setupRef}>
                 <ContractReviewSetup
                   matterId={status.matter.id}
+                  preparationEnabled={canPrepare}
+                  returnFocusRef={setupButtonRef}
                   onClose={() => setSetupOpen(false)}
                   executionRoute={executionRoute ?? undefined}
                   preferredModel={
@@ -482,11 +551,7 @@ export function FirstReviewJourney({
             ) : null}
           </GuideStep>
 
-          <GuideStep
-            number={6}
-            title="Review cited findings"
-            state={findingsReady ? "Findings prepared" : review ? "In progress" : "Needs review"}
-          >
+          <GuideStep number={6} title={FIRST_REVIEW_TASKS[6]} state={reviewFindingStatus(review)}>
             {review ? (
               <>
                 <p>
@@ -512,8 +577,16 @@ export function FirstReviewJourney({
 
           <GuideStep
             number={7}
-            title="Make human decisions"
-            state={review?.decisionsComplete ? "Decisions complete" : "Needs decisions"}
+            title={FIRST_REVIEW_TASKS[7]}
+            state={
+              !review
+                ? "After findings"
+                : review.sourceChanged
+                  ? "Needs current source"
+                  : review.decisionsComplete
+                    ? "Decisions complete"
+                    : "Needs decisions"
+            }
           >
             <p>
               Decide exact current proposals, leave unchanged with a reason, or escalate questions
@@ -532,7 +605,7 @@ export function FirstReviewJourney({
 
           <GuideStep
             number={8}
-            title="Prepare the Word output"
+            title={FIRST_REVIEW_TASKS[8]}
             state={review?.cleanReady ? "Ready to request output" : "Not ready"}
           >
             <p>
@@ -555,7 +628,7 @@ export function FirstReviewJourney({
               </p>
             )}
           </GuideStep>
-        </ol>
+        </ProgressiveTaskList>
       ) : (
         <p className="text-sm text-muted-foreground">
           Choose a matter to see its approved standards, documents and saved review progress.
@@ -584,31 +657,5 @@ export function FirstReviewJourney({
         ) : null}
       </div>
     </div>
-  );
-}
-
-function GuideStep({
-  number,
-  title,
-  state,
-  children,
-}: {
-  number: number;
-  title: string;
-  state: string;
-  children: ReactNode;
-}) {
-  return (
-    <li className="flex flex-col gap-3 border-b border-border pb-6 last:border-0">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-base font-semibold">
-          {number}. {title}
-        </h2>
-        <Badge variant="secondary">{state}</Badge>
-      </div>
-      <div className="flex max-w-prose flex-col items-start gap-3 text-sm text-muted-foreground">
-        {children}
-      </div>
-    </li>
   );
 }

@@ -88,9 +88,9 @@ a legally accepted production workflow are separate milestones.
 
 ## Integrated verification
 
-The [2026-10-13 implementation record](evidence/2026-10-13-mvp-implementation.md) captures source
+The 2026-10-13 implementation record captures source
 coverage, all 282 passing tests in 54 files, required checks, local migrations and the isolated
 browser interaction evidence. PR-head CI passed. The
-[integration and staging record](evidence/2026-10-14-dev-integration-and-staging.md) confirms the
+integration and staging record confirms the
 merge and fresh server pull failures: staging still runs older revisions because private GHCR
 authentication was denied. Authenticated acceptance remains open.

@@ -134,6 +134,20 @@
       "when": 1791927314545,
       "tag": "0018_warm_mauler",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1793800218302,
+      "tag": "0019_safe_firebrand",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1793825966596,
+      "tag": "0020_dashing_iron_man",
+      "breakpoints": true
     }
   ]
 }

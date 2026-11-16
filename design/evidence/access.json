@@ -1,0 +1,145 @@
+{
+  "version": 1,
+  "recordedOn": "2026-11-16",
+  "scope": "Current settings, shell, authentication components and real Better Auth browser client in an isolated memory router. Fictional session resolution and intercepted API/challenge outcomes; unhandled local API paths return 599 and remote requests are blocked. No real authentication, mail delivery, credential operations, hardware passkey, challenge verification or server authorization proof. Native unload is suppressed only during explicit fixture scenario resets; client exit guards are real. Hashes identify relevant sources, not a complete transitive runtime.",
+  "sourceSHA256": {
+    "apps/web/src/routes/sign-out.tsx": "0c5da6b22beb20573b585e2bc70c32df933cbd6839e624f4d28502410112432a",
+    "apps/web/src/router.tsx": "4e76c573ea1c151be909e7e4f84de8d342f1608335a8eb2e00c9ba2a418f53e4",
+    "design/tokens.json": "daadcd3714db609d93e28ff20fa29dddc72c9fa6aba802676ab8b1a982e370ed",
+    "apps/web/src/styles/tokens.css": "041c2a3ee55a1c0a2ed8c15b0194860e34c0143610ffddafd6eafde9770bf6d1",
+    "apps/web/src/components/UnsavedChangesGuard.tsx": "55e8f6ce41387d6179c24331017545b2128787f649d9f14ff05e91dc057c6dcc",
+    "apps/web/src/components/AppSidebar.tsx": "7906d8486273b2439219fd937b644cfea2830927328d477b4e05e639c7bee891",
+    "apps/web/src/components/sidebar/ChatNavPanel.tsx": "ce0b06f4fac1731069cc5d6c8e7b9d1971ebf7873c25eb9a1fdbc1012b7894e8",
+    "apps/web/src/components/ui/tabs.tsx": "c768131366d659eefeed488a69f17f9c76a1526fca8b76735cae73f845aae0d2",
+    "apps/web/src/components/ui/dialog.tsx": "3d34617ed1ee16f88cb73094adb2aefc3e7c133c7b5f9ae8c47ac9d76b0dac51",
+    "apps/web/src/components/PageHeader.tsx": "5bed2a3828397f2f1f32d50986dfc4ab62153947f96f17247f92fb15c74d76c5",
+    "apps/web/src/lib/auth/auth-client.ts": "cd3ef4d47c4729209edefed9f7ec44d51e681ce73b632246bb8af307d6ae915f",
+    "apps/web/src/lib/auth/redirect.ts": "327c4cab39e174233e3c0af4375ad5ff5317c78a48e81e96c322032f986fe149",
+    "apps/web/src/lib/context/matters-context.tsx": "bb5749bf9f878f5eb4a71db804970c841af644dfe0a13fac9e7eaf7baa0b150c",
+    "apps/web/src/lib/data/snapshot-refresh.ts": "c6aa6e49c5307a12e295182ee75638d69b02d4f6e3df20568a0f1256a2c8c94e",
+    "apps/web/src/lib/data/api.ts": "0df3150acecd515c8caac125d14bffc90966c6b475b4bfa0c3169e2fa6d8836b",
+    "apps/web/src/routes/_auth/settings/index.tsx": "371d6591bb6076a0eb1a8b7bbb09564fa8e8cb07441afed143aa4d09fc071d10",
+    "apps/web/src/routes/_auth/settings/-components/SettingsDrafts.tsx": "76f1d75cfc07752c6f03585397a2d81d4a12a91f97d547cc8e12585c73be050e",
+    "apps/web/src/routes/_auth/settings/-components/SettingsQueryNotice.tsx": "9b36194a43639b532ab2d59038b7433e29015edb52f661de3bf03dab06974748",
+    "apps/web/src/routes/_auth/settings/-components/AccountSettings.tsx": "b422e2ac69116a8f3a3484bb78a7fc691fc0c90e2b03ca2b8fa157eb87831027",
+    "apps/web/src/routes/_auth/settings/-components/TwoFactorCard.tsx": "c90f5ef9ca5e8177262901f2560a0fbcc93961c8bae433917e859c781243f876",
+    "apps/web/src/routes/_auth/settings/-components/AiSettings.tsx": "47c8a34863644f3ebd378d793bff0f7b868dcd32470c6a371fc80ee8a40740d6",
+    "apps/web/src/routes/_auth/settings/-components/OrganizationCard.tsx": "b3265055d54911f2c17b167a4df69762d7591a2340e5c45d2efe41a6403d72a1",
+    "apps/web/src/routes/_auth/settings/-components/JobControls.tsx": "9e55d5e38acbbf36bb3a08ae6d9810c3afa82939c7aad08fab4bacd159ae04a3",
+    "apps/web/src/routes/_auth/settings/-components/ConnectAgent.tsx": "e6ee5d8e10fedfe4682acd2e887166cb52eed35b56d4f75dc6d417b3bbb0837b",
+    "apps/web/src/routes/_auth/settings/-components/LegalResearchCard.tsx": "0f9602d0e8ff78fbbc339f630588f1188bb0e6ce706340fc7ad3c044b769ac6a",
+    "apps/web/src/routes/_auth/settings/-components/DataPrivacyCard.tsx": "1852e0ccc97861db9d91779577f500abe1e9cea55e2389a6d13fa1b7be2e561e",
+    "apps/web/src/routes/_unauth/route.tsx": "e16b8a5252f1744d53aee60ca7750d331bee24227fd2d97281cf05272ab289f7",
+    "apps/web/src/routes/_unauth/login.tsx": "93444710987e6f2b7ef709921387688f9a01d1aaebe9224fc2bcddb05ecf7d1c",
+    "apps/web/src/routes/_unauth/signup.tsx": "7d0801c5108149879cd908eae8fef3dd404a0291ace1470be868ed9a619dea63",
+    "apps/web/src/routes/_unauth/forgot-password.tsx": "5be3b1b2152dc5d061589c7032a3d9c3751efa7fcc1dae60aaf6000de8a64454",
+    "apps/web/src/routes/_unauth/reset-password.tsx": "ff5c9c06c3be29bc51f5bfa18496e9ea17b14f7a7fab9b4f0108bdee971023f3",
+    "apps/web/src/routes/_unauth/2fa.tsx": "736f97288017bb69c40903d16ad29f97ff0d2ad8dbdba63bd6d628b091dbb164",
+    "apps/web/src/routes/_unauth/verify-email.tsx": "7cc285d38133bb58102f257fe9fbaf9fe0b96db9b21e1c207a061288eef5e78a",
+    "apps/web/src/routes/_unauth/-components/Turnstile.tsx": "c57c32f957515cf36ef1c09e9c68b08976c504234e38de07d1e874316c135be9",
+    "apps/web/src/routes/_unauth/-components/AuthShell.tsx": "f3b02ac443ea5f7b060e0f9a95615e6a1e7184472a5b191d3e25617231457291",
+    "test/acceptance/account-ui-fixture/main.tsx": "565eae3f7a1da62e6b083f9b66426637fb1e89e5ae72d97d207e5d12e81c0fec",
+    "test/acceptance/account-ui-fixture/vite.config.ts": "7d11b558ebd62eb0621a86e27375f004aa25bdb873ded4f82e144af00126a8ce",
+    "test/acceptance/account-ui-fixture/tsconfig.json": "b47f46b53156ecac6c21b451a3db16d61b51949d03faf6a8ec4124cff3653b1f",
+    "test/acceptance/account-ui-fixture/index.html": "a10864b11280991c50943e7e525f1161bc8f8fd89d05ddda39ca06db4e066089",
+    "apps/web/src/styles/globals.css": "399faa1aa751ab40fd875d5bc3a20de4d3bf342719bf2d127cdca3a1400bcf42",
+    "apps/web/src/components/ui/card.tsx": "7c4c2118b887fe48ac2fd707f3cbff2b6cb85e49e44b34a3f414cad23551b52f",
+    "apps/web/src/components/ui/sidebar.tsx": "fd5a129abd678cca18e3f27ccfe3add1dea393bdec827eaf01e9238ad1bf5504",
+    "apps/web/src/hooks/use-mobile.ts": "21eff740f9e5c965c7f0782925a7e8f67ddfcdf0f58b6613550f99c3e1c454e9",
+    "apps/web/src/components/ui/native-select.tsx": "7e28c79cd01d434c6eb2fb51d2ea15fc753cfa105f329451769262b9d2039b05",
+    "apps/web/src/components/ui/checkbox.tsx": "6bb7309a5c25701d01590fb6b4ebf10ad7c3836aa7e9f454b32fc97850088780",
+    "apps/web/src/components/ui/empty.tsx": "586c8e395658ff6374d235978273e73bec7b3cc2980fd0b66e3694e6be86d1b6",
+    "apps/web/src/components/ui/toggle-group.tsx": "ed68cd1e20167d87a60b3234f6632d0df997cfc27ce52cb0a0b331c369173485",
+    "apps/web/src/components/ToolbarTabs.tsx": "5cf8e8a26f8ce69b727fd6506a7644a698c53b2bc68043ef19429dae9468dee9",
+    "apps/web/src/components/TableSearch.tsx": "a0fdb4bcd0a1610859b4983f8bba5bb476321635ebc5e507e06cb7c38b55cb11",
+    "apps/web/src/components/TablePager.tsx": "ece10e78024e04f784cf5d63ddbbf648a6c5180d3f1cfba040b27ee84b2056a1",
+    "apps/web/src/components/AppFrame.tsx": "f3a6bae7a8f75c57a35c5c6618a5111e2538fd815c78e67a753b4b9bc59236b1",
+    "apps/web/src/components/PageShell.tsx": "70307dc8ea75097544317efc3598a5f41ef4e2fd13b81ad24a202ce349d41329",
+    "apps/web/src/lib/hooks/useMediaQuery.ts": "092f707ce31f97db7a337ac87f2159a9b007c036e980f73242ff44372ce93c91"
+  },
+  "checks": [
+    {
+      "script": "test/acceptance/design-workflows/settings-navigation.js",
+      "sha256": "9e6ed88b7061d3fae1c5c35d50501c6f0329dbc2e0b997048e356fe5f9b11b22",
+      "result": {
+        "passed": true,
+        "cases": [
+          "lazy panels",
+          "URL tabs and history",
+          "cross-tab drafts",
+          "single exit decision",
+          "failed-save retention",
+          "pending-save protection",
+          "503 retained readonly configuration",
+          "403 removal",
+          "permission check recovery",
+          "mobile tabs",
+          "navigation modal keyboard and focus",
+          "no unintended operations"
+        ],
+        "scope": "Current production components and real Better Auth browser client in isolated memory router; fictional responses; no live authentication, credentials, emails or server authorization."
+      }
+    },
+    {
+      "script": "test/acceptance/design-workflows/settings-limits.js",
+      "sha256": "c9c99ffcbb59de9f00416244b51f277eaf02d6eb0f7b630a3df398558fb523ca",
+      "result": {
+        "passed": true,
+        "cases": [
+          "cross-tab limits draft",
+          "background revision retains draft",
+          "stale Enter gate",
+          "explicit Keep/Discard reload",
+          "503 recovery",
+          "failed save retention",
+          "revision-bound retry",
+          "successful save permits exit"
+        ],
+        "scope": "Current limits component with fictional snapshots and intercepted requests; no real policy mutation, spend or authorization proof."
+      }
+    },
+    {
+      "script": "test/acceptance/design-workflows/auth-recovery.js",
+      "sha256": "a2fa9051cc670e33e69090f1963bea5c8081d6789b5daa067448ab874c9868ec",
+      "result": {
+        "passed": true,
+        "cases": [
+          "availability failure vs closed",
+          "challenge load failure and retry",
+          "Enter readiness gate",
+          "signup/login network recovery",
+          "passkey service rejection",
+          "challenge expiry",
+          "safe external return rejection",
+          "password reset missing/expired/mismatch/error/success",
+          "two-factor retry and single pending request",
+          "local return path",
+          "verification retry and requested wording",
+          "390px reflow"
+        ],
+        "scope": "Actual product routes and Better Auth browser client with intercepted fictional requests and challenge callbacks; no real sign-in, mail, credentials, hardware passkeys or server challenge verification."
+      }
+    },
+    {
+      "script": "test/acceptance/design-workflows/sign-out.js",
+      "sha256": "1cfcfb6d363a4f2ba86f35114d3af8ec36ca26cc8513e1ea4374ef2162a3c409",
+      "result": {
+        "passed": true,
+        "cases": [
+          "no request on hover",
+          "Keep sends nothing and preserves draft",
+          "pending save blocks sign-out",
+          "discard before request",
+          "rejection remains recoverable",
+          "network failure retry",
+          "single pending request",
+          "confirmed login reload",
+          "direct URL and query do not act",
+          "explicit direct-entry action",
+          "390px recovery"
+        ],
+        "scope": "Current sidebar/sign-out route, shared draft guard and real Better Auth browser client with intercepted fictional requests. No real session was ended; no server-auth or native cross-browser prompt claim."
+      }
+    }
+  ]
+}

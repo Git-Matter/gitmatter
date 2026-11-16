@@ -1,4 +1,11 @@
 import { Link } from "@tanstack/react-router";
+import {
+  Empty,
+  EmptyHeader,
+  EmptyTitle,
+  EmptyDescription,
+  EmptyContent,
+} from "@/components/ui/empty";
 import { Button } from "@/components/ui/button";
 
 // Shared full-page fallback for the root route's notFound / error boundaries.
@@ -16,18 +23,22 @@ export function ErrorState({
   onRetry?: () => void;
 }) {
   return (
-    <div className="flex min-h-[60vh] flex-col items-center justify-center gap-3 text-center">
-      <p className="text-sm font-medium text-muted-foreground">{code}</p>
-      <h1 className="text-xl font-semibold">{title}</h1>
-      <p className="max-w-md text-sm text-muted-foreground">{message}</p>
-      <div className="mt-2 flex gap-2">
-        {onRetry ? (
+    <Empty className="min-h-[60vh]">
+      <EmptyHeader>
+        <p className="text-sm text-muted-foreground">{code}</p>
+        <EmptyTitle>
+          <h1>{title}</h1>
+        </EmptyTitle>
+        <EmptyDescription>{message}</EmptyDescription>
+      </EmptyHeader>
+      <EmptyContent className="flex-row justify-center">
+        {onRetry && (
           <Button variant="outline" onClick={onRetry}>
             Try again
           </Button>
-        ) : null}
+        )}
         <Button render={<Link to="/">Go home</Link>} />
-      </div>
-    </div>
+      </EmptyContent>
+    </Empty>
   );
 }

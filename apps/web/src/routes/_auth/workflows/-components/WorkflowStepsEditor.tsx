@@ -1,3 +1,4 @@
+import { Input } from "@/components/ui/input";
 import { ChevronDown, ChevronUp, Plus, Trash2 } from "lucide-react";
 import type { WorkflowStep } from "@/lib/data/api";
 import { Button } from "@/components/ui/button";
@@ -50,7 +51,7 @@ export function WorkflowStepsEditor({ value, onChange, readOnly = false }: Props
               <span className="grid size-5 shrink-0 place-items-center rounded bg-foreground text-[11px] font-medium text-background">
                 {i + 1}
               </span>
-              <input
+              <Input
                 value={step.title ?? ""}
                 onChange={(e) => patchStep(i, { title: e.target.value })}
                 disabled={readOnly}

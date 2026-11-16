@@ -1,0 +1,93 @@
+{
+  "version": 1,
+  "recordedOn": "2026-11-16",
+  "scope": "Production clients, matters, documents, workflows and Library routes in an isolated read-only browser fixture. Fictional identity and data; remote requests and mutations are blocked. Covers search/return, filter changes, checkbox selection, editor shortcut preservation, mobile sheet/focus, pagination bounds and current desktop/mobile captures. No production authentication, providers, legal quality, mutation authorization or deployment claim. Relevant source hashes are not a complete runtime attestation.",
+  "sourceSHA256": {
+    "apps/web/src/components/ui/breadcrumb.tsx": "831f846428d281b105f542948bd7bddd7e1464c392d5b522bb9b6406013a759f",
+    "apps/web/src/components/ui/sheet.tsx": "1e3b3d3976eb71c13ba91f34785b8bf7d284d2423968e864c424579ce408af56",
+    "apps/web/src/components/ui/tabs.tsx": "c768131366d659eefeed488a69f17f9c76a1526fca8b76735cae73f845aae0d2",
+    "apps/web/src/components/ui/badge.tsx": "e88d5b0e8e689858fda69563564f80f9fd7b6016f6879b1acbab3ca8fb46e10a",
+    "apps/web/src/components/PageHeader.tsx": "5bed2a3828397f2f1f32d50986dfc4ab62153947f96f17247f92fb15c74d76c5",
+    "apps/web/src/components/ModelPicker.tsx": "17d1e83ee6533076433d2de29c91ed65ac81c8ca35fa9ae33998baf945a1646f",
+    "apps/web/src/lib/data/api.ts": "0df3150acecd515c8caac125d14bffc90966c6b475b4bfa0c3169e2fa6d8836b",
+    "apps/web/src/components/UnsavedChangesGuard.tsx": "55e8f6ce41387d6179c24331017545b2128787f649d9f14ff05e91dc057c6dcc",
+    "test/acceptance/mvp-ui-fixture/main.tsx": "3cb8c2df84a21a1edcaf080e77738004973f80fe5406ae63d30d717bc6086439",
+    "test/acceptance/mvp-ui-fixture/vite.config.ts": "058505908cad8ba136596827ec0fc205076a7f4148996a6bf21627321f59c8c4",
+    "design/tokens.json": "4e945b404601835b71b15578e84f08f456eff0e75c0c47fd7c547bd3982b8063",
+    "apps/web/src/styles/tokens.css": "cf12ad4c50c90633adb41fc13496048b67a51eaff66b3b168f2e099a63476372",
+    "apps/web/src/routes/_auth/clients/index.tsx": "d45c6d892f69f26ff3f67038edb7f24b91919576af63756bc4bcfa6caede807c",
+    "apps/web/src/routes/_auth/matters/index.tsx": "1bf7bc7227982d13291170d92617158c78f667a782fda5f6260d943be68d2ad5",
+    "apps/web/src/routes/_auth/documents/index.tsx": "f7bbab1a23b69d90ae29a169e711e6af8689efb24e8f4fe6138bf511998c29d6",
+    "apps/web/src/routes/_auth/workflows/index.tsx": "73776ab732771802e8e2375e2442ec8e26a1e9e757be150fe69c6239eeb39cf3",
+    "apps/web/src/routes/_auth/library/index.tsx": "2fdce8036fead07f1ebb5c02f9b46ab52a36700044139814057b5e0847354248",
+    "apps/web/src/components/DataTable.tsx": "3d9bc054d78055a4d8d906fba4d1b18fcaeec83419887ad30de2eb21c1ac1bc7",
+    "apps/web/src/components/StateCue.tsx": "afb40e9c0c5cf776788e0be9818e2bc6d5fff461bc2c9d47a9944ff872e3b36d",
+    "apps/web/src/components/ui/input-group.tsx": "3aa84dc11f099c947ac5b8cabcd17fae6bb319153e9f9fb6240314b1b45a7159",
+    "apps/web/src/routes/_auth/clients/-components/clientColumns.tsx": "53e0dad61c5b5e4fd974fd1e9024ef85bc96825a87d9b9888566fb50a7f3bce2",
+    "apps/web/src/routes/_auth/matters/-components/matterColumns.tsx": "2f2214282c98bc525c538d008a95365b818347f43ec320bcfc5a826e2867cf99",
+    "apps/web/src/routes/_auth/documents/-components/documentColumns.tsx": "2a9cf0b998bccc1b114c980c231a437e861051f8f5eba2e800cf567c98474932",
+    "apps/web/src/routes/_auth/documents/-components/DocumentStatusBadge.tsx": "21b01322936b1757bbbfc0107b644085d0fed138d02ba5bab419b1312c9ac49f",
+    "apps/web/src/routes/_auth/workflows/-components/workflowColumns.tsx": "cccc07fe713736f12cc05015736c7b91c303de5f69a1db8409281f4c7852c551",
+    "test/acceptance/app-ui-fixture/main.tsx": "2db3cad6cf8adfb010dc25d0d3925f29f58ac04ffb021013ff1d0d3d2354222d",
+    "test/acceptance/app-ui-fixture/vite.config.ts": "850c8f4bdbace249319f90d5dd229cff6d13f5480b413f91c4f40f974963a4cb",
+    "test/acceptance/app-ui-fixture/index.html": "7c0d7759e0f3a7d72183a48bc69ec6ae5e933fc6805da72d0057190a914eb6b4",
+    "test/acceptance/app-ui-fixture/tsconfig.json": "5d23e60cf02a431e6eb29af8875473cae375856436f609b495c33802a90bb509",
+    "apps/web/src/styles/globals.css": "399faa1aa751ab40fd875d5bc3a20de4d3bf342719bf2d127cdca3a1400bcf42",
+    "apps/web/src/components/ui/card.tsx": "7c4c2118b887fe48ac2fd707f3cbff2b6cb85e49e44b34a3f414cad23551b52f",
+    "apps/web/src/components/ui/sidebar.tsx": "fd5a129abd678cca18e3f27ccfe3add1dea393bdec827eaf01e9238ad1bf5504",
+    "apps/web/src/hooks/use-mobile.ts": "21eff740f9e5c965c7f0782925a7e8f67ddfcdf0f58b6613550f99c3e1c454e9",
+    "apps/web/src/components/ui/native-select.tsx": "7e28c79cd01d434c6eb2fb51d2ea15fc753cfa105f329451769262b9d2039b05",
+    "apps/web/src/components/ui/checkbox.tsx": "6bb7309a5c25701d01590fb6b4ebf10ad7c3836aa7e9f454b32fc97850088780",
+    "apps/web/src/components/ui/empty.tsx": "586c8e395658ff6374d235978273e73bec7b3cc2980fd0b66e3694e6be86d1b6",
+    "apps/web/src/components/ui/toggle-group.tsx": "ed68cd1e20167d87a60b3234f6632d0df997cfc27ce52cb0a0b331c369173485",
+    "apps/web/src/components/ToolbarTabs.tsx": "5cf8e8a26f8ce69b727fd6506a7644a698c53b2bc68043ef19429dae9468dee9",
+    "apps/web/src/components/TableSearch.tsx": "a0fdb4bcd0a1610859b4983f8bba5bb476321635ebc5e507e06cb7c38b55cb11",
+    "apps/web/src/components/TablePager.tsx": "ece10e78024e04f784cf5d63ddbbf648a6c5180d3f1cfba040b27ee84b2056a1",
+    "apps/web/src/components/AppFrame.tsx": "f3a6bae7a8f75c57a35c5c6618a5111e2538fd815c78e67a753b4b9bc59236b1",
+    "apps/web/src/components/PageShell.tsx": "70307dc8ea75097544317efc3598a5f41ef4e2fd13b81ad24a202ce349d41329",
+    "apps/web/src/lib/hooks/useMediaQuery.ts": "092f707ce31f97db7a337ac87f2159a9b007c036e980f73242ff44372ce93c91",
+    "apps/web/src/components/AppSidebar.tsx": "7906d8486273b2439219fd937b644cfea2830927328d477b4e05e639c7bee891"
+  },
+  "checks": [
+    {
+      "script": "test/acceptance/design-workflows/app-wide.js",
+      "sha256": "353cd0907a95e505d7780ab5fe99fab6887f4b9aa0285def7d2e76dda69d7f65",
+      "result": {
+        "scope": "Production components in an isolated read-only fictional UI fixture; no live auth, providers or legal quality claim",
+        "screens": [
+          {
+            "route": "clients",
+            "searchAndReturn": true,
+            "mobileNavigation": true,
+            "containedMobile": true
+          },
+          {
+            "route": "matters",
+            "searchAndReturn": true,
+            "mobileNavigation": true,
+            "containedMobile": true
+          },
+          {
+            "route": "documents",
+            "searchAndReturn": true,
+            "mobileNavigation": true,
+            "containedMobile": true
+          },
+          {
+            "route": "workflows",
+            "searchAndReturn": true,
+            "mobileNavigation": true,
+            "containedMobile": true
+          },
+          {
+            "route": "library",
+            "searchAndReturn": true,
+            "mobileNavigation": true,
+            "containedMobile": true
+          }
+        ],
+        "captures": 10
+      }
+    }
+  ]
+}

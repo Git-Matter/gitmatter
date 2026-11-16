@@ -1,3 +1,8 @@
+import { FieldDescription } from "@/components/ui/field";
+import { notifySuccess } from "@/lib/feedback";
+import { useDraftExit } from "@/lib/hooks/useDraftExit";
+import { FormFeedback } from "@/components/FormFeedback";
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -7,7 +12,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Dialog,
-  DialogClose,
   DialogContent,
   DialogFooter,
   DialogHeader,
@@ -28,11 +32,12 @@ export function CreateMatterModal({
   onOpenChange: (open: boolean) => void;
   onCreated: (id: string) => void;
 }) {
-  const { data: clients = [] } = useQuery({
+  const clientsQuery = useQuery({
     queryKey: queryKeys.clients,
     queryFn: () => api.listClients(),
     enabled: open,
   });
+  const clients = clientsQuery.data ?? [];
   const [clientId, setClientId] = useState("");
   const [name, setName] = useState("");
   const [practiceArea, setPracticeArea] = useState<string | null>(null);
@@ -52,13 +57,29 @@ export function CreateMatterModal({
   const createMutation = useMutation({
     mutationFn: (d: Parameters<typeof api.createMatter>[0]) => api.createMatter(d),
     onSuccess: (m) => {
-      toast.success("Matter created");
+      exit.resolve();
+      notifySuccess("Matter created");
       onCreated(m.id);
       onOpenChange(false);
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
   });
 
+  const clearDraft = () => {
+    setName("");
+    setClientId("");
+    setPracticeArea(null);
+    setAdverse("");
+    setConflicts(null);
+  };
+  const exit = useDraftExit({
+    dirty: open && !!(name.trim() || clientId || practiceArea || adverse.trim()),
+    saving: open && createMutation.isPending,
+    discard: clearDraft,
+  });
+  const [validation, setValidation] = useState("");
+  const [checking, setChecking] = useState(false);
+  const [conflictError, setConflictError] = useState<unknown>(null);
   const adverseParties = () =>
     adverse
       .split(",")
@@ -67,20 +88,41 @@ export function CreateMatterModal({
 
   async function check() {
     const client = clients.find((c) => c.id === clientId);
-    if (!client) return toast.error("Pick a client first");
-    const { matches } = await api.checkConflicts({
-      clientName: client.name,
-      adverseParties: adverseParties(),
-    });
-    setConflicts(matches);
-    toast[matches.length ? "warning" : "success"](
-      matches.length ? `${matches.length} possible conflict(s)` : "No conflicts found"
-    );
+    if (!client) {
+      setValidation("Choose a client before checking conflicts.");
+      return;
+    }
+    setConflictError(null);
+    setChecking(true);
+    try {
+      const { matches } = await api.checkConflicts({
+        clientName: client.name,
+        adverseParties: adverseParties(),
+      });
+      setConflicts(matches);
+      toast[matches.length ? "warning" : "success"](
+        matches.length ? `${matches.length} possible conflict(s)` : "No conflicts found"
+      );
+    } catch (error) {
+      setConflictError(error);
+    } finally {
+      setChecking(false);
+    }
   }
 
   function create() {
-    if (!clientId) return toast.error("Pick a client");
-    if (!name.trim()) return toast.error("Matter name is required");
+    if (!clientsQuery.isSuccess) {
+      setValidation(
+        "Client access is not confirmed. Retry loading clients before creating a matter."
+      );
+      return;
+    }
+    setValidation("");
+    if (!clientId || !name.trim()) {
+      setValidation(!clientId ? "Choose a client." : "Enter a matter name.");
+      document.getElementById(!clientId ? "new-matter-client" : "new-matter-name")?.focus();
+      return;
+    }
     createMutation.mutate({
       clientId,
       name: name.trim(),
@@ -90,92 +132,137 @@ export function CreateMatterModal({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>New matter</DialogTitle>
-        </DialogHeader>
+    <>
+      {exit.guard}
+      <Dialog
+        open={open}
+        onOpenChange={(next, details) => {
+          if (next) onOpenChange(true);
+          else if (!exit.requestClose(() => onOpenChange(false))) details.cancel();
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>New matter</DialogTitle>
+          </DialogHeader>
 
-        <div className="flex flex-col gap-3">
-          <div className="flex flex-col gap-1.5">
-            <Label>Client</Label>
-            <select
-              className="h-9 rounded-md border border-input bg-background px-2.5 text-sm"
-              value={clientId}
-              onChange={(e) => setClientId(e.target.value)}
-            >
-              <option value="">Select a client…</option>
-              {clients.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-            {!clients.length && (
-              <p className="text-xs text-muted-foreground">
-                No clients yet —{" "}
-                <Link to="/clients" className="underline">
-                  add one
-                </Link>{" "}
-                first.
-              </p>
-            )}
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label>Matter name</Label>
-            <Input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Series A financing"
-            />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label>Practice area (optional)</Label>
-            <PracticeAreaPicker value={practiceArea} onChange={setPracticeArea} />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label>Adverse parties (optional, comma-separated)</Label>
-            <Input
-              value={adverse}
-              onChange={(e) => setAdverse(e.target.value)}
-              placeholder="Beta LLC, Gamma Inc"
-            />
-          </div>
-
-          {conflicts !== null && (
-            <div
-              className={
-                conflicts.length
-                  ? "rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm"
-                  : "rounded-md border border-border bg-muted/50 p-3 text-sm text-muted-foreground"
-              }
-            >
-              {conflicts.length ? (
-                <>
-                  <p className="font-medium">Possible conflicts — review before proceeding:</p>
-                  <ul className="mt-1 list-inside list-disc">
-                    {conflicts.map((m) => (
-                      <li key={m}>{m}</li>
-                    ))}
-                  </ul>
-                </>
-              ) : (
-                "No conflicts found."
+          <FormFeedback
+            id="new-matter-errors"
+            error={createMutation.error || conflictError || validation}
+            title="Matter needs attention"
+          />
+          <FormFeedback error={clientsQuery.error} title="Clients could not be loaded" />
+          {clientsQuery.isError && (
+            <Button variant="outline" onClick={() => void clientsQuery.refetch()}>
+              Retry clients
+            </Button>
+          )}
+          {clientsQuery.isPending && <p role="status">Loading clients…</p>}
+          <FieldDescription id="matter-create-hint">
+            Choose a client and enter a matter name. Checking conflicts does not create the matter;
+            use Create matter to save it.
+          </FieldDescription>
+          <fieldset disabled={createMutation.isPending || checking} className="flex flex-col gap-3">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="new-matter-client">Client</Label>
+              <NativeSelect
+                id="new-matter-client"
+                disabled={!clientsQuery.isSuccess}
+                aria-describedby={
+                  validation ? "new-matter-errors matter-create-hint" : "matter-create-hint"
+                }
+                aria-invalid={!!validation && !clientId}
+                value={clientId}
+                onChange={(e) => setClientId(e.target.value)}
+              >
+                <NativeSelectOption value="">Select a client…</NativeSelectOption>
+                {clients.map((c) => (
+                  <NativeSelectOption key={c.id} value={c.id}>
+                    {c.name}
+                  </NativeSelectOption>
+                ))}
+              </NativeSelect>
+              {clientsQuery.isSuccess && !clients.length && (
+                <p className="text-xs text-muted-foreground">
+                  No clients yet —{" "}
+                  <Link to="/clients" className="underline">
+                    add one
+                  </Link>{" "}
+                  first.
+                </p>
               )}
             </div>
-          )}
-        </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="new-matter-name">Matter name</Label>
+              <Input
+                id="new-matter-name"
+                aria-describedby={
+                  validation ? "new-matter-errors matter-create-hint" : "matter-create-hint"
+                }
+                aria-invalid={!!validation && !name.trim()}
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Series A financing"
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label>Practice area (optional)</Label>
+              <PracticeAreaPicker value={practiceArea} onChange={setPracticeArea} />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="new-matter-adverse">
+                Adverse parties (optional, comma-separated)
+              </Label>
+              <Input
+                id="new-matter-adverse"
+                value={adverse}
+                onChange={(e) => setAdverse(e.target.value)}
+                placeholder="Beta LLC, Gamma Inc"
+              />
+            </div>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={check} disabled={!clientId} className="mr-auto">
-            Check conflicts
-          </Button>
-          <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
-          <Button onClick={create} disabled={createMutation.isPending}>
-            {createMutation.isPending ? "Creating…" : "Create matter"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+            {conflicts !== null && (
+              <div
+                className={
+                  conflicts.length
+                    ? "rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm"
+                    : "rounded-md border border-border bg-muted/50 p-3 text-sm text-muted-foreground"
+                }
+              >
+                {conflicts.length ? (
+                  <>
+                    <p className="font-medium">Possible conflicts — review before proceeding:</p>
+                    <ul className="mt-1 list-inside list-disc">
+                      {conflicts.map((m) => (
+                        <li key={m}>{m}</li>
+                      ))}
+                    </ul>
+                  </>
+                ) : (
+                  "No conflicts found."
+                )}
+              </div>
+            )}
+          </fieldset>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={check}
+              disabled={!clientId || checking || createMutation.isPending}
+              className="mr-auto"
+            >
+              {checking ? "Checking conflicts…" : "Check conflicts"}
+            </Button>
+            <Button variant="outline" onClick={() => exit.requestClose(() => onOpenChange(false))}>
+              Cancel
+            </Button>
+            <Button onClick={create} disabled={createMutation.isPending || !clientsQuery.isSuccess}>
+              {createMutation.isPending ? "Creating…" : "Create matter"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

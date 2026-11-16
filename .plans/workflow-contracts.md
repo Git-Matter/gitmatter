@@ -92,4 +92,4 @@ an already committed legal operation.
 Each plan supplies core/DB tests, authenticated browser scenarios, scoped MCP parity, and relevant
 failure injection. Run `vp check`, `vp run typecheck`, and `vp test`; regenerate migrations for actual
 schema changes. Record local, staging, Word/provider, pilot, and production evidence separately
-under [`evidence/`](evidence/). Written scenarios do not prove they passed.
+alongside the relevant plan. Written scenarios do not prove they passed.

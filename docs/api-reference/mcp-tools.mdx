@@ -9,7 +9,7 @@ The connector at `/api/mcp` uses your assistant's own reasoning. It does not lau
 
 Read source documents, create a review (or prepare one with `run_playbook`), then populate findings with `write_cell` and exact source quotes. Document edits remain proposals until a person accepts or rejects them in GitMatter. Review cells record agent findings; they are not human approvals.
 
-The combined catalog below contains 52 tools. Legal research availability depends on jurisdiction. After an update, refresh your client's tool catalog or reconnect if it still shows removed tools. `run_cell` and `draft_playbook` are available through the built-in assistant, not this subscription-only connector. `resolve_document_edit` is reserved for people in the UI.
+The combined catalog below contains 56 tools. Legal research availability depends on jurisdiction. After an update, refresh your client's tool catalog or reconnect if it still shows removed tools. `run_cell` and `draft_playbook` are available through the built-in assistant, not this subscription-only connector. `resolve_document_edit` is reserved for people in the UI.
 
 ## `acknowledge_job_event`
 
@@ -56,6 +56,14 @@ Changes workspace data; recorded under the acting account.
 Create a tabular review over documents with extraction columns.
 
 Inputs: `title`, `documentIds`, `columns`, `matterId?`.
+
+Changes workspace data; recorded under the acting account.
+
+## `create_template`
+
+Create an audited template draft. A human assigned reviewer or workspace admin must approve it in the UI before anyone can download it as current.
+
+Inputs: `title`, `category`, `body`, `guidance?`, `audience?`.
 
 Changes workspace data; recorded under the acting account.
 
@@ -163,6 +171,14 @@ Inputs: `reviewId`.
 
 Reads existing data.
 
+## `get_template`
+
+Read the current approved template revision, with version, usage guidance, and original Word file metadata/hash when present. File-backed body text is an extracted preview; the Word download preserves the exact original. Never returns an unpublished draft.
+
+Inputs: `templateId`.
+
+Reads existing data.
+
 ## `get_trademark`
 
 Get a single Australian trade mark (IP Australia) by its trade mark number.
@@ -173,7 +189,7 @@ Reads existing data. Uses an external research service.
 
 ## `history`
 
-List an artifact's commit history (newest first): seq, actor (user or agent + label), op, and message. artifactType: tabular_review | workflow | document | clause | matter.
+List an artifact's commit history (newest first): seq, actor (user or agent + label), op, and message. artifactType: tabular_review | workflow | document | clause | matter | template.
 
 Inputs: `artifactType`, `artifactId`.
 
@@ -251,6 +267,14 @@ Inputs: none.
 
 Reads existing data.
 
+## `list_templates`
+
+List a bounded page of template summaries, without document bodies. Filter by view or search text; pass nextCursor as cursor for another page. Readers see only published workspace templates; the template team can see draft metadata. Use get_template to read approved content. Matter-scoped tokens cannot access this library.
+
+Inputs: `cursor?`, `limit?`, `view?`, `q?`.
+
+Reads existing data.
+
 ## `list_workflows`
 
 List available workflow templates and playbooks (system + user).
@@ -320,6 +344,14 @@ Changes workspace data; recorded under the acting account.
 Retry an eligible failed job against its original source and within its lifetime attempt limit. A retry can incur another provider charge; inspect the current job and uncertainty first.
 
 Inputs: `jobId`, `requestId`, `acknowledgeUnknown?`.
+
+Changes workspace data; recorded under the acting account.
+
+## `revise_template`
+
+Save an immutable draft revision and reason, using the expected head from list_templates. Does not change the approved current version. Agents cannot approve templates.
+
+Inputs: `templateId`, `expectedHead`, `content`, `message`.
 
 Changes workspace data; recorded under the acting account.
 

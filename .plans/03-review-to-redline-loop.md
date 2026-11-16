@@ -207,14 +207,14 @@ checked. Reviews freeze party, disclosure role, NDA structure, purpose and gover
 across UI/MCP/provider paths. Word inspection binds to immutable bytes, exposes coverage, and gates
 Word proposals, Word-edit decisions and clean export consistently. Human finding decisions remain
 separate. See [the coordinated scope and checks](review-setup-and-word-intake.md) and
-[dated implementation evidence](evidence/2026-10-14-review-setup-and-word-intake.md). Representative
+dated implementation evidence. Representative
 Word and authenticated staging acceptance remain open.
 
-[The 2026-10-15 record](evidence/2026-10-15-review-workflow-signoff.md) adds bounded local provider
+The 2026-10-15 record adds bounded local provider
 comparisons and actual tracked/clean Word exports saved, reopened and re-imported in Microsoft Word.
 It also records the citation-page correction and preserved audit history. This establishes the
 tested synthetic cases, while broader Word/provider, staging and real-firm acceptance remain open.
-[Visual checks on 2026-10-18](evidence/2026-10-18-final-visual-and-staging-verification.md) pass for
+Visual checks on 2026-10-18 pass for
 quote-only citation navigation and incoming/clean Word inspection controls. Staging still lacks the
 integrated frontend and remains an open acceptance gate.
 

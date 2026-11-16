@@ -3,7 +3,6 @@ import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SITE } from "@/marketing/site";
 import { SOLUTIONS } from "@/marketing/catalog";
-import Eyebrow from "@/marketing/components/Eyebrow";
 import CTASection from "@/marketing/components/CTASection";
 
 // Cloud-only /solutions index mapping the work people search for — contract
@@ -14,7 +13,6 @@ export default function Solutions() {
   return (
     <div className="flex flex-col">
       <header className="mx-auto flex max-w-3xl flex-col gap-stack px-6 pt-section pb-24 text-center">
-        <Eyebrow>solutions</Eyebrow>
         <h1 className="font-heading text-4xl tracking-tight text-balance sm:text-5xl">
           The legal work you already do — on the record.
         </h1>
@@ -31,12 +29,10 @@ export default function Solutions() {
             id={u.slug}
             className="flex scroll-mt-20 flex-col gap-3 border-t border-border pt-6"
           >
-            <span className="text-xs font-medium tracking-[0.2em] text-bronze uppercase">
-              {u.tag}
-            </span>
+            <span className="text-sm font-medium text-muted-foreground">{u.tag}</span>
             <h2 className="font-heading text-2xl tracking-tight">{u.title}</h2>
             <p className="leading-relaxed text-muted-foreground">{u.body}</p>
-            <p className="mt-1 text-sm text-muted-foreground/80">{u.who}</p>
+            <p className="mt-1 text-sm text-muted-foreground">{u.who}</p>
             <Link
               to="/solutions/$slug"
               params={{ slug: u.slug }}
@@ -51,12 +47,12 @@ export default function Solutions() {
 
       <section className="mx-auto max-w-7xl px-6 pb-8">
         <div className="flex flex-wrap items-center gap-3 border-t border-border pt-8">
-          <Link to="/compare/harvey">
-            <Button variant="outline">Compare with Harvey</Button>
-          </Link>
-          <a href={SITE.docs}>
-            <Button variant="outline">Read docs</Button>
-          </a>
+          <Button variant="outline" nativeButton={false} render={<Link to="/compare/harvey" />}>
+            Compare with Harvey
+          </Button>
+          <Button variant="outline" nativeButton={false} render={<a href={SITE.docs} />}>
+            Read docs
+          </Button>
         </div>
       </section>
 

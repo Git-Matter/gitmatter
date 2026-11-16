@@ -7,7 +7,7 @@ software evaluation cases, not a lawyer-approved benchmark or actual firm policy
 The plan, scorer and self-check scripts are offline: they import no provider, database, credential
 or environment loader. They never call a model, create accounts, publish legal content or send
 messages. The separately gated local HTTP runner is described below. Run with Node's native
-TypeScript support so Bun does not automatically load a project `.env`.
+TypeScript support so the Node runner does not automatically load a project `.env`.
 
 ```sh
 vp exec node --experimental-strip-types test/acceptance/provider-quality/self-check.ts

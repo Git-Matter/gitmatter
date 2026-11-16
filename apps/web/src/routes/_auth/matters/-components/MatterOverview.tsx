@@ -1,3 +1,4 @@
+import { notifySuccess } from "@/lib/feedback";
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -69,7 +70,7 @@ export function MatterOverview({
     mutationFn: (id: string) => api.retryJob(id),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["matter-jobs", matterId] });
-      toast.success("Job queued for retry");
+      notifySuccess("Job queued for retry");
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : "Retry failed"),
   });
@@ -77,7 +78,7 @@ export function MatterOverview({
     mutationFn: (id: string) => api.cancelJob(id),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["matter-jobs", matterId] });
-      toast.success("Cancellation requested");
+      notifySuccess("Cancellation requested");
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : "Cancellation failed"),
   });

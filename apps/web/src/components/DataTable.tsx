@@ -1,8 +1,12 @@
 import * as React from "react";
+import { Link } from "@tanstack/react-router";
+import { useWorkspaceViewMemory } from "@/lib/hooks/state/useWorkspaceViewState";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { flexRender, type Row, type RowData, type Table as RTable } from "@tanstack/react-table";
 import type { VirtualItem } from "@tanstack/react-virtual";
-import { ChevronDown, ChevronsUpDown, ChevronUp } from "lucide-react";
+import { ChevronDown, ChevronsUpDown, ChevronUp, ChevronLeft, ChevronRight } from "lucide-react";
+import { Empty, EmptyHeader, EmptyDescription } from "@/components/ui/empty";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/util/utils";
 import {
   Table,
@@ -36,24 +40,34 @@ declare module "@tanstack/react-table" {
 type DataTableProps<T> = {
   table: RTable<T>;
   estimateSize?: number;
+  variant?: "list" | "matrix";
   // Measure each row's real height (variable-height content). Off = fixed
   // estimateSize per row (cheaper; use when rows are single-line).
   measureRows?: boolean;
   onRowClick?: (row: T) => void;
+  rowActionColumn?: string;
+  getRowHref?: (row: T) => string;
   cellClassName?: string;
   empty?: React.ReactNode;
   className?: string;
+  scrollKey?: string;
 };
 
 export function DataTable<T>({
   table,
   estimateSize = 40,
+  variant = "list",
   measureRows = false,
   onRowClick,
+  rowActionColumn,
+  getRowHref,
   cellClassName,
   empty,
   className,
+  scrollKey,
 }: DataTableProps<T>) {
+  const memory = useWorkspaceViewMemory();
+  const restored = React.useRef<string | null>(null);
   const [scrollEl, setScrollEl] = React.useState<HTMLDivElement | null>(null);
   const setScrollRef = React.useCallback((node: HTMLDivElement | null) => {
     setScrollEl(node);
@@ -131,9 +145,25 @@ export function DataTable<T>({
       columnSizeVars: vars,
       tableWidth: Math.floor(containerWidth > 0 ? Math.max(baseWidth, containerWidth) : baseWidth),
     };
-    // Recompute on container width change (column sizes are static).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [containerWidth]);
+  }, [containerWidth, leafColumns, table]);
+
+  const [scrollState, setScrollState] = React.useState({ previous: false, next: false });
+  React.useEffect(() => {
+    if (!scrollEl || variant !== "matrix") return;
+    const sync = () => {
+      const previous = scrollEl.scrollLeft > 1;
+      const next = scrollEl.scrollLeft + scrollEl.clientWidth < scrollEl.scrollWidth - 1;
+      setScrollState((current) =>
+        current.previous === previous && current.next === next ? current : { previous, next }
+      );
+    };
+    sync();
+    scrollEl.addEventListener("scroll", sync, { passive: true });
+    return () => scrollEl.removeEventListener("scroll", sync);
+  }, [scrollEl, containerWidth, tableWidth, variant]);
+  function scrollColumns(direction: number) {
+    scrollEl?.scrollBy({ left: direction * scrollEl.clientWidth * 0.7, behavior: "smooth" });
+  }
 
   const bodyProps: BodyProps<T> = {
     table,
@@ -145,12 +175,81 @@ export function DataTable<T>({
     measureElement: virtualizer.measureElement,
     measureRows,
     onRowClick,
+    rowActionColumn,
+    getRowHref,
     cellClassName,
+    matrix: variant === "matrix",
     empty,
   };
 
-  return (
-    <div ref={setScrollRef} className={cn("min-h-0 flex-1 overflow-auto", className)}>
+  React.useLayoutEffect(() => {
+    if (!scrollEl || !scrollKey || !rows.length || !items.length || restored.current === scrollKey)
+      return;
+    restored.current = scrollKey;
+    const saved = memory?.get(`scroll:${scrollKey}`) as
+      | { top: number; left: number; focus?: string }
+      | undefined;
+    if (!saved) {
+      scrollEl.scrollTop = 0;
+      scrollEl.scrollLeft = 0;
+      return;
+    }
+    scrollEl.scrollTop = saved.top;
+    scrollEl.scrollLeft = saved.left;
+    if (saved.focus)
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() => {
+          scrollEl
+            .querySelector<HTMLElement>(`[data-row-object="${CSS.escape(saved.focus!)}"]`)
+            ?.focus({ preventScroll: true });
+          memory?.set(`scroll:${scrollKey}`, { top: saved.top, left: saved.left });
+        })
+      );
+  }, [scrollEl, scrollKey, rows.length, items.length, memory]);
+  React.useLayoutEffect(
+    () => () => {
+      if (!scrollEl || !scrollKey) return;
+      const previous = memory?.get(`scroll:${scrollKey}`) as
+        | { top: number; left: number; focus?: string }
+        | undefined;
+      memory?.set(`scroll:${scrollKey}`, {
+        ...previous,
+        top: scrollEl.scrollTop,
+        left: scrollEl.scrollLeft,
+      });
+    },
+    [scrollEl, scrollKey, memory]
+  );
+  const content = (
+    <div
+      ref={setScrollRef}
+      onScroll={(event) => {
+        if (scrollKey) {
+          const element = event.currentTarget;
+          memory?.set(`scroll:${scrollKey}`, { top: element.scrollTop, left: element.scrollLeft });
+        }
+      }}
+      onClickCapture={(event) => {
+        const target =
+          event.target instanceof Element
+            ? event.target.closest<HTMLElement>("[data-row-navigation]")
+            : null;
+        if (target && scrollKey)
+          memory?.set(`scroll:${scrollKey}`, {
+            top: event.currentTarget.scrollTop,
+            left: event.currentTarget.scrollLeft,
+            focus: target.dataset.rowObject,
+          });
+      }}
+      tabIndex={variant === "matrix" ? 0 : undefined}
+      aria-label={variant === "matrix" ? "Table columns" : undefined}
+      className={cn(
+        "min-h-0 flex-1 overflow-auto",
+        variant === "matrix" &&
+          "focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring",
+        className
+      )}
+    >
       <Table
         className="table-fixed"
         containerClassName="overflow-x-visible bg-transparent"
@@ -162,7 +261,7 @@ export function DataTable<T>({
       >
         <TableHeader className="sticky top-0 z-10 bg-background">
           {table.getHeaderGroups().map((hg) => (
-            <TableRow key={hg.id}>
+            <TableRow key={hg.id} className={variant === "matrix" ? "border-grid-line" : undefined}>
               {hg.headers.map((header) => {
                 const dir = header.column.getIsSorted();
                 const canSort = header.column.getCanSort();
@@ -170,7 +269,11 @@ export function DataTable<T>({
                 return (
                   <TableHead
                     key={header.id}
-                    className="h-8 overflow-hidden"
+                    className={cn(
+                      "h-8 overflow-hidden",
+                      variant === "matrix" &&
+                        "h-review-header border-e border-grid-line bg-card py-2 whitespace-normal text-foreground first:bg-card md:first:sticky md:first:start-0 md:first:z-20"
+                    )}
                     style={{ width: `calc(var(--header-${header.id}-size) * 1px)` }}
                   >
                     {canSort ? (
@@ -200,6 +303,40 @@ export function DataTable<T>({
       </Table>
     </div>
   );
+  if (variant !== "matrix") return content;
+  return (
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+      {content}
+      {(scrollState.previous || scrollState.next) && (
+        <nav
+          aria-label="Table column navigation"
+          className="flex shrink-0 items-center justify-between gap-2 border-t border-grid-line py-2"
+        >
+          <span className="text-xs text-muted-foreground">Scroll to compare questions</span>
+          <div className="flex items-center gap-1">
+            <Button
+              size="icon-xs"
+              variant="ghost"
+              aria-label="Previous columns"
+              disabled={!scrollState.previous}
+              onClick={() => scrollColumns(-1)}
+            >
+              <ChevronLeft />
+            </Button>
+            <Button
+              size="icon-xs"
+              variant="ghost"
+              aria-label="Next columns"
+              disabled={!scrollState.next}
+              onClick={() => scrollColumns(1)}
+            >
+              <ChevronRight />
+            </Button>
+          </div>
+        </nav>
+      )}
+    </div>
+  );
 }
 
 type BodyProps<T> = {
@@ -211,7 +348,10 @@ type BodyProps<T> = {
   colSpan: number;
   measureElement: (el: Element | null) => void;
   measureRows: boolean;
+  matrix: boolean;
   onRowClick?: (row: T) => void;
+  rowActionColumn?: string;
+  getRowHref?: (row: T) => string;
   cellClassName?: string;
   empty?: React.ReactNode;
 };
@@ -225,7 +365,10 @@ function DataTableBody<T>({
   measureElement,
   measureRows,
   onRowClick,
+  rowActionColumn,
+  getRowHref,
   cellClassName,
+  matrix,
   empty,
 }: BodyProps<T>) {
   return (
@@ -237,14 +380,18 @@ function DataTableBody<T>({
       )}
       {items.map((item) => {
         const row = rows[item.index]!;
+        const RenderRow = matrix ? DataRowInner : DataRow;
         return (
-          <DataRow
+          <RenderRow
             key={row.id}
             row={row}
             index={item.index}
             isSelected={row.getIsSelected()}
+            matrix={matrix}
             measureRef={measureRows ? measureElement : undefined}
             onRowClick={onRowClick}
+            rowActionColumn={rowActionColumn}
+            getRowHref={getRowHref}
             cellClassName={cellClassName}
           />
         );
@@ -257,7 +404,11 @@ function DataTableBody<T>({
       {!rows.length && empty != null && (
         <TableRow>
           <TableCell colSpan={colSpan} className="py-section text-center text-muted-foreground">
-            {empty}
+            <Empty>
+              <EmptyHeader>
+                <EmptyDescription>{empty}</EmptyDescription>
+              </EmptyHeader>
+            </Empty>
           </TableCell>
         </TableRow>
       )}
@@ -269,17 +420,33 @@ type DataRowProps<T> = {
   row: Row<T>;
   index: number;
   isSelected: boolean;
+  matrix: boolean;
   measureRef?: (el: Element | null) => void;
   onRowClick?: (row: T) => void;
+  rowActionColumn?: string;
+  getRowHref?: (row: T) => string;
   cellClassName?: string;
 };
 
-function DataRowInner<T>({ row, index, measureRef, onRowClick, cellClassName }: DataRowProps<T>) {
+function DataRowInner<T>({
+  row,
+  index,
+  measureRef,
+  onRowClick,
+  rowActionColumn,
+  getRowHref,
+  cellClassName,
+  matrix,
+}: DataRowProps<T>) {
   return (
     <TableRow
       data-index={index}
       ref={measureRef}
-      className={cn("group border-border/60 hover:bg-muted/60", onRowClick && "cursor-pointer")}
+      className={cn(
+        "group hover:bg-muted/60",
+        matrix ? "border-grid-line" : "border-border/60",
+        onRowClick && "cursor-pointer"
+      )}
       onClick={onRowClick ? () => onRowClick(row.original) : undefined}
     >
       {row.getVisibleCells().map((cell) => {
@@ -287,11 +454,44 @@ function DataRowInner<T>({ row, index, measureRef, onRowClick, cellClassName }: 
         // cells truncate to an ellipsis; columns that opt out (avatar groups,
         // icon buttons) render as-is but are still clipped at the boundary.
         const noTruncate = cell.column.columnDef.meta?.noTruncate;
-        const content = flexRender(cell.column.columnDef.cell, cell.getContext());
+        const rendered = flexRender(cell.column.columnDef.cell, cell.getContext());
+        const content =
+          onRowClick && cell.column.id === rowActionColumn ? (
+            getRowHref ? (
+              <Link
+                to={getRowHref(row.original)}
+                data-row-object={row.id}
+                data-row-navigation
+                onClick={(event) => event.stopPropagation()}
+                className="inline-flex min-h-6 max-w-full items-center truncate font-medium underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+              >
+                {rendered}
+              </Link>
+            ) : (
+              <Button
+                variant="link"
+                className="h-auto min-h-6 max-w-full justify-start p-0"
+                data-row-object={row.id}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onRowClick(row.original);
+                }}
+              >
+                {rendered}
+              </Button>
+            )
+          ) : (
+            rendered
+          );
         return (
           <TableCell
             key={cell.id}
-            className={cn("overflow-hidden py-2", cellClassName)}
+            className={cn(
+              "overflow-hidden py-2",
+              matrix &&
+                "h-review-row border-e border-grid-line p-0 first:bg-card first:px-3 first:ps-3 last:pe-0 md:first:sticky md:first:start-0 md:first:z-10",
+              cellClassName
+            )}
             style={{ width: `calc(var(--col-${cell.column.id}-size) * 1px)` }}
           >
             {noTruncate ? content : <div className="min-w-0 truncate">{content}</div>}
@@ -312,7 +512,10 @@ const DataRow = React.memo(
   (prev, next) =>
     prev.row.original === next.row.original &&
     prev.isSelected === next.isSelected &&
+    prev.matrix === next.matrix &&
     prev.index === next.index &&
     prev.onRowClick === next.onRowClick &&
+    prev.rowActionColumn === next.rowActionColumn &&
+    prev.getRowHref === next.getRowHref &&
     prev.cellClassName === next.cellClassName
 ) as typeof DataRowInner;

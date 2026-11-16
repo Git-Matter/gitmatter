@@ -1,3 +1,4 @@
+import { Input } from "@/components/ui/input";
 import { useEffect, useRef, useState } from "react";
 import { ChevronDown, ChevronLeft, MessageSquare, Search, Table2, X } from "lucide-react";
 import { Streamdown } from "streamdown";
@@ -130,7 +131,7 @@ function WorkflowSearchBox({
     <div className="shrink-0 px-2 pt-3 pb-2">
       <div className="flex h-9 items-center gap-2 rounded-md border border-input bg-background px-3">
         <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-        <input
+        <Input
           type="text"
           placeholder="Search workflows..."
           value={value}

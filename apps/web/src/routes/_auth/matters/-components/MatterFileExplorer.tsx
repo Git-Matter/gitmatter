@@ -1,3 +1,5 @@
+import { notifySuccess } from "@/lib/feedback";
+import { Input } from "@/components/ui/input";
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -78,7 +80,7 @@ export function MatterFileExplorer({
   const upload = useMutation({
     mutationFn: (file: File) => api.uploadDocument(file, undefined, matterId, selectedFolderId),
     onSuccess: () => {
-      toast.success("Uploaded — extracting…");
+      notifySuccess("Uploaded — extracting…");
       void qc.invalidateQueries({ queryKey: ["matter-docs", matterId, "all"] });
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Upload failed"),
@@ -381,7 +383,7 @@ function NewFolderRow({
     <div className="flex items-center gap-1.5 py-1.5 pe-2" style={{ paddingInlineStart: padding }}>
       <ChevronRight className="size-3 shrink-0 text-muted-foreground/50" />
       <FolderPlus className="size-3.5 shrink-0 text-bronze" />
-      <input
+      <Input
         autoFocus
         className="min-w-0 flex-1 border-b border-border bg-transparent text-sm outline-none"
         placeholder="Folder name"

@@ -55,6 +55,73 @@ const solution = (s: Omit<Solution, "slug">): Solution => ({
 
 export const FEATURES: Feature[] = [
   feature({
+    tag: "Template library",
+    title: "Stop asking which template is current.",
+    body: "Give each template an owner, an approved current version, and a history of every change. Let your commercial team download the versions legal has approved for the workspace.",
+    menuDesc: "Owned templates, exact-version approval, and a current Word download.",
+    clip: "",
+    intro:
+      "Keep your working drafts separate from the templates your team uses. Legal reviews a specific revision; your workspace gets the approved Word download. Every edit and decision stays in one history.",
+    sections: [
+      {
+        title: "One current version. Room to keep improving it.",
+        lead: "Your deal terms keep evolving. Updating a draft should not quietly change what the commercial team downloads.",
+        points: [
+          {
+            name: "An owner for every template",
+            desc: "Name the person responsible for the language and delegate template editing and review without granting workspace-wide admin rights.",
+          },
+          {
+            name: "Approval tied to the exact revision",
+            desc: "Assign a human reviewer to the working revision. They can request changes or approve that exact revision before it becomes current. A changed revision requires review again.",
+          },
+          {
+            name: "History with the actual changes",
+            desc: "Inspect who changed the language, what changed, and why. Drafts, approvals, ownership changes, and archiving are recorded on the same audit spine.",
+          },
+        ],
+      },
+      {
+        title: "Let sales find the starting point legal intended.",
+        lead: "Choose which published templates are available to everyone in the workspace. Keep the rest with the template team and workspace admins.",
+        points: [
+          {
+            name: "Published access, private drafts",
+            desc: "Other workspace members see only the approved current content, even while legal works on the next revision.",
+          },
+          {
+            name: "Your original Word template",
+            desc: "Upload a DOCX and keep its formatting. The published download returns the approved file with the template name and version in its filename. Text templates remain available with a clean generated Word layout. Google Drive synchronization is not supported.",
+          },
+          {
+            name: "Withdraw outdated templates",
+            desc: "Archive a template to remove reader access and stop downloads. Restoring returns it to draft, requiring approval before it is available again.",
+          },
+        ],
+      },
+      {
+        title: "Your agent can help. Your people approve.",
+        lead: "Use gitmatter's MCP tools to read approved templates and propose revisions with an attributable change reason.",
+        points: [
+          {
+            name: "No AI required to manage templates",
+            desc: "Create, revise, approve, archive, and download templates directly in the Library. Template management does not require an LLM call.",
+          },
+          {
+            name: "Agent changes stay in history",
+            desc: "Agent-created drafts and revisions follow the same commit path. Agents cannot publish, archive, or reassign templates.",
+          },
+        ],
+      },
+    ],
+    uses: [
+      "Give sales the approved NDA while legal revises the next version",
+      "Let a legal editor and reviewer collaborate without becoming workspace admins",
+      "Review the before and after behind a changed commercial term",
+      "Withdraw a retired template without losing its history",
+    ],
+  }),
+  feature({
     tag: "Legal research",
     title: "Research the law and Australian IP without leaving the matter.",
     body: "Search US case law and Australian patents and trade marks in the assistant or through your connected MCP agent. In Australia, queries, IP Australia sources, and tool activity stay visible in the assistant session.",
@@ -214,7 +281,7 @@ export const FEATURES: Feature[] = [
           },
           {
             name: "Outliers surface themselves",
-            desc: "When ninety-seven contracts permit the deal and three require customer consent, the table makes the three impossible to miss.",
+            desc: "When 97 contracts permit the deal and 3 require customer consent, the table makes the 3 impossible to miss.",
           },
         ],
       },
@@ -281,7 +348,7 @@ export const FEATURES: Feature[] = [
           },
           {
             name: "Every round in one history",
-            desc: "AI passes, lawyer edits, and accepted counterparty changes stay in one chronological history — version seven is explainable against version two.",
+            desc: "AI passes, lawyer edits, and accepted counterparty changes stay in one chronological history — version 7 is explainable against version 2.",
           },
         ],
       },
@@ -420,7 +487,7 @@ export const FEATURES: Feature[] = [
       },
       {
         title: "Answers when someone asks",
-        lead: 'Six months later, the question is always "who changed this clause, and why?" The history answers it.',
+        lead: '6 months later, the question is always "who changed this clause, and why?" The history answers it.',
         points: [
           {
             name: "Blame on any clause",
@@ -450,7 +517,7 @@ export const FEATURES: Feature[] = [
       "Connect ChatGPT or Claude to gitmatter as a connector, and the assistant your firm already uses can do real matter work — with every action on the record.",
     sections: [
       {
-        title: "A five-minute, no-code connection",
+        title: "Connect your agent over MCP",
         lead: "gitmatter is an MCP server with a secure sign-in, so connecting an assistant works like linking any two apps.",
         points: [
           {
@@ -498,28 +565,28 @@ export const FEATURES: Feature[] = [
 export const SOLUTIONS: Solution[] = [
   solution({
     tag: "Contract redline",
-    title: "AI contract redline and review.",
+    title: "Review and redline a contract.",
     body: "Mark up agreements against your own playbook. The AI flags risky or off-standard clauses and suggests new wording, so the first pass is done before you open the file. Every suggestion lands as a change you can accept, reject, or trace back.",
     who: "For commercial and transactional lawyers drowning in first-pass review.",
-    menuDesc: "AI contract redline and review.",
+    menuDesc: "Review and redline a contract.",
   }),
   solution({
     tag: "Data extraction",
-    title: "Clause and tabular data extraction.",
+    title: "Compare terms across contracts.",
     body: "Pull dates, parties, amounts, and key clauses out of a stack of contracts into a clean table. No copy-paste. Each value links back to the exact spot it came from, so the source is one click away.",
     who: "For due-diligence and contract-intake teams working at volume.",
-    menuDesc: "Clause and tabular data extraction.",
+    menuDesc: "Compare terms across contracts.",
   }),
   solution({
     tag: "Drafting",
-    title: "AI legal document generation.",
+    title: "Draft from your own documents.",
     body: "Draft agreements and standard documents from your templates and prior work. The AI fills the routine parts; you keep judgment on the rest. Every draft is saved with who asked for what and when.",
     who: "For teams that draft the same kinds of documents over and over.",
     menuDesc: "Document generation from your templates.",
   }),
   solution({
     tag: "Audit trail",
-    title: "Audit trail and version control for legal documents.",
+    title: "Trace every change to its author.",
     body: "Every change — by a person in the UI or by an AI agent — is a commit with an author, a message, a field-level diff, and blame, all in one history. Open any clause and see exactly how it got there. Built for client-data duties, eDiscovery, and supervision rules.",
     who: "For general counsel, risk, and compliance who must show their work.",
     menuDesc: "Version control for legal documents.",

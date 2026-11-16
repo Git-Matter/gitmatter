@@ -20,11 +20,17 @@ import {
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
 import { ContractReviewWorkspace } from "@/routes/_auth/reviews/-components/ContractReviewWorkspace";
+import { CellDetailDrawer } from "@/routes/_auth/reviews/-components/CellDetailDrawer";
+import { DocumentDrawer } from "@/routes/_auth/documents/-components/DocumentDrawer";
 import { ContractReviewCompletion } from "@/routes/_auth/reviews/-components/ContractReviewActions";
 import { MatterOverview } from "@/routes/_auth/matters/-components/MatterOverview";
 import { AgentActivity } from "@/routes/_auth/matters/-components/AgentActivity";
 import { JobControls } from "@/routes/_auth/settings/-components/JobControls";
+import { TemplateEditor } from "@/routes/_auth/library/-components/TemplateEditor";
 import { FirstReviewGuide } from "@/components/FirstReviewGuide";
+import { AppFrame } from "@/components/AppFrame";
+import { MattersProvider } from "@/lib/context/matters-context";
+import type { ServerSession } from "@/lib/auth/session";
 import { WordInspectionNotice } from "@/routes/_auth/documents/-components/WordInspectionNotice";
 import { Toaster } from "@/components/ui/sonner";
 import { Route as ProductionDocumentRoute } from "@/routes/_auth/documents/$id";
@@ -69,8 +75,15 @@ type Scenario =
   | "guide_start"
   | "guide_no_provider"
   | "guide_no_standard"
-  | "guide_no_source";
+  | "guide_no_source"
+  | "guide_no_storage"
+  | "guide_error"
+  | "guide_slow_prepare"
+  | "review_error"
+  | "review_slow";
 let scenario: Scenario = "partial";
+let findingRevision = 1;
+let progressFailure: 403 | 503 | null = null;
 const findingDecisions = new Map<
   number,
   { status: "left_unchanged" | "escalated"; rationale: string }
@@ -166,7 +179,7 @@ function firstReviewFixture(matterId: string | null): FirstReviewStatus {
     capturedAt: fixedAt,
     organization: {
       name: "Fictional acceptance firm",
-      storageRegion: "au",
+      storageRegion: scenario === "guide_no_storage" ? null : "au",
       canPublishFirmStandard: canEdit,
     },
     matters: [{ id: ids.matter, name: "Fictional NDA matter", canEdit }],
@@ -265,7 +278,46 @@ const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
 });
 
+// A matrix-scale preview uses identical, explicitly labelled fictional review copies.
+// The regular one-document scenarios remain the interactive acceptance fixture.
+const previewMode = new URL(window.location.href).searchParams.get("preview");
+const vaultPreview = previewMode === "vault";
+const previewDocumentIds = Array.from({ length: 14 }, (_, index) =>
+  index === 0 ? ids.document : `60000000-0000-4000-8000-${String(index).padStart(12, "0")}`
+);
+const previewTitle = (index: number) =>
+  `Review ${String(index + 1).padStart(2, "0")} · Mutual NDA.docx`;
+const previewCellId = (row: number, column: number) =>
+  `20000000-0000-4000-8000-${String(row * 100 + column + 1).padStart(12, "0")}`;
 function cellFixtures(): Cell[] {
+  const cells = singleDocumentCells();
+  return vaultPreview
+    ? previewDocumentIds.flatMap((documentId, row) =>
+        cells.map((cell) => ({ ...cell, documentId, id: previewCellId(row, cell.columnIndex) }))
+      )
+    : cells;
+}
+function completionFixture(): ReviewCompletion {
+  const completion = singleDocumentCompletion();
+  if (!vaultPreview) return completion;
+  const source = completion.documents[0]!;
+  return {
+    ...completion,
+    canDecide: false,
+    canEscalate: false,
+    documents: previewDocumentIds.map((documentId, row) => ({
+      ...source,
+      documentId,
+      title: previewTitle(row),
+      canPropose: false,
+      findings: source.findings.map((finding) => ({
+        ...finding,
+        cellId: previewCellId(row, finding.columnIndex),
+      })),
+    })),
+  };
+}
+function singleDocumentCells(): Cell[] {
   return manifest.findings.map((finding, index) => ({
     id: `20000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`,
     documentId: ids.document,
@@ -293,12 +345,12 @@ function cellFixtures(): Cell[] {
           : [],
     status:
       preparationRequests > 0 ? "pending" : scenario === "failed" && index === 2 ? "error" : "done",
-    lastCommitId: preparationRequests > 0 ? null : `finding-${index}`,
+    lastCommitId: preparationRequests > 0 ? null : `finding-${index}-${findingRevision}`,
     blame:
       preparationRequests > 0
         ? null
         : {
-            id: `finding-${index}`,
+            id: `finding-${index}-${findingRevision}`,
             seq: index + 1,
             op: "write_cell",
             message: "Synthetic fixture finding",
@@ -311,8 +363,8 @@ function cellFixtures(): Cell[] {
           },
   }));
 }
-function completionFixture(): ReviewCompletion {
-  const cells = cellFixtures();
+function singleDocumentCompletion(): ReviewCompletion {
+  const cells = singleDocumentCells();
   const pendingEdits =
     (documentDecision === "pending" ? 1 : 0) +
     [...proposedFindings.keys()].filter((index) => !resolvedFindings.has(index)).length;
@@ -328,7 +380,7 @@ function completionFixture(): ReviewCompletion {
       preparationRequests > 0 || (scenario === "failed" && index === 2)
         ? null
         : {
-            revisionId: `finding-${index}`,
+            revisionId: `finding-${index}-${findingRevision}`,
             sourceVersionId: ids.source,
             sourceHeadCommitId: "source-commit",
             ruleId: rule.id,
@@ -689,7 +741,24 @@ window.fetch = async (input, init) => {
   const method = init?.method ?? (input instanceof Request ? input.method : "GET");
   if (scenario === "viewer" && method !== "GET" && !path.endsWith("/read"))
     return json({ error: "Synthetic viewer cannot mutate legal work." }, 403);
+  if (vaultPreview && method !== "GET" && !path.endsWith("/opened"))
+    return json({ error: "Read-only fictional matrix preview." }, 403);
   if (path === "/api/auth/get-session") return json(null);
+  if (path === "/api/matters" && method === "GET")
+    return json([
+      {
+        matter: {
+          id: ids.matter,
+          name: "Fictional NDA matter",
+          clientId: null,
+          createdAt: fixedAt,
+          updatedAt: fixedAt,
+        },
+        client: null,
+        role: "owner",
+      },
+    ]);
+  if (path === "/api/chats" && method === "GET") return json([]);
   if (path === "/api/models" && method === "GET") {
     countRequest("catalogs");
     return json(firstReviewFixture(ids.matter).application.providers);
@@ -726,7 +795,16 @@ window.fetch = async (input, init) => {
       501
     );
   }
+  if (path.startsWith("/api/templates") && method !== "GET")
+    return json(
+      { error: "This fixture only checks unsaved template UI; template mutations are blocked." },
+      501
+    );
   if (path === "/api/first-review" && method === "GET") {
+    if (progressFailure)
+      return json({ error: "Synthetic progress refresh failure." }, progressFailure);
+    if (scenario === "guide_error")
+      return json({ error: "Synthetic progress service unavailable." }, 503);
     const matterId = url.searchParams.get("matterId");
     if (matterId && matterId !== ids.matter) return json({ error: "Unknown fixture matter." }, 403);
     return json(firstReviewFixture(matterId));
@@ -750,6 +828,8 @@ window.fetch = async (input, init) => {
       }))
     );
   if (path === `/api/workflows/${ids.playbook}/run-playbook` && method === "POST") {
+    if (scenario === "guide_slow_prepare")
+      await new Promise((resolve) => setTimeout(resolve, 2500));
     const context = reviewInstructionsSchema.safeParse(body.reviewInstructions);
     if (
       !context.success ||
@@ -852,8 +932,25 @@ window.fetch = async (input, init) => {
     }
     return json(documentFixture());
   }
+  if (
+    vaultPreview &&
+    method === "GET" &&
+    previewDocumentIds.some((docId) => path === `/api/documents/${docId}`)
+  ) {
+    const row = previewDocumentIds.findIndex((docId) => path === `/api/documents/${docId}`);
+    const snapshot = documentFixture();
+    return json({
+      ...snapshot,
+      document: { ...snapshot.document, id: previewDocumentIds[row], title: previewTitle(row) },
+    });
+  }
   if (path === `/api/documents/${ids.document}`) return json(documentFixture());
-  if (path === `/api/documents/${ids.document}/versions` && method === "GET")
+  if (
+    method === "GET" &&
+    (path === `/api/documents/${ids.document}/versions` ||
+      (vaultPreview &&
+        previewDocumentIds.some((docId) => path === `/api/documents/${docId}/versions`)))
+  )
     return json([
       {
         id: completionFixture().documents[0]!.currentVersionId,
@@ -882,6 +979,12 @@ window.fetch = async (input, init) => {
         );
   if (path.endsWith("/opened")) return new Response(null, { status: 204 });
   if (path.endsWith("/disposition")) {
+    if (scenario === "review_slow") await new Promise((resolve) => setTimeout(resolve, 2500));
+    if (scenario === "review_error")
+      return json(
+        { error: "Fictional audit save unavailable. Your input has not been saved." },
+        503
+      );
     if (
       !Number.isInteger(body.columnIndex) ||
       !manifest.rules[body.columnIndex] ||
@@ -892,6 +995,11 @@ window.fetch = async (input, init) => {
     return json({ ok: true });
   }
   if (path.endsWith("/redline")) {
+    if (scenario === "review_error")
+      return json(
+        { error: "Fictional audit save unavailable. Your input has not been saved." },
+        503
+      );
     if (!completionFixture().documents[0]!.canPropose)
       return json({ error: "Fixture Word safety or permissions block this proposal." }, 409);
     const finding = completionFixture().documents[0]!.findings.find(
@@ -1013,18 +1121,22 @@ window.fetch = async (input, init) => {
       review: {
         id: ids.review,
         matterId: ids.matter,
-        title: "Synthetic NDA review",
+        title: vaultPreview ? "Mutual NDA review" : "Synthetic NDA review",
         columnsConfig: manifest.rules.map((rule, index) => ({
           index,
           name: rule.clauseType,
           prompt: "Synthetic prompt",
         })),
-        documentIds: [ids.document],
+        documentIds: vaultPreview ? previewDocumentIds : [ids.document],
         headCommitId: "synthetic-review-commit",
       },
       cells: cellFixtures(),
-      documentTitles: { [ids.document]: "Synthetic mutual NDA.docx" },
-      documentMatters: { [ids.document]: "Synthetic matter" },
+      documentTitles: vaultPreview
+        ? Object.fromEntries(previewDocumentIds.map((docId, row) => [docId, previewTitle(row)]))
+        : { [ids.document]: "Synthetic mutual NDA.docx" },
+      documentMatters: vaultPreview
+        ? Object.fromEntries(previewDocumentIds.map((docId) => [docId, "Fictional NDA matter"]))
+        : { [ids.document]: "Synthetic matter" },
     });
   return json(
     { error: `Fixture does not implement ${path}; no application request was sent.` },
@@ -1112,6 +1224,31 @@ function GuideFixture() {
     />
   );
 }
+function InspectorFixture() {
+  const [open, setOpen] = useState(false);
+  const [source, setSource] = useState(false);
+  const cell = cellFixtures()[0];
+  return (
+    <>
+      <Button onClick={() => setOpen(true)}>Inspect first finding</Button>
+      <DocumentDrawer docId={source ? ids.document : null} onClose={() => setSource(false)} />
+      <CellDetailDrawer
+        open={open}
+        columnName={manifest.rules[0].clauseType}
+        docTitle="Synthetic mutual NDA.docx"
+        cell={cell}
+        busy={false}
+        canRun={false}
+        onRun={() => {}}
+        onClose={() => setOpen(false)}
+        onOpenSource={() => setSource(true)}
+        sourceVersionChanged={scenario === "stale"}
+        reviewedSourceUrl={api.versionDownloadUrl(ids.document, ids.source)}
+      />
+    </>
+  );
+}
+
 function FixtureRoot() {
   const [surface, setSurface] = useState("review");
   const location = useRouterState({ select: (state) => state.location });
@@ -1130,6 +1267,30 @@ function FixtureRoot() {
     return () => window.removeEventListener("synthetic-request-count", refresh);
   }, []);
   const productionReviewMounted = location.pathname.startsWith("/reviews/");
+  // Visual delivery uses the app's real chrome and routes, without the test-control toolbar.
+  // This remains fictional fixture data, never an authenticated or deployed app claim.
+  if (previewMode === "1" || vaultPreview) {
+    const session = {
+      user: {
+        id: "fictional-preview-user",
+        name: "Demo Reviewer",
+        email: "reviewer@example.invalid",
+      },
+      session: { id: "fictional-preview-session", userId: "fictional-preview-user" },
+    } as NonNullable<ServerSession>;
+    return (
+      <QueryClientProvider client={queryClient}>
+        <TooltipProvider>
+          <MattersProvider>
+            <AppFrame session={session}>
+              {location.pathname === "/first-review" ? <GuideFixture /> : <Outlet />}
+            </AppFrame>
+          </MattersProvider>
+          <Toaster />
+        </TooltipProvider>
+      </QueryClientProvider>
+    );
+  }
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
@@ -1156,6 +1317,8 @@ function FixtureRoot() {
                 value={selectedScenario}
                 onChange={(event) => {
                   scenario = event.target.value as Scenario;
+                  findingRevision = 1;
+                  progressFailure = null;
                   setSelectedScenario(scenario);
                   findingDecisions.clear();
                   proposedFindings.clear();
@@ -1178,7 +1341,10 @@ function FixtureRoot() {
                     void router.navigate({
                       to: "/reviews/$id",
                       params: { id: ids.review },
-                      search: location.search,
+                      search: {
+                        ...location.search,
+                        view: location.search.view === "document" ? "document" : undefined,
+                      },
                     });
                 }}
               >
@@ -1194,59 +1360,123 @@ function FixtureRoot() {
                 <option value="word_limited">Unsupported non-body Word revision</option>
                 <option value="word_unknown">Word inspection unavailable</option>
                 <option value="document_pending">Recorded pending document proposal</option>
+                <option value="review_error">Review save unavailable</option>
+                <option value="review_slow">Review save pending</option>
                 <option value="guide_start">First review — ready to prepare</option>
                 <option value="guide_no_provider">First review — no AI route configured</option>
                 <option value="guide_no_standard">First review — no approved standard</option>
                 <option value="guide_no_source">First review — source still preparing</option>
+                <option value="guide_no_storage">First review — storage not configured</option>
+                <option value="guide_error">First review — progress unavailable</option>
+                <option value="guide_slow_prepare">First review — slow preparation response</option>
               </select>
             </label>
           </div>
           <div className="flex flex-wrap gap-2">
-            {["guide", "review", "overview", "approvals", "document", "word", "controls"].map(
-              (id) => (
-                <Button
-                  key={id}
-                  variant={surface === id ? "secondary" : "ghost"}
-                  onClick={() => {
-                    setSurface(id);
-                    void router.navigate({
-                      to:
-                        id === "document"
-                          ? "/documents/$id"
-                          : id === "guide"
-                            ? "/first-review"
-                            : id === "review"
-                              ? "/reviews/$id"
-                              : "/",
-                      params:
-                        id === "document"
-                          ? { id: ids.document }
+            {[
+              "guide",
+              "review",
+              "overview",
+              "approvals",
+              "document",
+              "word",
+              "controls",
+              "template",
+              "inspector",
+            ].map((id) => (
+              <Button
+                key={id}
+                variant={surface === id ? "secondary" : "ghost"}
+                onClick={() => {
+                  setSurface(id);
+                  void router.navigate({
+                    to:
+                      id === "document"
+                        ? "/documents/$id"
+                        : id === "guide"
+                          ? "/first-review"
                           : id === "review"
-                            ? { id: ids.review }
-                            : {},
-                      search: id === "guide" ? { matterId: ids.matter } : {},
-                    });
-                  }}
-                >
-                  {id === "guide"
-                    ? "Guided first review"
-                    : id === "word"
-                      ? "Word inspection"
-                      : id === "review"
-                        ? "Contract review"
-                        : id === "overview"
-                          ? "Matter overview"
-                          : id === "approvals"
-                            ? "Approval queue"
-                            : id === "document"
-                              ? "Document decisions"
-                              : "Review limits"}
-                </Button>
-              )
-            )}
+                            ? "/reviews/$id"
+                            : "/",
+                    params:
+                      id === "document"
+                        ? { id: ids.document }
+                        : id === "review"
+                          ? { id: ids.review }
+                          : {},
+                    search: id === "guide" ? { matterId: ids.matter } : {},
+                  });
+                }}
+              >
+                {id === "guide"
+                  ? "Guided first review"
+                  : id === "word"
+                    ? "Word inspection"
+                    : id === "review"
+                      ? "Contract review"
+                      : id === "overview"
+                        ? "Matter overview"
+                        : id === "approvals"
+                          ? "Approval queue"
+                          : id === "document"
+                            ? "Document decisions"
+                            : id === "template"
+                              ? "Template draft"
+                              : id === "inspector"
+                                ? "Finding inspector"
+                                : "Review limits"}
+              </Button>
+            ))}
           </div>
+          {surface === "review" ? (
+            <Button
+              variant="outline"
+              onClick={() => {
+                findingRevision += 1;
+                void queryClient.invalidateQueries({ queryKey: ["review-completion", ids.review] });
+                void queryClient.invalidateQueries({ queryKey: ["review", ids.review] });
+              }}
+            >
+              Refresh finding revision
+            </Button>
+          ) : null}
+          {surface === "guide" ? (
+            <div aria-label="Fixture progress controls" className="flex flex-wrap gap-2">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  progressFailure = 503;
+                  void queryClient.invalidateQueries({ queryKey: ["first-review"] });
+                }}
+              >
+                Interrupt progress refresh
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  progressFailure = null;
+                  void queryClient.invalidateQueries({ queryKey: ["first-review"] });
+                }}
+              >
+                Restore progress refresh
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  progressFailure = 403;
+                  void queryClient.invalidateQueries({ queryKey: ["first-review"] });
+                }}
+              >
+                Revoke fixture access
+              </Button>
+            </div>
+          ) : null}
           {surface === "guide" ? (
             <GuideFixture />
+          ) : surface === "inspector" ? (
+            <InspectorFixture />
+          ) : surface === "template" ? (
+            <TemplateEditor item="new" onClose={() => setSurface("review")} />
           ) : surface === "word" ? (
             <WordInspectionNotice inspection={completionFixture().documents[0]!.wordInspection} />
           ) : surface === "review" && !productionReviewMounted ? (

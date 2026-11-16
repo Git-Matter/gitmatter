@@ -1,6 +1,5 @@
 import { Link } from "@tanstack/react-router";
 import { ArrowRight } from "lucide-react";
-import Eyebrow from "@/marketing/components/Eyebrow";
 import CTASection from "@/marketing/components/CTASection";
 
 // Cloud-only hub for the comparison pages. Each entry is an honest one-liner on
@@ -37,7 +36,6 @@ export default function Compare() {
   return (
     <div className="flex flex-col">
       <header className="mx-auto flex max-w-3xl flex-col gap-stack px-6 pt-section pb-24 text-center">
-        <Eyebrow>compare</Eyebrow>
         <h1 className="font-heading text-4xl tracking-tight text-balance sm:text-5xl">
           How gitmatter compares.
         </h1>
@@ -53,7 +51,7 @@ export default function Compare() {
           <Link
             key={c.to}
             to={c.to}
-            className="group flex flex-col gap-2 rounded-lg border border-border p-6 transition-colors hover:border-bronze"
+            className="group flex flex-col gap-2 border-t border-border py-6 hover:text-ink-secondary"
           >
             <span className="inline-flex items-center gap-1.5 font-heading text-xl tracking-tight">
               gitmatter vs {c.name}

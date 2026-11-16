@@ -1,6 +1,5 @@
 import { Link } from "@tanstack/react-router";
 import { ArrowRight } from "lucide-react";
-import Eyebrow from "@/marketing/components/Eyebrow";
 
 // The trust band. Harvey shows certification badges here; we show the
 // guarantees that are true of gitmatter today, each verifiable in the product
@@ -34,12 +33,9 @@ const GUARANTEES = [
 
 export default function TrustBand() {
   return (
-    <section className="border-y border-border bg-secondary/60">
-      <div className="mx-auto max-w-7xl px-6 py-24">
-        <Eyebrow>security &amp; control</Eyebrow>
-        <h2 className="mt-stack max-w-[22ch] font-heading text-4xl tracking-tight text-balance">
-          Guarantees you can check, not badges to take on faith.
-        </h2>
+    <section className="bg-secondary">
+      <div className="page-container py-band">
+        <h2 className="max-w-[24ch] text-section">Check how your work is handled.</h2>
         <div className="mt-12 grid gap-x-10 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
           {GUARANTEES.map((g) => (
             <div key={g.title} className="flex flex-col gap-1.5 border-t border-border pt-4">

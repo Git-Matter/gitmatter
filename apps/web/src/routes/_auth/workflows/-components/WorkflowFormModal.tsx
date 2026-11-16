@@ -1,7 +1,12 @@
-import { useEffect, useState } from "react";
+import { FieldDescription } from "@/components/ui/field";
+import { notifySuccess } from "@/lib/feedback";
+import { useDraftExit } from "@/lib/hooks/useDraftExit";
+import { FormFeedback } from "@/components/FormFeedback";
+import { Input } from "@/components/ui/input";
+import { useEffect, useRef, useState } from "react";
 import { MessageSquare, Table2 } from "lucide-react";
 import { api, type WorkflowListItem } from "@/lib/data/api";
-import { cn } from "@/lib/util/utils";
+import { Toggle } from "@/components/ui/toggle";
 import { PracticeAreaPicker } from "@/components/PracticeAreaPicker";
 import { WorkflowModal } from "./WorkflowModal";
 
@@ -16,30 +21,56 @@ interface Props {
 export function WorkflowFormModal(props: Props) {
   const form = useWorkflowForm(props);
   const formId = "workflow-modal-form";
+  const initialTitle = props.editWorkflow?.title ?? "";
+  const initialPractice = props.editWorkflow?.practice ?? null;
+  const exit = useDraftExit({
+    dirty:
+      props.open &&
+      (form.title !== initialTitle ||
+        form.practice !== initialPractice ||
+        (!props.editWorkflow && form.type !== "assistant")),
+    saving: props.open && form.loading,
+    committed: form.committed,
+    discard: () => {
+      form.setTitle(initialTitle);
+      form.setPractice(initialPractice);
+      form.setType("assistant");
+    },
+  });
 
   return (
-    <WorkflowModal
-      open={props.open}
-      onClose={props.onClose}
-      size="lg"
-      breadcrumbs={["Workflows", form.isEditing ? "Edit workflow" : "New workflow"]}
-      primaryAction={{
-        label: getPrimaryLabel(form.loading, form.isEditing),
-        type: "submit",
-        form: formId,
-        disabled: form.saveDisabled,
-      }}
-    >
-      <form id={formId} onSubmit={form.submit} className="flex min-h-0 flex-1 flex-col py-1">
-        <WorkflowNameField title={form.title} onChange={form.setTitle} />
+    <>
+      {exit.guard}
+      <WorkflowModal
+        open={props.open}
+        onClose={() => exit.requestClose(props.onClose)}
+        size="lg"
+        breadcrumbs={["Workflows", form.isEditing ? "Edit workflow" : "New workflow"]}
+        primaryAction={{
+          label: getPrimaryLabel(form.loading, form.isEditing),
+          type: "submit",
+          form: formId,
+          disabled: form.saveDisabled,
+        }}
+      >
+        <form id={formId} onSubmit={form.submit} className="flex min-h-0 flex-1 flex-col py-1">
+          <fieldset disabled={form.loading} className="flex min-w-0 flex-col">
+            <WorkflowNameField title={form.title} onChange={form.setTitle} />
+            <FieldDescription id="workflow-name-hint" className="mt-2">
+              Enter a workflow name to enable {form.isEditing ? "Save" : "Create workflow"}.
+              Practice area is optional. Saving does not run the workflow.
+            </FieldDescription>
 
-        {!form.isEditing ? <WorkflowTypeField type={form.type} onChange={form.setType} /> : null}
+            {!form.isEditing ? (
+              <WorkflowTypeField type={form.type} onChange={form.setType} />
+            ) : null}
 
-        <PracticeField value={form.practice} onChange={form.setPractice} />
-
-        {form.error ? <p className="mt-4 text-sm text-destructive">{form.error}</p> : null}
-      </form>
-    </WorkflowModal>
+            <PracticeField value={form.practice} onChange={form.setPractice} />
+          </fieldset>
+          <FormFeedback error={form.error} title="Workflow was not saved" />
+        </form>
+      </WorkflowModal>
+    </>
   );
 }
 
@@ -50,11 +81,20 @@ function useWorkflowForm({ open, onClose, onCreated, editWorkflow, onUpdated }: 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  const committed = useRef(false);
+  const seeded = useRef<string | null>(null);
   const isEditing = !!editWorkflow;
   const saveDisabled = loading || !title.trim();
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      seeded.current = null;
+      return;
+    }
+    const identity = editWorkflow?.id ?? "new";
+    if (seeded.current === identity) return;
+    seeded.current = identity;
+    committed.current = false;
     if (editWorkflow) {
       setTitle(editWorkflow.title);
       setType(editWorkflow.type === "playbook" ? "assistant" : editWorkflow.type);
@@ -79,6 +119,7 @@ function useWorkflowForm({ open, onClose, onCreated, editWorkflow, onUpdated }: 
           title: title.trim(),
           practice,
         });
+        committed.current = true;
         onUpdated?.({
           ...editWorkflow,
           title: updated.workflow.title,
@@ -90,8 +131,10 @@ function useWorkflowForm({ open, onClose, onCreated, editWorkflow, onUpdated }: 
           type,
           practice,
         });
+        committed.current = true;
         onCreated({ id: created.workflow.id, type: created.workflow.type });
       }
+      notifySuccess(isEditing ? "Workflow updated" : "Workflow created");
       onClose();
     } catch (err) {
       setError((err as Error).message || `Failed to ${isEditing ? "update" : "create"} workflow`);
@@ -102,6 +145,7 @@ function useWorkflowForm({ open, onClose, onCreated, editWorkflow, onUpdated }: 
 
   return {
     error,
+    committed,
     isEditing,
     loading,
     practice,
@@ -128,12 +172,14 @@ function WorkflowNameField({
   onChange: (title: string) => void;
 }) {
   return (
-    <input
+    <Input
       type="text"
+      aria-label="Workflow name"
+      aria-describedby="workflow-name-hint"
       value={title}
       onChange={(event) => onChange(event.target.value)}
       placeholder="Workflow name"
-      className="w-full bg-transparent font-serif text-2xl text-foreground placeholder:text-muted-foreground/50 focus:outline-none"
+      className="w-full bg-transparent font-serif text-2xl text-foreground placeholder:text-muted-foreground focus:outline-none"
       autoFocus
     />
   );
@@ -188,17 +234,8 @@ function TypeChip({
   children: React.ReactNode;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs transition-colors",
-        active
-          ? "border-foreground bg-foreground text-background"
-          : "border-input text-muted-foreground hover:bg-muted"
-      )}
-    >
+    <Toggle variant="outline" pressed={active} onPressedChange={() => onClick()}>
       {children}
-    </button>
+    </Toggle>
   );
 }

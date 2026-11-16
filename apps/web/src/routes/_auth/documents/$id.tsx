@@ -14,6 +14,7 @@ import { WordInspectionNotice } from "./-components/WordInspectionNotice";
 import { PageHeader } from "@/components/PageHeader";
 import { api, type DocumentDetail, type DocEdit } from "@/lib/data/api";
 import { useSession } from "@/lib/auth/auth-client";
+import { UnsavedNavigationGuard } from "@/components/UnsavedChangesGuard";
 
 export const Route = createFileRoute("/_auth/documents/$id")({ component: DocumentView });
 
@@ -94,6 +95,24 @@ function DocumentView() {
 
   return (
     <div className="grid min-h-0 flex-1 gap-6 overflow-y-auto pt-6 lg:grid-cols-[1fr_300px]">
+      <UnsavedNavigationGuard
+        isDirty={() =>
+          !!(find || replace || reason) ||
+          proposeMutation.isPending ||
+          resolveMutation.isPending ||
+          resolveAllMutation.isPending
+        }
+        saving={
+          proposeMutation.isPending || resolveMutation.isPending || resolveAllMutation.isPending
+        }
+        title="Keep your unfinished tracked change?"
+        description="Your proposed text and reason are still here. Keep editing, or discard this unfinished input. Recorded changes remain in the audit history."
+        onDiscard={() => {
+          setFind("");
+          setReplace("");
+          setReason("");
+        }}
+      />
       <div className="flex min-w-0 flex-col gap-4">
         <PageHeader
           breadcrumbs={[{ label: "Documents", to: "/documents" }, { label: document.title }]}
@@ -167,16 +186,31 @@ function DocumentView() {
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
             <div className="flex flex-col gap-1.5">
-              <Label>Find (exact text in the document)</Label>
-              <Input value={find} onChange={(e) => setFind(e.target.value)} />
+              <Label htmlFor={`edit-find-${id}`}>Find (exact text in the document)</Label>
+              <Input
+                id={`edit-find-${id}`}
+                value={find}
+                onChange={(e) => setFind(e.target.value)}
+                disabled={proposeMutation.isPending || !data.resolutionPolicy?.mayPropose}
+              />
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label>Replace with</Label>
-              <Input value={replace} onChange={(e) => setReplace(e.target.value)} />
+              <Label htmlFor={`edit-replace-${id}`}>Replace with</Label>
+              <Input
+                id={`edit-replace-${id}`}
+                value={replace}
+                onChange={(e) => setReplace(e.target.value)}
+                disabled={proposeMutation.isPending || !data.resolutionPolicy?.mayPropose}
+              />
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label>Reason (optional)</Label>
-              <Input value={reason} onChange={(e) => setReason(e.target.value)} />
+              <Label htmlFor={`edit-reason-${id}`}>Reason (optional)</Label>
+              <Input
+                id={`edit-reason-${id}`}
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                disabled={proposeMutation.isPending || !data.resolutionPolicy?.mayPropose}
+              />
             </div>
             <Button
               onClick={() => find && proposeMutation.mutate()}
@@ -250,12 +284,10 @@ function DocumentView() {
                   )}
                 </div>
                 <div className="text-sm">
-                  <span className="bg-red-500/15 text-red-700 line-through dark:text-red-400">
+                  <span className="bg-destructive-surface text-destructive line-through">
                     {e.deletedText}
                   </span>{" "}
-                  <span className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-400">
-                    {e.insertedText}
-                  </span>
+                  <span className="bg-success-surface text-success">{e.insertedText}</span>
                 </div>
                 {e.reason && <p className="text-xs text-muted-foreground">{e.reason}</p>}
                 {e.status === "pending" && (

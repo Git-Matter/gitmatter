@@ -1,0 +1,86 @@
+---
+title: Template library
+description: Own, revise, approve, and distribute current legal templates.
+---
+
+Open **Library → Templates** to manage starting documents separately from the
+documents filed on your matters.
+
+## Create and revise
+
+Choose **New template**, add a name, category, and guidance about when to use it.
+Upload your original DOCX to keep its document formatting, or write a text
+template that will use a clean generated Word layout. Choose who can read the
+published version:
+
+- The restricted audience keeps it with the template team and workspace admins.
+- **Everyone in this workspace, including sales** gives every workspace member
+  access to the approved current version. Sales users must be workspace members.
+
+Saving creates an immutable draft revision and records its author. The creator
+becomes the owner. Owners and workspace admins can delegate an editor and a
+reviewer from the same workspace. These template roles do not grant workspace
+administration privileges.
+
+Editors can prepare a revision with a change reason. Reviewers can read the
+working revision and decide an assigned review. Team membership changes remain
+in the same audit history as document changes.
+
+For an uploaded DOCX, the text preview is read-only and comes from the file.
+Replace the file with a revised DOCX to change its language; metadata changes
+can keep the same original file. The published download returns the approved
+source bytes, preserving tables, numbering, headers, and formatting. Google
+Drive synchronization is not supported.
+
+Closing an editor with unsaved changes requires an explicit discard decision.
+Keep editing to retain the current input. Draft text is not saved into browser
+local storage.
+
+## Approve a current version
+
+Open the template, name a reviewer, and submit the working revision with a
+reason. The reviewer finds assigned work in **Needs review**. They can request
+changes with a reason or approve that exact revision for publication.
+
+Approval is tied to the working revision being reviewed. Viewing the published
+version does not approve the next draft. If someone changes the template before
+the decision, explicitly reload and review the new revision. The server rejects
+stale approvals and concurrent saves.
+
+Requesting changes returns the work for revision and records the review reason.
+The owner or editor can revise it and resubmit. The existing current publication
+stays available to readers throughout this process.
+
+The working draft and current published version are separate. When the owner
+saves a new draft, other workspace members continue seeing the last published
+version. They cannot see unpublished language or internal change history.
+Audience changes take effect only when the new revision is published.
+
+## Download and withdraw
+
+**Download current** returns the published source DOCX, or generates a Word
+document for a text template. The filename includes the template name and version.
+Search by template name, category, or owner to find the right starting point.
+Usage guidance appears when opening a template.
+
+The owner or a workspace admin can **Archive and withdraw** a retired template. It disappears
+from other members' library and downloads stop. The template team and admins can still
+find its history using **Show archived**. **Restore as draft** does not republish:
+submit it for fresh approval before making it available again.
+
+Previously downloaded files are outside gitmatter's control. Archiving cannot
+recall copies already saved elsewhere.
+
+## Audit history and agents
+
+The template team and admins can expand **Version and decision history** to inspect the
+author, time, reason, and field-level before and after for each change. Drafts,
+approvals, ownership changes, and lifecycle decisions use the same commit system.
+
+Connected agents can list available templates, read the current approved
+revision, create text drafts, and propose permitted revisions with an expected
+head and change reason. They cannot change the extracted text of a DOCX while
+retaining a different source file. Agents cannot approve review decisions,
+publish, archive, restore, or reassign templates.
+Matter-scoped tokens cannot access the firm-wide template library; viewer-capped
+tokens cannot write it.

@@ -12,8 +12,11 @@ export default defineConfig(async () => {
   const { default: tailwind } = await import(fixtureRequire.resolve("@tailwindcss/vite"));
   return {
     root: fixtureRoot,
+    // Keep this independent entry point's prebundled React graph separate from the app.
+    cacheDir: fileURLToPath(new URL("../../../.scratch/mvp-ui-vite/", import.meta.url)),
     plugins: [react(), tailwind()],
     resolve: {
+      dedupe: ["react", "react-dom"],
       alias: {
         "@/lib/auth/auth-client": `${fixtureRoot}/auth-fixture.ts`,
         "@": `${appRoot}/src`,

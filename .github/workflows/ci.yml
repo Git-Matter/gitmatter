@@ -43,30 +43,36 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Bun
-        uses: oven-sh/setup-bun@v2
+      - uses: actions/setup-node@v6
         with:
-          bun-version: 1.3.14
+          node-version: 24
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.16.1
 
       - name: Install
-        run: bun install --frozen-lockfile
+        run: pnpm install --frozen-lockfile
+
+      - name: Check design policy and generated foundations
+        run: pnpm run design:check
 
       # build → lint → test: fail fast on a broken build before linting, and lint
       # before the (slower, DB-backed) tests.
       - name: Build
-        run: bun run build
+        run: pnpm run build
 
       - name: Lint (format, lint, types)
-        run: bun run check
+        run: pnpm run check
 
       - name: Typecheck
-        run: bun run typecheck
+        run: pnpm run typecheck
 
       - name: Check generated MCP reference
-        run: bun run docs:tools:check
+        run: pnpm run docs:tools:check
 
       - name: Check synthetic NDA source
-        run: bun run fixtures:nda:check
+        run: pnpm run fixtures:nda:check
 
       # Legacy community container images are no longer publicly available.
       # Pin official release binaries and their published SHA-256 checksums;
@@ -95,7 +101,7 @@ jobs:
           "$RUNNER_TEMP/mc" mb --ignore-existing "local/$S3_BUCKET"
 
       - name: Migrate test database
-        run: cd packages/db && bun run migrate
+        run: cd packages/db && pnpm run migrate
 
       - name: Test
-        run: bun run test:ci
+        run: pnpm run test:ci

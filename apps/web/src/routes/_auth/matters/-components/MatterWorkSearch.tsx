@@ -1,3 +1,5 @@
+import { Checkbox } from "@/components/ui/checkbox";
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -59,11 +61,10 @@ export function MatterWorkSearch({ matterId }: { matterId: string }) {
       </form>
       <div className="flex flex-wrap items-center gap-4 text-sm">
         <label className="flex items-center gap-2">
-          <input
-            type="checkbox"
+          <Checkbox
             checked={allMatters}
-            onChange={(e) => {
-              setAllMatters(e.target.checked);
+            onCheckedChange={(e) => {
+              setAllMatters(e);
               setPage(0);
             }}
           />
@@ -71,21 +72,20 @@ export function MatterWorkSearch({ matterId }: { matterId: string }) {
         </label>
         <label className="flex items-center gap-2">
           <span>Source</span>
-          <select
-            className="h-9 rounded-md border border-input bg-background px-2"
+          <NativeSelect
             value={type}
             onChange={(e) => {
               setType(e.target.value as typeof type);
               setPage(0);
             }}
           >
-            <option value="">All sources</option>
-            <option value="document">Documents</option>
-            <option value="cell">Review findings</option>
-            <option value="clause">Clauses</option>
-            <option value="playbook">Playbooks</option>
-            <option value="matter">Matter details</option>
-          </select>
+            <NativeSelectOption value="">All sources</NativeSelectOption>
+            <NativeSelectOption value="document">Documents</NativeSelectOption>
+            <NativeSelectOption value="cell">Review findings</NativeSelectOption>
+            <NativeSelectOption value="clause">Clauses</NativeSelectOption>
+            <NativeSelectOption value="playbook">Playbooks</NativeSelectOption>
+            <NativeSelectOption value="matter">Matter details</NativeSelectOption>
+          </NativeSelect>
         </label>
       </div>
       {error && (

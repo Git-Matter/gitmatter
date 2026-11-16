@@ -7,13 +7,13 @@ numbered paragraphs, a table, comments, a header/footer, and referenced footnote
 Regenerate from the repository root without loading environment files:
 
 ```sh
-bun --no-env-file test/acceptance/word-signoff/generate.ts
+pnpm exec tsx test/acceptance/word-signoff/generate.ts
 ```
 
 Verify the prepared assets without regenerating or replacing files already opened in Word:
 
 ```sh
-bun --no-env-file test/acceptance/word-signoff/verify.ts
+pnpm exec tsx test/acceptance/word-signoff/verify.ts
 vp exec tsc --project test/acceptance/word-signoff/tsconfig.json
 ```
 
@@ -110,7 +110,7 @@ The value is consumed only at runtime and is never printed or included in receip
 loading environment files and write evidence only under the project's ignored `.scratch` directory:
 
 ```sh
-bun --no-env-file test/acceptance/word-signoff/local-http.ts \
+pnpm exec tsx test/acceptance/word-signoff/local-http.ts \
   /absolute/private-cookie.json /absolute/project/.scratch/word-http --styled-source
 ```
 

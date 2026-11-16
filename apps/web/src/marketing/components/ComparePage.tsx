@@ -3,7 +3,6 @@ import { Link } from "@tanstack/react-router";
 import { Check, Minus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SITE } from "@/marketing/site";
-import Eyebrow from "@/marketing/components/Eyebrow";
 import CTASection from "@/marketing/components/CTASection";
 
 // One row of the capability table. `them` is the competitor's column. `note`
@@ -27,7 +26,6 @@ export default function ComparePage(props: {
   return (
     <div className="flex flex-col">
       <header className="mx-auto flex max-w-3xl flex-col gap-stack px-6 pt-section pb-24 text-center">
-        <Eyebrow>{props.eyebrow}</Eyebrow>
         <h1 className="font-heading text-4xl tracking-tight text-balance sm:text-5xl">
           {props.title}
         </h1>
@@ -54,7 +52,7 @@ export default function ComparePage(props: {
                   <td className="px-4 py-3 text-muted-foreground">
                     {r.point}
                     {r.note ? (
-                      <span className="ml-1.5 text-xs text-muted-foreground/60">({r.note})</span>
+                      <span className="ml-1.5 text-xs text-muted-foreground">({r.note})</span>
                     ) : null}
                   </td>
                   <td className="px-4 py-3 text-center">
@@ -68,33 +66,29 @@ export default function ComparePage(props: {
             </tbody>
           </table>
         </div>
-        <p className="mt-4 text-xs text-muted-foreground/70">
+        <p className="mt-4 text-xs text-muted-foreground">
           {props.competitor} details reflect public positioning as of mid-2026 and may change. Check
           each vendor's current terms before deciding.
         </p>
 
         <div className="mt-section grid gap-8 sm:grid-cols-2">
           <div className="flex flex-col gap-2 border-t border-border pt-6">
-            <span className="text-xs font-medium tracking-[0.2em] text-bronze uppercase">
-              {props.pickThemTitle}
-            </span>
+            <span className="text-sm font-medium text-muted-foreground">{props.pickThemTitle}</span>
             <p className="leading-relaxed text-muted-foreground">{props.pickThemBody}</p>
           </div>
           <div className="flex flex-col gap-2 border-t border-border pt-6">
-            <span className="text-xs font-medium tracking-[0.2em] text-bronze uppercase">
-              Pick gitmatter when
-            </span>
+            <span className="text-sm font-medium text-muted-foreground">Pick gitmatter when</span>
             <p className="leading-relaxed text-muted-foreground">{props.pickUsBody}</p>
           </div>
         </div>
 
         <div className="mt-section flex flex-wrap items-center gap-3">
-          <Link to="/solutions">
-            <Button>See the solutions</Button>
-          </Link>
-          <a href={SITE.docs}>
-            <Button variant="outline">Read docs</Button>
-          </a>
+          <Button nativeButton={false} render={<Link to="/solutions" />}>
+            See the solutions
+          </Button>
+          <Button variant="outline" nativeButton={false} render={<a href={SITE.docs} />}>
+            Read docs
+          </Button>
         </div>
       </section>
 
@@ -107,6 +101,6 @@ function Cell({ on }: { on: boolean }) {
   return on ? (
     <Check className="mx-auto size-4 text-bronze" aria-label="yes" />
   ) : (
-    <Minus className="mx-auto size-4 text-muted-foreground/40" aria-label="no" />
+    <Minus className="mx-auto size-4 text-muted-foreground" aria-label="no" />
   );
 }

@@ -1,9 +1,16 @@
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { useRef, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient, useIsMutating } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { useMediaQuery } from "@/lib/hooks/useMediaQuery";
 import { api, ApiError, type Cell, type ReviewCompletion } from "@/lib/data/api";
+import {
+  EMPTY_REVIEW_ACTION_DRAFT,
+  type ReviewActionDraft,
+  type EarlierReviewDraft,
+} from "./useReviewActionDrafts";
 
 type ReviewDocument = ReviewCompletion["documents"][number];
 type ReviewFinding = ReviewDocument["findings"][number];
@@ -15,6 +22,11 @@ export function ContractReviewActions({
   canDecide,
   canEscalate,
   policyRevision,
+  draft,
+  onDraftChange,
+  earlierDrafts,
+  recoveryBusy,
+  onDiscardEarlier,
 }: {
   reviewId: string;
   document: ReviewDocument;
@@ -23,13 +35,20 @@ export function ContractReviewActions({
   canDecide: boolean;
   canEscalate: boolean;
   policyRevision: number;
+  draft: ReviewActionDraft;
+  onDraftChange: (update: (current: ReviewActionDraft) => ReviewActionDraft) => void;
+  earlierDrafts: EarlierReviewDraft[];
+  recoveryBusy: boolean;
+  onDiscardEarlier: (key: string) => void;
 }) {
   const qc = useQueryClient();
-  const [clauseId, setClauseId] = useState("");
-  const [quote, setQuote] = useState("");
-  const [anchor, setAnchor] = useState("");
-  const [rationale, setRationale] = useState("");
-  const requestId = useRef(crypto.randomUUID());
+  const { clauseId, quote, anchor, rationale } = draft;
+  const mutationKey = ["review-action", reviewId, document.documentId, finding.finding?.revisionId];
+  const pendingActions = useIsMutating({ mutationKey });
+  const editProposal = (patch: Partial<ReviewActionDraft>) => {
+    const requestId = crypto.randomUUID();
+    onDraftChange((current) => ({ ...current, ...patch, requestId }));
+  };
   const refresh = () => {
     void qc.invalidateQueries({ queryKey: ["review", reviewId] });
     void qc.invalidateQueries({ queryKey: ["review-completion", reviewId] });
@@ -37,6 +56,7 @@ export function ContractReviewActions({
     void qc.invalidateQueries({ queryKey: ["document", document.documentId] });
   };
   const decide = useMutation({
+    mutationKey,
     mutationFn: (status: "left_unchanged" | "escalated") =>
       api.setFindingDisposition(reviewId, {
         documentId: document.documentId,
@@ -46,12 +66,16 @@ export function ContractReviewActions({
         rationale,
         policyRevision,
       }),
-    onSuccess: refresh,
+    onSuccess: () => {
+      onDraftChange((current) => ({ ...current, rationale: "" }));
+      refresh();
+    },
   });
   const propose = useMutation({
+    mutationKey,
     mutationFn: () =>
       api.proposeFindingRedline(reviewId, {
-        requestId: requestId.current,
+        requestId: draft.requestId,
         documentId: document.documentId,
         columnIndex: finding.columnIndex,
         revisionId: finding.finding!.revisionId,
@@ -60,18 +84,70 @@ export function ContractReviewActions({
         find: quote,
         contextBefore: anchor || undefined,
       }),
-    onSuccess: refresh,
+    onSuccess: () => {
+      onDraftChange((current) => ({
+        ...EMPTY_REVIEW_ACTION_DRAFT,
+        rationale: current.rationale,
+      }));
+      refresh();
+    },
   });
   const clause = finding.clauses.find((c) => c.id === clauseId);
-  const busy = decide.isPending || propose.isPending;
+  const busy = pendingActions > 0;
+  const recovery = earlierDrafts.length > 0 && (
+    <details open className="space-y-3 rounded-md bg-muted p-3 text-sm">
+      <summary className="cursor-pointer font-medium">
+        Unfinished input from an earlier finding revision
+      </summary>
+      <p>
+        The finding evidence has changed. Compare this earlier input with the current finding before
+        entering a new decision. This input has not been recorded in the audit history.
+      </p>
+      {earlierDrafts.map(({ key, revisionId, draft: earlier }) => (
+        <section
+          key={key}
+          className="space-y-2 border-t border-border pt-3"
+          aria-label={`Earlier finding revision ${revisionId}`}
+        >
+          {earlier.rationale && (
+            <Textarea aria-label="Earlier decision rationale" readOnly value={earlier.rationale} />
+          )}
+          {earlier.clauseLabel && (
+            <p>
+              Earlier clause selection: {earlier.clauseLabel}. Check the currently approved revision
+              before selecting it again.
+            </p>
+          )}
+          {earlier.quote && (
+            <blockquote className="font-serif whitespace-pre-wrap">{earlier.quote}</blockquote>
+          )}
+          {earlier.anchor && (
+            <p className="whitespace-pre-wrap">Earlier source context: {earlier.anchor}</p>
+          )}
+          <Button
+            size="xs"
+            variant="ghost"
+            disabled={recoveryBusy}
+            onClick={() => onDiscardEarlier(key)}
+          >
+            Discard this earlier input
+          </Button>
+        </section>
+      ))}
+    </details>
+  );
   if (!finding.finding)
     return (
-      <p className="text-sm text-muted-foreground">
-        A cited result is needed before a decision can be recorded.
-      </p>
+      <div className="space-y-5">
+        {recovery}
+        <p className="text-sm text-muted-foreground">
+          A cited result is needed before a decision can be recorded.
+        </p>
+      </div>
     );
   return (
     <div className="space-y-5">
+      {recovery}
       <section className="space-y-2">
         <h3 className="text-sm font-medium">Review decision</h3>
         <p className="text-sm capitalize">
@@ -97,8 +173,8 @@ export function ContractReviewActions({
         </pre>
       </details>
       {document.canPropose && (
-        <section className="space-y-3">
-          <h3 className="text-sm font-medium">Propose tracked change</h3>
+        <details className="space-y-3 border-t border-border pt-3">
+          <summary className="cursor-pointer text-sm font-medium">Propose tracked change</summary>
           {!finding.finding.citationsValid && (
             <p role="status" className="text-sm text-destructive">
               The source evidence is inconclusive. A verified finding is required before proposing a
@@ -119,44 +195,45 @@ export function ContractReviewActions({
             <>
               <label className="block space-y-1 text-sm">
                 <span>Approved clause</span>
-                <select
+                <NativeSelect
                   aria-label="Approved clause"
-                  className="h-9 w-full rounded-md border border-input bg-background px-2"
+                  className="w-full"
                   value={clauseId}
                   disabled={busy}
                   onChange={(e) => {
-                    setClauseId(e.target.value);
-                    requestId.current = crypto.randomUUID();
+                    editProposal({
+                      clauseId: e.target.value,
+                      clauseLabel: e.target.selectedOptions[0]?.textContent ?? "",
+                    });
                   }}
                 >
-                  <option value="">Choose standard or fallback</option>
+                  <NativeSelectOption value="">Choose standard or fallback</NativeSelectOption>
                   {finding.clauses.map((c) => (
-                    <option key={c.id} value={c.id}>
+                    <NativeSelectOption key={c.id} value={c.id}>
                       {c.title}
-                    </option>
+                    </NativeSelectOption>
                   ))}
-                </select>
+                </NativeSelect>
               </label>
               {finding.finding.outcome !== "not_found" && (
                 <label className="block space-y-1 text-sm">
                   <span>Original quoted language</span>
-                  <select
+                  <NativeSelect
                     aria-label="Original quoted language"
-                    className="h-9 w-full rounded-md border border-input bg-background px-2"
+                    className="w-full"
                     value={quote}
                     disabled={busy}
                     onChange={(e) => {
-                      setQuote(e.target.value);
-                      requestId.current = crypto.randomUUID();
+                      editProposal({ quote: e.target.value });
                     }}
                   >
-                    <option value="">Choose verified quotation</option>
+                    <NativeSelectOption value="">Choose verified quotation</NativeSelectOption>
                     {cell?.citations?.map((citation, i) => (
-                      <option key={i} value={citation.quote}>
+                      <NativeSelectOption key={i} value={citation.quote}>
                         {citation.quote}
-                      </option>
+                      </NativeSelectOption>
                     ))}
-                  </select>
+                  </NativeSelect>
                 </label>
               )}
               <label className="block space-y-1 text-sm">
@@ -174,8 +251,7 @@ export function ContractReviewActions({
                   value={anchor}
                   disabled={busy}
                   onChange={(e) => {
-                    setAnchor(e.target.value);
-                    requestId.current = crypto.randomUUID();
+                    editProposal({ anchor: e.target.value });
                   }}
                   placeholder="Copy the exact source text to select the location"
                 />
@@ -221,7 +297,7 @@ export function ContractReviewActions({
               </p>
             </>
           )}
-        </section>
+        </details>
       )}
       {canEscalate && (
         <section className="space-y-3">
@@ -230,7 +306,10 @@ export function ContractReviewActions({
             <Textarea
               aria-label="Decision rationale"
               value={rationale}
-              onChange={(e) => setRationale(e.target.value)}
+              onChange={(e) => {
+                const value = e.target.value;
+                onDraftChange((current) => ({ ...current, rationale: value }));
+              }}
               disabled={busy}
               placeholder="Explain leaving this language unchanged or the judgment needed"
               maxLength={4000}
@@ -272,11 +351,20 @@ export function ContractReviewActions({
   );
 }
 
-export function ContractReviewCompletion({ completion }: { completion: ReviewCompletion }) {
-  return (
-    <section className="mb-6 space-y-3" aria-label="Review completion">
+export function ContractReviewCompletion({
+  completion,
+  compact = false,
+}: {
+  completion: ReviewCompletion;
+  compact?: boolean;
+}) {
+  const narrow = useMediaQuery("(max-width: 767px)");
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const disclosure = narrow || compact;
+  const content = (
+    <>
       <div className="flex flex-wrap items-baseline gap-3">
-        <h2 className="font-serif text-xl">Review completion</h2>
+        <h2 className="font-sans text-sm font-semibold">Review completion</h2>
         <p className="text-sm text-muted-foreground">
           {completion.cleanReady
             ? "Ready for clean export"
@@ -309,7 +397,7 @@ export function ContractReviewCompletion({ completion }: { completion: ReviewCom
       {completion.documents.map((doc) => (
         <div
           key={doc.documentId}
-          className="flex flex-wrap items-center justify-between gap-3 py-2"
+          className="flex flex-wrap items-center justify-between gap-3 py-1"
         >
           <div className="min-w-0">
             <p className="truncate text-sm font-medium">{doc.title}</p>
@@ -345,6 +433,25 @@ export function ContractReviewCompletion({ completion }: { completion: ReviewCom
           </div>
         </div>
       ))}
+    </>
+  );
+  return (
+    <section
+      className="mb-4 shrink-0 space-y-2 border-b border-border pb-3"
+      aria-label="Review completion"
+    >
+      <details
+        open={!disclosure || mobileOpen}
+        onToggle={(event) => {
+          if (disclosure) setMobileOpen(event.currentTarget.open);
+        }}
+      >
+        <summary className={disclosure ? "cursor-pointer text-xs text-muted-foreground" : "hidden"}>
+          Review status and files ·{" "}
+          {completion.cleanReady ? "Ready for clean export" : "Clean export blocked"}
+        </summary>
+        <div className={disclosure ? "mt-3 space-y-2" : "space-y-2"}>{content}</div>
+      </details>
     </section>
   );
 }

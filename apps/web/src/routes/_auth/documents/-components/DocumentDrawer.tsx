@@ -1,5 +1,6 @@
+import { notifySuccess } from "@/lib/feedback";
 import { useRef, useState } from "react";
-import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
+import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import { Download, ExternalLink, Pencil, RefreshCw, Trash2, Upload, X } from "lucide-react";
@@ -59,33 +60,19 @@ export function DocumentDrawer({
   };
 
   return (
-    <DialogPrimitive.Root open={open} onOpenChange={(next) => !next && onClose()}>
-      <DialogPrimitive.Portal>
-        <DialogPrimitive.Backdrop
-          className={cn(
-            "fixed inset-0 z-50 bg-black/10 duration-150 supports-backdrop-filter:backdrop-blur-xs",
-            "data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0"
-          )}
+    <Sheet open={open} onOpenChange={(next) => !next && onClose()}>
+      <SheetContent showCloseButton={false} style={{ width, maxWidth: "96vw" }}>
+        {/* Drag the left edge to resize the drawer. */}
+        <div
+          onMouseDown={startResize}
+          className="absolute inset-y-0 start-0 z-10 hidden w-1.5 cursor-col-resize transition-colors hover:bg-primary/40 lg:block"
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize drawer"
         />
-        <DialogPrimitive.Popup
-          style={{ width, maxWidth: "96vw" }}
-          className={cn(
-            "fixed inset-y-0 end-0 z-50 flex w-[96vw] flex-col bg-card text-foreground shadow-2xl duration-150 outline-none",
-            "data-open:animate-in data-open:slide-in-from-right data-closed:animate-out data-closed:slide-out-to-right"
-          )}
-        >
-          {/* Drag the left edge to resize the drawer. */}
-          <div
-            onMouseDown={startResize}
-            className="absolute inset-y-0 start-0 z-10 hidden w-1.5 cursor-col-resize transition-colors hover:bg-primary/40 lg:block"
-            role="separator"
-            aria-orientation="vertical"
-            aria-label="Resize drawer"
-          />
-          {docId && <DrawerBody docId={docId} onClose={onClose} page={page} />}
-        </DialogPrimitive.Popup>
-      </DialogPrimitive.Portal>
-    </DialogPrimitive.Root>
+        {docId && <DrawerBody docId={docId} onClose={onClose} page={page} />}
+      </SheetContent>
+    </Sheet>
   );
 }
 
@@ -156,7 +143,7 @@ function DrawerBody({
     mutationFn: (file: File) => api.uploadDocumentVersion(docId, file),
     onSuccess: () => {
       invalidate();
-      toast.success("New version uploaded — extracting…");
+      notifySuccess("New version uploaded — extracting…");
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Upload failed"),
   });
@@ -228,7 +215,13 @@ function DrawerBody({
             V{currentVersion.versionNumber}
           </span>
         )}
-        <span className="min-w-0 flex-1 truncate text-sm font-medium">{doc.title}</span>
+        <SheetTitle className="min-w-0 flex-1 truncate font-sans text-sm font-medium">
+          {doc.title}
+        </SheetTitle>
+        <SheetDescription className="sr-only">
+          Current draft preview for {doc.title}. Review findings refer to their captured source
+          version.
+        </SheetDescription>
         <Button
           variant="ghost"
           size="sm"
@@ -442,9 +435,10 @@ function DrawerBody({
         }
         confirmLabel="Delete"
         pending={deleteDocMut.isPending || deleteVersionMut.isPending}
+        error={deleteDocMut.error || deleteVersionMut.error}
         onConfirm={() => {
-          if (pendingDelete === "doc") deleteDocMut.mutate();
-          else if (pendingDelete) deleteVersionMut.mutate(pendingDelete.versionId);
+          if (pendingDelete === "doc") return deleteDocMut.mutateAsync();
+          else if (pendingDelete) return deleteVersionMut.mutateAsync(pendingDelete.versionId);
         }}
       />
 
@@ -455,7 +449,8 @@ function DrawerBody({
         description={`Renaming changes the file extension. The stored file type stays ${fileTypeLabel(doc.fileType)} — only the displayed name changes.`}
         confirmLabel="Rename anyway"
         pending={renameMut.isPending}
-        onConfirm={() => extWarnTitle && renameMut.mutate(extWarnTitle)}
+        error={renameMut.error}
+        onConfirm={() => (extWarnTitle ? renameMut.mutateAsync(extWarnTitle) : undefined)}
       />
     </>
   );

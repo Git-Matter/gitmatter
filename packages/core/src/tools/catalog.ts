@@ -4,6 +4,7 @@ import { ensureDefaultMatter } from "../platform/index.js";
 import { buildApprovalTools } from "./approval.js";
 import { buildAuditTools } from "./audit.js";
 import { buildContractReviewTools } from "./contract-review.js";
+import { buildTemplateTools } from "./templates.js";
 import { buildClauseTools } from "./clauses.js";
 import { buildDiscoveryTools } from "./discovery.js";
 import { buildDocumentTools } from "./documents.js";
@@ -221,6 +222,7 @@ export function buildToolCatalog(
     ...buildDiscoveryTools(ctx),
     ...buildWorkflowTools(ctx),
     ...buildClauseTools(ctx),
+    ...buildTemplateTools(ctx),
     ...buildResearchTools(ctx, providerIds),
   ]
     .filter((t) => !(actor.type === "agent" && t.humanOnly))

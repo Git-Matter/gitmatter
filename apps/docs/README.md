@@ -15,17 +15,17 @@ single source of truth); this app only renders it — see `source.config.ts` (`d
 
 ```bash
 # from repo root
-bun run docs:build      # turbo run build --filter=docs
-bun run docs:dev        # dev server on http://localhost:4285/docs
+pnpm run docs:build      # turbo run build --filter=docs
+pnpm run docs:dev        # dev server on http://localhost:4285/docs
 
 # or from apps/docs
-bun run build           # next build → standalone server output
-bun run dev             # next dev  (http://localhost:4285/docs)
+pnpm run build           # next build → standalone server output
+pnpm run dev             # next dev  (http://localhost:4285/docs)
 ```
 
 ## Serving in production
 
-`bun run docs:build` (or `next build`) produces a self-contained standalone server.
+`pnpm run docs:build` (or `next build`) produces a self-contained standalone server.
 The build's postbuild step copies `.next/static` and the repo-root `docs/` into the
 standalone output (to `.next/standalone/docs`), so the whole `.next/standalone`
 directory is deployable as-is. Run it and reverse-proxy `/docs` to it:
@@ -34,7 +34,7 @@ directory is deployable as-is. Run it and reverse-proxy `/docs` to it:
 node apps/docs/.next/standalone/apps/docs/server.js   # listens on PORT (default 3000)
 ```
 
-Updating docs is a rebuild: edit `docs/**` (repo root), run `bun run docs:build`, redeploy.
+Updating docs is a rebuild: edit `docs/**` (repo root), run `pnpm run docs:build`, redeploy.
 
 `basePath` is `/docs`, so every route and asset is namespaced under `/docs`
 (`/docs/_next/...`, `/docs/api/search`, `/docs/llms.txt`). A single reverse-proxy

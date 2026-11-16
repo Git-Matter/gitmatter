@@ -1,9 +1,9 @@
+import ProductVideo from "@/marketing/components/ProductVideo";
 import { Link } from "@tanstack/react-router";
 import { ArrowRight, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SITE } from "@/marketing/site";
 import { FEATURES } from "@/marketing/catalog";
-import Eyebrow from "@/marketing/components/Eyebrow";
 import CTASection from "@/marketing/components/CTASection";
 import ClipFigure from "@/marketing/components/ClipFigure";
 
@@ -76,42 +76,38 @@ export default function Platform() {
     <div className="flex flex-col">
       {/* Hero: oversized statement left, positioning + CTA right, demo below. */}
       <header id="overview" className="mx-auto w-full max-w-7xl scroll-mt-20 px-6 pt-16">
-        <Eyebrow>platform overview</Eyebrow>
         <div className="grid gap-10 py-10 lg:grid-cols-[1.2fr_1fr] lg:gap-16">
           <h1 className="max-w-[14ch] font-heading text-5xl tracking-tight text-balance sm:text-6xl">
-            Everything the work needs. Nothing off the record.
+            Review legal work. Keep every change.
           </h1>
           <div className="flex flex-col items-start gap-6 lg:pt-3">
             <p className="max-w-[46ch] text-lg leading-relaxed text-muted-foreground">
               Review, redline, extract, and draft with the AI your firm already trusts — every step
               saved with who did it, what changed, and when.
             </p>
-            <a href={SITE.bookDemo} target="_blank" rel="noreferrer">
-              <Button size="lg">Book demo</Button>
-            </a>
+            <Button
+              size="lg"
+              nativeButton={false}
+              render={<a href={SITE.bookDemo} target="_blank" rel="noreferrer" />}
+            >
+              Book demo
+            </Button>
           </div>
         </div>
-        <figure className="m-0 overflow-hidden rounded-lg border border-border bg-card shadow-xs">
-          <video
-            className="aspect-video w-full"
-            poster="/demo-poster.png"
-            controls
-            muted
-            playsInline
-            preload="metadata"
-          >
-            <source src="/demo.mp4" type="video/mp4" />
-          </video>
-        </figure>
+        <ProductVideo
+          src="/demo.mp4"
+          poster="/demo-poster.png"
+          label="gitmatter platform overview"
+          className="aspect-video"
+        />
       </header>
 
       <MobileTableOfContents />
 
       {/* Why gitmatter — three value cards, all verifiable. */}
       <section id="why-gitmatter" className="mx-auto w-full max-w-7xl scroll-mt-20 px-6 pt-24">
-        <Eyebrow>why gitmatter</Eyebrow>
         <h2 className="mt-stack max-w-[22ch] font-heading text-4xl tracking-tight text-balance">
-          The questions a firm asks first, answered by the system itself.
+          Know who changed the work.
         </h2>
         <div className="mt-12 grid gap-10 sm:grid-cols-3 md:gap-16">
           {WHY.map((w) => (
@@ -126,7 +122,7 @@ export default function Platform() {
       {/* Feature tour — one platform, purpose-built tools. */}
       <section id="platform-tools" className="mx-auto w-full max-w-7xl scroll-mt-20 px-6 pt-24">
         <h2 className="max-w-[24ch] font-heading text-4xl tracking-tight text-balance">
-          Nine tools. One history underneath.
+          {FEATURES.length} tools. A shared history.
         </h2>
         <p className="mt-4 max-w-[52ch] leading-relaxed text-muted-foreground">
           Each tool does one job well. Research tools keep their queries, sources, and activity
@@ -138,25 +134,27 @@ export default function Platform() {
             <section
               key={f.slug}
               id={f.slug}
-              className="grid scroll-mt-20 items-center gap-10 border-t border-border py-16 md:gap-16 lg:grid-cols-2"
+              className={`grid scroll-mt-20 items-center gap-10 border-t border-border py-16 md:gap-16 ${f.clip ? "lg:grid-cols-2" : ""}`}
             >
               <div className={`flex flex-col gap-3 ${i % 2 ? "lg:order-2" : ""}`}>
-                <span className="text-xs font-medium tracking-[0.2em] text-bronze uppercase">
-                  {f.tag}
-                </span>
                 <h3 className="max-w-[24ch] font-heading text-3xl tracking-tight text-balance">
                   {f.title}
                 </h3>
                 <p className="max-w-[52ch] leading-relaxed text-muted-foreground">{f.body}</p>
-                <Link to="/platform/$slug" params={{ slug: f.slug }} className="mt-2">
-                  <Button variant="outline" size="sm">
-                    Learn more
-                  </Button>
-                </Link>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  nativeButton={false}
+                  render={<Link to="/platform/$slug" params={{ slug: f.slug }} className="mt-2" />}
+                >
+                  Learn more
+                </Button>
               </div>
-              <div className={`mx-auto w-full max-w-md ${i % 2 ? "lg:order-1" : ""}`}>
-                <ClipFigure src={f.clip} label={`${f.tag} demo`} />
-              </div>
+              {f.clip ? (
+                <div className={`mx-auto w-full max-w-md ${i % 2 ? "lg:order-1" : ""}`}>
+                  <ClipFigure src={f.clip} label={`${f.tag} demo`} />
+                </div>
+              ) : null}
             </section>
           ))}
         </div>
@@ -165,7 +163,6 @@ export default function Platform() {
       {/* Works with the AI your team already uses. */}
       <section id="works-with" className="scroll-mt-20 border-y border-border bg-secondary/60">
         <div className="mx-auto max-w-7xl px-6 py-20">
-          <Eyebrow>works with</Eyebrow>
           <h2 className="mt-stack max-w-[22ch] font-heading text-4xl tracking-tight text-balance">
             The AI your team is already using.
           </h2>
@@ -176,12 +173,9 @@ export default function Platform() {
                 Over MCP, with a secure sign-in — the agent drives gitmatter's tools and every
                 action lands on the record.
               </p>
-              <ul className="mt-4 flex flex-wrap gap-2">
+              <ul className="mt-4 flex flex-wrap gap-x-5 gap-y-2">
                 {WORKS_WITH.agents.map((a) => (
-                  <li
-                    key={a}
-                    className="rounded-md border border-border bg-background px-3 py-1.5 text-sm"
-                  >
+                  <li key={a} className="text-sm text-ink-secondary">
                     {a}
                   </li>
                 ))}
@@ -193,12 +187,9 @@ export default function Platform() {
                 gitmatter's own features run on the firm's LLM account — stored encrypted,
                 configured for zero data retention.
               </p>
-              <ul className="mt-4 flex flex-wrap gap-2">
+              <ul className="mt-4 flex flex-wrap gap-x-5 gap-y-2">
                 {WORKS_WITH.providers.map((p) => (
-                  <li
-                    key={p}
-                    className="rounded-md border border-border bg-background px-3 py-1.5 text-sm"
-                  >
+                  <li key={p} className="text-sm text-ink-secondary">
                     {p}
                   </li>
                 ))}

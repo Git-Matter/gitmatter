@@ -30,7 +30,11 @@ export function PageShell({
 }) {
   return (
     <div className={cn("flex h-full min-h-0 flex-col gap-stack", className)}>
-      {header && <div className="shrink-0">{header}</div>}
+      {header && (
+        <div className="flex min-h-chrome shrink-0 flex-col justify-center border-b border-border pb-4">
+          {header}
+        </div>
+      )}
       <div
         className={cn(
           "min-h-0 flex-1",

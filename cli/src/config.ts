@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import { randomBytes } from "node:crypto";
 import { homedir, networkInterfaces } from "node:os";
 import { join } from "node:path";
@@ -56,9 +57,12 @@ export function serializeEnv(env: Record<string, string>): string {
 
 /** Read saved config, or null if `init` has not run. */
 export async function loadConfig(): Promise<Config | null> {
-  const file = Bun.file(paths.env);
-  if (!(await file.exists())) return null;
-  const env = parseEnv(await file.text());
+  const text = await readFile(paths.env, "utf8").catch((error: NodeJS.ErrnoException) => {
+    if (error.code === "ENOENT") return null;
+    throw error;
+  });
+  if (text === null) return null;
+  const env = parseEnv(text);
   const databaseUrl = env.DATABASE_URL ?? "";
   return {
     domain: env.GITMATTER_DOMAIN ?? "gitmatter.local",

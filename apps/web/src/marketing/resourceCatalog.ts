@@ -16,7 +16,7 @@ export type Resource = {
   to?: string;
   /** External/docs href. */
   href?: string;
-  /** Looping mp4 thumbnail under /public; omit for a typographic tile. */
+  /** Product illustration under /public; watch pages provide the disclosed player. */
   media?: string;
   /** Poster still shown before hover starts playback. */
   poster?: string;
@@ -42,7 +42,7 @@ export const VIDEOS: VideoResource[] = [
   {
     slug: "customer-contract-diligence",
     title: "Customer contract diligence",
-    desc: "A 100-contract acquisition review surfaces the consent rights tied to material recurring revenue, with every finding linked to its source clause.",
+    desc: "An illustrated 100-contract acquisition review surfaces consent rights alongside recurring revenue, with findings linked to their source clauses.",
     media: "/blog/customer-contract-diligence-review.mp4",
     poster: "/posters/customer-contract-diligence-review.jpg",
     publishedAt: "2026-07-19T00:00:00+02:00",
@@ -50,7 +50,7 @@ export const VIDEOS: VideoResource[] = [
     points: [
       "One tabular review across 100 customer contracts",
       "Change-of-control consent risk viewed alongside annual contract value",
-      "The decisive clause, reasoning, and audit attribution opened in the real product",
+      "An illustrated view of the decisive clause, reasoning, and audit attribution",
     ],
   },
   {
@@ -62,15 +62,15 @@ export const VIDEOS: VideoResource[] = [
     publishedAt: "2026-07-12T23:09:03+02:00",
     duration: "PT21.8S",
     points: [
-      "Eight product moments in about twenty-two seconds: legal research, assistant, tabular review, redline and drafting, workflows, clause library, audit trail, and bring-your-own-agent",
-      "Each feature shown as a real product moment, not slides",
+      "8 product moments in about 22 seconds: legal research, assistant, tabular review, redline and drafting, workflows, clause library, audit trail, and bring-your-own-agent",
+      "Rendered examples of the main product workflows",
       "Where to go deeper: every feature has its own page under /platform",
     ],
   },
   {
     slug: "australian-ip-search",
     title: "Australian IP search",
-    desc: "Before an Australian product launch, counsel checks NORTHSTAR against IP Australia trade marks and reviews the returned records, sources, and tool activity.",
+    desc: "An illustrated launch-clearance scenario: counsel checks a fictional NORTHSTAR brand against trade mark records and inspects sources and tool activity.",
     media: "/features/legal-research.mp4",
     poster: "/posters/legal-research.jpg",
     publishedAt: "2026-07-15T00:00:00+02:00",
@@ -84,13 +84,13 @@ export const VIDEOS: VideoResource[] = [
   {
     slug: "product-tour",
     title: "Product tour",
-    desc: "The full walkthrough: a matter from first document to a finished, fully attributed record.",
+    desc: "An illustrated walkthrough: a fictional matter from first document to its attributed record.",
     media: "/demo.mp4",
     poster: "/demo-poster.png",
     publishedAt: "2026-07-12T23:32:46+02:00",
     duration: "PT30.186S",
     points: [
-      "A matter worked end to end in the actual product",
+      "An illustrated matter from first document to its audit history",
       "AI suggestions landing as tracked changes, accepted and rejected by a lawyer",
       "The audit trail building itself as the work happens",
     ],
@@ -98,7 +98,7 @@ export const VIDEOS: VideoResource[] = [
   {
     slug: "install",
     title: "Install gitmatter",
-    desc: "From zero to a running gitmatter in minutes — on your own machine or server.",
+    desc: "An illustrated guide to setting up gitmatter on your own machine or server.",
     media: "/videos/install.mp4",
     poster: "/posters/install.jpg",
     publishedAt: "2026-07-12T23:09:03+02:00",
@@ -126,13 +126,13 @@ export const VIDEOS: VideoResource[] = [
   {
     slug: "agent-at-work",
     title: "An agent at work",
-    desc: "Claude connected over MCP, reviewing twelve NDAs through gitmatter while every step lands on the record.",
+    desc: "An illustrated MCP session: an agent reviews twelve example NDAs while its actions appear in the matter history.",
     media: "/blog/mcp-session.mp4",
     poster: "/posters/mcp-session.jpg",
     publishedAt: "2026-07-12T20:54:37+02:00",
     duration: "PT45.056S",
     points: [
-      "A real session shape: the assistant calls gitmatter's tools, gitmatter does the work",
+      "An example session: the assistant calls tools and gitmatter records the work",
       "Each action attributed to the agent, inside the lawyer's session",
       "The matter history the session leaves behind",
     ],
@@ -140,7 +140,7 @@ export const VIDEOS: VideoResource[] = [
   {
     slug: "ai-first-pass-redline",
     title: "An AI first pass, redlined",
-    desc: "Playbook-driven suggestions land as tracked changes; a lawyer accepts two and rejects one, on the record.",
+    desc: "Playbook-driven suggestions land as tracked changes; a lawyer accepts 2 and rejects 1, on the record.",
     media: "/blog/redline-loop.mp4",
     poster: "/posters/redline-loop.jpg",
     publishedAt: "2026-07-12T20:54:37+02:00",
@@ -154,15 +154,15 @@ export const VIDEOS: VideoResource[] = [
   {
     slug: "where-your-key-goes",
     title: "Where your key goes",
-    desc: "The bring-your-own-key path in thirty seconds: encrypted at rest, straight to your provider, no route to training.",
+    desc: "The illustrated bring-your-own-key path: key configuration, encrypted storage, and requests to your selected provider.",
     media: "/blog/byok.mp4",
     poster: "/posters/byok.jpg",
     publishedAt: "2026-07-12T20:54:37+02:00",
     duration: "PT30.059S",
     points: [
-      "Your LLM key stored encrypted, never logged, never in the browser",
-      "Documents flowing to your own provider account under zero data retention",
-      "The off switch: revoke the key and every AI feature stops",
+      "An illustration of provider-key configuration and encrypted storage",
+      "An example document-to-provider request path",
+      "The illustrated application-key removal flow",
     ],
   },
 ];
