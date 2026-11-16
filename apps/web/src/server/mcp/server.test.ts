@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, test } from "vite-plus/test";
+import { afterAll, beforeAll, describe, expect, test, vi } from "vite-plus/test";
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -6,19 +6,29 @@ import { CallToolResultSchema } from "@modelcontextprotocol/sdk/types.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { db, sql } from "@workspace/db/client";
-import { tenants, user } from "@workspace/db/schema";
-import { eq } from "drizzle-orm";
+import {
+  commits,
+  jobs,
+  jobSpendReservations,
+  tenants,
+  usageEvents,
+  user,
+} from "@workspace/db/schema";
+import { and, eq } from "drizzle-orm";
 import {
   buildToolCatalog,
   extractMarkdown,
   getObject,
   listVersions,
   processDocument,
+  queueReviewRun,
+  retryJob,
   resolveEdit,
   setApprovalPolicy,
   updateWorkflow,
   uploadDocument,
 } from "@workspace/core";
+import * as extractionQueue from "../../../../../packages/core/src/content/extractionQueue.js";
 import { buildMcpServer, toolResult } from "./server";
 
 test("tool errors are protocol errors with structured data", () => {
@@ -73,6 +83,9 @@ test("subscription catalog excludes provider inference and human decisions", asy
       true
     );
     expect(tools.find((tool) => tool.name === "write_cell")?.annotations?.readOnlyHint).toBe(false);
+    expect(tools.find((tool) => tool.name === "retry_job")?.description).toContain(
+      "Provider-backed review jobs must be retried in the GitMatter UI"
+    );
     expect(client.getInstructions()).toContain("your own reasoning and subscription");
     // Provider-funded execution remains available to the built-in assistant.
     const internal = buildToolCatalog(
@@ -128,6 +141,105 @@ const hasStorage = !!process.env.S3_ACCESS_KEY;
     expect(result.isError, JSON.stringify(result.content)).not.toBe(true);
     return result;
   }
+  test("subscription retry preserves extraction recovery and cannot requeue provider work", async () => {
+    const wake = vi.fn();
+    const worker = vi.spyOn(extractionQueue, "startExtractionWorker").mockReturnValue({
+      stop: vi.fn(),
+      wake,
+    });
+    try {
+      const createdClient = await call("create_client", { name: "Retry client" });
+      const matter = await call("create_matter", {
+        clientId: createdClient.structuredContent!.clientId,
+        name: "Retry matter",
+      });
+      const matterId = matter.structuredContent!.matterId as string;
+      const generated = await call("generate_docx", {
+        matterId,
+        title: "Retry source",
+        blocks: [{ type: "paragraph", text: "Confidentiality lasts two years." }],
+      });
+      const documentId = generated.structuredContent!.documentId as string;
+      const review = await call("create_review", {
+        matterId,
+        title: "Retry review",
+        documentIds: [documentId],
+        columns: [{ name: "Term", prompt: "Find the term" }],
+      });
+      const reviewId = review.structuredContent!.reviewId as string;
+      const accepted = await queueReviewRun(
+        { type: "user", userId },
+        { reviewId, requestId: randomUUID() }
+      );
+      const jobId = accepted.jobIds[0]!;
+      await db
+        .update(jobs)
+        .set({ state: "failed", errorCode: "provider_unavailable" })
+        .where(eq(jobs.id, jobId));
+      const requestId = randomUUID();
+      for (const replay of [false, true]) {
+        if (replay)
+          await retryJob({ type: "agent", userId, agentLabel: `mcp:${label}` }, jobId, {
+            requestId,
+          });
+        const [before] = await db.select().from(jobs).where(eq(jobs.id, jobId));
+        const priorCommits = await db
+          .select()
+          .from(commits)
+          .where(eq(commits.artifactId, reviewId))
+          .orderBy(commits.seq);
+        const result = CallToolResultSchema.parse(
+          await client.callTool({ name: "retry_job", arguments: { jobId, requestId } })
+        );
+        expect(result.isError).toBe(true);
+        expect(result.structuredContent).toMatchObject({ code: "access_denied" });
+        const [after] = await db.select().from(jobs).where(eq(jobs.id, jobId));
+        expect(after).toEqual(before);
+        expect(
+          await db
+            .select()
+            .from(commits)
+            .where(eq(commits.artifactId, reviewId))
+            .orderBy(commits.seq)
+        ).toEqual(priorCommits);
+        expect(
+          await db.select().from(jobSpendReservations).where(eq(jobSpendReservations.jobId, jobId))
+        ).toHaveLength(0);
+        expect(
+          await db
+            .select()
+            .from(usageEvents)
+            .where(and(eq(usageEvents.userId, userId), eq(usageEvents.kind, "llm")))
+        ).toHaveLength(0);
+        expect(worker).not.toHaveBeenCalled();
+      }
+      const bytes = readFileSync(
+        fileURLToPath(
+          new URL("../../../../../packages/core/test/fixtures/nda/source.docx", import.meta.url)
+        )
+      );
+      const uploaded = await uploadDocument(userId, {
+        title: "Retry extraction",
+        fileType: "docx",
+        bytes,
+        matterId,
+      });
+      const [extraction] = await db.select().from(jobs).where(eq(jobs.artifactId, uploaded.id));
+      await db
+        .update(jobs)
+        .set({ state: "failed", errorCode: "extraction_failed" })
+        .where(eq(jobs.id, extraction!.id));
+      const retried = await call("retry_job", { jobId: extraction!.id, requestId: randomUUID() });
+      expect(retried.structuredContent).toMatchObject({
+        kind: "document_extraction",
+        state: "queued",
+      });
+      expect(worker).toHaveBeenCalledOnce();
+      expect(wake).toHaveBeenCalledOnce();
+    } finally {
+      worker.mockRestore();
+    }
+  });
   test("generate, read, save cited review, propose, human resolve and audit", async () => {
     const createdClient = await call("create_client", { name: "Synthetic client" });
     const matter = await call("create_matter", {

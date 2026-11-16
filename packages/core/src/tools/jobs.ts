@@ -8,6 +8,7 @@ import {
   listMatterJobs,
   listJobNotifications,
   markJobNotificationRead,
+  retryExtractionJob,
   retryJob,
 } from "../core/jobs.js";
 import { startExtractionWorker } from "../content/extractionQueue.js";
@@ -26,7 +27,7 @@ async function safely(work: () => Promise<unknown>) {
 }
 
 /** Web and agent callers share the durable engine and its live scope checks. */
-export function buildJobTools({ actor }: ToolContext): ToolSpec[] {
+export function buildJobTools({ actor, executionMode }: ToolContext): ToolSpec[] {
   return [
     {
       name: "list_matter_jobs",
@@ -89,11 +90,14 @@ export function buildJobTools({ actor }: ToolContext): ToolSpec[] {
     {
       name: "retry_job",
       description:
-        "Retry an eligible failed job against its original source and within its lifetime attempt limit. A retry can incur another provider charge; inspect the current job and uncertainty first.",
+        executionMode === "subscription"
+          ? "Retry an eligible failed document extraction against its original source and within its lifetime attempt limit. Provider-backed review jobs must be retried in the GitMatter UI."
+          : "Retry an eligible failed job against its original source and within its lifetime attempt limit. A retry can incur another provider charge; inspect the current job and uncertainty first.",
       schema: { jobId: z.uuid(), requestId: z.uuid(), acknowledgeUnknown: z.boolean().optional() },
       handler: ({ jobId, requestId, acknowledgeUnknown }) =>
         safely(async () => {
-          const result = await retryJob(actor, jobId as string, {
+          const retry = executionMode === "subscription" ? retryExtractionJob : retryJob;
+          const result = await retry(actor, jobId as string, {
             requestId: requestId as string,
             acknowledgeUnknown: acknowledgeUnknown as boolean | undefined,
           });

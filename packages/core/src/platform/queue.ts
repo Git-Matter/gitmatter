@@ -1,6 +1,7 @@
 import { type Job, Queue, type RedisOptions, Worker } from "bullmq";
 import { getEnv } from "../core/config.js";
 import { logEvent } from "../core/log.js";
+import { embeddingFailureMetadata } from "../ai/embeddings.js";
 
 // Background job queue (BullMQ over Redis). Today it carries one job type:
 // embedding a document's chunks off the request path so the retrieval index
@@ -59,10 +60,11 @@ export async function enqueueEmbedding(documentId: string): Promise<void> {
         backoff: { type: "exponential", delay: 2_000 },
       }
     );
-  } catch (err) {
+  } catch {
     logEvent("warn", "queue.enqueue_failed", {
       documentId,
-      error: err instanceof Error ? err.message : String(err),
+      stage: "enqueue",
+      code: "queue_unavailable",
     });
   }
 }
@@ -91,7 +93,8 @@ export function startEmbeddingWorker(): void {
     logEvent("warn", "queue.embed_failed", {
       documentId: job?.data.documentId,
       attempts: job?.attemptsMade,
-      error: err.message,
+      stage: "indexing",
+      ...embeddingFailureMetadata(err),
     });
   });
   logEvent("info", "queue.embed_worker_started", {});

@@ -1,13 +1,15 @@
 import { randomUUID } from "node:crypto";
 import { beforeAll, afterAll, describe, expect, test } from "vite-plus/test";
 import { db } from "@workspace/db/client";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import {
   approvalProposals,
+  commits,
   jobSpendReservations,
   jobs,
   matterMembers,
   tabularCells,
+  tabularReviews,
   tenants,
   usageEvents,
   user,
@@ -85,6 +87,72 @@ describe("durable review and spend boundaries", () => {
       })
     ).rejects.toThrow("request_conflict");
     await db.update(jobs).set({ state: "cancelled" }).where(eq(jobs.artifactId, f.id));
+  });
+  test("editor downgrade while acceptance waits cannot freeze sources, queue jobs or append a commit", async () => {
+    const f = await fixture();
+    const editorId = `review-queue-editor-${randomUUID()}`;
+    await db.insert(user).values({
+      id: editorId,
+      name: "Queue editor",
+      email: `${editorId}@example.com`,
+      tenantId,
+    });
+    await db.insert(matterMembers).values({
+      matterId: f.matter.id,
+      userId: editorId,
+      role: "editor",
+    });
+    const before = (await getReview(f.id))!.review;
+    const priorCommits = await db.select().from(commits).where(eq(commits.artifactId, f.id));
+    let release!: () => void;
+    let acquired!: () => void;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const ready = new Promise<void>((resolve) => {
+      acquired = resolve;
+    });
+    const blocker = db.transaction(async (tx) => {
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`tabular_review:${f.id}`}))`);
+      acquired();
+      await held;
+    });
+    await ready;
+    const pending = queueReviewRun({ type: "user", userId: editorId }, { reviewId: f.id }).then(
+      () => null,
+      (error: unknown) => error
+    );
+    try {
+      let waiting = false;
+      const deadline = Date.now() + 3000;
+      while (!waiting && Date.now() < deadline) {
+        const rows = await db.execute<{ waiting: boolean }>(
+          sql`select exists(select 1 from pg_locks where locktype='advisory' and not granted and objid::bigint=(hashtext(${`tabular_review:${f.id}`})::bigint & 4294967295)) as waiting`
+        );
+        waiting = rows[0]!.waiting;
+        if (!waiting) await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+      expect(waiting).toBe(true);
+      await db
+        .update(matterMembers)
+        .set({ role: "viewer" })
+        .where(and(eq(matterMembers.matterId, f.matter.id), eq(matterMembers.userId, editorId)));
+      release();
+      await blocker;
+      expect(await pending).toMatchObject({ code: "access_denied" });
+      const [after] = await db.select().from(tabularReviews).where(eq(tabularReviews.id, f.id));
+      expect(after!.inputSnapshot).toEqual(before.inputSnapshot);
+      expect(after!.headCommitId).toBe(before.headCommitId);
+      expect(await db.select().from(jobs).where(eq(jobs.artifactId, f.id))).toHaveLength(0);
+      expect(await db.select().from(commits).where(eq(commits.artifactId, f.id))).toEqual(
+        priorCommits
+      );
+    } finally {
+      release();
+      await blocker;
+      await pending;
+      await db.delete(user).where(eq(user.id, editorId));
+    }
   });
   test("paid inference execution can succeed while exact proposal preserves accepted green content", async () => {
     const f = await fixture();

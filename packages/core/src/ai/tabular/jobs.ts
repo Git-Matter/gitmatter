@@ -4,6 +4,7 @@ import { db, type DB, type Tx } from "@workspace/db/client";
 import {
   documents,
   jobs,
+  mcpAccessTokens,
   tabularCells,
   tabularReviews,
   type DurableJob,
@@ -11,7 +12,11 @@ import {
 } from "@workspace/db/schema";
 import type { ContractReviewSnapshot } from "@workspace/contracts";
 import { type Actor, recordCommitInTransaction } from "../../core/commit.js";
-import { canAccessArtifact, canReadDocument } from "../../core/access.js";
+import {
+  canAccessArtifact,
+  canReadDocument,
+  hasMatterAccessInTransaction,
+} from "../../core/access.js";
 import {
   authorizeJob,
   claimJob,
@@ -19,6 +24,7 @@ import {
   failJob,
   heartbeatJob,
   JobError,
+  refreshProviderActor,
   retryJobInTransaction,
 } from "../../core/jobs.js";
 import {
@@ -124,10 +130,23 @@ export async function queueReviewRun(
           .where(eq(tabularReviews.id, params.reviewId));
         if (!review?.tenantId || !review.documentIds.length || !review.columnsConfig.length)
           throw new JobError("input_not_ready");
+        if (params.credentialId)
+          await commitTx
+            .select({ id: mcpAccessTokens.id })
+            .from(mcpAccessTokens)
+            .where(eq(mcpAccessTokens.id, params.credentialId))
+            .for("share");
+        const currentActor = await refreshProviderActor(actor, params.credentialId, commitTx);
+        // Hold the same current matter-editor authority required by worker publication.
+        if (
+          !(await hasMatterAccessInTransaction(commitTx, currentActor, review.matterId, "editor"))
+        )
+          throw new JobError("access_denied");
         if (!review.inputSnapshot) {
           const sources: ContractReviewSnapshot["documents"] = [];
           for (const id of review.documentIds) {
-            if (!(await canReadDocument(actor, id, commitTx))) throw new JobError("access_denied");
+            if (!(await canReadDocument(currentActor, id, commitTx)))
+              throw new JobError("access_denied");
             const [doc] = await commitTx
               .select()
               .from(documents)
@@ -158,7 +177,7 @@ export async function queueReviewRun(
         }
         const createdIds: string[] = [];
         for (const documentId of review.documentIds) {
-          if (!(await canReadDocument(actor, documentId, commitTx)))
+          if (!(await canReadDocument(currentActor, documentId, commitTx)))
             throw new JobError("access_denied");
           for (const column of review.columnsConfig) {
             const input = cellInput(review, documentId, column.index);
@@ -211,7 +230,7 @@ export async function queueReviewRun(
                 baseCellCommitId: cell?.lastCommitId,
                 runId,
                 userId: actor.userId,
-                actor,
+                actor: currentActor,
                 credentialId: params.credentialId,
                 tenantId: review.tenantId,
                 matterId: review.matterId,

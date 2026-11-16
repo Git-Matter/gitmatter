@@ -218,7 +218,12 @@ export function buildToolCatalog(
     return ensureDefaultMatter(actor.userId, opts.defaultMatterLabel, tenantId);
   };
 
-  const ctx: ToolContext = { actor, resolveMatter, credentialId: opts.credentialId };
+  const ctx: ToolContext = {
+    actor,
+    resolveMatter,
+    credentialId: opts.credentialId,
+    executionMode: opts.executionMode,
+  };
 
   return [
     ...buildReviewTools(ctx),

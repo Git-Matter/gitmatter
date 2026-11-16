@@ -23,6 +23,8 @@ export type ToolSpec = {
 // returns its ToolSpec[]; buildToolCatalog assembles them.
 export type ToolContext = {
   actor: Actor;
+  /** Trusted catalog mode; subscription agents never admit GitMatter provider execution. */
+  executionMode?: "subscription";
   /** Trusted server credential metadata; never a bearer value or client input. */
   credentialId?: string;
   /** Resolve the matter a new artifact lands in, or null when forbidden. */

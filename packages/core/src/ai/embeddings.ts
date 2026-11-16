@@ -19,6 +19,24 @@ export type EmbeddingProfile = {
 export type ResolvedEmbeddingProfile = EmbeddingProfile & {
   key: string;
 };
+type EmbeddingResult = { vectors: number[][]; inputTokens?: number };
+
+class EmbeddingProviderError extends Error {
+  constructor(readonly status?: number) {
+    super("Embedding provider request failed");
+  }
+}
+
+/** Provider messages and response bodies may contain private document content. */
+export function embeddingFailureMetadata(error: unknown) {
+  const status = error && typeof error === "object" && "status" in error ? error.status : undefined;
+  return {
+    code: "embedding_failed",
+    ...(typeof status === "number" && Number.isInteger(status) && status >= 100 && status <= 599
+      ? { status }
+      : {}),
+  };
+}
 
 const DEFAULTS: Record<EmbeddingProvider, { envKey: string; model: string; dimensions: number }> = {
   openai: {
@@ -77,9 +95,22 @@ export async function embedTexts(
   profile: ResolvedEmbeddingProfile,
   texts: string[],
   inputType: "document" | "query" = "document"
-): Promise<{ vectors: number[][]; inputTokens?: number }> {
+): Promise<EmbeddingResult> {
   const input = texts.map((text) => text.trim()).filter(Boolean);
   if (!input.length) return { vectors: [] };
+  try {
+    return await requestEmbeddings(profile, input, inputType);
+  } catch (error) {
+    // Queue failure records must be as safe as application logs. Do not retain a raw cause.
+    throw new EmbeddingProviderError(embeddingFailureMetadata(error).status);
+  }
+}
+
+async function requestEmbeddings(
+  profile: ResolvedEmbeddingProfile,
+  input: string[],
+  inputType: "document" | "query"
+): Promise<EmbeddingResult> {
   if (profile.provider === "voyage") {
     const timeout = llmTimeoutMs();
     const res = await fetch("https://api.voyageai.com/v1/embeddings", {
@@ -97,7 +128,8 @@ export async function embedTexts(
       ...(timeout ? { signal: AbortSignal.timeout(timeout) } : {}),
     });
     if (!res.ok) {
-      throw new Error(`voyage embeddings failed: ${res.status} ${await res.text()}`);
+      await res.body?.cancel().catch(() => {});
+      throw new EmbeddingProviderError(res.status);
     }
     const json = (await res.json()) as {
       data: Array<{ embedding: number[]; index: number }>;

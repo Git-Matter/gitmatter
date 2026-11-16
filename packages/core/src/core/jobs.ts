@@ -635,15 +635,19 @@ export async function cancelJob(actor: Actor, id: string): Promise<JobSnapshot |
     .then(async (result) => (result ? getJob(actor, id) : null));
 }
 
+type JobRetryOptions = { acknowledgeUnknown?: boolean; requestId?: string };
+
 export async function retryJobInTransaction(
   tx: Tx,
   actor: Actor,
   id: string,
-  options: { acknowledgeUnknown?: boolean; requestId?: string } = {}
+  options: JobRetryOptions = {},
+  requiredKind?: DurableJob["kind"]
 ) {
   const [job] = await tx.select().from(jobs).where(eq(jobs.id, id)).for("update");
   if (
     !job ||
+    (requiredKind !== undefined && job.kind !== requiredKind) ||
     !(await sameTenant(actor.userId, job.tenantId, tx)) ||
     !(await canAccessArtifact(actor, job.artifactType, job.artifactId, "editor", tx))
   )
@@ -740,9 +744,21 @@ export async function retryJobInTransaction(
 export async function retryJob(
   actor: Actor,
   id: string,
-  options: { acknowledgeUnknown?: boolean; requestId?: string } = {}
+  options: JobRetryOptions = {}
 ): Promise<JobSnapshot | null> {
   await db.transaction((tx) => retryJobInTransaction(tx, actor, id, options));
+  return getJob(actor, id);
+}
+
+/** Subscription agents may recover source extraction without admitting provider inference. */
+export async function retryExtractionJob(
+  actor: Actor,
+  id: string,
+  options: JobRetryOptions = {}
+): Promise<JobSnapshot | null> {
+  await db.transaction((tx) =>
+    retryJobInTransaction(tx, actor, id, options, "document_extraction")
+  );
   return getJob(actor, id);
 }
 

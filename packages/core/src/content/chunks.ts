@@ -10,6 +10,7 @@ import {
 } from "@workspace/db/schema";
 import {
   embedTexts,
+  embeddingFailureMetadata,
   resolveEmbeddingProfile,
   type ResolvedEmbeddingProfile,
 } from "../ai/embeddings.js";
@@ -483,7 +484,8 @@ export async function getDocumentContext(
     } catch (err) {
       logEvent("warn", "document_embeddings.fallback", {
         documentId: doc.id,
-        error: err instanceof Error ? err.message : String(err),
+        stage: "retrieval",
+        ...embeddingFailureMetadata(err),
       });
     }
   }
