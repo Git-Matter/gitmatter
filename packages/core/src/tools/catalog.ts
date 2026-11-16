@@ -10,7 +10,7 @@ import { buildDiscoveryTools } from "./discovery.js";
 import { buildDocumentTools } from "./documents.js";
 import { buildJobTools } from "./jobs.js";
 import { buildMatterTools } from "./matters.js";
-import { buildResearchTools } from "./research.js";
+import { buildResearchTools } from "./research/index.js";
 import { buildReviewTools } from "./reviews.js";
 import type { ToolContext, ToolSpec } from "./types.js";
 import { buildWorkflowTools } from "./workflows.js";

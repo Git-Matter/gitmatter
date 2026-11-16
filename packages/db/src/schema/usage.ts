@@ -6,7 +6,22 @@ import { index, integer, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-c
 // (over-budget emits a `budget.exceeded` audit event, never rejects). Kept apart
 // from audit_events so high-volume metering never crowds the security log.
 
-export type UsageKind = "llm" | "tool" | "courtlistener" | "ipaustralia" | "extraction";
+export type UsageKind =
+  | "llm"
+  | "tool"
+  | "extraction"
+  // External legal-data providers — one kind per registry ProviderId (kept as
+  // literals so the db package stays decoupled from @workspace/registry).
+  | "courtlistener"
+  | "ipaustralia"
+  | "uklegislation"
+  | "eurlex"
+  | "egovjapan"
+  | "rechtspraak"
+  | "legifrance"
+  | "canlii"
+  | "korealaw"
+  | "govinfo";
 
 export const usageEvents = pgTable(
   "usage_events",

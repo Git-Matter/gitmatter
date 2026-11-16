@@ -1,5 +1,5 @@
 import { and, desc, eq, gte, isNotNull, type SQL, sql } from "drizzle-orm";
-import { estimateCostUsd } from "@workspace/registry";
+import { estimateCostUsd, type ProviderId } from "@workspace/registry";
 import { db } from "@workspace/db/client";
 import { documentVersions, documents, type UsageKind, usageEvents } from "@workspace/db/schema";
 import { templateStorageBytes } from "../core/template-storage.js";
@@ -138,40 +138,27 @@ export async function recordToolCall(e: {
   }
 }
 
-/** Record one CourtListener request and check the per-user per-minute budget. */
-export async function recordCourtListenerCall(e: {
-  userId: string;
-  tenantId?: string | null;
-}): Promise<void> {
-  try {
-    await db
-      .insert(usageEvents)
-      .values({ kind: "courtlistener", userId: e.userId, tenantId: e.tenantId ?? null });
-    const budget = getEnvNumber("COURTLISTENER_CALL_BUDGET_PER_MIN", 0);
-    if (budget > 0) {
-      const used = await countInWindow("courtlistener", eq(usageEvents.userId, e.userId), since(1));
-      if (used > budget)
-        await flag("courtlistener", { actorId: e.userId, tenantId: e.tenantId }, { used, budget });
-    }
-  } catch {
-    // best-effort
+/**
+ * Record one external legal-data provider request and check the per-user
+ * per-minute budget. Budget env var is `<PROVIDER>_CALL_BUDGET_PER_MIN`
+ * (e.g. COURTLISTENER_CALL_BUDGET_PER_MIN); each ProviderId is also a UsageKind.
+ */
+export async function recordProviderCall(
+  provider: ProviderId,
+  e: {
+    userId: string;
+    tenantId?: string | null;
   }
-}
-
-/** Record one IP Australia request and check the per-user per-minute budget. */
-export async function recordIpAustraliaCall(e: {
-  userId: string;
-  tenantId?: string | null;
-}): Promise<void> {
+): Promise<void> {
   try {
     await db
       .insert(usageEvents)
-      .values({ kind: "ipaustralia", userId: e.userId, tenantId: e.tenantId ?? null });
-    const budget = getEnvNumber("IPAUSTRALIA_CALL_BUDGET_PER_MIN", 0);
+      .values({ kind: provider, userId: e.userId, tenantId: e.tenantId ?? null });
+    const budget = getEnvNumber(`${provider.toUpperCase()}_CALL_BUDGET_PER_MIN`, 0);
     if (budget > 0) {
-      const used = await countInWindow("ipaustralia", eq(usageEvents.userId, e.userId), since(1));
+      const used = await countInWindow(provider, eq(usageEvents.userId, e.userId), since(1));
       if (used > budget)
-        await flag("ipaustralia", { actorId: e.userId, tenantId: e.tenantId }, { used, budget });
+        await flag(provider, { actorId: e.userId, tenantId: e.tenantId }, { used, budget });
     }
   } catch {
     // best-effort
