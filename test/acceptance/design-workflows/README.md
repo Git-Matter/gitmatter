@@ -79,11 +79,6 @@ cannot accidentally mix the app and fixture's prebundled React graphs.
 
 ## Additional surfaces
 
-`replay.mjs marketing-media` uses the current cloud-mode public app at `http://127.0.0.1:4280/`.
-Start it from `apps/web` with `DEPLOYMENT=cloud vp dev --host localhost --port 4280 --strictPort`
-when no existing task server is listening. It checks five page families at desktop and mobile and
-records playback/disclosure results, not proof of live product capabilities.
-
 `replay.mjs template-library` uses the tracked local integration harness on port 4280. See
 [the setup and evidence boundaries](../template-library/design-acceptance.md). This group uses real
 loopback Postgres and original fictional files, rather than the API-response fixture used by the

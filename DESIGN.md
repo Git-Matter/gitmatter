@@ -10,7 +10,7 @@ The document and its decisions lead. Navigation, forms, and metadata provide a q
 The product implementation follows Harvey's published [system architecture](https://www.harvey.ai/blog/rebuilding-harveys-design-system-from-the-ground-up)
 and [design principles](https://www.harvey.ai/blog/how-we-approach-design-at-harvey): intent-based
 tokens, consistent component anatomy, contextual composition and complete interaction states.
-Public website styling is a separate brand reference. This remains gitmatter's own implementation.
+This remains gitmatter's own implementation.
 
 `AppFrame` owns a compact navigation rail and an unboxed work surface. `PageHeader` uses operational
 sans typography; `PageShell` separates context from scrolling work. Settings use flat sections and
@@ -71,7 +71,7 @@ always comes with text. Do not use a colored dot as the only state indicator.
 
 `text-bronze` and `bg-bronze-tint` remain compatibility aliases for older audit components; they
 now resolve to neutral foreground and muted surface. New components should use semantic names.
-The sidebar uses the muted paper tint. Inverted marketing bands use the dark theme palette.
+The sidebar uses the muted paper tint.
 Do not add a decorative brand hue, gradient text, neon edges, background grids, or glows.
 
 ## Typography
@@ -83,7 +83,7 @@ maps to Inter. Keep font optical sizing enabled.
 
 | Role             | Size          | Weight | Leading | Usage                                 |
 | ---------------- | ------------- | ------ | ------- | ------------------------------------- |
-| Display          | fluid 44–72px | 400    | 1.05    | `text-display`, marketing H1          |
+| Display          | fluid 44–72px | 400    | 1.05    | `text-display`, display heading       |
 | Section          | fluid 32–48px | 400    | 1.1     | `text-section`, major sections        |
 | App page         | 18–20px       | 500    | 1.2     | Sans PageHeader and object context    |
 | App section      | 14px          | 600    | 1.4     | Sans operational group identity       |
@@ -102,17 +102,14 @@ and copyable identifiers, not navigation or ordinary inputs.
 ## Space and layout
 
 Use a 4px rhythm: 4, 8, 16, 24, 32, 64, and 128px. Existing semantic spacing remains compatible:
-field = 6px, stack = 16px, section = 40px, page = 32px. Marketing bands use `py-band` (64px);
-large feature transitions may use `feature` (128px). Avoid arbitrary spacer elements.
+field = 6px, stack = 16px, section = 40px, page = 32px. Avoid arbitrary spacer elements.
 
 `page-container` caps content at 1280px with fluid 24–48px gutters. Reading content stays within
-60–70 characters. Desktop marketing heroes split a statement and a short explanation; on mobile
-they stack. Tables may scroll horizontally inside their own container. Pages must not overflow.
+60–70 characters. Tables may scroll horizontally inside their own container. Pages must not overflow.
 Use the existing project breakpoints (sm/md/lg), rather than claiming they were measured at Harvey.
 
 The app frame has its own density: `navigation` = 224px, `chrome` = 56px minimum and `work` = 20px.
-These roles are generated from the canonical foundations. Marketing gutters do not determine app
-layout. `Card variant="section"` groups settings with proximity and a divider; `surface` is reserved
+These roles are generated from the canonical foundations. `Card variant="section"` groups settings with proximity and a divider; `surface` is reserved
 for standalone contained content. Operational titles stay sans; legal reading and brand identity
 can use serif.
 
@@ -138,8 +135,8 @@ Use tabs, menus, and inline expansion for supporting content.
 ### Buttons
 
 Use the shared Button. Default height is 36px; compact is 32px, extra-small 24px, and large 48px.
-Use large controls for public calls to action. Icon buttons keep a visible focus indicator and an
-accessible name. Compact table controls are a density exception, not the marketing default.
+Icon buttons keep a visible focus indicator and an accessible name. Compact table controls are a
+density exception.
 Primary is ink with paper text. Outline uses a hairline edge. Ghost belongs in toolbars; links
 remain clearly identifiable. One primary action per local group. Destructive actions use the
 semantic error treatment. Hover changes tone; it does not bounce or shift the layout.
@@ -159,16 +156,13 @@ Placeholders give an example; they do not replace labels. Errors cannot rely on 
 
 The sidebar is flat muted paper. Active rows use a neutral tint, ink text, and `aria-current`.
 Do not add a second dot to repeat the selected state. Line tabs mark their active label with an
-underline. Menus reveal supporting actions. Marketing navigation uses static product stills,
-not hover-triggered video. Mobile navigation has a 44px hit area.
+underline. Menus reveal supporting actions. Mobile navigation has a 44px hit area.
 
 ### Tables, lists, and documents
 
 Tables use readable column headings, horizontal separators, and a muted hover or selected row.
 Keep number alignment consistent; use tabular figures for comparable numeric values. Content
 stays unboxed when spacing suffices. Form boundaries and selectable items may keep their edges.
-Show the actual product in marketing media. If a feature has no real capture, explain it plainly
-rather than building a fake screenshot from cards and badges.
 
 ### Audit and diff
 
@@ -191,9 +185,7 @@ Use 100–200ms transitions for hover, focus, and opening UI. Content is visible
 scroll-triggered appearance effects. Respect `prefers-reduced-motion` globally. Loading indicators
 may move while work is running. Do not animate idle content.
 
-Product videos start paused and have native controls. Prefer `preload="metadata"` and a real
-poster when available. Static resource thumbnails show an actual frame and carry no invented
-logo or testimonial. A missing thumbnail does not require a decorative replacement tile.
+Authored video playback starts paused and has controls. Prefer `preload="metadata"` when appropriate.
 
 ## Review against the 21-pattern audit
 
@@ -230,12 +222,11 @@ changes. Keep custom styles local only when a shared component cannot express th
 
 ## Validation for this revision
 
-Verified locally on November 11, 2026: `vp check`, `vp run typecheck`, all 354 tests across 63
-files, and the cloud production build. Browser checks covered the home, platform, resources,
-and development specimen at desktop and 390px mobile widths; light/dark contrast; reduced
-motion; field errors; dialog focus, Escape, and focus return. The production homepage returns
-200, while `/design-system` returns 404 and the specimen content is absent from production JS.
-Signed-in end-to-end flows and deployment were not exercised. Existing video assets were retained.
+Historical verification on November 11, 2026: `vp check`, `vp run typecheck`, all 354 tests across
+63 files, and the cloud production build passed. Development specimen checks covered desktop and
+390px mobile widths, light/dark contrast, reduced motion, field errors, dialog focus, Escape, and
+focus return. `/design-system` returned 404 in production, with specimen content absent from
+production JS. Signed-in end-to-end flows and deployment were not exercised.
 
 The project keeps pnpm’s virtual store local (`enableGlobalVirtualStore: false` in `pnpm-workspace.yaml`).
 The machine’s global-store setting caused Vite+ native-binding and editor peer-dependency resolution

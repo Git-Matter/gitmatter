@@ -1,6 +1,24 @@
 # Design acceptance ledger
 
-## Current evidence
+## Marketing removal (November 17, 2026)
+
+Public promotional pages, articles, comparison pages, videos, campaign drafts, demo-booking links,
+and their rendering/verification tooling have been removed. `/` enters the assistant through the
+existing authentication guard. Privacy, Terms, application workflows and usage documentation remain.
+
+Verification: `vp check`, `vp run typecheck`, `vp run design:check`, the cloud web build and docs build
+pass. `vp test --maxWorkers=2` passes all 502 tests across 86 files using disposable loopback
+Postgres and S3rver, with no live providers or AWS calls. The simplify-code review removed the
+remaining unreachable media-replay branches and found no further source defects.
+
+Rendered checks on the actual app at port 4280 cover guest entry, signup links to both legal
+notices, former `/features` 404 recovery, 1440px/390px legal-page reflow, keyboard focus, dark theme
+and reduced-motion preferences. No blocking findings remain. Signed-in routing, the setup-guide
+destination and deployed behavior were not exercised. Captures are under the ignored
+`output/playwright/marketing-removal/` directory. The earlier records below retain their original
+scope and do not establish current end-to-end acceptance of unrelated workflows.
+
+## Earlier design evidence
 
 **Current visual revision:** the product frame and hierarchy were rebuilt after the user's feedback.
 See [the layout contract](workflows/product-frame.md) and [current app captures](screenshots.json).
@@ -16,7 +34,7 @@ Earlier oversized-card screenshots and their visual completion claims are supers
 - Structural policy: scans authored TS/TSX files and 22 configured contrast pairs; initial scan
   found two real nested link/button controls and an arbitrary shadow. These have been corrected.
 - Guard tests cover token generation, theme drift/injection, sRGB contrast, aliased icons, conditional
-  classes, playback, interactive composition, media-origin drift and configured-model eligibility.
+  classes, playback, interactive composition and configured-model eligibility.
 - Rounder geometry: shared tokens increased to 16px controls, 24px dialogs/media and 28px cards.
   Browser checks measured 16px fields and 24px dialogs with no page overflow at 390px; desktop
   controls and dialogs, dark controls, and mobile controls were visually inspected. Screenshots:
@@ -31,7 +49,6 @@ Earlier oversized-card screenshots and their visual completion claims are supers
 | First-review guide                        | Progressive current-task implementation; saved/resumed/denied/stale scenarios          | Six current replay functions pass, including cached refresh retention/recovery, denied access removal, opener clarity and pending/unsaved exits.                                                                                                  |
 | Review and output                         | Inspector/source/decision round trip; keyboard/mobile; stale/partial/export states     | Six current replay functions pass, including revised-input recovery, proposal accept/reject and explicit clean-output approval. Local UI evidence only; see boundary below.                                                                       |
 | Template lifecycle                        | Editor/reviewer/reader roles; exact revision, private draft, dirty/stale/archive paths | Two current local integration replays pass: exact approved original, private draft, stale/revoked access, dirty/reload/focus recovery, mobile, archive and restore. Injected roles and disk adapter; no production-auth claim.                    |
-| Public product media                      | Reviewed origin, controlled playback, clear disclosure and mobile reflow               | Nineteen illustration assets registered; shared disclosed player and DG010 drift checks; five public-page families pass at 1440px/390px.                                                                                                          |
 | Assistant and conversation context        | Explicit execution, source scope, partial/error/cancel/resume, keyboard/mobile         | Two current component/route replays pass with fictional metadata and streams. No live provider, credential, server-cancellation or authentication claim.                                                                                          |
 | Navigation/settings/auth                  | Task contracts and current context/cancel/recovery audit                               | Four intercepted-request replays pass, including pre-request sign-out protection, URL/history, drafts, configuration/permission failures, revision-bound limits, auth recovery and mobile focus. Formal practitioner study is optional follow-up. |
 | Whole repository                          | `vp check`, `vp run typecheck`, full tests and production build                        | Current format/lint/types, cloud build and fixture types pass; 371 tests / 67 files pass with an explicit 15-second timeout. The default timeout failure is documented below.                                                                     |
@@ -117,7 +134,7 @@ Previous review/output gates passed: `vp check`, `vp run typecheck`, the isolate
 22 contrast pairs / no failures), and the cloud production build. Both replay records were checked
 against the current relevant source and script hashes.
 
-## Template and media checkpoint (November 13, 2026)
+## Template checkpoint (November 13, 2026)
 
 The [template integration record](evidence/template-library.json) adds real local persistence and
 exact approved DOCX identity to the earlier UI-only guard evidence. The editor/reviewer/reader path,
@@ -126,11 +143,6 @@ private next draft, 409 stale approval, copyable frozen note, explicit reload, d
 harness is reproducible from [its guide](../test/acceptance/template-library/design-acceptance.md).
 Injected personas and a disk adapter remain explicit boundaries.
 
-The [media record](evidence/marketing-media.json) covers five public-page families at 1440px and
-390px. All their players start paused, expose controls and names, and visibly identify illustrative
-example data. All 19 public MP4s have reviewed source/composition mappings and asset hashes in
-`media.json`. DG010 and its drift tests enforce that contract. See [media.md](media.md).
-
 Template review notes now survive closing/reloading decisions and transient refresh failures. A
 stale note stays visible and copyable without authorizing a new decision. Authoritative denial
 removes the private view. List replacement no longer strands focus; a disappeared row falls back
@@ -138,7 +150,7 @@ to search. These repairs use the shared unsaved-work and snapshot-retention poli
 
 The template dialog keeps its identity and close action visible while the body scrolls. The mobile
 walkthrough checks that the note is reachable without being covered by that header. Current static
-checks cover ten design rules, including 19 media assets and 22 configured theme contrast pairs.
+checks cover nine design rules and 22 configured theme contrast pairs.
 
 The final template replay includes controlled route open/close and an in-flight audited decision.
 The save/discard bypass is set only after a confirmed server result or explicit user discard; new

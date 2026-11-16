@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { ArrowUpRight, FileCheck2, Settings2, ShieldCheck } from "lucide-react";
+import { FileCheck2, Settings2, ShieldCheck } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -103,17 +103,11 @@ export function PracticeSetup() {
         </AlertDescription>
       </Alert>
       <p className="text-sm text-muted-foreground">
-        For help setting up,{" "}
-        <a
-          className="inline-flex items-center gap-1 underline underline-offset-4"
-          href="https://www.cal.eu/gitmatter/demo"
-          target="_blank"
-          rel="noreferrer"
-        >
-          book an assisted walkthrough
-          <ArrowUpRight className="size-3" aria-hidden="true" />
+        For setup instructions,{" "}
+        <a className="underline underline-offset-4" href="/docs/admin/assisted-setup">
+          read the setup guide
         </a>
-        . Use fictional material for the first session and keep credentials out of support messages.
+        . Use fictional material while getting started and keep credentials out of support messages.
       </p>
     </div>
   );

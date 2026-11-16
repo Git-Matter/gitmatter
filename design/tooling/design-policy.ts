@@ -61,15 +61,6 @@ export function inspectDesignSource(source: string, file: string): DesignFinding
     if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
       const tag = node.tagName.getText(tree);
       if (tag === "video") {
-        if (
-          file.startsWith("apps/web/src/marketing/") &&
-          file !== "apps/web/src/marketing/components/ProductVideo.tsx"
-        )
-          add(
-            "DG010",
-            node,
-            "Use ProductVideo so playback controls and the media-origin disclosure cannot diverge."
-          );
         const auto = node.attributes.properties.find(
           (a) => ts.isJsxAttribute(a) && a.name.getText(tree) === "autoPlay"
         );

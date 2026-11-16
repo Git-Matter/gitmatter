@@ -52,7 +52,7 @@ jobs:
     strategy:
       # Two flavors of the same source, published as two separate GHCR packages so
       # their visibility differs: `local` (self-host, login-first) → public
-      # `gitmatter`; `cloud` (marketing + prerender) → private `gitmatter-cloud`.
+      # `gitmatter`; `cloud` → private `gitmatter-cloud`.
       # DEPLOYMENT is baked at build time, so one image can't be both.
       matrix:
         include:

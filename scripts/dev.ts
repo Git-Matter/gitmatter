@@ -9,7 +9,7 @@ import { run } from "../cli/src/process.ts";
 // Flags:
 //   --skip-deps      don't touch docker (deps already running)
 //   --skip-migrate   don't apply the DB schema
-//   --cloud          run as the cloud flavor (serves the marketing site at "/")
+//   --cloud          run with cloud deployment settings
 //   --dry-run        print the steps without running them
 
 const { values: flags } = parseArgs({
@@ -52,8 +52,8 @@ if (!flags["skip-migrate"]) {
   log("skipping migrate (--skip-migrate)");
 }
 
-// Run only the web app; docs and video have separate development commands.
-// --cloud sets DEPLOYMENT=cloud so vite serves the marketing landing at "/"
+// Run only the web app; docs have a separate development command.
+// --cloud sets DEPLOYMENT=cloud for the cloud build and runtime configuration
 // (vite.config.ts reads process.env.DEPLOYMENT; default is the local flavor).
 log(
   flags["dry-run"]

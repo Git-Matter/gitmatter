@@ -31,8 +31,9 @@ Defer new breadth: artifact branching/time travel, large-export scheduling, mult
 | Settings, model configuration, access, budget and research controls | Must work                 | Named scope; explicit consequential save; revision/current-access guards; pending/error/denied input preservation; correct provider configuration               | Four `access` fixture functions; `job-controls`, provider-policy and auth tests                                                                     | Fresh replay, then actual account/provider metadata through approved credential workflow. Never print or copy secret values into evidence                                        |
 | Legal research and document chunk context                           | Preserve and verify       | Configured provider works or explains unavailability; citations identify actual source; tenant/matter/token scope respected                                     | Current worktree has research UI; branch audit owns outstanding implementations                                                                     | Review merge-specific diffs, migration/index changes, provider availability and tests after merge. Do not silently infer live research quality from configured UI                |
 | Australian sole-practice workflows                                  | Preserve and verify       | Practice profile/jurisdiction, guided briefing/agreement review/client update, human review binding and clear outcome                                           | Separate feature branch exists; its code is outside this worktree at audit start                                                                    | Branch integration review, tests and real UI acceptance on integrated revision. Not discarded merely because NDA is the short demo                                               |
-| Public website and product media                                    | Must publish              | Accurate feature copy; linked demo path; paused controlled media/disclosure; desktop/mobile/keyboard; no unproved deployment/customer claims                    | Registered media and design policy; five-page-family `marketing-media` replay                                                                       | Fresh public runtime replay and deployed revision checks. Old screenshot hashes and local prerender are not publication proof                                                    |
 | Staging, main promotion and production                              | Must complete             | Current CI; exact image/revision and migrations; browser/MCP smoke on intended environment; frontend marker not only health; all non-excluded branches resolved | CI/staging/release workflows and `scripts/verify-web-deployment.ts`; historical plans describe an older staging pull/frontend blocker               | Inspect live deployment independently. Merge/push into dev first, validate staging, then main and production. Final branch inventory must be only main/dev/excluded integration  |
+
+Public promotional pages and media were removed on 17 November 2026. Their publication and marketing-media replay requirements no longer apply. App entry, authentication, legal notices, and documentation remain in scope.
 
 ## Current evidence check
 
@@ -45,7 +46,6 @@ All JSON files in `design/evidence` were read and each `sourceSHA256` entry was 
 | `app-wide.json`                  |             44 |                  17 | Historical after shared/list fixture changes                          |
 | `assistant.json`                 |             43 |                   4 | Historical after guard/composer changes                               |
 | `first-review.json`              |             34 |                   7 | Historical after token/guard/editor changes                           |
-| `marketing-media.json`           |             18 |                   2 | Historical after token changes                                        |
 | `product-frame-screenshots.json` |             21 |                  12 | Superseded source state; cannot prove current render                  |
 | `review-and-output.json`         |             39 |                  11 | Historical after guard/review/document changes                        |
 | `template-library.json`          |             44 |                   9 | Historical after guard/template changes                               |
@@ -94,7 +94,6 @@ PLAYWRIGHT_CLI=/absolute/path/to/playwright-cli node test/acceptance/design-work
 PLAYWRIGHT_CLI=/absolute/path/to/playwright-cli node test/acceptance/design-workflows/replay.mjs assistant
 PLAYWRIGHT_CLI=/absolute/path/to/playwright-cli node test/acceptance/design-workflows/replay.mjs access
 PLAYWRIGHT_CLI=/absolute/path/to/playwright-cli node test/acceptance/design-workflows/replay.mjs feedback
-PLAYWRIGHT_CLI=/absolute/path/to/playwright-cli node test/acceptance/design-workflows/replay.mjs marketing-media
 ```
 
 The fixture guides in `test/acceptance` specify their startup, identities and storage boundaries. Supplement them with `test/acceptance/nda-browser.md`, actual loopback Word HTTP acceptance, a bounded authorized provider-quality run, native Word checks, then staging and production smoke against exact deployed revisions. No fixture or offline scorer closes those runtime tiers.

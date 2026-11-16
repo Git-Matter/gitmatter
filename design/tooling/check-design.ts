@@ -3,7 +3,6 @@ import { fileURLToPath } from "node:url";
 import { relative, resolve } from "node:path";
 import { checkDesignTokens, type DesignTokens, tokenSource } from "./design-tokens";
 import { contrastRatio, inspectDesignSource, type DesignFinding } from "./design-policy";
-import { checkProductMedia } from "./check-media";
 
 type Policy = {
   version: number;
@@ -60,7 +59,6 @@ for (const entry of policy.exceptions) {
     );
 }
 await scan(resolve(root, policy.sourceRoot));
-findings.push(...(await checkProductMedia(root)));
 if (!(await checkDesignTokens()))
   findings.push({
     rule: "DG008",

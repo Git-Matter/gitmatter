@@ -36,9 +36,6 @@ tmp
 # gitmatter CLI build artifacts
 cli/dist/
 
-# remotion bundle output
-apps/video/build/
-
 # test artifacts
 test-results/
 

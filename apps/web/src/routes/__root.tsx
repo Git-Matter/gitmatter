@@ -1,4 +1,4 @@
-import { HeadContent, Scripts, createRootRoute, useRouterState } from "@tanstack/react-router";
+import { HeadContent, Scripts, createRootRoute } from "@tanstack/react-router";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Suspense, lazy } from "react";
 import { ThemeProvider } from "next-themes";
@@ -12,7 +12,7 @@ const Toaster = lazy(() => import("@/components/ui/sonner").then((m) => ({ defau
 
 export const Route = createRootRoute({
   // Session is resolved per route group, not here: the `_auth` layout resolves
-  // it (and renders the authed chrome), while public/marketing/login pages stay
+  // it (and renders the authed chrome), while legal and login pages stay
   // session-free so they prerender to static HTML without a database.
   head: () => ({
     meta: [
@@ -53,18 +53,11 @@ export const Route = createRootRoute({
 function Shell({ children }: { children: React.ReactNode }) {
   // Plain document background. Each route group owns its own chrome: `_auth`
   // renders the sidebar + app container, `_unauth` the centered auth container,
-  // and marketing its full-bleed MarketingLayout.
+  // and legal pages their reading layout.
   return <div className="min-h-dvh bg-background">{children}</div>;
 }
 
 function RootDocument({ children }: { children: React.ReactNode }) {
-  // The marketing site is always light (warm-paper editorial). Force it at the
-  // root provider so next-themes' pre-paint script emits light — no dark flash
-  // for visitors whose product theme is dark. Detected from the matched route
-  // group, not the pathname, so it stays correct on client navigation.
-  const isMarketing = useRouterState({
-    select: (s) => s.matches.some((m) => m.routeId.includes("(marketing)")),
-  });
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
@@ -77,7 +70,6 @@ function RootDocument({ children }: { children: React.ReactNode }) {
             defaultTheme="system"
             enableSystem
             disableTransitionOnChange
-            forcedTheme={isMarketing ? "light" : undefined}
           >
             <TooltipProvider>
               <Shell>{children}</Shell>

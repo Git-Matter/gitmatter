@@ -6,8 +6,6 @@ import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 import viteReact, { reactCompilerPreset } from "@vitejs/plugin-react";
 import babel from "@rolldown/plugin-babel";
 import tailwindcss from "@tailwindcss/vite";
-import mdx from "@mdx-js/rollup";
-import remarkGfm from "remark-gfm";
 
 // Load monorepo-root .env into process.env so server handlers (db, auth) see it.
 loadEnv({ path: "../../.env" });
@@ -16,64 +14,10 @@ loadEnv({ path: "../../.env" });
 // Reject a duplicate start rather than silently launching another instance.
 const port = Number(process.env.PORT) || 4280;
 
-// DEPLOYMENT=cloud ships the public marketing landing at "/"; anything else
-// (local/self-host) drops it and "/" redirects to login. Exposed as a build
-// constant so the cloud-only marketing chunk tree-shakes out of local builds.
+// Cloud builds prerender only session-free access and legal pages. Protected
+// routes resolve each visitor's session at request time.
 const deployment = process.env.DEPLOYMENT === "cloud" ? "cloud" : "local";
-
-// Public, session-free pages safe to render to static HTML at build time (then
-// served from the edge / CF cache). Cloud only: in a local build the marketing
-// chunk is tree-shaken out and these paths redirect to /login, so there is
-// nothing to prerender. Everything under _auth/* is per-session and must NOT be
-// listed here.
-const PUBLIC_PRERENDER_PATHS = [
-  "/", // marketing home
-  "/about",
-  "/australian-practices",
-  "/privacy",
-  "/security",
-  "/terms",
-  "/login",
-  "/signup",
-  "/legal-ai",
-  "/legal-ai-audit-trail",
-  "/self-hosted-legal-ai",
-  // Platform + solutions indexes and one path per catalog entry (slugs come
-  // from src/marketing/catalog.ts). Keep in sync with public/sitemap.xml.
-  "/platform",
-  "/platform/template-library",
-  "/platform/assistant",
-  "/platform/tabular-review",
-  "/platform/redline-and-drafting",
-  "/platform/workflows",
-  "/platform/clause-library-and-playbooks",
-  "/platform/audit-trail",
-  "/platform/bring-your-own-agent",
-  "/solutions",
-  "/solutions/contract-redline",
-  "/solutions/data-extraction",
-  "/solutions/drafting",
-  "/solutions/audit-trail",
-  "/solutions/bring-your-own-agent",
-  "/solutions/bring-your-own-key",
-  // Resources hub + one watch page per video (slugs from
-  // src/marketing/resourceCatalog.ts VIDEOS).
-  "/resources",
-  "/resources/platform-overview",
-  "/resources/product-tour",
-  "/resources/install",
-  "/resources/who-changed-this-clause",
-  "/resources/agent-at-work",
-  "/resources/ai-first-pass-redline",
-  "/resources/where-your-key-goes",
-  // Blog index + one path per post (slug = filename in src/marketing/blog/posts).
-  // Keep in sync when adding a post, along with public/sitemap.xml.
-  "/blog",
-  "/blog/ai-audit-trail-legal-work",
-  "/blog/chatgpt-claude-legal-work-audit-trail",
-  "/blog/contract-redlining-best-practices-ai-first-pass",
-  "/blog/byok-zero-data-retention-legal-ai",
-];
+const PUBLIC_PRERENDER_PATHS = ["/privacy", "/terms", "/login", "/signup"];
 
 // Lock prerender to the explicit whitelist: discovery and link-crawling are off
 // so the prerenderer can never wander into the authenticated app shell (which
@@ -109,7 +53,6 @@ const config = defineConfig({
     },
   },
   define: {
-    "import.meta.env.VITE_DEPLOYMENT": JSON.stringify(deployment),
     // Public Turnstile site key, baked in as a build constant (safe to expose).
     // Empty when unset, which disables the widget client-side.
     "import.meta.env.VITE_TURNSTILE_SITE_KEY": JSON.stringify(process.env.TURNSTILE_SITE_KEY ?? ""),
@@ -142,13 +85,6 @@ const config = defineConfig({
   // Traefik, which already routes by host — so accept whatever host it forwards.
   preview: { port, strictPort: true, allowedHosts: true },
   plugins: [
-    // Blog posts are authored as .mdx and compiled to plain React at build time.
-    // Must run before the react/babel plugins so they only ever see compiled JS.
-    // Post metadata lives in src/marketing/blog/posts.ts, not in frontmatter.
-    {
-      enforce: "pre" as const,
-      ...mdx({ remarkPlugins: [remarkGfm] }),
-    },
     devtools(),
     tailwindcss(),
     tanstackStart(prerenderOptions),
