@@ -24,7 +24,7 @@ const WHY = [
   },
   {
     title: "Where did the documents go?",
-    body: "Through your own LLM account and back — Claude, Gemini, OpenAI, or OpenRouter, stored encrypted, set for zero data retention. Open source, self-hostable if a client requires it.",
+    body: "Requests go to the provider your firm selects, under your own account where configured. Keys are encrypted; retention depends on the provider's supported controls, your settings, and its terms. You can also self-host gitmatter.",
   },
 ];
 
@@ -184,8 +184,9 @@ export default function Platform() {
             <div className="flex flex-col gap-1 border-t border-border pt-4">
               <h3 className="font-heading text-lg tracking-tight">Run on your own key</h3>
               <p className="text-sm leading-relaxed text-muted-foreground">
-                gitmatter's own features run on the firm's LLM account — stored encrypted,
-                configured for zero data retention.
+                gitmatter's own features use the firm's LLM key, stored encrypted, with
+                zero-data-retention handling where the provider supports it. Review your account
+                settings and provider terms before sending client material.
               </p>
               <ul className="mt-4 flex flex-wrap gap-x-5 gap-y-2">
                 {WORKS_WITH.providers.map((p) => (

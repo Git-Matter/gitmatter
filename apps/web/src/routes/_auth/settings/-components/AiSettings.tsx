@@ -4,7 +4,6 @@ import { FormFeedback } from "@/components/FormFeedback";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Scale } from "lucide-react";
 import { toast } from "sonner";
 import { JURISDICTIONS, sourcesFor } from "@workspace/registry";
 import { Badge } from "@/components/ui/badge";
@@ -81,11 +80,10 @@ export function JurisdictionCard() {
         )}
         <SettingsQueryNotice query={query} label="Jurisdiction" />
         {settingsSnapshotVisible(query) && (
-          <div className="rounded-lg border border-border/70 bg-muted/40 p-3">
+          <div className="pt-2">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-xs font-medium text-muted-foreground">Available tools</p>
-                <p className="text-sm font-medium">Tools for {effective}</p>
+                <p className="text-sm font-medium">Research tools for {effective}</p>
               </div>
               <Badge variant={toolCount ? "secondary" : "outline"}>{toolCount || "No"} tools</Badge>
             </div>
@@ -93,32 +91,23 @@ export function JurisdictionCard() {
             {sources.length ? (
               <div className="mt-3 divide-y divide-border/70">
                 {sources.map((source) => (
-                  <section key={source.id} className="py-3 first:pt-0 last:pb-0">
+                  <section key={source.id} className="py-4 first:pt-0 last:pb-0">
                     <div className="flex items-center gap-2">
-                      <span className="size-1.5 rounded-full bg-bronze" />
                       <p className="text-sm font-medium">{source.name}</p>
                       <span className="text-xs text-muted-foreground">
                         {source.tools.length} {source.tools.length === 1 ? "tool" : "tools"}
                       </span>
                     </div>
-                    <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                    <dl className="mt-2 space-y-3">
                       {source.tools.map((tool) => (
-                        <div
-                          key={tool.name}
-                          className="flex min-w-0 gap-2 rounded-md border border-border/60 bg-card/70 p-2.5"
-                        >
-                          <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-background text-muted-foreground">
-                            <Scale className="size-3.5" aria-hidden="true" />
-                          </span>
-                          <div className="min-w-0">
-                            <p className="truncate text-sm font-medium">{tool.label}</p>
-                            <p className="text-xs leading-5 text-muted-foreground">
-                              {tool.summary}
-                            </p>
-                          </div>
+                        <div key={tool.name} className="min-w-0">
+                          <dt className="text-sm">{tool.label}</dt>
+                          <dd className="mt-0.5 text-sm leading-relaxed text-muted-foreground">
+                            {tool.summary}
+                          </dd>
                         </div>
                       ))}
-                    </div>
+                    </dl>
                   </section>
                 ))}
               </div>

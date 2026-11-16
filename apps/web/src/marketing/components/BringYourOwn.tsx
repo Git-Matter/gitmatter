@@ -10,7 +10,7 @@ const WAYS = [
   {
     tag: "Bring your own key",
     title: "Run on your own key.",
-    body: "gitmatter's own features run on your AI key, stored encrypted and set for zero data retention. Pick the provider you trust — your data stays yours.",
+    body: "gitmatter's own features run on your AI key, stored encrypted. Choose the provider your firm has approved; retention depends on its supported controls, your account settings, and its terms.",
   },
 ];
 

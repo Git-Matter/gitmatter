@@ -242,7 +242,7 @@ export const FEATURES: Feature[] = [
         points: [
           {
             name: "Your own LLM key",
-            desc: "Claude, Gemini, OpenAI, or OpenRouter — stored encrypted, configured for zero data retention, never used to train anyone's model.",
+            desc: "Connect Claude, Gemini, OpenAI, or OpenRouter with an encrypted key. Retention depends on the provider's supported controls, your account settings, and its terms.",
           },
           {
             name: "Recorded sessions",
@@ -600,10 +600,10 @@ export const SOLUTIONS: Solution[] = [
   }),
   solution({
     tag: "Bring your own key",
-    title: "Your own LLM key, zero data retention.",
-    body: "Run gitmatter's own features on your firm's LLM key — Claude, Gemini, OpenAI, or OpenRouter — stored encrypted and configured so nothing is kept or used for training. Privacy concerns are the top reason firms stall on AI; this is the answer.",
+    title: "Use your firm's approved AI provider.",
+    body: "Run gitmatter's own features on your firm's LLM key for Claude, Gemini, OpenAI, or OpenRouter. Keys are stored encrypted, with zero-data-retention handling where supported. Review provider terms and account settings against your firm's confidentiality requirements.",
     who: "For firms blocked on AI by confidentiality and data-privacy rules.",
-    menuDesc: "Your own LLM key, zero data retention.",
+    menuDesc: "Your own LLM key and provider account.",
   }),
 ];
 
