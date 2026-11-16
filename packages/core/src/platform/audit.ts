@@ -1,4 +1,4 @@
-import { db } from "@workspace/db/client";
+import { db, type Tx } from "@workspace/db/client";
 import { type AuditEventType, auditEvents } from "@workspace/db/schema";
 import { createBatchWriter } from "./batch-writer.js";
 
@@ -29,8 +29,8 @@ const auditWriter = createBatchWriter<AuditRow>(
  * enqueued and flushed in bulk shortly after, so this never blocks the request it
  * observes (and a hard crash may drop the last unflushed batch).
  */
-export async function recordAudit(e: AuditInput): Promise<void> {
-  auditWriter.add({
+export async function recordAudit(e: AuditInput, transaction?: Tx): Promise<void> {
+  const row = {
     eventType: e.eventType,
     actorId: e.actorId ?? null,
     tenantId: e.tenantId ?? null,
@@ -38,5 +38,7 @@ export async function recordAudit(e: AuditInput): Promise<void> {
     userAgent: e.userAgent ?? null,
     target: e.target ?? null,
     metadata: e.metadata ?? null,
-  });
+  };
+  if (transaction) await transaction.insert(auditEvents).values(row);
+  else auditWriter.add(row);
 }

@@ -8,6 +8,8 @@ export * from "./mcp-tokens.js";
 export * from "./oauth.js";
 export * from "./practice.js";
 export * from "./queue.js";
+export * from "./practice-profile.js";
+export * from "./guided.js";
 export * from "./retention.js";
 export * from "./settings.js";
 export * from "./shares.js";

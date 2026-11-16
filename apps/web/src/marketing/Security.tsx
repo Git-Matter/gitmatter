@@ -4,7 +4,7 @@ import { LegalPage } from "./LegalPage";
 // Cloud-only marketing page summarizing gitmatter's security posture.
 export default function Security() {
   return (
-    <LegalPage title="Security" lastUpdated="June 20, 2026">
+    <LegalPage title="Security" lastUpdated="November 10, 2026">
       <p>
         Security is the core of gitmatter: the product exists to make every change to legal work
         attributable and reviewable. This page summarizes our current posture for the hosted
@@ -30,17 +30,19 @@ export default function Security() {
       <h2>Authentication and sessions</h2>
       <p>
         Accounts use email and password, with credentials stored using a strong one-way hash and
-        sessions managed by our authentication layer. We recommend a unique, strong password for
-        your account. Multi-factor authentication and single sign-on are on our roadmap and are not
-        not yet available.
+        sessions managed by our authentication layer. Device passkeys can also be managed in account
+        settings. Use the available account controls and review the configuration of your
+        deployment; this page does not establish an enforced authentication policy for your
+        practice.
       </p>
 
       <h2>Secrets and credentials</h2>
       <p>
         Bring-your-own-key provider credentials and external-connection secrets are encrypted at
         rest with AES-256-GCM. Access tokens are stored hashed, never in plaintext. Provider keys
-        are used with zero-data-retention handling where the provider supports it, and are never
-        logged.
+        are never logged. API flags do not establish an account-level zero-retention agreement;
+        provider terms, settings, and any additional agreement must be checked for the actual
+        account.
       </p>
 
       <h2>Access and tenant isolation</h2>
@@ -81,6 +83,19 @@ export default function Security() {
         processed in the EU. Document and prompt content is sent only to the AI provider you select
         (Anthropic, Google, OpenAI, or OpenRouter), under your own key where configured. gitmatter
         does not train models on your data. A current list of subprocessors is available on request.
+      </p>
+      <p>
+        The document-storage region is a separate control from account/database data, extracted
+        text, backups, monitoring, and AI processing. Selecting Australian document storage does not
+        establish that all data remains in Australia. An external assistant connected over MCP is
+        subject to its own account terms and may receive document content in tool responses.
+      </p>
+      <p>
+        Review the{" "}
+        <a href={`${SITE.docs}/admin/ai-data-handling`} className="text-foreground underline">
+          AI data-handling guide
+        </a>{" "}
+        and retain the provider and deployment evidence needed for your practice's assessment.
       </p>
 
       <h2>Vulnerability management</h2>

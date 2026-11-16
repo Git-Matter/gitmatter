@@ -13,14 +13,24 @@ import { JobControls } from "./-components/JobControls";
 import { z } from "zod";
 import { useState, type ReactNode } from "react";
 import { SettingsDrafts } from "./-components/SettingsDrafts";
+import { PracticeProfileCard } from "./-components/PracticeProfileCard";
+import { PracticeSetup } from "./-components/PracticeSetup";
 
-const settingsTabs = ["account", "organization", "ai", "agents", "data"] as const;
+const settingsTabs = [
+  "setup",
+  "practice",
+  "account",
+  "organization",
+  "ai",
+  "agents",
+  "data",
+] as const;
 type SettingsTab = (typeof settingsTabs)[number];
 
 export const Route = createFileRoute("/_auth/settings/")({
   component: Settings,
   validateSearch: z.object({
-    tab: z.enum(["account", "organization", "ai", "agents", "data"]).optional().catch(undefined),
+    tab: z.enum(settingsTabs).optional().catch(undefined),
   }),
 });
 
@@ -34,6 +44,8 @@ function Settings() {
   if (!visited.has(activeTab)) setVisited((previous) => new Set([...previous, activeTab]));
 
   const labels: Record<SettingsTab, string> = {
+    setup: "Get started",
+    practice: "Your practice",
     account: "Account",
     organization: "Organization",
     ai: "AI & Models",
@@ -91,6 +103,8 @@ function Settings() {
           </div>
           <div className="min-h-0 min-w-0 overflow-y-auto pe-2">
             <div className="max-w-3xl">
+              {panel("setup", <PracticeSetup />)}
+              {panel("practice", <PracticeProfileCard userId={session.user.id} />)}
               {panel("account", <AccountSettings session={session} />)}
               {panel(
                 "organization",

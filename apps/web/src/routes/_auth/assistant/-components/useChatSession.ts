@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { type ProviderId, resolveJurisdiction } from "@workspace/registry";
+import { type ProviderId, resolveChatJurisdiction } from "@workspace/registry";
 import {
   api,
   type ChatAttachment,
@@ -68,14 +68,25 @@ export function useChatSession({
     }))
   );
   const [tools, setTools] = useState<string[]>([]);
-  const [jurisdiction, setJurisdiction] = useState<string>("");
-  const [jurisdictionOverride, setJurisdictionOverrideState] = useState("");
+  const [jurisdiction, setJurisdiction] = useState<string>(loaded?.jurisdiction ?? "");
+  const [jurisdictionOverride, setJurisdictionOverrideState] = useState(loaded?.jurisdiction ?? "");
   const [sourceIds, setSourceIds] = useState<ProviderId[] | null>(null);
   const { data: settings } = useQuery({
     queryKey: ["settings"],
     queryFn: () => api.getSettings(),
   });
-  const effectiveJurisdiction = resolveJurisdiction(jurisdictionOverride, settings?.jurisdiction);
+  const scopedMatterId = loaded?.matterId ?? matterId;
+  const matterContext = useQuery({
+    queryKey: ["matter", scopedMatterId],
+    queryFn: () => api.getMatter(scopedMatterId!),
+    enabled: !!scopedMatterId && !jurisdiction,
+  });
+  const effectiveJurisdiction = resolveChatJurisdiction({
+    request: jurisdictionOverride,
+    conversation: jurisdiction,
+    matter: matterContext.data?.jurisdiction,
+    user: settings?.jurisdiction,
+  });
 
   function setJurisdictionOverride(next: string) {
     setJurisdictionOverrideState(next);
@@ -203,8 +214,11 @@ export function useChatSession({
 
   // Any attached document still being stored or extracted. Used to block send
   // until the model can actually read every attached document.
-  const hasProcessingAttachment = attachments.some(
-    (a) => a.kind === "document" && (a.status === "pending" || a.status === "processing")
+  const hasProcessingAttachment = Boolean(
+    (scopedMatterId && !jurisdiction && !jurisdictionOverride && matterContext.isPending) ||
+    attachments.some(
+      (a) => a.kind === "document" && (a.status === "pending" || a.status === "processing")
+    )
   );
   const hasFailedAttachment = attachments.some(
     (a) => a.kind === "document" && a.status === "failed"
@@ -286,6 +300,7 @@ export function useChatSession({
             });
             setTools(r.tools);
             setJurisdiction(r.jurisdiction);
+            setJurisdictionOverrideState(r.jurisdiction);
             if (!chatId) {
               // First turn of a new chat. Seed the resume route's cache with the
               // just-finished conversation so navigating to /…/$chatId renders it
@@ -295,6 +310,7 @@ export function useChatSession({
                 id: r.chatId,
                 title: null,
                 matterId: matterId ?? null,
+                jurisdiction: r.jurisdiction,
                 turns: [
                   { role: "user", text: message },
                   {

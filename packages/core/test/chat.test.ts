@@ -3,7 +3,8 @@ import { randomUUID } from "node:crypto";
 import { db, sql } from "@workspace/db/client";
 import { chatMessages, chats, tenants, user } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
-import { persistChat } from "../src/platform/chat.js";
+import { getChat, persistChat } from "../src/platform/chat.js";
+import { resolveChatJurisdiction, toolsFor } from "@workspace/registry";
 
 const userId = `test-user-${randomUUID()}`;
 let tenantId: string;
@@ -28,6 +29,72 @@ afterAll(async () => {
 });
 
 describe("persistChat", () => {
+  test("persists AU state context through follow-up and reload despite a US account default", async () => {
+    const id = await persistChat(
+      userId,
+      { message: "Review the fictional NSW matter", finalText: "Draft briefing", toolCalls: [] },
+      undefined,
+      undefined,
+      "AU-NSW"
+    );
+    const reloaded = await getChat(userId, id);
+    expect(reloaded?.jurisdiction).toBe("AU-NSW");
+    const jurisdiction = resolveChatJurisdiction({
+      conversation: reloaded?.jurisdiction,
+      user: "US",
+    });
+    expect(jurisdiction).toBe("AU-NSW");
+    expect(toolsFor(jurisdiction).some((tool) => tool.name === "search_case_law")).toBe(false);
+    await persistChat(
+      userId,
+      { message: "Draft the update", finalText: "Draft update", toolCalls: [] },
+      id
+    );
+    expect((await getChat(userId, id))?.jurisdiction).toBe("AU-NSW");
+    await persistChat(
+      userId,
+      {
+        message: "Now consider Victoria explicitly",
+        finalText: "Victorian context",
+        toolCalls: [],
+      },
+      id,
+      undefined,
+      "AU-VIC"
+    );
+    expect((await getChat(userId, id))?.jurisdiction).toBe("AU-VIC");
+  });
+
+  test("does not append to a conversation owned by another account", async () => {
+    const id = await persistChat(userId, {
+      message: "Private fixture",
+      finalText: "Private answer",
+      toolCalls: [],
+    });
+    await expect(
+      persistChat(
+        `not-the-owner-${randomUUID()}`,
+        { message: "Injected", finalText: "Injected", toolCalls: [] },
+        id
+      )
+    ).rejects.toThrow("Conversation not found");
+    expect((await getChat(userId, id))?.turns).toHaveLength(2);
+  });
+
+  test("serialises concurrent follow-ups in the same conversation", async () => {
+    const id = await persistChat(userId, { message: "Start", finalText: "Ready", toolCalls: [] });
+    await Promise.all(
+      Array.from({ length: 5 }, (_, index) =>
+        persistChat(
+          userId,
+          { message: `Follow-up ${index}`, finalText: "Answer", toolCalls: [] },
+          id
+        )
+      )
+    );
+    const detail = await getChat(userId, id);
+    expect(detail?.turns).toHaveLength(12);
+  });
   test("writes a turn atomically: user + assistant messages at seq 1,2", async () => {
     const id = await persistChat(userId, {
       message: "hello",

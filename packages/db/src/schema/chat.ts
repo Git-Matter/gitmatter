@@ -25,6 +25,9 @@ export const chats = pgTable(
       .notNull()
       .references(() => tenants.id, { onDelete: "cascade" }),
     matterId: uuid("matter_id").references(() => matters.id, { onDelete: "cascade" }),
+    // Persist the conversation's explicit legal context across follow-ups and
+    // reloads; null preserves legacy fallback to matter/user preferences.
+    jurisdiction: text("jurisdiction"),
     // Optionally scoped to an artifact (review/contract); null = global chat.
     artifactType: text("artifact_type").$type<ArtifactType>(),
     artifactId: uuid("artifact_id"),

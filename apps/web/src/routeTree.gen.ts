@@ -33,6 +33,7 @@ import { Route as marketingPrivacyRouteImport } from './routes/(marketing)/priva
 import { Route as marketingLegalAiAuditTrailRouteImport } from './routes/(marketing)/legal-ai-audit-trail'
 import { Route as marketingLegalAiRouteImport } from './routes/(marketing)/legal-ai'
 import { Route as marketingFeaturesRouteImport } from './routes/(marketing)/features'
+import { Route as marketingAustralianPracticesRouteImport } from './routes/(marketing)/australian-practices'
 import { Route as marketingAboutRouteImport } from './routes/(marketing)/about'
 import { Route as AuthWorkflowsIndexRouteImport } from './routes/_auth/workflows/index'
 import { Route as AuthSettingsIndexRouteImport } from './routes/_auth/settings/index'
@@ -184,6 +185,12 @@ const marketingFeaturesRoute = marketingFeaturesRouteImport.update({
   path: '/features',
   getParentRoute: () => marketingRouteRoute,
 } as any)
+const marketingAustralianPracticesRoute =
+  marketingAustralianPracticesRouteImport.update({
+    id: '/australian-practices',
+    path: '/australian-practices',
+    getParentRoute: () => marketingRouteRoute,
+  } as any)
 const marketingAboutRoute = marketingAboutRouteImport.update({
   id: '/about',
   path: '/about',
@@ -351,6 +358,7 @@ export interface FileRoutesByFullPath {
   '/design-system': typeof DesignSystemRoute
   '/sign-out': typeof SignOutRoute
   '/about': typeof marketingAboutRoute
+  '/australian-practices': typeof marketingAustralianPracticesRoute
   '/features': typeof marketingFeaturesRoute
   '/legal-ai': typeof marketingLegalAiRoute
   '/legal-ai-audit-trail': typeof marketingLegalAiAuditTrailRoute
@@ -405,6 +413,7 @@ export interface FileRoutesByTo {
   '/design-system': typeof DesignSystemRoute
   '/sign-out': typeof SignOutRoute
   '/about': typeof marketingAboutRoute
+  '/australian-practices': typeof marketingAustralianPracticesRoute
   '/features': typeof marketingFeaturesRoute
   '/legal-ai': typeof marketingLegalAiRoute
   '/legal-ai-audit-trail': typeof marketingLegalAiAuditTrailRoute
@@ -462,6 +471,7 @@ export interface FileRoutesById {
   '/design-system': typeof DesignSystemRoute
   '/sign-out': typeof SignOutRoute
   '/(marketing)/about': typeof marketingAboutRoute
+  '/(marketing)/australian-practices': typeof marketingAustralianPracticesRoute
   '/(marketing)/features': typeof marketingFeaturesRoute
   '/(marketing)/legal-ai': typeof marketingLegalAiRoute
   '/(marketing)/legal-ai-audit-trail': typeof marketingLegalAiAuditTrailRoute
@@ -519,6 +529,7 @@ export interface FileRouteTypes {
     | '/design-system'
     | '/sign-out'
     | '/about'
+    | '/australian-practices'
     | '/features'
     | '/legal-ai'
     | '/legal-ai-audit-trail'
@@ -573,6 +584,7 @@ export interface FileRouteTypes {
     | '/design-system'
     | '/sign-out'
     | '/about'
+    | '/australian-practices'
     | '/features'
     | '/legal-ai'
     | '/legal-ai-audit-trail'
@@ -629,6 +641,7 @@ export interface FileRouteTypes {
     | '/design-system'
     | '/sign-out'
     | '/(marketing)/about'
+    | '/(marketing)/australian-practices'
     | '/(marketing)/features'
     | '/(marketing)/legal-ai'
     | '/(marketing)/legal-ai-audit-trail'
@@ -860,6 +873,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof marketingFeaturesRouteImport
       parentRoute: typeof marketingRouteRoute
     }
+    '/(marketing)/australian-practices': {
+      id: '/(marketing)/australian-practices'
+      path: '/australian-practices'
+      fullPath: '/australian-practices'
+      preLoaderRoute: typeof marketingAustralianPracticesRouteImport
+      parentRoute: typeof marketingRouteRoute
+    }
     '/(marketing)/about': {
       id: '/(marketing)/about'
       path: '/about'
@@ -1082,6 +1102,7 @@ declare module '@tanstack/react-router' {
 
 interface marketingRouteRouteChildren {
   marketingAboutRoute: typeof marketingAboutRoute
+  marketingAustralianPracticesRoute: typeof marketingAustralianPracticesRoute
   marketingFeaturesRoute: typeof marketingFeaturesRoute
   marketingLegalAiRoute: typeof marketingLegalAiRoute
   marketingLegalAiAuditTrailRoute: typeof marketingLegalAiAuditTrailRoute
@@ -1109,6 +1130,7 @@ interface marketingRouteRouteChildren {
 
 const marketingRouteRouteChildren: marketingRouteRouteChildren = {
   marketingAboutRoute: marketingAboutRoute,
+  marketingAustralianPracticesRoute: marketingAustralianPracticesRoute,
   marketingFeaturesRoute: marketingFeaturesRoute,
   marketingLegalAiRoute: marketingLegalAiRoute,
   marketingLegalAiAuditTrailRoute: marketingLegalAiAuditTrailRoute,

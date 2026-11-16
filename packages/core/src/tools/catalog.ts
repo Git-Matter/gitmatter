@@ -186,6 +186,8 @@ export function buildToolCatalog(
   opts: {
     jurisdiction: string;
     defaultMatterLabel: string;
+    /** Fixed, server-authorized conversation context for newly created artifacts. */
+    matterId?: string;
     sourceIds?: ProviderId[];
     executionMode?: "subscription";
     credentialId?: string;
@@ -202,8 +204,10 @@ export function buildToolCatalog(
   // matterId, or the acting user's default matter. Returns null when forbidden.
   const scope = actor.type === "agent" ? (actor.scope ?? null) : null;
   const resolveMatter = async (matterId?: string): Promise<string | null> => {
-    if (matterId) {
-      return (await hasMatterAccess(actor, matterId, "editor")) ? matterId : null;
+    if (opts.matterId && matterId && opts.matterId !== matterId) return null;
+    const targetMatterId = opts.matterId ?? matterId;
+    if (targetMatterId) {
+      return (await hasMatterAccess(actor, targetMatterId, "editor")) ? targetMatterId : null;
     }
     // A scoped token gets no implicit default matter: a matter-restricted token
     // must name one of its matters, and a viewer-capped token cannot create.

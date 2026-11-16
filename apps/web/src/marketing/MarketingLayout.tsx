@@ -151,6 +151,9 @@ function CompactNav() {
         <Link to="/resources" className="rounded-md px-3 py-2 text-sm hover:bg-muted">
           Resources
         </Link>
+        <a href="/australian-practices" className="rounded-md px-3 py-2 text-sm hover:bg-muted">
+          Australian practices
+        </a>
         <Link to="/about" className="rounded-md px-3 py-2 text-sm hover:bg-muted">
           About
         </Link>
@@ -205,6 +208,12 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
           >
             About
           </Link>
+          <a
+            href="/australian-practices"
+            className="rounded-md px-3 py-2 text-muted-foreground hover:text-foreground"
+          >
+            Australian practices
+          </a>
         </nav>
         <div className="flex shrink-0 items-center gap-2">
           <Button
@@ -284,6 +293,9 @@ export default function MarketingLayout({ children }: { children: React.ReactNod
           </FooterSection>
 
           <FooterSection title="Company">
+            <a href="/australian-practices" className="text-muted-foreground hover:text-foreground">
+              Australian practices
+            </a>
             <Link to="/about" className="text-muted-foreground hover:text-foreground">
               About
             </Link>

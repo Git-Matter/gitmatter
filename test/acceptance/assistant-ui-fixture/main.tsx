@@ -41,6 +41,7 @@ let resumeStatus = mode === "resume-error" ? 503 : mode === "resume-denied" ? 40
 let completePending: (() => void) | undefined;
 let savedChat: ChatDetail = {
   id: chatId,
+  jurisdiction: null,
   matterId: location.pathname.startsWith("/matters/") ? matter : (null as string | null),
   title: "Fictional saved conversation",
   turns: [

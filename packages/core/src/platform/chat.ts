@@ -62,7 +62,8 @@ export async function persistChat(
     attachmentDocIds?: string[];
   },
   chatId?: string,
-  matterId?: string
+  matterId?: string,
+  jurisdiction?: string
 ): Promise<string> {
   // Resolve the tenant outside the transaction (a read; no need to hold the tx
   // connection for it) only when creating a new chat.
@@ -82,11 +83,28 @@ export async function persistChat(
           userId,
           tenantId: tenantId!,
           matterId: matterId ?? null,
+          jurisdiction: jurisdiction ?? null,
           title: turn.message.slice(0, 60),
         })
         .returning();
       id = chat!.id;
     }
+
+    // Serialise appends and recheck ownership inside the write transaction.
+    // A caller cannot append to another account's chat by supplying its ID.
+    const [owned] = await tx
+      .select({ id: chats.id })
+      .from(chats)
+      .innerJoin(user, eq(chats.userId, user.id))
+      .where(
+        and(
+          eq(chats.id, id),
+          eq(chats.userId, userId),
+          sql`${chats.tenantId}::text = ${user.tenantId}`
+        )
+      )
+      .for("update", { of: chats });
+    if (!owned) throw new Error("Conversation not found");
 
     const [row] = await tx
       .select({ max: sql<number>`coalesce(max(${chatMessages.seq}), 0)` })
@@ -120,7 +138,13 @@ export async function persistChat(
         annotations: turn.citations?.length ? { citations: turn.citations } : null,
       },
     ]);
-    await tx.update(chats).set({ updatedAt: new Date() }).where(eq(chats.id, id));
+    await tx
+      .update(chats)
+      .set({
+        updatedAt: new Date(),
+        ...(jurisdiction === undefined ? {} : { jurisdiction }),
+      })
+      .where(eq(chats.id, id));
     return id;
   });
 }
@@ -209,13 +233,22 @@ export async function getChat(
   id: string;
   title: string | null;
   matterId: string | null;
+  jurisdiction: string | null;
   turns: ChatTurn[];
 } | null> {
-  const [chat] = await db
-    .select()
+  const [row] = await db
+    .select({ chat: chats })
     .from(chats)
-    .where(and(eq(chats.id, chatId), eq(chats.userId, userId)));
-  if (!chat) return null;
+    .innerJoin(user, eq(chats.userId, user.id))
+    .where(
+      and(
+        eq(chats.id, chatId),
+        eq(chats.userId, userId),
+        sql`${chats.tenantId}::text = ${user.tenantId}`
+      )
+    );
+  if (!row) return null;
+  const chat = row.chat;
 
   const rows = await db
     .select()
@@ -236,5 +269,11 @@ export async function getChat(
       attachmentDocIds: content.attachmentDocIds,
     };
   });
-  return { id: chat.id, title: chat.title, matterId: chat.matterId, turns };
+  return {
+    id: chat.id,
+    title: chat.title,
+    matterId: chat.matterId,
+    jurisdiction: chat.jurisdiction,
+    turns,
+  };
 }

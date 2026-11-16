@@ -16,7 +16,7 @@ import ClipFigure from "@/marketing/components/ClipFigure";
 const WHY = [
   {
     title: "Who decided?",
-    body: "A lawyer did. The AI makes the first pass — review, markup, extraction — and every suggestion waits for a named person's accept or reject. Nothing applies itself.",
+    body: "The record distinguishes the person or AI agent that acted. Check proposed changes and record your own review; an AI accepting an edit is not evidence of practitioner sign-off.",
   },
   {
     title: "Who changed this clause?",
@@ -24,7 +24,7 @@ const WHY = [
   },
   {
     title: "Where did the documents go?",
-    body: "Through your own LLM account and back — Claude, Gemini, OpenAI, or OpenRouter, stored encrypted, set for zero data retention. Open source, self-hostable if a client requires it.",
+    body: "The selected AI route receives the content needed for the task. Its account terms, retention, processing locations, and intermediaries need to be checked separately from gitmatter's document storage.",
   },
 ];
 
@@ -184,8 +184,8 @@ export default function Platform() {
             <div className="flex flex-col gap-1 border-t border-border pt-4">
               <h3 className="font-heading text-lg tracking-tight">Run on your own key</h3>
               <p className="text-sm leading-relaxed text-muted-foreground">
-                gitmatter's own features run on the firm's LLM account — stored encrypted,
-                configured for zero data retention.
+                gitmatter's own features use the selected provider account. Keys are encrypted;
+                retention depends on that account's terms, settings, and agreements.
               </p>
               <ul className="mt-4 flex flex-wrap gap-x-5 gap-y-2">
                 {WORKS_WITH.providers.map((p) => (

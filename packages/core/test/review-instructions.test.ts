@@ -14,6 +14,7 @@ import { validateFinding } from "../src/ai/tabular/finding.js";
 import { updateReviewColumn } from "../src/ai/tabular/reviews.js";
 import { runCell, runDocument } from "../src/ai/tabular/runner.js";
 import { queryCell, queryRow } from "../src/ai/tabular/extract.js";
+import * as documentContext from "../src/content/chunks.js";
 import {
   buildCellPrompt,
   buildRowPrompt,
@@ -197,6 +198,12 @@ test("legacy review context remains unknown rather than deriving a client or gov
 
 test("cell and row provider paths receive exactly captured instructions and explicit unknown law", async () => {
   const prepared = await prepare(instructions);
+  const sourceText = (await getReview(prepared.reviewId))!.review.inputSnapshot!.documents.find(
+    (source) => source.id === documentId
+  )!.text;
+  const mutableIndex = vi
+    .spyOn(documentContext, "getDocumentContext")
+    .mockRejectedValue(new Error("Frozen review input must not read the mutable index"));
   const output = {
     content: { summary: "Conforms", flag: "green" as const, reasoning: "Synthetic" },
     citations: [{ quote: "keep information confidential" }],
@@ -204,9 +211,13 @@ test("cell and row provider paths receive exactly captured instructions and expl
   vi.mocked(queryCell).mockResolvedValueOnce(output);
   await runCell(actor, { reviewId: prepared.reviewId, documentId, columnIndex: 0 });
   expect(vi.mocked(queryCell).mock.calls.at(-1)![0].reviewInstructions).toEqual(instructions);
+  expect(vi.mocked(queryCell).mock.calls.at(-1)![0].documentText).toBe(sourceText);
   vi.mocked(queryRow).mockResolvedValueOnce(new Map([[0, output]]));
   await runDocument(actor, { reviewId: prepared.reviewId, documentId });
   expect(vi.mocked(queryRow).mock.calls.at(-1)![0].reviewInstructions).toEqual(instructions);
+  expect(vi.mocked(queryRow).mock.calls.at(-1)![0].documentText).toBe(sourceText);
+  expect(mutableIndex).not.toHaveBeenCalled();
+  mutableIndex.mockRestore();
   for (const prompt of [
     buildCellPrompt({
       filename: "NDA",

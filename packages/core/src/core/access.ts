@@ -322,3 +322,33 @@ export async function hasMatterAccessInTransaction(
     clampRank(scope, ROLE_RANK[row.role]) >= ROLE_RANK[min]
   );
 }
+
+/** Hold document-write authority until the caller's mutation commits. */
+export async function canAccessDocumentInTransaction(
+  tx: Tx,
+  subject: AccessSubject,
+  documentId: string,
+  min: MatterRole = "editor"
+): Promise<boolean> {
+  const userId = subjectUserId(subject);
+  await tx.select({ id: user.id }).from(user).where(eq(user.id, userId)).for("share");
+  const [doc] = await tx
+    .select({ matterId: documents.matterId })
+    .from(documents)
+    .where(eq(documents.id, documentId))
+    .for("share");
+  if (!doc) return false;
+  if (doc.matterId) await hasMatterAccessInTransaction(tx, subject, doc.matterId, min);
+  await tx
+    .select({ id: artifactShares.id })
+    .from(artifactShares)
+    .where(
+      and(
+        eq(artifactShares.artifactType, "document"),
+        eq(artifactShares.artifactId, documentId),
+        eq(artifactShares.userId, userId)
+      )
+    )
+    .for("share");
+  return canAccessArtifact(subject, "document", documentId, min, tx);
+}

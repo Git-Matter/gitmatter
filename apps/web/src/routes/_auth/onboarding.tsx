@@ -89,7 +89,7 @@ function Onboarding() {
       </p>
       {error && <p className="text-sm text-destructive">{error}</p>}
       <Button onClick={continueToApp} disabled={!selected || busy} className="self-start">
-        {busy ? "Saving…" : "Continue"}
+        {busy ? "Saving…" : "Continue to first review"}
       </Button>
     </div>
   );

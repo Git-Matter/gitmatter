@@ -5,12 +5,12 @@ const WAYS = [
   {
     tag: "Bring your own agent",
     title: "Use the AI you already have.",
-    body: "Connect the assistant your firm already pays for — ChatGPT or Claude, nothing to learn. Builders can wire their own tools in over MCP. Either way it drives gitmatter, and gitmatter records every step.",
+    body: "Connect your practice's approved ChatGPT or Claude account over MCP. Your assistant can work with gitmatter's tools, and gitmatter records its actions here. Conversations held in that assistant remain subject to its own account terms and settings.",
   },
   {
     tag: "Bring your own key",
     title: "Run on your own key.",
-    body: "gitmatter's own features run on your AI key, stored encrypted and set for zero data retention. Pick the provider you trust — your data stays yours.",
+    body: "Use gitmatter's built-in assistant and review features with your configured AI-provider API account. Keys are encrypted at rest. Provider retention, processing locations, and any zero-retention agreement must be checked for your account; supplying a key does not establish them.",
   },
 ];
 

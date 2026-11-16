@@ -24,7 +24,13 @@ const result: CompleteResult = {
   text: "Synthetic result",
   toolCalls: [],
   stop: "end",
-  usage: { inputTokens: 5, outputTokens: 3 },
+  usage: {
+    inputTokens: 5,
+    outputTokens: 3,
+    cacheReadTokens: 2,
+    cacheMode: "automatic",
+    cacheKey: "synthetic-cache-key",
+  },
 };
 let tenantId: string;
 
@@ -75,12 +81,14 @@ describe("shared provider admission (real Postgres, no network)", () => {
     expect(rows).toHaveLength(1);
     expect(rows[0]!.state).toBe("settled");
     expect(rows[0]!.dispatchedAt).not.toBeNull();
-    expect(
-      await db
-        .select()
-        .from(usageEvents)
-        .where(and(eq(usageEvents.userId, userId), eq(usageEvents.kind, "llm")))
-    ).toHaveLength(1);
+    const usage = await db
+      .select()
+      .from(usageEvents)
+      .where(and(eq(usageEvents.userId, userId), eq(usageEvents.kind, "llm")));
+    expect(usage).toHaveLength(1);
+    expect(usage[0]).toMatchObject({ cacheReadTokens: 2, cacheMode: "automatic" });
+    expect(usage[0]!.cacheKey).toMatch(/^[a-f0-9]{16}$/);
+    expect(usage[0]!.cacheKey).not.toBe("synthetic-cache-key");
   });
   test("concurrent streams share capacity and uncertain partial output retains spend", async () => {
     let release!: () => void;

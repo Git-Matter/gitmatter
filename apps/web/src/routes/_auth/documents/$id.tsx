@@ -11,6 +11,7 @@ import { CommitHistory } from "@/components/CommitHistory";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DocxView } from "./-components/DocxView";
 import { WordInspectionNotice } from "./-components/WordInspectionNotice";
+import { PractitionerReviewPanel } from "./-components/PractitionerReviewPanel";
 import { PageHeader } from "@/components/PageHeader";
 import { api, type DocumentDetail, type DocEdit } from "@/lib/data/api";
 import { useSession } from "@/lib/auth/auth-client";
@@ -38,12 +39,14 @@ function DocumentView() {
   const [find, setFind] = useState("");
   const [replace, setReplace] = useState("");
   const [reason, setReason] = useState("");
+  const [renderedVersion, setRenderedVersion] = useState<string | null>(null);
 
   // Both mutations return the updated document; seed it into the cache and
   // refresh the blame history.
   const onEdited = (updated: DocumentDetail) => {
     qc.setQueryData(docKey, updated);
     void qc.invalidateQueries({ queryKey: ["document-history", id] });
+    void qc.invalidateQueries({ queryKey: ["document-review", id] });
   };
 
   const proposeMutation = useMutation({
@@ -162,8 +165,10 @@ function DocumentView() {
               </p>
             ) : isDocx ? (
               <DocxView
-                url={api.documentDownloadUrl(id)}
+                key={document.currentVersionId}
+                url={api.versionDownloadUrl(id, document.currentVersionId!)}
                 versionToken={document.currentVersionId}
+                onRendered={setRenderedVersion}
               />
             ) : document.markdown ? (
               // Legal text gets the serif and a readable measure — it is the hero (DESIGN.md).
@@ -179,6 +184,19 @@ function DocumentView() {
             )}
           </CardContent>
         </Card>
+
+        <PractitionerReviewPanel
+          key={id}
+          documentId={id}
+          versionId={document.currentVersionId}
+          headCommitId={document.headCommitId}
+          previewReady={
+            isDocx
+              ? data.wordInspection?.inspection.status === "complete" &&
+                renderedVersion === document.currentVersionId
+              : document.status === "ready" && !!document.markdown?.trim()
+          }
+        />
 
         <Card>
           <CardHeader>

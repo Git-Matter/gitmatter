@@ -442,6 +442,12 @@ export async function createGeneratedDocument(
       });
       await attachStagedObject(tx, tenantId, storagePath);
       await tx.insert(matterDocuments).values({ matterId: input.matterId, documentId: docId });
+      await replaceDocumentChunks(tx, {
+        documentId: docId,
+        versionId,
+        markdown,
+        fileType: "docx",
+      });
       return {
         changes: [
           { path: "file", before: null, after: storagePath },

@@ -11,10 +11,13 @@ import { ChatTurns } from "./-components/ChatTurns";
 import { ActivityPanel } from "./-components/ActivityPanel";
 import { ActivityPanelProvider } from "./-components/activity-context";
 import { useChatSession } from "./-components/useChatSession";
-import { type ChatAttachment, type ChatDetail } from "@/lib/data/api";
+import { type ChatDetail } from "@/lib/data/api";
 import { Button } from "@/components/ui/button";
 import { UnsavedNavigationGuard } from "@/components/UnsavedChangesGuard";
 import { ResponseNotice } from "./-components/ResponseNotice";
+import type { PreparedGuidedTask } from "@workspace/registry";
+import { GuidedStarts } from "./-components/GuidedStarts";
+import { parseWorkflowChatSeed } from "./-components/workflow-seed";
 
 // Fresh chat. Resuming a conversation lives at /assistant/$id (assistant.$id.tsx),
 // which seeds AssistantView from its loader. Keyed "new" so state starts clean.
@@ -30,6 +33,7 @@ export function AssistantView({
   current?: boolean;
 }) {
   const navigate = useNavigate();
+  const [guidedMatterId, setGuidedMatterId] = useState<string>();
 
   const stepsRef = useRef<string[]>([]);
   const navIdRef = useRef<string | null>(null);
@@ -41,11 +45,22 @@ export function AssistantView({
   const s = useChatSession({
     loaded,
     current,
+    matterId: guidedMatterId,
     onFirstChat: (id) => {
       navIdRef.current = id;
     },
   });
   const empty = s.turns.length === 0;
+
+  function startGuidedTask(seed: PreparedGuidedTask) {
+    if (seed.version !== 1 || loaded || s.busy || s.input.trim() || s.attachments.length) return;
+    stepsRef.current = [];
+    setWorkflow(null);
+    setGuidedMatterId(seed.matterId);
+    s.setJurisdictionOverride(seed.jurisdiction);
+    s.setAttachments(seed.attachments);
+    s.setInput(seed.prompt);
+  }
 
   useEffect(() => {
     if (loaded) return;
@@ -53,22 +68,11 @@ export function AssistantView({
     if (!raw) return;
     sessionStorage.removeItem("workflowChatSeed");
     try {
-      const seed = JSON.parse(raw) as { steps?: unknown; attachments?: unknown };
-      const steps = Array.isArray(seed.steps)
-        ? seed.steps.filter((step): step is string => typeof step === "string" && !!step.trim())
-        : [];
-      if (!steps.length) return;
+      const seed = parseWorkflowChatSeed(JSON.parse(raw));
+      if (!seed) return;
+      const steps = seed.steps;
       s.setInput(steps[0]);
-      const attachments = Array.isArray(seed.attachments)
-        ? seed.attachments.filter(
-            (a): a is ChatAttachment =>
-              !!a &&
-              typeof a.id === "string" &&
-              typeof a.label === "string" &&
-              ["document", "matter", "client", "review"].includes(a.kind)
-          )
-        : [];
-      s.setAttachments(attachments);
+      s.setAttachments(seed.attachments);
       stepsRef.current = steps.slice(1);
       setWorkflow({ steps, state: "ready" });
     } catch {
@@ -266,9 +270,12 @@ export function AssistantView({
 
   if (empty) {
     return (
-      <div className="mx-auto flex h-full w-full max-w-xl flex-col items-center justify-center gap-section md:max-w-2xl lg:max-w-3xl xl:max-w-4xl">
+      <div className="mx-auto flex min-h-0 w-full max-w-xl flex-1 flex-col items-center gap-section overflow-y-auto py-8 md:max-w-2xl lg:max-w-3xl">
         {guard}
         <h1 className="font-heading text-3xl">Workspace assistant</h1>
+        {!loaded && !s.input.trim() && !s.attachments.length && !workflow && (
+          <GuidedStarts onStart={startGuidedTask} />
+        )}
         <div className="w-full">
           {workflowPanel}
           {composer}

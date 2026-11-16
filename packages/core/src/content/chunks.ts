@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { and, asc, eq, inArray, isNull, or, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { db } from "@workspace/db/client";
 import {
   documentChunkEmbeddings,
@@ -355,8 +355,8 @@ export async function embedDocumentChunks(documentId: string): Promise<void> {
       and(
         eq(documentChunks.documentId, doc.id),
         doc.currentVersionId
-          ? or(eq(documentChunks.versionId, doc.currentVersionId), isNull(documentChunks.versionId))
-          : undefined
+          ? eq(documentChunks.versionId, doc.currentVersionId)
+          : isNull(documentChunks.versionId)
       )
     )
     .orderBy(asc(documentChunks.index));
@@ -399,11 +399,8 @@ async function ensureEmbeddings(
         eq(documentChunkEmbeddings.tenantId, doc.tenantId),
         eq(documentChunkEmbeddings.documentId, doc.id),
         doc.currentVersionId
-          ? or(
-              eq(documentChunkEmbeddings.versionId, doc.currentVersionId),
-              isNull(documentChunkEmbeddings.versionId)
-            )
-          : undefined,
+          ? eq(documentChunkEmbeddings.versionId, doc.currentVersionId)
+          : isNull(documentChunkEmbeddings.versionId),
         eq(documentChunkEmbeddings.provider, profile.provider),
         eq(documentChunkEmbeddings.model, profile.model),
         eq(documentChunkEmbeddings.dimensions, profile.dimensions),
@@ -454,8 +451,8 @@ export async function getDocumentContext(
       and(
         eq(documentChunks.documentId, doc.id),
         doc.currentVersionId
-          ? or(eq(documentChunks.versionId, doc.currentVersionId), isNull(documentChunks.versionId))
-          : undefined
+          ? eq(documentChunks.versionId, doc.currentVersionId)
+          : isNull(documentChunks.versionId)
       )
     )
     .orderBy(asc(documentChunks.index));
@@ -504,13 +501,7 @@ export async function getDocumentContext(
     const indexes = opts.chunkRefs
       .map((ref) => (typeof ref === "number" ? ref : Number(String(ref).replace(/^chunk:/, ""))))
       .filter((n) => Number.isInteger(n));
-    selected = indexes.length
-      ? await db
-          .select()
-          .from(documentChunks)
-          .where(and(eq(documentChunks.documentId, doc.id), inArray(documentChunks.index, indexes)))
-          .orderBy(asc(documentChunks.index))
-      : [];
+    selected = rows.filter((chunk) => indexes.includes(chunk.index));
   } else if (!selected?.length) {
     const terms = cleanTerms(opts.query ?? "");
     selected = rows

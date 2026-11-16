@@ -9,7 +9,7 @@ The connector at `/api/mcp` uses your assistant's own reasoning. It does not lau
 
 Read source documents, create a review (or prepare one with `run_playbook`), then populate findings with `write_cell` and exact source quotes. Document edits remain proposals until a person accepts or rejects them in GitMatter. Review cells record agent findings; they are not human approvals.
 
-The combined catalog below contains 56 tools. Legal research availability depends on jurisdiction. After an update, refresh your client's tool catalog or reconnect if it still shows removed tools. `run_cell` and `draft_playbook` are available through the built-in assistant, not this subscription-only connector. `resolve_document_edit` is reserved for people in the UI.
+The combined catalog below contains 58 tools. Legal research availability depends on jurisdiction. After an update, refresh your client's tool catalog or reconnect if it still shows removed tools. `run_cell` and `draft_playbook` are available through the built-in assistant, not this subscription-only connector. `resolve_document_edit` is reserved for people in the UI.
 
 ## `acknowledge_job_event`
 
@@ -117,9 +117,9 @@ Reads existing data.
 
 ## `get_document`
 
-Get a document's text (markdown) and its tracked edits (with status and blame).
+Get a document's text/context and tracked edits. For large documents, use mode 'query' with a focused query, or mode 'chunks' with chunkRefs returned by an earlier read.
 
-Inputs: `documentId`.
+Inputs: `documentId`, `mode?`, `query?`, `chunkRefs?`.
 
 Reads existing data.
 
@@ -184,6 +184,14 @@ Reads existing data.
 Get a single Australian trade mark (IP Australia) by its trade mark number.
 
 Inputs: `number`.
+
+Reads existing data. Uses an external research service.
+
+## `get_us_federal_package`
+
+Get a govinfo package's summary (title, collection, dates, download links) by package ID.
+
+Inputs: `packageId`.
 
 Reads existing data. Uses an external research service.
 
@@ -400,6 +408,14 @@ Reads existing data. Uses an external research service.
 Advanced Australian trade mark search (IP Australia). Supports word, phrase, owner, goods/services, class, date, number, IR number, ABN/ACN/ARBN, address for service, parties, image, kind, status, flags, and AND/OR/AND_NOT rows. Returns trade mark numbers.
 
 Inputs: `rows`, `changedSinceDate?`, `sort?`.
+
+Reads existing data. Uses an external research service.
+
+## `search_us_federal_law`
+
+Search US federal statutes and documents on govinfo (US GPO) by keyword, with an optional collection filter (USCODE, PLAW, CFR, FR, STATUTE).
+
+Inputs: `query`, `collection?`, `limit?`.
 
 Reads existing data. Uses an external research service.
 

@@ -1,5 +1,5 @@
 import { and, asc, count, desc, eq, ilike, inArray, isNull, ne, or, sql } from "drizzle-orm";
-import { db } from "@workspace/db/client";
+import { db, type Tx } from "@workspace/db/client";
 import { hasClientAccess } from "../core/access.js";
 import {
   type MatterRole,
@@ -24,12 +24,14 @@ import {
 export async function createClient(
   creatorId: string,
   tenantId: string,
-  input: { name: string; type?: "organization" | "individual"; clientNumber?: string }
+  input: { id?: string; name: string; type?: "organization" | "individual"; clientNumber?: string },
+  transaction?: Tx
 ) {
-  return db.transaction(async (tx) => {
+  const insertClient = async (tx: Tx) => {
     const [row] = await tx
       .insert(clients)
       .values({
+        ...(input.id ? { id: input.id } : {}),
         tenantId,
         name: input.name,
         type: input.type ?? "organization",
@@ -39,7 +41,8 @@ export async function createClient(
       .returning();
     await tx.insert(clientMembers).values({ clientId: row!.id, userId: creatorId, role: "owner" });
     return row!;
-  });
+  };
+  return transaction ? insertClient(transaction) : db.transaction(insertClient);
 }
 
 export async function updateClient(
@@ -372,6 +375,8 @@ export async function removeClientMember(clientId: string, userId: string) {
 // ---- Matters ----
 
 type MatterInput = {
+  id?: string;
+  jurisdiction?: string;
   clientId: string;
   name: string;
   practiceArea?: string;
@@ -380,23 +385,25 @@ type MatterInput = {
 
 /** Create a matter and add the creator as its `owner` member, atomically. The
  *  matter copies its client's tenantId down (the isolation root). */
-export async function createMatter(creatorId: string, input: MatterInput) {
-  if (!(await hasClientAccess(creatorId, input.clientId, "editor"))) {
+export async function createMatter(creatorId: string, input: MatterInput, transaction?: Tx) {
+  if (!(await hasClientAccess(creatorId, input.clientId, "editor", transaction))) {
     throw new Error("Forbidden");
   }
-  const [client] = await db
+  const [client] = await (transaction ?? db)
     .select({ tenantId: clients.tenantId })
     .from(clients)
     .where(eq(clients.id, input.clientId));
   if (!client) throw new Error("Client not found");
-  return db.transaction(async (tx) => {
+  const insertMatter = async (tx: Tx) => {
     const [matter] = await tx
       .insert(matters)
       .values({
+        ...(input.id ? { id: input.id } : {}),
         tenantId: client.tenantId,
         clientId: input.clientId,
         name: input.name,
         practiceArea: input.practiceArea ?? null,
+        jurisdiction: input.jurisdiction ?? null,
         adverseParties: input.adverseParties ?? null,
         createdBy: creatorId,
         leadAttorney: creatorId,
@@ -406,7 +413,8 @@ export async function createMatter(creatorId: string, input: MatterInput) {
       .insert(matterMembers)
       .values({ matterId: matter!.id, userId: creatorId, role: "owner" });
     return matter!;
-  });
+  };
+  return transaction ? insertMatter(transaction) : db.transaction(insertMatter);
 }
 
 /** Update a matter's editable details (plain CRUD — matters aren't commit-spine

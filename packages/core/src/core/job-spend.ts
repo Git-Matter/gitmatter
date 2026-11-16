@@ -1,4 +1,5 @@
 import { and, eq, sql, type SQL } from "drizzle-orm";
+import { createHash } from "node:crypto";
 import { db } from "@workspace/db/client";
 import {
   jobSpendReservations,
@@ -19,6 +20,25 @@ import {
   scopeAllowsMatter,
 } from "./access.js";
 import { providerForModel } from "../ai/provider/catalog.js";
+import type { UsageInfo } from "../ai/provider/types.js";
+
+type ProviderUsage = UsageInfo & { provider: string; model: string };
+
+function usageValues(usage: ProviderUsage) {
+  return {
+    provider: usage.provider,
+    model: usage.model,
+    inputTokens: usage.inputTokens,
+    outputTokens: usage.outputTokens,
+    cachedInputTokens: usage.cachedInputTokens,
+    cacheReadTokens: usage.cacheReadTokens,
+    cacheWriteTokens: usage.cacheWriteTokens,
+    cacheMode: usage.cacheMode,
+    cacheKey: usage.cacheKey
+      ? createHash("sha256").update(usage.cacheKey).digest("hex").slice(0, 16)
+      : null,
+  };
+}
 
 export type ProviderSpendContext = {
   actor: Actor;
@@ -359,7 +379,7 @@ export async function dispatchProviderSpend(reservationId: string, actor: Actor,
 
 export async function settleProviderSpend(
   reservationId: string,
-  usage?: { provider: string; model: string; inputTokens: number; outputTokens: number },
+  usage?: ProviderUsage,
   release = false
 ) {
   await db.transaction(async (tx) => {
@@ -384,10 +404,7 @@ export async function settleProviderSpend(
       tenantId: reservation.tenantId,
       matterId: reservation.matterId,
       tokenId: reservation.tokenId,
-      provider: usage.provider,
-      model: usage.model,
-      inputTokens: usage.inputTokens,
-      outputTokens: usage.outputTokens,
+      ...usageValues(usage),
     });
     await tx
       .update(jobSpendReservations)
@@ -401,10 +418,7 @@ export async function settleProviderSpend(
 }
 
 /** Record a known paid attempt even when its legal result is cancelled or stale. */
-export async function settleJobSpend(
-  job: DurableJob,
-  usage?: { provider: string; model: string; inputTokens: number; outputTokens: number }
-) {
+export async function settleJobSpend(job: DurableJob, usage?: ProviderUsage) {
   await db.transaction(async (tx) => {
     const [reservation] = await tx
       .select()
@@ -432,10 +446,7 @@ export async function settleJobSpend(
       tenantId: job.tenantId,
       matterId: job.matterId,
       tokenId: job.credentialId,
-      provider: usage.provider,
-      model: usage.model,
-      inputTokens: usage.inputTokens,
-      outputTokens: usage.outputTokens,
+      ...usageValues(usage),
     });
     await tx
       .update(jobSpendReservations)

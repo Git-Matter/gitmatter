@@ -403,6 +403,8 @@ async function req<T>(path: string, opts?: RequestInit): Promise<T> {
   return (await r.json()) as T;
 }
 
+export { req as apiRequest };
+
 // Encodes the standard page params plus any extra string filters (status, scope,
 // tab, type, practice, …). The "all" sentinel is dropped so it maps to "no
 // filter" on the server.
@@ -581,6 +583,7 @@ export const api = {
     clientId: string;
     name: string;
     practiceArea?: string;
+    jurisdiction?: string;
     adverseParties?: string[];
   }) => req<Matter>("/api/matters", { method: "POST", body: JSON.stringify(d) }),
   closeMatter: (id: string) => req<null>(`/api/matters/${id}/close`, { method: "POST" }),
@@ -1146,6 +1149,7 @@ export type ChatDetail = {
   id: string;
   title: string | null;
   matterId: string | null;
+  jurisdiction: string | null;
   turns: ChatTurn[];
 };
 

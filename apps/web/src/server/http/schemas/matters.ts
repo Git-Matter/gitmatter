@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { JURISDICTIONS } from "@workspace/registry";
 
 export const createClientSchema = z.object({
   name: z.string().min(1),
@@ -17,6 +18,13 @@ export const createMatterSchema = z.object({
   clientId: z.string().uuid(),
   name: z.string().min(1),
   practiceArea: z.string().optional(),
+  jurisdiction: z
+    .string()
+    .refine(
+      (value) => JURISDICTIONS.some((item) => item.code === value),
+      "Choose a recognised jurisdiction"
+    )
+    .optional(),
   adverseParties: z.array(z.string()).optional(),
 });
 

@@ -3,7 +3,9 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Search, X } from "lucide-react";
+import { guidedTaskForSystemWorkflow } from "@workspace/registry";
 import { api, type ChatAttachment, type Doc, type WorkflowListItem } from "@/lib/data/api";
+import { clearGuidedTaskLaunch, queueGuidedTaskLaunch } from "@/lib/data/guided-task-launch";
 import { useMatters } from "@/lib/context/matters-context";
 import { cn } from "@/lib/util/utils";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -118,6 +120,7 @@ export function DisplayWorkflowModal({ workflow, onClose }: Props) {
   }
 
   function handleStartChat() {
+    if (openGuidedTask()) return;
     // A multi-step workflow becomes one chat turn per step (run in order); a
     // single-prompt one is just one step. The optional message is appended to
     // the last step.
@@ -132,9 +135,19 @@ export function DisplayWorkflowModal({ workflow, onClose }: Props) {
     const attachments: ChatAttachment[] = sourceDocs
       .filter((d) => selectedDocIds.has(d.id))
       .map((d) => ({ kind: "document", id: d.id, label: d.title }));
+    clearGuidedTaskLaunch(sessionStorage);
     sessionStorage.setItem("workflowChatSeed", JSON.stringify({ steps, attachments }));
     handleClose();
     void navigate({ to: "/assistant" });
+  }
+
+  function openGuidedTask() {
+    const task = guidedTaskForSystemWorkflow(wf);
+    if (!task) return false;
+    queueGuidedTaskLaunch(sessionStorage, task);
+    handleClose();
+    void navigate({ to: "/assistant" });
+    return true;
   }
 
   async function handleCreateReview() {
@@ -171,7 +184,12 @@ export function DisplayWorkflowModal({ workflow, onClose }: Props) {
 
   const primaryAction =
     screen === "select"
-      ? { label: "Use", onClick: () => setScreen("configure") }
+      ? {
+          label: "Use",
+          onClick: () => {
+            if (!openGuidedTask()) setScreen("configure");
+          },
+        }
       : wf.type === "assistant"
         ? {
             label: "Start Chat",

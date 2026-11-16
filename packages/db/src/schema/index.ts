@@ -19,3 +19,5 @@ export * from "./approval.js";
 export * from "./jobs.js";
 
 export * from "./templates.js";
+export * from "./practice-profile.js";
+export * from "./document-review.js";

@@ -402,15 +402,17 @@ export async function runCell(
       },
       model,
       filename: doc.title,
-      documentText: (
-        await getDocumentContext(doc, {
-          mode: "query",
-          query: col.prompt,
-          task: "tabular",
-          repeated: true,
-          allowEmbedding: true,
-        })
-      ).text,
+      documentText:
+        review.inputSnapshot?.documents.find((source) => source.id === doc.id)?.text ??
+        (
+          await getDocumentContext(doc, {
+            mode: "query",
+            query: col.prompt,
+            task: "tabular",
+            repeated: true,
+            allowEmbedding: true,
+          })
+        ).text,
       columnPrompt: col.prompt,
       reviewInstructions: capturedReviewInstructions(review.inputSnapshot),
       format: col.format,
@@ -530,18 +532,20 @@ export async function runDocument(
       },
       model,
       filename: doc.title,
-      documentText: (
-        await getDocumentContext(doc, {
-          mode: "query",
-          query: review.columnsConfig
-            .map((column) => `${column.name}: ${column.prompt}`)
-            .join("\n"),
-          task: "tabular",
-          repeated: true,
-          allowEmbedding: true,
-          maxChunks: 16,
-        })
-      ).text,
+      documentText:
+        review.inputSnapshot?.documents.find((source) => source.id === doc.id)?.text ??
+        (
+          await getDocumentContext(doc, {
+            mode: "query",
+            query: review.columnsConfig
+              .map((column) => `${column.name}: ${column.prompt}`)
+              .join("\n"),
+            task: "tabular",
+            repeated: true,
+            allowEmbedding: true,
+            maxChunks: 16,
+          })
+        ).text,
       columns: review.columnsConfig,
       reviewInstructions: capturedReviewInstructions(review.inputSnapshot),
       apiKey: key,
