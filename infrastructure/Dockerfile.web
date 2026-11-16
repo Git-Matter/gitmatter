@@ -11,7 +11,7 @@ RUN npm install --global pnpm@12.16.1
 # no-op after the first boot. NOTE: this assumes a single instance; running
 # multiple replicas would race the migration on startup.
 #
-# The flavor (local self-host vs cloud marketing+prerender) is baked into dist by
+# The deployment flavor (local self-host vs cloud) is baked into dist by
 # DEPLOYMENT at build time on the runner, so this image is flavor-agnostic.
 FROM node:24-bookworm-slim
 COPY --from=pnpm-toolchain /usr/local/lib/node_modules/pnpm /opt/pnpm

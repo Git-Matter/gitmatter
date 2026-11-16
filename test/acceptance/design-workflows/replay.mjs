@@ -19,7 +19,6 @@ const groups = {
   ],
   assistant: ["assistant-execution", "assistant-context"],
   access: ["settings-navigation", "settings-limits", "auth-recovery", "sign-out"],
-  "marketing-media": ["marketing-media"],
   "template-library": ["template-lifecycle", "template-stale"],
   "review-and-output": [
     "detail-recovery",
@@ -34,7 +33,7 @@ const groups = {
 };
 if (!groups[group] || !cli) {
   throw new Error(
-    "Usage: PLAYWRIGHT_CLI=/path/to/playwright-cli node test/acceptance/design-workflows/replay.mjs feedback|ux-nine|app-wide|first-review|review-and-output|marketing-media|template-library|assistant|access"
+    "Usage: PLAYWRIGHT_CLI=/path/to/playwright-cli node test/acceptance/design-workflows/replay.mjs feedback|ux-nine|app-wide|first-review|review-and-output|template-library|assistant|access"
   );
 }
 const root = resolve(import.meta.dirname, "../../..");
@@ -110,27 +109,6 @@ if (group === "app-wide")
     ...["main.tsx", "vite.config.ts", "index.html", "tsconfig.json"].map(
       (name) => `test/acceptance/app-ui-fixture/${name}`
     ),
-  ];
-if (group === "marketing-media")
-  sources = [
-    "design/media.json",
-    "design/tokens.json",
-    "apps/web/src/styles/tokens.css",
-    ...[
-      "productMedia.ts",
-      "resourceCatalog.ts",
-      "Resources.tsx",
-      "Platform.tsx",
-      "PlatformFeature.tsx",
-      "ResourceVideo.tsx",
-      "BlogPost.tsx",
-      "components/ProductVideo.tsx",
-      "components/ClipFigure.tsx",
-      "components/Hero.tsx",
-    ].map((file) => `apps/web/src/marketing/${file}`),
-    "design/tooling/check-media.ts",
-    "design/tooling/design-policy.ts",
-    "design/policy.json",
   ];
 if (group === "template-library")
   sources = [
@@ -288,23 +266,19 @@ sources = [
     ...sources,
     "apps/web/src/styles/globals.css",
     "apps/web/src/components/ui/card.tsx",
-    ...(group === "marketing-media"
-      ? []
-      : [
-          "apps/web/src/components/ui/sidebar.tsx",
-          "apps/web/src/hooks/use-mobile.ts",
-          "apps/web/src/components/ui/native-select.tsx",
-          "apps/web/src/components/ui/checkbox.tsx",
-          "apps/web/src/components/ui/empty.tsx",
-          "apps/web/src/components/ui/toggle-group.tsx",
-          "apps/web/src/components/ToolbarTabs.tsx",
-          "apps/web/src/components/TableSearch.tsx",
-          "apps/web/src/components/TablePager.tsx",
-          "apps/web/src/components/AppFrame.tsx",
-          "apps/web/src/components/PageShell.tsx",
-          "apps/web/src/lib/hooks/useMediaQuery.ts",
-          "apps/web/src/components/AppSidebar.tsx",
-        ]),
+    "apps/web/src/components/ui/sidebar.tsx",
+    "apps/web/src/hooks/use-mobile.ts",
+    "apps/web/src/components/ui/native-select.tsx",
+    "apps/web/src/components/ui/checkbox.tsx",
+    "apps/web/src/components/ui/empty.tsx",
+    "apps/web/src/components/ui/toggle-group.tsx",
+    "apps/web/src/components/ToolbarTabs.tsx",
+    "apps/web/src/components/TableSearch.tsx",
+    "apps/web/src/components/TablePager.tsx",
+    "apps/web/src/components/AppFrame.tsx",
+    "apps/web/src/components/PageShell.tsx",
+    "apps/web/src/lib/hooks/useMediaQuery.ts",
+    "apps/web/src/components/AppSidebar.tsx",
   ]),
 ];
 const localRun =
@@ -326,9 +300,7 @@ const scope =
             ? "Production assistant and saved-conversation components in an isolated client router with fictional identity, metadata, extraction events and streamed responses. Actual provider calls are blocked. No credential operations, authentication, legal quality, server cancellation/usage settlement or production proof. Native unload prompts are suppressed only for explicit fixture resets; production client route guards are exercised. Source hashes identify relevant files, not a complete runtime bundle."
             : group === "template-library"
               ? "Current production template UI/Hono/core with real loopback Postgres, original fictional DOCX files and a tenant-scoped disk object adapter. Injected loopback personas, not production authentication, remote object storage, deployment or a legal-user study. Hashes identify relevant files, not the complete transitive runtime."
-              : group === "marketing-media"
-                ? "Current public product pages on the local cloud-mode server. Verifies paused, controlled, named and disclosed media at 1440px and 390px. Media registry hashes identify reviewed illustrative assets, not a render-chain attestation or proof of live product capability."
-                : "Local production-component UI fixture with fictional API data. No live authentication, provider inference, template lifecycle, real Word transformation or production release proof. Native unload event prevention was signaled; no cross-browser native-prompt claim. Source hashes identify relevant modules, not a complete transitive bundle attestation. Screenshots capture settled states with finite animations disabled. The review-output download uses fixed fictional source bytes.";
+              : "Local production-component UI fixture with fictional API data. No live authentication, provider inference, template lifecycle, real Word transformation or production release proof. Native unload event prevention was signaled; no cross-browser native-prompt claim. Source hashes identify relevant modules, not a complete transitive bundle attestation. Screenshots capture settled states with finite animations disabled. The review-output download uses fixed fictional source bytes.";
 const digest = async (path) =>
   createHash("sha256")
     .update(await readFile(resolve(root, path)))

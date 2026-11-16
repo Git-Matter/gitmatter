@@ -55,7 +55,6 @@ This is a pnpm + Turborepo monorepo (with Node.js as the runtime) (`apps/*`, `pa
 
 - `apps/web`: React app on TanStack Start (Router, Query, Form, Table, Store). Owns the legal-review UI, chat, document rendering (tiptap, docx-preview, streamdown), auth (better-auth), and the embedded Hono server that exposes gitmatter's tools over MCP (`@hono/mcp`, `@modelcontextprotocol/sdk`).
 - `apps/docs`: documentation site, rendered under `/docs`.
-- `apps/video`: Remotion project for marketing/explainer video.
 - `packages/contracts` (`@workspace/contracts`): shared Zod schemas and TypeScript contracts (LLM provider types, protocol). Keep schema-only — no runtime logic.
 - `packages/core` (`@workspace/core`): the audited legal engine. Multi-provider AI loop (Anthropic / Google / OpenAI / OpenRouter), content generation (`docx`, `xlsx`, `mammoth`, `fast-diff`), tools, and platform adapters (S3). Subdirs: `ai`, `content`, `core`, `platform`, `tools`.
 - `packages/db` (`@workspace/db`): Drizzle ORM schema, migrations, and Postgres access. Scripts: `generate`, `migrate`, `push`, `studio`.

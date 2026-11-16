@@ -130,7 +130,6 @@ Area examples:
 
 - `web` for the TanStack Start app in `apps/web`
 - `docs` for the docs app and markdown docs
-- `video` for the Remotion project in `apps/video`
 - `contracts` for shared schemas and TypeScript contracts
 - `core` for the audited legal engine, AI loop, content tools, and platform adapters
 - `db` for Drizzle schema, migrations, and database access

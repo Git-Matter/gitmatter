@@ -11,7 +11,7 @@ const AppFrame = lazy(() =>
 );
 
 // Pathless layout that gates every route nested under it. Session is resolved
-// here (not in the root) so public/marketing/login pages stay session-free and
+// here (not in the root) so legal and login pages stay session-free and
 // prerender without a database. This runs at request time for real authed
 // traffic — cookies and DB available — so the protected shell renders directly
 // in the SSR HTML with no blank-screen wait.

@@ -73,11 +73,9 @@ layout, actions, and states. It does not mean model answers or aesthetic judgmen
   Six first-review and six review/output functions are replayable with source/script hashes. Remaining
   work is listed in the acceptance ledger; this checkpoint is not production or empirical usability proof.
 
-- Template/media checkpoint: a tracked loopback harness verifies current UI/Hono/core with local
+- Template checkpoint: a tracked loopback harness verifies current UI/Hono/core with local
   Postgres and original fictional Word files. Two role/lifecycle/stale/recovery functions pass.
-  The media inventory covers 19 rendered illustrations; the shared player discloses example data,
-  and DG010 rejects unreviewed/changed assets or independent marketing players. Five page families
-  pass at desktop/mobile. Relevant evidence lives under `design/evidence`.
+  Relevant evidence lives under `design/evidence`.
 
 - Assistant checkpoint: explicit workflow preparation/start, outcome-aware queues, model/file gates,
   retained follow-up drafts, explicit saved-chat recovery and context validation are implemented.

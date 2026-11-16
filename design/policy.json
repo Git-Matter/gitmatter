@@ -12,8 +12,7 @@
     "DG006": "Elevation uses the shared scale; no per-screen arbitrary shadows.",
     "DG007": "A native link cannot contain a button and a button cannot contain a link.",
     "DG008": "Canonical tokens must generate the checked-in CSS exactly.",
-    "DG009": "Semantic text and essential control edges meet the configured contrast thresholds.",
-    "DG010": "Public product videos use the shared disclosed player and reviewed media registry."
+    "DG009": "Semantic text and essential control edges meet the configured contrast thresholds."
   },
   "contrastPairs": [
     { "foreground": "--foreground", "background": "--background", "minimum": 4.5 },

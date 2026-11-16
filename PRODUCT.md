@@ -14,9 +14,6 @@ screen is reading and judging legal text: a redline, an extracted table, a cited
 secondary job is trusting the audit trail (who changed what, when, why). A recorded agent action
 is distinct from a practitioner's own review of a particular document state.
 
-Marketing pages address the buying lawyer or firm IT: skeptical of AI hype, allergic to vendor
-gloss, convinced by evidence (audit spine, citations, bring-your-own-key).
-
 ## Product Purpose
 
 AI-assisted legal review (contract redline, tabular extraction, document generation, workflows) on

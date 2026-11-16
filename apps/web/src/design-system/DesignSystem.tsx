@@ -41,7 +41,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
-import Wordmark from "@/marketing/components/Wordmark";
+import Wordmark from "@/components/Wordmark";
 
 const SECTIONS = ["Foundations", "Typography", "Controls", "Navigation", "Documents", "Feedback"];
 const COLORS = [
@@ -407,7 +407,7 @@ export default function DesignSystem() {
               </p>
             </figure>
             <a
-              href="/platform/audit-trail"
+              href="/docs/user-guide/history"
               className="mt-6 inline-flex items-center gap-2 text-sm underline underline-offset-4"
             >
               See the audit trail <ArrowRight className="size-4" />

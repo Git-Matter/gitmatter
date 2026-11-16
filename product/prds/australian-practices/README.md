@@ -8,14 +8,15 @@ Serve Australian sole practitioners and general practices first. Help a practiti
 
 ## Work packages
 
-| PRD                                                               | Deliverable                                                                     | Dependencies                               |
-| ----------------------------------------------------------------- | ------------------------------------------------------------------------------- | ------------------------------------------ |
-| [01 Matter briefing and correspondence](01-matter-briefing.md)    | Reusable, source-first task instructions and matter-linked output               | Existing assistant, document tools         |
-| [02 Guided starting actions](02-guided-starts.md)                 | Three guided tasks and an explicitly fictional sample                           | 01                                         |
-| [03 Assisted setup and trust](03-assisted-setup.md)               | Setup guidance, practice preferences, accurate processing disclosures           | 04 profile contract                        |
-| [04 Australian practice outputs](04-practice-outputs.md)          | State/territory context, correspondence preferences, version-bound human review | Existing document versions and audit spine |
-| [05 Sole-practice commercial offering](05-commercial-offering.md) | AUD quote path and transparent cost explanation                                 | Marketing shell                            |
-| [06 Practitioner pilot](06-practitioner-pilot.md)                 | Pilot enquiry flow, interview/runbook, explicit measures and acceptance gates   | 01–05                                      |
+| PRD                                                            | Deliverable                                                                     | Dependencies                               |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------------- | ------------------------------------------ |
+| [01 Matter briefing and correspondence](01-matter-briefing.md) | Reusable, source-first task instructions and matter-linked output               | Existing assistant, document tools         |
+| [02 Guided starting actions](02-guided-starts.md)              | Three guided tasks and an explicitly fictional sample                           | 01                                         |
+| [03 Assisted setup and trust](03-assisted-setup.md)            | Setup guidance, practice preferences, accurate processing disclosures           | 04 profile contract                        |
+| [04 Australian practice outputs](04-practice-outputs.md)       | State/territory context, correspondence preferences, version-bound human review | Existing document versions and audit spine |
+| [06 Practitioner pilot](06-practitioner-pilot.md)              | Internal interview/runbook, explicit measures and acceptance gates              | 01–04                                      |
+
+The public commercial offering and promotional pilot enquiry flow were removed on 17 November 2026. The internal research runbook remains available.
 
 ## Delivery boundaries
 

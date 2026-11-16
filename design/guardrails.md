@@ -18,24 +18,21 @@ and the vendored `components/ai-elements` directory. It is a TypeScript AST-base
 not a classifier of whether a human or model created a screen. Class-like tokens in string literals
 are conservatively checked, including conditional class definitions. Comments are not inspected.
 
-| ID    | Hard gate                                                                              | What it does not prove                                                                  |
-| ----- | -------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| DG001 | Reject clipped decorative text fills                                                   | Every heading has good hierarchy                                                        |
-| DG002 | Reject the old glass-panel surface                                                     | Every translucent element is an inappropriate overlay                                   |
-| DG003 | Reject bounce/ping utility decorations                                                 | All motion conveys useful information                                                   |
-| DG004 | Reject authored automatic video playback and direct playback surfaces without controls | Media provenance, captions, bandwidth or external players                               |
-| DG005 | Reject the magic/sparkle icon import, including aliases                                | All icons have accessible names                                                         |
-| DG006 | Reject arbitrary per-screen shadow utilities                                           | Every use of shared elevation is appropriate                                            |
-| DG007 | Reject direct native/router link and Button nesting; allow render-host composition     | Every custom wrapper renders a valid interactive tree                                   |
-| DG008 | Compare generated CSS with canonical foundation input                                  | Every local value or every document renderer is tokenized                               |
-| DG009 | Check configured opaque sRGB text/control pairs in both themes                         | Full rendered contrast, alpha compositing, imagery, charts or WCAG conformance          |
-| DG010 | Require the disclosed marketing player and reviewed public-media inventory/hashes      | Truth of a product capability, exact render-chain provenance or live-session acceptance |
+| ID    | Hard gate                                                                              | What it does not prove                                                         |
+| ----- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| DG001 | Reject clipped decorative text fills                                                   | Every heading has good hierarchy                                               |
+| DG002 | Reject the old glass-panel surface                                                     | Every translucent element is an inappropriate overlay                          |
+| DG003 | Reject bounce/ping utility decorations                                                 | All motion conveys useful information                                          |
+| DG004 | Reject authored automatic video playback and direct playback surfaces without controls | Media provenance, captions, bandwidth or external players                      |
+| DG005 | Reject the magic/sparkle icon import, including aliases                                | All icons have accessible names                                                |
+| DG006 | Reject arbitrary per-screen shadow utilities                                           | Every use of shared elevation is appropriate                                   |
+| DG007 | Reject direct native/router link and Button nesting; allow render-host composition     | Every custom wrapper renders a valid interactive tree                          |
+| DG008 | Compare generated CSS with canonical foundation input                                  | Every local value or every document renderer is tokenized                      |
+| DG009 | Check configured opaque sRGB text/control pairs in both themes                         | Full rendered contrast, alpha compositing, imagery, charts or WCAG conformance |
 
 Token generation rejects missing theme roles, unsupported format versions, malformed declaration
 names and declaration injection. It sorts keys for repeatable output. Tests deliberately exercise
 unsafe render nesting, safe render props, aliased imports, conditional classes and dynamic autoplay.
-Media checks also exercise unreviewed, changed and removed assets. See [the media contract](media.md)
-before adding or replacing a public product video.
 
 The generated palette now uses a stronger neutral field edge than the older Harvey public-site
 sample: input edges must meet our 3:1 configured pair floor. Keep the difference documented rather

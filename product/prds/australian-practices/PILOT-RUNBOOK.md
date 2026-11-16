@@ -13,9 +13,9 @@ The pilot tests whether guided, source-first work reduces the practitioner's tot
 - Start with fictional documents. Any later client-material use requires an appropriate documented decision and authorisation by the practitioner; avoid receiving client documents through recruitment email or calendar descriptions.
 - An expression of interest is not participation consent, permission to use client files, a meeting booking, or consent to marketing. Obtain each separately where required.
 
-## Recruitment flow
+## Participant screening
 
-The public `/australian-practices#pilot` page explains the proposal and opens an editable email template to the existing contact address. It does not send mail or enrol the person. Outbound invitations and meeting creation need explicit authorisation; this runbook does not authorise sending them.
+The public pilot enquiry flow was removed on 17 November 2026. This internal runbook does not authorise outreach, invitations, meeting creation, or enrolment.
 
 Screen for:
 
@@ -25,7 +25,7 @@ Screen for:
 4. Their existing Word/document tools and approved AI account, if any.
 5. Ability to participate in four short weekly sessions and attempt a second task.
 
-Collect only role/size, state/territory, generic task type, current tools, and preferred contact details at enquiry stage. Do not request client names, matter details, document attachments, passwords, or API keys. Arrange credentials through designated product settings only.
+Collect only role/size, state/territory, generic task type, current tools, and preferred contact details during initial screening. Do not request client names, matter details, document attachments, passwords, or API keys. Arrange credentials through designated product settings only.
 
 ## Baseline interview (week one)
 
