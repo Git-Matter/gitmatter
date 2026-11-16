@@ -75,3 +75,12 @@ format/lint checks and all package typechecks passed after this review.
   pnpm's optional agent-skill approval notice did not prevent installation or scoped validation.
 - Only the archival tag and dedicated integration branch were pushed. The consolidation checkout,
   root source checkout, `dev`/`main` refs and other branches were left under their existing owners.
+
+## Independent specialist review
+
+The global `typescript_engineer` specialist reviewed the actual `21af2e1..b3a20ff` result read-only
+under the updated specialist requirement. It reported no must-fix findings after checking workspace
+selection, cache/environment declarations against pinned Vite+ documentation, executable names against
+installed tsdown sources, launcher failure handling, the CSS declaration, and retained design/template
+boundaries. Its `git diff --check` passed. The remaining acceptance gaps above are unchanged; historical
+migration evidence was excluded from current acceptance. No further implementation edits were warranted.
