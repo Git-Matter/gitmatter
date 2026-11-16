@@ -4,34 +4,37 @@
   "private": true,
   "license": "MIT",
   "scripts": {
-    "build": "turbo run build",
+    "build": "vp run --filter './apps/*' --filter './packages/*' --filter './cli' build",
     "docs:tools": "tsx scripts/generate-mcp-docs.ts",
     "docs:tools:check": "tsx scripts/generate-mcp-docs.ts --check",
-    "docs:build": "turbo run build --filter=docs",
-    "docs:dev": "turbo run dev --filter=docs",
+    "docs:build": "vp run docs#build",
+    "docs:dev": "vp run docs#dev",
     "dev": "tsx scripts/dev.ts",
     "lint": "vp lint",
     "format": "vp fmt",
-    "typecheck": "turbo run typecheck",
-    "test": "turbo run test",
-    "test:ci": "vp test",
+    "typecheck": "vp run --filter './apps/*' --filter './packages/*' --filter './cli' typecheck",
+    "test": "vp test run",
+    "test:ci": "vp test run",
     "check": "vp check",
     "prepare": "vp config",
     "fixtures:nda": "tsx scripts/generate-nda-fixture.ts",
     "fixtures:nda:check": "tsx scripts/generate-nda-fixture.ts --check",
     "design:generate": "tsx design/tooling/design-tokens.ts",
-    "design:check": "tsx design/tooling/check-design.ts"
+    "design:check": "tsx design/tooling/check-design.ts",
+    "db:backup": "node scripts/db-backup.ts",
+    "db:restore": "node scripts/db-restore.ts"
   },
   "devDependencies": {
     "dotenv": "^17.4.2",
-    "turbo": "^2.9.17",
     "typescript": "^6",
     "vite-plus": "catalog:",
-    "tsx": "^4.23.15"
+    "tsx": "^4.23.15",
+    "@types/node": "^26.6.1",
+    "@aws-sdk/client-s3": "^3.0.0"
   },
   "packageManager": "pnpm@12.16.1",
   "engines": {
-    "node": ">=20"
+    "node": ">=26.13.0"
   },
   "dependencies": {
     "posthog-node": "^5.45.2"

@@ -12,7 +12,7 @@
   },
   "devDependencies": {
     "typescript": "^6",
-    "vitest": "catalog:"
+    "vite-plus": "catalog:"
   },
   "exports": {
     ".": "./src/index.ts",

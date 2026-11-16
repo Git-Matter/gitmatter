@@ -7,13 +7,13 @@
     "gitmatter": "./src/main.ts"
   },
   "scripts": {
-    "start": "tsx src/main.ts",
-    "build": "node scripts/build.mjs",
-    "build:all": "pnpm run build:darwin-arm64 && pnpm run build:darwin-x64 && pnpm run build:linux-x64 && pnpm run build:win-x64",
-    "build:darwin-arm64": "node scripts/build.mjs darwin-arm64",
-    "build:darwin-x64": "node scripts/build.mjs darwin-x64",
-    "build:linux-x64": "node scripts/build.mjs linux-x64",
-    "build:win-x64": "node scripts/build.mjs win-x64",
+    "start": "node src/main.ts",
+    "build": "vp pack --filter host",
+    "build:all": "vp pack --filter all",
+    "build:darwin-arm64": "vp pack --filter darwin-arm64",
+    "build:darwin-x64": "vp pack --filter darwin-x64",
+    "build:linux-x64": "vp pack --filter linux-x64",
+    "build:win-x64": "vp pack --filter win-x64",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "engines": {
@@ -21,16 +21,8 @@
   },
   "devDependencies": {
     "@types/node": "^26.6.1",
-    "esbuild": "^0.28.2",
-    "tsx": "^4.23.15",
-    "typescript": "^6.0.3"
-  },
-  "packageManager": "pnpm@12.16.1",
-  "devEngines": {
-    "runtime": {
-      "name": "node",
-      "version": "26.13.0",
-      "onFail": "download"
-    }
+    "typescript": "^6.0.3",
+    "@tsdown/exe": "0.22.1",
+    "vite-plus": "catalog:"
   }
 }

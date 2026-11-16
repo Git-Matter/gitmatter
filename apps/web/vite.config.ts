@@ -97,6 +97,17 @@ const prerenderOptions =
     : undefined;
 
 const config = defineConfig({
+  run: {
+    tasks: {
+      build: {
+        command: "vp build",
+        env: ["DEPLOYMENT", "TURNSTILE_SITE_KEY", "NODE_ENV"],
+        untrackedEnv: ["DATABASE_URL", "BETTER_AUTH_SECRET", "ENCRYPTION_KEY"],
+        input: [{ auto: true }, "!dist/**", "!.tanstack/**"],
+        output: ["dist/**"],
+      },
+    },
+  },
   define: {
     "import.meta.env.VITE_DEPLOYMENT": JSON.stringify(deployment),
     // Public Turnstile site key, baked in as a build constant (safe to expose).

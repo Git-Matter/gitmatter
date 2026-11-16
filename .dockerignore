@@ -11,3 +11,10 @@
 **/.env
 **/.env.*
 .scratch
+
+# Generated tooling and non-web build outputs.
+.vite
+.vite-hooks
+**/.next
+**/.source
+**/build

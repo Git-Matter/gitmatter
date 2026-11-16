@@ -5,7 +5,6 @@
   "private": true,
   "scripts": {
     "dev": "vp dev",
-    "build": "vp build",
     "build:devtools": "ANALYZE=1 vp build",
     "preview": "vp preview",
     "lint": "vp lint",

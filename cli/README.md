@@ -17,8 +17,8 @@ the binary from the latest GitHub Release, and installs it to
 Or grab the binary for your OS from Releases yourself, or build it:
 
 ```sh
-pnpm run build         # this platform -> dist/gitmatter
-pnpm run build:all     # mac (arm64/x64), linux x64, windows x64
+vp run gitmatter-cli#build      # this platform -> cli/dist/gitmatter
+vp run gitmatter-cli#build:all  # mac (arm64/x64), linux x64, windows x64
 ```
 
 Drop the binary on PATH as `gitmatter`.
@@ -62,4 +62,4 @@ The web service pulls `ghcr.io/gitmatter/gitmatter:latest` (see
 `src/templates.ts`). Set up CI to build `infrastructure/Dockerfile.web` and push
 that image, or point `GITMATTER_IMAGE` at your registry.
 
-Building the standalone CLI uses pnpm and its pinned Node.js 26.13 runtime. `pnpm run build` creates a self-contained executable; users of the release binary only need Docker. Release jobs build natively on each target OS, including macOS ad-hoc signing.
+Building the standalone CLI uses the shared Vite+ workspace and its pinned Node.js 26.13 runtime. `vp run gitmatter-cli#build` packages a self-contained executable through `vp pack`; users of the release binary only need Docker. `vp run gitmatter-cli#build:<target>` selects one release target. Release jobs still build natively on each target OS, including macOS ad-hoc signing.

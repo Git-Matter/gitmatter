@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import "dotenv/config";
 // Dump the Postgres database to a compressed custom-format file.
-//   pnpm exec tsx scripts/db-backup.ts [outfile]
+//   vp run db:backup [outfile]
 // Reads DATABASE_URL from .env. Requires `pg_dump` on PATH (postgresql-client).
 
 import { run } from "../cli/src/process.ts";

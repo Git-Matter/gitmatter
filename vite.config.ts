@@ -17,10 +17,7 @@ export default defineConfig({
     options: { typeAware: true, typeCheck: true },
     // Vendored shadcn/ai-elements registry components — owned but not authored
     // here. Exclude from app-strict lint instead of editing 40+ upstream files.
-    // cli/ is a standalone package with its own lockfile and node_modules; the
-    // root verify doesn't install its deps, so type-aware lint can't resolve its
-    // ambient types. It is checked independently, not as part of the workspace.
-    ignorePatterns: ["**/components/ai-elements/**", ".claude/", "scripts/", "cli/"],
+    ignorePatterns: ["**/components/ai-elements/**", ".claude/", "scripts/"],
   },
   fmt: {
     endOfLine: "lf",
@@ -37,7 +34,9 @@ export default defineConfig({
     ignorePatterns: [
       "dist/",
       "node_modules/",
-      ".turbo/",
+      ".vite-hooks/",
+      "**/.next/",
+      "**/.source/",
       ".output/",
       ".nitro/",
       ".tanstack/",

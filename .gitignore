@@ -17,8 +17,11 @@ __unconfig*
 todos.json
 tmp
 
-# turbo
-.turbo
+# Vite+ task cache and generated hook dispatcher
+.vite/
+.vite-hooks/
+# Legacy generated task caches may remain in existing checkouts.
+.turbo/
 
 # typescript
 *.tsbuildinfo

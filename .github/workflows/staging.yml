@@ -25,16 +25,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v6
+      - name: Set up Vite+
+        uses: voidzero-dev/setup-vp@v1
         with:
-          node-version: 24
-
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 12.16.1
+          version: 0.3.2
+          node-version-file: .node-version
+          cache: true
+          run-install: false
 
       - name: Install
-        run: pnpm install --frozen-lockfile
+        run: vp install --frozen-lockfile
 
       # Build the web app into apps/web/dist here (not in the Docker build): the
       # cloud prerender boots the SSR server and crawls it, which needs a real
@@ -54,7 +54,7 @@ jobs:
           # browser), so it lives in the workflow, not a secret. The matching
           # TURNSTILE_SECRET_KEY is set as runtime env on the dokploy app.
           TURNSTILE_SITE_KEY: "0x4AAAAAADoWezFOHdsCDIF-"
-        run: cd apps/web && pnpm run build
+        run: vp run web#build
 
       - name: Log in to GHCR
         uses: docker/login-action@v3
@@ -144,7 +144,7 @@ jobs:
         timeout-minutes: 6
         env:
           EXPECTED_RELEASE: ${{ github.sha }}
-        run: pnpm exec tsx scripts/verify-web-deployment.ts https://staging.gitmatter.com/api/health/ready "$EXPECTED_RELEASE"
+        run: vp exec tsx scripts/verify-web-deployment.ts https://staging.gitmatter.com/api/health/ready "$EXPECTED_RELEASE"
 
   # Docs is a standalone Next.js app served under /docs. It builds and ships
   # independently of the web image: next build on the runner produces a
@@ -157,21 +157,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v6
+      - name: Set up Vite+
+        uses: voidzero-dev/setup-vp@v1
         with:
-          node-version: 24
-
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 12.16.1
+          version: 0.3.2
+          node-version-file: .node-version
+          cache: true
+          run-install: false
 
       - name: Install
-        run: pnpm install --frozen-lockfile
+        run: vp install --frozen-lockfile
 
       # next build → standalone server output; postbuild copies .next/static and
       # the repo-root docs/ content into the standalone bundle.
       - name: Build docs
-        run: cd apps/docs && pnpm run build
+        run: vp run docs#build
 
       - name: Log in to GHCR
         uses: docker/login-action@v3
