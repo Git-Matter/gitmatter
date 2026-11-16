@@ -1,9 +1,9 @@
-#!/usr/bin/env bun
+#!/usr/bin/env node
+import { spawn, spawnSync } from "node:child_process";
 import { parseArgs } from "node:util";
-import { $ } from "bun";
 
 // Local dev launcher: brings up docker deps (Postgres), applies the DB schema,
-// then runs the app. `bun run dev` calls this.
+// then runs the apps with Vite+. `vp run dev` calls this.
 //
 // Flags:
 //   --skip-deps      don't touch docker (deps already running)
@@ -23,34 +23,37 @@ const { values: flags } = parseArgs({
 const log = (msg: string) => console.log(`\x1b[36m[dev]\x1b[0m ${msg}`);
 
 /** Run a command, or just print it under --dry-run. */
-async function step(label: string, run: () => Promise<unknown>): Promise<void> {
+function step(label: string, command: string[]): void {
   log(flags["dry-run"] ? `(dry-run) ${label}` : label);
-  if (!flags["dry-run"]) await run();
+  if (!flags["dry-run"]) {
+    const result = spawnSync(command[0]!, command.slice(1), { stdio: "inherit" });
+    if (result.error) throw result.error;
+    if (result.status !== 0) process.exit(result.status ?? 1);
+  }
 }
 
-async function dockerIsRunning(): Promise<boolean> {
-  return (await $`docker info`.quiet().nothrow()).exitCode === 0;
+function dockerIsRunning(): boolean {
+  return spawnSync("docker", ["info"], { stdio: "ignore" }).status === 0;
 }
 
 if (!flags["skip-deps"]) {
-  if (!flags["dry-run"] && !(await dockerIsRunning())) {
+  if (!flags["dry-run"] && !dockerIsRunning()) {
     console.error("\x1b[31m[dev]\x1b[0m Docker is not running. Start Docker and retry.");
     process.exit(1);
   }
   // --wait blocks until Postgres is healthy (it has a healthcheck).
-  await step("starting deps (postgres)", () => $`docker compose up -d --wait postgres`);
+  step("starting deps (postgres)", ["docker", "compose", "up", "-d", "--wait", "postgres"]);
 } else {
   log("skipping deps (--skip-deps)");
 }
 
 if (!flags["skip-migrate"]) {
-  await step("applying schema", () => $`bun run migrate`.cwd("packages/db"));
+  step("applying schema", ["vp", "run", "@workspace/db#migrate"]);
 } else {
   log("skipping migrate (--skip-migrate)");
 }
 
-// Launch the app via Bun.spawn (not `$`) so turbo inherits the terminal's TTY
-// and renders its TUI (turbo.json sets "ui": "tui"); `$` would force stream mode.
+// Inherit the terminal and forward shutdown signals to the workspace runner.
 // --cloud sets DEPLOYMENT=cloud so vite serves the marketing landing at "/"
 // (vite.config.ts reads process.env.DEPLOYMENT; default is the local flavor).
 log(
@@ -59,11 +62,16 @@ log(
     : `starting app${flags.cloud ? " (cloud)" : ""}`
 );
 if (!flags["dry-run"]) {
-  const proc = Bun.spawn(["bunx", "turbo", "run", "dev"], {
-    stdin: "inherit",
-    stdout: "inherit",
-    stderr: "inherit",
+  const child = spawn("vp", ["run", "--filter", "./apps/*", "--parallel", "dev"], {
+    stdio: "inherit",
     env: { ...process.env, ...(flags.cloud ? { DEPLOYMENT: "cloud" } : {}) },
   });
-  process.exit(await proc.exited);
+  for (const signal of ["SIGINT", "SIGTERM"] as const) {
+    process.on(signal, () => child.kill(signal));
+  }
+  child.once("error", (error) => {
+    console.error(error.message);
+    process.exit(1);
+  });
+  child.once("exit", (code) => process.exit(code ?? 1));
 }

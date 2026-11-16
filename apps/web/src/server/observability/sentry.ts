@@ -7,7 +7,7 @@
 // scrubber below strips request bodies, auth headers, and cookies before any
 // event leaves the process. Use the EU-region DSN so events stay in the EU.
 
-import * as Sentry from "@sentry/bun";
+import * as Sentry from "@sentry/node";
 import { getEnv, setErrorReporter } from "@workspace/core";
 
 // Header names that can carry secrets/PII. Compared case-insensitively.

@@ -1,0 +1,26 @@
+packages:
+  - apps/*
+  - packages/*
+  - cli
+
+catalog:
+  vite: npm:@voidzero-dev/vite-plus-core@0.1.24
+  vitest: npm:@voidzero-dev/vite-plus-test@0.1.24
+  vite-plus: 0.1.24
+
+overrides:
+  vite: "catalog:"
+  vitest: "catalog:"
+  # The Postgres adapter does not use Drizzle's optional runtime types.
+  bun-types: "-"
+
+allowBuilds:
+  esbuild: true
+  lightningcss: true
+  sharp: true
+  protobufjs: true
+  "@google/genai": false
+  "@openrouter/sdk": false
+
+# Vite+ 0.1's patched runtimes resolve the native binding from the project root.
+virtualStoreType: project

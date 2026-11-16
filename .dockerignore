@@ -5,3 +5,8 @@
 .git
 .github
 *.log
+.vite
+.vite-hooks
+**/.next
+**/.source
+**/build

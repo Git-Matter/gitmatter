@@ -15,19 +15,17 @@
     "tailwindcss": "4.0.0"
   },
   "devDependencies": {
-    "@remotion/eslint-config-flat": "4.0.481",
     "@types/react": "19.2.7",
     "@types/web": "0.0.166",
-    "eslint": "9.19.0",
-    "prettier": "3.8.1",
-    "typescript": "5.9.3"
+    "typescript": "^6",
+    "vite-plus": "catalog:"
   },
   "scripts": {
     "dev": "remotion studio --port 4290",
     "remotion": "remotion studio --port 4290",
-    "build": "remotion bundle",
     "upgrade": "remotion upgrade",
-    "lint": "eslint src && tsc"
+    "lint": "vp lint",
+    "typecheck": "tsc --noEmit"
   },
   "sideEffects": [
     "*.css"

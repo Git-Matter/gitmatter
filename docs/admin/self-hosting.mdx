@@ -146,13 +146,13 @@ For the full per-provider privacy detail, see [AI data handling](/admin/ai-data-
 
 ## Local development
 
-Use this path when you are changing gitmatter source code. It requires [Bun](https://bun.sh).
+Use this path when you are changing gitmatter source code. It requires [Vite+](https://viteplus.dev/guide/), which manages the pinned Node.js and pnpm toolchain.
 
-`bun run dev` starts the supporting services (Postgres) in Docker, applies the database schema, then runs the app. Text extraction from uploaded documents runs in-process — there is no separate extraction service:
+`vp run dev` starts the supporting services (Postgres) in Docker, applies the database schema, then runs the app. Text extraction from uploaded documents runs in-process — there is no separate extraction service:
 
 ```bash
-bun install
-bun run dev   # deps in Docker + web on http://localhost:4280
+vp install
+vp run dev   # deps in Docker + web on http://localhost:4280
 ```
 
 Useful flags:
@@ -165,6 +165,6 @@ To do the same steps by hand (equivalent to `--skip-deps --skip-migrate`):
 
 ```bash
 docker compose up -d postgres     # Postgres with pgvector
-cd packages/db && bun run migrate  # apply schema
-turbo run dev                      # web on http://localhost:4280
+vp run @workspace/db#migrate  # apply schema
+vp run --filter './apps/*' --parallel dev                      # web on http://localhost:4280
 ```

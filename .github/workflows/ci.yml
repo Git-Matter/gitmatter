@@ -32,24 +32,30 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Bun
-        uses: oven-sh/setup-bun@v2
+      - name: Set up Vite+
+        uses: voidzero-dev/setup-vp@v1
         with:
-          bun-version: 1.3.14
+          version: 0.3.2
+          node-version-file: .node-version
+          cache: true
+          run-install: false
 
       - name: Install
-        run: bun install --frozen-lockfile
+        run: vp install --frozen-lockfile
 
       # build → lint → test: fail fast on a broken build before linting, and lint
       # before the (slower, DB-backed) tests.
       - name: Build
-        run: bun run build
+        run: vp run build
 
       - name: Lint (format, lint, types)
-        run: bun run check
+        run: vp check
+
+      - name: Typecheck all workspaces
+        run: vp run typecheck
 
       - name: Migrate test database
-        run: cd packages/db && bun run migrate
+        run: vp run @workspace/db#migrate
 
       - name: Test
-        run: bun run test
+        run: vp test run

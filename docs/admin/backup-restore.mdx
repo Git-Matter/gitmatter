@@ -15,8 +15,8 @@ Back up both. If you restore the database without its files, document links poin
 ### Back up
 
 ```bash
-bun scripts/db-backup.ts                 # → gitmatter-<timestamp>.dump
-bun scripts/db-backup.ts /backups/x.dump # explicit path
+vp run db:backup                 # → gitmatter-<timestamp>.dump
+vp run db:backup /backups/x.dump # explicit path
 ```
 
 This produces a single compressed backup file (`pg_dump -Fc`, Postgres's custom dump format). It needs the `postgresql-client` package (which provides the `pg_dump` tool) and `DATABASE_URL` set in `.env`.
@@ -27,7 +27,7 @@ Schedule backups off-host (run them automatically with cron, CI, or your managed
 
 ```bash
 # Point DATABASE_URL at the TARGET db (a scratch db for drills), then:
-bun scripts/db-restore.ts gitmatter-<timestamp>.dump
+vp run db:restore gitmatter-<timestamp>.dump
 ```
 
 <Callout type="warn">
@@ -49,9 +49,9 @@ With versioning on, gitmatter's document purge (which deletes files) leaves reco
 
 A drill is a practice run of recovery, so you know it works before you ever need it for real. Do this before launch, and repeat it periodically.
 
-1. Take a backup: `bun scripts/db-backup.ts`.
+1. Take a backup: `vp run db:backup`.
 2. Create a scratch database (a throwaway test database) and set `DATABASE_URL` to it.
-3. Restore into it: `bun scripts/db-restore.ts <dump>`.
+3. Restore into it: `vp run db:restore <dump>`.
 4. Point the app at the scratch database and confirm it starts up and serves `/api/health`.
 5. Spot-check one firm's data: members, matters, and a document download against the versioned bucket.
 6. Record how long the restore took on the clock. That number is your recovery-time objective (how long getting back online realistically takes).

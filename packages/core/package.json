@@ -40,7 +40,7 @@
     "@types/react": "^19.2.17",
     "react-email": "^6.6.4",
     "typescript": "^6",
-    "vitest": "catalog:"
+    "vite-plus": "catalog:"
   },
   "exports": {
     ".": "./src/index.ts",

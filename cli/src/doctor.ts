@@ -1,4 +1,6 @@
-import { $ } from "bun";
+import { execFile } from "node:child_process";
+import { createConnection } from "node:net";
+import { promisify } from "node:util";
 import { type Config, loadConfig, parseDbHost, paths } from "./config.ts";
 
 export interface Check {
@@ -10,21 +12,26 @@ export interface Check {
 }
 
 async function cmdOk(cmd: string[]): Promise<boolean> {
-  return (await $`${cmd}`.quiet().nothrow()).exitCode === 0;
-}
-
-/** TCP connect with a timeout. Used to probe an external Postgres. */
-async function tcpReachable(host: string, port: number, ms = 3000): Promise<boolean> {
   try {
-    const socket = await Promise.race([
-      Bun.connect({ hostname: host, port, socket: { data() {} } }),
-      new Promise<never>((_, rej) => setTimeout(() => rej(new Error("timeout")), ms)),
-    ]);
-    socket.end();
+    await promisify(execFile)(cmd[0]!, cmd.slice(1));
     return true;
   } catch {
     return false;
   }
+}
+
+/** TCP connect with a timeout. Used to probe an external Postgres. */
+async function tcpReachable(host: string, port: number, ms = 3000): Promise<boolean> {
+  return new Promise((resolve) => {
+    const socket = createConnection({ host, port });
+    const done = (ok: boolean) => {
+      socket.destroy();
+      resolve(ok);
+    };
+    socket.setTimeout(ms, () => done(false));
+    socket.once("connect", () => done(true));
+    socket.once("error", () => done(false));
+  });
 }
 
 /**

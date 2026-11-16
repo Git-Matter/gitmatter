@@ -17,8 +17,8 @@ the binary from the latest GitHub Release, and installs it to
 Or grab the binary for your OS from Releases yourself, or build it:
 
 ```sh
-bun run build         # this platform -> dist/gitmatter
-bun run build:all     # mac (arm64/x64), linux x64, windows x64
+vp run gitmatter-cli#build      # this platform -> cli/dist/gitmatter
+vp run gitmatter-cli#build:all  # mac (arm64/x64), linux x64, windows x64
 ```
 
 Drop the binary on PATH as `gitmatter`.
