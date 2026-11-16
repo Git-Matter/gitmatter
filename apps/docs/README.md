@@ -1,8 +1,8 @@
 # docs
 
 The gitmatter documentation site — a standalone **Next.js + Fumadocs** app, built
-with its own toolchain (independent of the `apps/web` vite-plus build) and served
-under `/docs`.
+served under `/docs`. Vite+ orchestrates its Next.js build alongside the other
+apps, using the shared pnpm workspace and lockfile.
 
 ## Why a separate app
 
@@ -15,17 +15,17 @@ single source of truth); this app only renders it — see `source.config.ts` (`d
 
 ```bash
 # from repo root
-pnpm run docs:build      # turbo run build --filter=docs
-pnpm run docs:dev        # dev server on http://localhost:4285/docs
+vp run docs:build        # Vite+ workspace build task
+vp run docs:dev        # dev server on http://localhost:4285/docs
 
 # or from apps/docs
-pnpm run build           # next build → standalone server output
-pnpm run dev             # next dev  (http://localhost:4285/docs)
+vp run build           # next build → standalone server output
+vp run dev             # next dev  (http://localhost:4285/docs)
 ```
 
 ## Serving in production
 
-`pnpm run docs:build` (or `next build`) produces a self-contained standalone server.
+`vp run docs:build` (or `next build`) produces a self-contained standalone server.
 The build's postbuild step copies `.next/static` and the repo-root `docs/` into the
 standalone output (to `.next/standalone/docs`), so the whole `.next/standalone`
 directory is deployable as-is. Run it and reverse-proxy `/docs` to it:
@@ -34,7 +34,7 @@ directory is deployable as-is. Run it and reverse-proxy `/docs` to it:
 node apps/docs/.next/standalone/apps/docs/server.js   # listens on PORT (default 3000)
 ```
 
-Updating docs is a rebuild: edit `docs/**` (repo root), run `pnpm run docs:build`, redeploy.
+Updating docs is a rebuild: edit `docs/**` (repo root), run `vp run docs:build`, redeploy.
 
 `basePath` is `/docs`, so every route and asset is namespaced under `/docs`
 (`/docs/_next/...`, `/docs/api/search`, `/docs/llms.txt`). A single reverse-proxy

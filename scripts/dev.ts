@@ -4,7 +4,7 @@ import { parseArgs } from "node:util";
 import { run } from "../cli/src/process.ts";
 
 // Local dev launcher: brings up docker deps (Postgres), applies the DB schema,
-// then runs the app. `pnpm run dev` calls this.
+// then runs the app. `vp run dev` calls this.
 //
 // Flags:
 //   --skip-deps      don't touch docker (deps already running)
@@ -24,9 +24,11 @@ const { values: flags } = parseArgs({
 const log = (msg: string) => console.log(`\x1b[36m[dev]\x1b[0m ${msg}`);
 
 /** Run a command, or just print it under --dry-run. */
-async function step(label: string, run: () => Promise<unknown>): Promise<void> {
+async function step(label: string, action: () => Promise<number>): Promise<void> {
   log(flags["dry-run"] ? `(dry-run) ${label}` : label);
-  if (!flags["dry-run"]) await run();
+  if (flags["dry-run"]) return;
+  const code = await action();
+  if (code !== 0) process.exit(code);
 }
 
 async function dockerIsRunning(): Promise<boolean> {
@@ -45,12 +47,12 @@ if (!flags["skip-deps"]) {
 }
 
 if (!flags["skip-migrate"]) {
-  await step("applying schema", () => run(["pnpm", "run", "migrate"], { cwd: "packages/db", shell: process.platform === "win32" }));
+  await step("applying schema", () => run(["vp", "run", "@workspace/db#migrate"]));
 } else {
   log("skipping migrate (--skip-migrate)");
 }
 
-// Inherit the terminal so Turbo can render its interactive UI.
+// Run only the web app; docs and video have separate development commands.
 // --cloud sets DEPLOYMENT=cloud so vite serves the marketing landing at "/"
 // (vite.config.ts reads process.env.DEPLOYMENT; default is the local flavor).
 log(
@@ -59,8 +61,7 @@ log(
     : `starting app${flags.cloud ? " (cloud)" : ""}`
 );
 if (!flags["dry-run"]) {
-  const code = await run(["pnpm", "exec", "turbo", "run", "dev", "--filter=web"], {
-    shell: process.platform === "win32",
+  const code = await run(["vp", "run", "web#dev"], {
     env: { ...process.env, ...(flags.cloud ? { DEPLOYMENT: "cloud" } : {}) },
   });
   process.exit(code);

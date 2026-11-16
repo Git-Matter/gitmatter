@@ -16,25 +16,25 @@ Welcome to your Remotion project!
 **Install Dependencies**
 
 ```console
-npm i
+vp install
 ```
 
 **Start Preview**
 
 ```console
-pnpm run dev
+vp run dev
 ```
 
 **Render video**
 
 ```console
-npx remotion render
+vp exec remotion render
 ```
 
 **Upgrade Remotion**
 
 ```console
-npx remotion upgrade
+vp run upgrade
 ```
 
 ## Docs

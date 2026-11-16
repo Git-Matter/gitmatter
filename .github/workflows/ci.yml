@@ -43,36 +43,36 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v6
+      - name: Set up Vite+
+        uses: voidzero-dev/setup-vp@v1
         with:
-          node-version: 24
-
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 12.16.1
+          version: 0.3.2
+          node-version-file: .node-version
+          cache: true
+          run-install: false
 
       - name: Install
-        run: pnpm install --frozen-lockfile
+        run: vp install --frozen-lockfile
 
       - name: Check design policy and generated foundations
-        run: pnpm run design:check
+        run: vp run design:check
 
       # build → lint → test: fail fast on a broken build before linting, and lint
       # before the (slower, DB-backed) tests.
       - name: Build
-        run: pnpm run build
+        run: vp run build
 
       - name: Lint (format, lint, types)
-        run: pnpm run check
+        run: vp check
 
       - name: Typecheck
-        run: pnpm run typecheck
+        run: vp run typecheck
 
       - name: Check generated MCP reference
-        run: pnpm run docs:tools:check
+        run: vp run docs:tools:check
 
       - name: Check synthetic NDA source
-        run: pnpm run fixtures:nda:check
+        run: vp run fixtures:nda:check
 
       # Legacy community container images are no longer publicly available.
       # Pin official release binaries and their published SHA-256 checksums;
@@ -101,7 +101,7 @@ jobs:
           "$RUNNER_TEMP/mc" mb --ignore-existing "local/$S3_BUCKET"
 
       - name: Migrate test database
-        run: cd packages/db && pnpm run migrate
+        run: vp run @workspace/db#migrate
 
       - name: Test
-        run: pnpm run test:ci
+        run: vp run test:ci

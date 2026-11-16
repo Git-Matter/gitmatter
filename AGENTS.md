@@ -16,7 +16,7 @@ Docs are local at `node_modules/vite-plus/docs` or online at <https://viteplus.d
 ## Task Completion Requirements
 
 - `vp check` (format, lint, type check) and `vp run typecheck` must pass before considering tasks completed.
-- Use `vp test` for the built-in Vite+ test command and `vp run test` when you specifically need the `test` package script (runs `turbo run test`).
+- Use `vp test` for the built-in Vite+ test command and `vp run test` when you specifically need the `test` package script (runs the root Vite+ test suite).
 - Database-touching changes: regenerate and check migrations in `packages/db` (`vp run --filter=@workspace/db generate`) when the schema changes.
 
 ## Local app instance
@@ -51,7 +51,7 @@ Long term maintainability is a core priority. If you add new functionality, firs
 
 ## Package Roles
 
-This is a pnpm + Turborepo monorepo (with Node.js as the runtime) (`apps/*`, `packages/*`, `services/*`).
+This is a Node.js + pnpm monorepo orchestrated by Vite+ (`apps/*`, `packages/*`, `services/*`, `cli`). Use `vp install` for dependencies and `vp run build`, `vp run typecheck`, and `vp test run` for workspace validation.
 
 - `apps/web`: React app on TanStack Start (Router, Query, Form, Table, Store). Owns the legal-review UI, chat, document rendering (tiptap, docx-preview, streamdown), auth (better-auth), and the embedded Hono server that exposes gitmatter's tools over MCP (`@hono/mcp`, `@modelcontextprotocol/sdk`).
 - `apps/docs`: documentation site, rendered under `/docs`.
@@ -62,7 +62,7 @@ This is a pnpm + Turborepo monorepo (with Node.js as the runtime) (`apps/*`, `pa
 - `packages/registry` (`@workspace/registry`): shared registry consumed across packages.
 - `cli` (`gitmatter-cli`): packaged binary with per-platform build targets (darwin-arm64/x64, linux-x64, win-x64).
 - `infrastructure`: infrastructure-as-code.
-- `scripts`: operational scripts (`db-backup`, `db-restore`, `dev`, `wipe-s3`), run with `pnpm exec tsx scripts/<name>.ts`.
+- `scripts`: operational scripts (`db-backup`, `db-restore`, `dev`, `wipe-s3`), run with `vp run dev`, `vp run db:backup`, and `vp run db:restore`. For other TypeScript scripts, use `vp exec tsx --env-file-if-exists=.env scripts/<name>.ts`.
 
 ## Design authoring requirements
 

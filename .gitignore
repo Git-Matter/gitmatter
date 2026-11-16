@@ -17,8 +17,9 @@ __unconfig*
 todos.json
 tmp
 
-# turbo
-.turbo
+# Vite+ task cache and generated hook dispatcher
+.vite/
+.vite-hooks/
 
 # typescript
 *.tsbuildinfo

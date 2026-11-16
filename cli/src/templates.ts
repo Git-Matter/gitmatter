@@ -24,7 +24,7 @@ services:
     restart: "no"
     environment:
       DATABASE_URL: \${DATABASE_URL}
-    command: ["sh", "-c", "cd /app/packages/db && pnpm run migrate"]
+    command: ["sh", "-c", "vp run @workspace/db#migrate"]
 
   web:
     image: \${GITMATTER_IMAGE:-ghcr.io/git-matter/gitmatter:latest}

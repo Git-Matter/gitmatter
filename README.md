@@ -43,6 +43,18 @@ The default image is `ghcr.io/git-matter/gitmatter:latest`. For production, pin 
 
 ## Build & run
 
+Use Vite+ 0.3.2 or newer. Node.js is pinned in `.node-version`, pnpm in
+`package.json`, and the project toolchain in `pnpm-workspace.yaml`.
+
+```sh
+vp install
+vp run dev         # the web app at http://127.0.0.1:4280
+vp run build       # web, docs, video, and CLI
+vp check
+vp run typecheck   # all eight workspaces
+vp test run        # database tests require migrated local Postgres and S3
+```
+
 See **[docs/admin/self-hosting.mdx](docs/admin/self-hosting.mdx)** — setup, local development, and
 the full Docker stack — and **[docs/ai-agents/connect-an-agent.mdx](docs/ai-agents/connect-an-agent.mdx)**
 for connecting an AI agent over MCP. These render on the docs site under `/docs`.

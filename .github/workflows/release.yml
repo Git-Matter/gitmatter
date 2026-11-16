@@ -61,16 +61,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v6
+      - name: Set up Vite+
+        uses: voidzero-dev/setup-vp@v1
         with:
-          node-version: 24
-
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 12.16.1
+          version: 0.3.2
+          node-version-file: .node-version
+          cache: true
+          run-install: false
 
       - name: Install
-        run: pnpm install --frozen-lockfile
+        run: vp install --frozen-lockfile
 
       # Build the web app into apps/web/dist here (not in the Docker build): the
       # cloud prerender boots the SSR server and crawls it, which needs a real
@@ -90,7 +90,7 @@ jobs:
           # so self-hosters supply their own. Public by design (ships to every
           # browser). The widget must allow gitmatter.com in its hostname list.
           TURNSTILE_SITE_KEY: ${{ matrix.deployment == 'cloud' && '0x4AAAAAADoWezFOHdsCDIF-' || '' }}
-        run: cd apps/web && pnpm run build
+        run: vp run web#build
 
       - name: Log in to GHCR
         uses: docker/login-action@v3
@@ -136,19 +136,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v6
+      - name: Set up Vite+
+        uses: voidzero-dev/setup-vp@v1
         with:
-          node-version: 24
-
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 12.16.1
+          version: 0.3.2
+          node-version-file: .node-version
+          cache: true
+          run-install: false
 
       - name: Install
-        run: pnpm install --frozen-lockfile
+        run: vp install --frozen-lockfile
 
       - name: Build docs
-        run: cd apps/docs && pnpm run build
+        run: vp run docs#build
 
       - name: Log in to GHCR
         uses: docker/login-action@v3
@@ -200,14 +200,21 @@ jobs:
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v6
-      - uses: actions/setup-node@v6
+      - name: Set up Vite+
+        uses: voidzero-dev/setup-vp@v1
         with:
-          node-version: 26.13.0
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 12.16.1
-      - run: pnpm --dir cli install --frozen-lockfile
-      - run: pnpm --dir cli run build:${{ matrix.target }}
+          version: 0.3.2
+          node-version-file: .node-version
+          cache: true
+          run-install: false
+      - run: vp install --frozen-lockfile
+      - run: vp run gitmatter-cli#build:${{ matrix.target }}
+      - name: Smoke native CLI executable
+        shell: bash
+        run: |
+          cli_binary="cli/dist/gitmatter-${{ matrix.target }}"
+          if [ "${{ runner.os }}" = "Windows" ]; then cli_binary="${cli_binary}.exe"; fi
+          "$cli_binary" --help
       - uses: actions/upload-artifact@v7
         with:
           name: gitmatter-cli-${{ matrix.target }}
