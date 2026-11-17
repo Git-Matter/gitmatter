@@ -7,6 +7,26 @@ import {
 
 const release = "a".repeat(40);
 const oldRelease = "b".repeat(40);
+const invalidReleases = [
+  "unknown",
+  "latest",
+  "A".repeat(40),
+  `${release}\n`,
+  "2026.11.17",
+  "V2026.11.17",
+  "v2026.1.17",
+  "v2026.00.17",
+  "v2026.13.17",
+  "v2026.11.00",
+  "v2026.11.32",
+  "v2026.11.17.0",
+  "v2026.11.17.01",
+  "v2026.11.17.-1",
+  "v2026.11.17.1.extra",
+  "v2026.11.17-private",
+  " v2026.11.17",
+  "v2026.11.17\n",
+];
 const url = "https://staging.example.test/api/health/ready";
 const ready = (revision: string | null = release) => ({
   ok: true,
@@ -34,6 +54,65 @@ describe("bounded web deployment verification (no network)", () => {
       expect.objectContaining({ cache: "no-store", credentials: "omit", redirect: "error" }),
     ]);
   });
+
+  test.each(["v2026.11.17", "v2026.11.17.1", "v2026.11.17.12"])(
+    "accepts the exact healthy production release %s",
+    async (expectedRelease) => {
+      const fetcher = vi
+        .fn<typeof fetch>()
+        .mockResolvedValue(Response.json(ready(expectedRelease)));
+      expect(await verifyWebDeployment({ ...options, expectedRelease, fetcher })).toEqual({
+        release: expectedRelease,
+        attempts: 1,
+      });
+    }
+  );
+
+  test.each([
+    { expectedRelease: "v2026.11.17.1", observedRelease: "v2026.11.17" },
+    { expectedRelease: "v2026.11.17", observedRelease: "v2026.11.16" },
+    { expectedRelease: "v2026.11.17", observedRelease: release },
+    { expectedRelease: release, observedRelease: "v2026.11.17" },
+  ])(
+    "does not conflate valid release identifiers: $expectedRelease / $observedRelease",
+    async ({ expectedRelease, observedRelease }) => {
+      const fetcher = vi
+        .fn<typeof fetch>()
+        .mockImplementation(async () => Response.json(ready(observedRelease)));
+      const observations: DeploymentObservation[] = [];
+      const outcome = verifyWebDeployment({
+        ...options,
+        expectedRelease,
+        fetcher,
+        onObservation: (observation) => observations.push(observation),
+      }).catch((error: unknown) => error);
+      await vi.advanceTimersByTimeAsync(35);
+      expect(((await outcome) as Error).message).toContain("release_mismatch");
+      expect(observations[0]).toEqual({
+        state: "release_mismatch",
+        release: observedRelease,
+        attempt: 1,
+      });
+    }
+  );
+
+  test.each(invalidReleases)(
+    "rejects an unknown observed release %j without logging it",
+    async (id) => {
+      const fetcher = vi
+        .fn<typeof fetch>()
+        .mockImplementation(async () => Response.json(ready(id)));
+      const observations: DeploymentObservation[] = [];
+      const outcome = verifyWebDeployment({
+        ...options,
+        fetcher,
+        onObservation: (observation) => observations.push(observation),
+      }).catch((error: unknown) => error);
+      await vi.advanceTimersByTimeAsync(35);
+      expect(((await outcome) as Error).message).toContain("release_unknown");
+      expect(observations[0]).toEqual({ state: "release_unknown", attempt: 1 });
+    }
+  );
 
   test("an old healthy process must become the expected release before succeeding", async () => {
     const fetcher = vi
@@ -164,11 +243,14 @@ describe("bounded web deployment verification (no network)", () => {
     }
   );
 
-  test("invalid release configuration fails before any request", async () => {
-    const fetcher = vi.fn<typeof fetch>();
-    await expect(
-      verifyWebDeployment({ ...options, expectedRelease: "unknown", fetcher })
-    ).rejects.toThrow("Invalid deployment verification configuration");
-    expect(fetcher).not.toHaveBeenCalled();
-  });
+  test.each(invalidReleases)(
+    "invalid release configuration %j fails before any request",
+    async (id) => {
+      const fetcher = vi.fn<typeof fetch>();
+      await expect(
+        verifyWebDeployment({ ...options, expectedRelease: id, fetcher })
+      ).rejects.toThrow("Invalid deployment verification configuration");
+      expect(fetcher).not.toHaveBeenCalled();
+    }
+  );
 });

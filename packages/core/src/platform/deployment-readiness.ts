@@ -1,6 +1,8 @@
 import type { ReadinessReport } from "@workspace/contracts";
 
-const SHA = /^[0-9a-f]{40}$/;
+// CI supplies a commit SHA for staging and vYYYY.MM.DD[.N] for production.
+const RELEASE_ID =
+  /^(?:[0-9a-f]{40}|v[0-9]{4}\.(?:0[1-9]|1[0-2])\.(?:0[1-9]|[12][0-9]|3[01])(?:\.[1-9][0-9]*)?)$/;
 const MAX_READINESS_BYTES = 16 * 1024;
 type Observation = {
   state:
@@ -28,13 +30,18 @@ export function describeDeploymentObservation(observation: DeploymentObservation
   return `attempt ${observation.attempt}: ${observation.state}${observation.status === undefined ? "" : ` (HTTP ${observation.status})`}${observation.release ? ` (release ${observation.release})` : ""}`;
 }
 
+function isReleaseId(release: string): boolean {
+  // Comparing the whole match also rejects a trailing line terminator allowed by $.
+  return RELEASE_ID.exec(release)?.[0] === release;
+}
+
 function inspect(body: unknown, expectedRelease: string): Observation {
   if (!body || typeof body !== "object") return { state: "invalid_response" };
   const report = body as Partial<ReadinessReport>;
   if (typeof report.ok !== "boolean" || !report.checks || typeof report.checks !== "object")
     return { state: "invalid_response" };
   if (!report.ok || report.checks.db !== "up") return { state: "database_not_ready" };
-  if (typeof report.release !== "string" || !SHA.test(report.release))
+  if (typeof report.release !== "string" || !isReleaseId(report.release))
     return { state: "release_unknown" };
   return {
     state: report.release === expectedRelease ? "ready" : "release_mismatch",
@@ -130,7 +137,7 @@ export async function verifyWebDeployment(options: {
   const intervalMs = options.intervalMs ?? 10_000;
   const requestTimeoutMs = options.requestTimeoutMs ?? 10_000;
   if (
-    !SHA.test(options.expectedRelease) ||
+    !isReleaseId(options.expectedRelease) ||
     ![timeoutMs, intervalMs, requestTimeoutMs].every((n) => Number.isSafeInteger(n) && n > 0) ||
     timeoutMs > 600_000
   )
