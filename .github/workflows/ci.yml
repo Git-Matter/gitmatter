@@ -30,6 +30,9 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     env:
+      # Aggregate builds share the hosted runner's process/thread budget.
+      VP_RUN_CONCURRENCY_LIMIT: "1"
+      RAYON_NUM_THREADS: "2"
       DATABASE_URL: postgres://gitmatter:gitmatter@localhost:5432/gitmatter
       # MinIO endpoint for the object-storage suites (started in its own step).
       # Every service in core/storage.ts only varies by env var, so legacy/R2

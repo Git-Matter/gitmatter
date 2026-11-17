@@ -46,7 +46,7 @@ const config = defineConfig({
       build: {
         command: "vp build",
         env: ["DEPLOYMENT", "TURNSTILE_SITE_KEY", "NODE_ENV"],
-        untrackedEnv: ["DATABASE_URL", "BETTER_AUTH_SECRET", "ENCRYPTION_KEY"],
+        untrackedEnv: ["DATABASE_URL", "BETTER_AUTH_SECRET", "ENCRYPTION_KEY", "RAYON_NUM_THREADS"],
         input: [{ auto: true }, "!dist/**", "!.tanstack/**"],
         output: ["dist/**"],
       },

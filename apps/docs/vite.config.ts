@@ -6,6 +6,7 @@ export default defineConfig({
       build: {
         command: "next build && node scripts/postbuild.mjs",
         env: ["NODE_ENV"],
+        untrackedEnv: ["RAYON_NUM_THREADS"],
         input: [
           { auto: true },
           { pattern: "docs/**", base: "workspace" },
