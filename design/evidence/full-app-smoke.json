@@ -1,0 +1,168 @@
+{
+  "kind": "local-full-application-smoke",
+  "observedAtUTC": "2026-11-17T03:26:06.324792+00:00",
+  "runtimeSourceCommit": "858bbb5f6f50bf9d11b1e69754be011ed408ae39",
+  "checkoutAtReceipt": "0802cf095bb7569ebbb2c33d3b639b8c4e167e7e",
+  "changesSinceImage": [
+    ".github/workflows/ci.yml",
+    "apps/docs/vite.config.ts",
+    "apps/web/vite.config.ts"
+  ],
+  "imageId": "sha256:1f9189a7c116f58e599ecb565c8a6f8f9206680aac9748947f170dd08c4090e4",
+  "containerId": "7a2864bbad8c7cdf90c5072479d701d2b714e3c2b660a2d5f24fe68161c4a397",
+  "startedAt": "2026-11-17T03:24:55.662437205Z",
+  "hostBinding": [
+    {
+      "HostIp": "127.0.0.1",
+      "HostPort": "4280"
+    }
+  ],
+  "readiness": {
+    "status": 200,
+    "cacheControl": "no-store",
+    "body": {
+      "ok": true,
+      "checks": {
+        "db": "up"
+      },
+      "release": "858bbb5f6f50bf9d11b1e69754be011ed408ae39"
+    }
+  },
+  "freshDatabaseMigrationCount": 24,
+  "browser": {
+    "recordedAt": "2026-11-16T21:09:13.905Z",
+    "status": "Observed passing within local full-app guest scope",
+    "environment": {
+      "origin": "http://127.0.0.1:4280",
+      "kind": "Real Docker application stack, not fixture",
+      "runtimeContainer": "gitmatter-smoke-858bbb5",
+      "runtimeSource": "858bbb5",
+      "runtimeIdentityProvenance": "Coordinator supplied clean source/image and readiness; browser independently tested actual served guest routes",
+      "database": "Fresh isolated gitmatter_smoke_858bbb5, coordinator supplied",
+      "session": "New dedicated full-app-858bbb5 browser profile; guest",
+      "viewports": [
+        {
+          "width": 1440,
+          "height": 1000
+        },
+        {
+          "width": 390,
+          "height": 844
+        }
+      ],
+      "preferences": [
+        "light",
+        "dark via prefers-color-scheme and real ThemeProvider",
+        "prefers-reduced-motion: reduce"
+      ]
+    },
+    "checks": {
+      "rootRedirect": {
+        "requested": "/",
+        "landed": "/login?next=%2Fassistant",
+        "loginHeading": "Welcome back"
+      },
+      "privateAssistant": {
+        "requested": "/assistant",
+        "landed": "/login?next=%2Fassistant",
+        "guestGated": true
+      },
+      "legal": {
+        "terms": {
+          "path": "/terms",
+          "status": 200,
+          "heading": "Terms of Service",
+          "signupLinkNavigationConfirmed": true
+        },
+        "privacy": {
+          "path": "/privacy",
+          "status": 200,
+          "heading": "Privacy Policy",
+          "signupLinkNavigationConfirmed": true
+        },
+        "loginDirectLegalLinkCount": 0,
+        "signupDirectLegalLinkCount": 2,
+        "loginReachability": "Login -> Sign up -> Terms of Service or Privacy Policy",
+        "deepTextAcceptance": "Reused prior unchanged legal UAT; no legal accuracy review in this smoke"
+      },
+      "removedFeatures": {
+        "path": "/features",
+        "status": 404,
+        "text": "Page not found",
+        "homeLink": "Go home",
+        "keyboardEnterReturns": "/login?next=%2Fassistant",
+        "visibleFocusRing": true,
+        "mobileHorizontalOverflow": false
+      },
+      "layout": {
+        "loginMobileOverflow": false,
+        "signupMobileOverflow": false,
+        "privacyMobileOverflow": false,
+        "termsMobileOverflow": false,
+        "signupDarkRendered": true,
+        "loginLightRendered": true,
+        "signupPasswordKeyboardFocus": true,
+        "loginForgotPasswordKeyboardFocus": true,
+        "reducedMotionMatched": true,
+        "loginButtonTransitionProperty": "none"
+      },
+      "requestScope": {
+        "formsFilled": false,
+        "formsSubmitted": false,
+        "credentialsUsed": false,
+        "signupSubmitted": false,
+        "nonstaticRequestLog": "Observed GET only: auth get-session, signup config, server-function reads and features404",
+        "externalPolicy": "All non-loopback browser requests blocked after initial page entry; no external request observed in reviewed request output"
+      }
+    },
+    "observations": [
+      "Login has no direct legal links. Both legal pages are reachable through Sign up; signup links directly to each.",
+      "Early SPA heading reads were rejected as unsettled; corrected checks waited for the exact destination heading and confirmed direct SSR HTTP200."
+    ],
+    "screenshots": [
+      {
+        "path": "output/playwright/full-app-smoke/01-login-desktop.png",
+        "sha256": "604bcf1f217814134f7ca2c5cc270767b41a6cb2f3f1d898b2d665dac3801d70"
+      },
+      {
+        "path": "output/playwright/full-app-smoke/02-signup-desktop.png",
+        "sha256": "813f83e68558ad6a82356d811f9a41fe50ddc7b66f44018a3fbe413b0013078f"
+      },
+      {
+        "path": "output/playwright/full-app-smoke/03-terms-desktop.png",
+        "sha256": "08b6bd04d5600b37cd9b2daea2b8effe05204a54aee85d7e8841f3cf961eca41"
+      },
+      {
+        "path": "output/playwright/full-app-smoke/04-privacy-mobile.png",
+        "sha256": "927b6341814eac21af5f8a7d66290d5c7a41e58be727dcaa249e07f64adc5b89"
+      },
+      {
+        "path": "output/playwright/full-app-smoke/05-features-404-mobile.png",
+        "sha256": "4b6a2ffbb1dc1dd3f6a097d22ee43368f03a53b21c1c94516465437e879641a0"
+      },
+      {
+        "path": "output/playwright/full-app-smoke/06-signup-dark-mobile.png",
+        "sha256": "d9e61fb089f1a30c53e7a0c987c1926074ba61b3ae7ba4c07a38f5d151194496"
+      },
+      {
+        "path": "output/playwright/full-app-smoke/07-login-light-mobile.png",
+        "sha256": "8699452ec77de6fa231d3256b95775f8bfab9935608d390fc1ba81a22525ea67"
+      }
+    ],
+    "boundaries": [
+      "Local full-app guest route and rendered browser evidence only",
+      "No signed-in workflow, live authentication success, provider inference, native Word fidelity, real external service, production deployment or complete WCAG/user-study proof",
+      "No Git/index/product/test-adapter edits",
+      "Only this reviewer browser will be closed; application and services retained"
+    ],
+    "completion": {
+      "browserClosed": true,
+      "applicationAndServices": "Left running",
+      "postBrowserCloseLoginHTTPStatus": 200,
+      "completedAt": "2026-11-16T21:09:47.462Z"
+    }
+  },
+  "captureWorkspace": "/Users/applecakes/.codex/worktrees/gitmatter-consolidation",
+  "operationalNote": "Test services were restored after a confirmed Docker-backend shutdown; the earlier same-image guest observation is preserved with its original timestamp. The regular local database has noncanonical migration history and was left unchanged. The running app uses an isolated empty database.",
+  "limits": "Real local Docker/SQL guest checkpoint with synthetic configuration; not account signup, provider, native Word/device or staging/production acceptance."
+}

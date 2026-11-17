@@ -91,3 +91,29 @@ additional gate; known failures affecting publication remain gates.
 Use one UI server at `127.0.0.1:4280`. Fixtures replace the app temporarily, then stop before the
 app is restored. Synthetic/intercepted UI evidence is kept separate from real authorization,
 provider, Word and deployed-runtime evidence.
+
+## Source delivery and operational checkpoint
+
+The completed source is on `dev`; only `main`, `dev` and the unchanged protected
+`feat/native-agent-workflow` remain locally and remotely. Merged source branches were
+removed only after confirming their commits are ancestors of pushed `dev`. The primary
+checkout is `dev`; older worktree contents and recovery snapshots were preserved.
+
+An actual local Docker application applied all 24 migrations to a fresh isolated
+database and passed the readiness verifier at source `858bbb5`. Independent guest
+browser checks passed application redirects, private-route gating, legal navigation,
+removed-page recovery, desktop/mobile, theme, reduced-motion and focus checks. The
+[runtime receipt](../design/evidence/full-app-smoke.json) preserves source/image,
+timestamps and limits. The regular local database has noncanonical migration history
+and was left unchanged; the running app uses isolated data.
+
+Fresh hosted CI at `0802cf0` passed after bounding CI task concurrency and native
+workers. Build, lint, all seven typechecks, generated references, migrations and all
+521 tests passed without a retry. These three CI-only configuration changes do not
+alter the previously verified application source or browser journeys.
+
+[PR #17](https://github.com/Git-Matter/gitmatter/pull/17) is prepared in draft for
+`dev` → `main`. New staging verification failed while build and CI succeeded; public
+readiness still does not identify the expected release. Main remains at the previous
+release. Deployment repair needs renewed operator authentication. The goal is not
+complete and production publication remains held.

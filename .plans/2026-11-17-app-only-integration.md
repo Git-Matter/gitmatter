@@ -120,3 +120,22 @@ and static-only limitation. Final schema generation reports no changes; format/l
 workspace types and design policy pass after the test-adapter updates. Main-app
 startup, exact staging/production revision and the final branch inventory remain
 separate coordinator checks.
+
+## Full application and delivery follow-up
+
+The actual local Docker app subsequently applied the complete 24-migration chain to
+an isolated empty database and passed release-specific readiness at `858bbb5`.
+Independent full-app guest checks passed redirects, private-route gating, Terms and
+Privacy navigation, removed-page recovery, layout, theme, reduced motion and focus.
+[The receipt](../design/evidence/full-app-smoke.json) records the image, current health
+and unchanged earlier guest observations with their original capture timestamps.
+
+Hosted CI exposed an aggregate-build process limit. The scoped `0802cf0` correction
+bounds CI concurrency to one and Rayon workers to two, explicitly passing the latter
+to cached web/docs tasks. A fresh uncached hosted run passed build, lint, type,
+metadata, migration and 521-test gates. Application-source browser receipts remain
+valid; no UI or engine behavior changed in the runner-budget correction.
+
+Source integration and branch cleanup are complete on `dev`; the protected ref is
+unchanged. Draft PR #17 records the remaining staging/main/production hold. These local
+and CI results do not prove a new deployed revision; the goal remains unfinished.
