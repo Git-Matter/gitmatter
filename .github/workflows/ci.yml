@@ -30,9 +30,8 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     env:
-      # Aggregate builds share the hosted runner's process/thread budget.
+      # Keep workspace task execution sequential on the shared CI runner.
       VP_RUN_CONCURRENCY_LIMIT: "1"
-      RAYON_NUM_THREADS: "2"
       DATABASE_URL: postgres://gitmatter:gitmatter@localhost:5432/gitmatter
       # MinIO endpoint for the object-storage suites (started in its own step).
       # Every service in core/storage.ts only varies by env var, so legacy/R2
@@ -63,7 +62,14 @@ jobs:
       # build → lint → test: fail fast on a broken build before linting, and lint
       # before the (slower, DB-backed) tests.
       - name: Build
-        run: vp run build
+        # Pinned Vite+ can fail on nonblocking stdout under output backpressure.
+        # https://github.com/voidzero-dev/vite-plus/pull/2173
+        run: |
+          build_log="$RUNNER_TEMP/workspace-build.log"
+          build_status=0
+          vp run --filter './apps/*' --filter './packages/*' --filter './cli' build >"$build_log" 2>&1 || build_status=$?
+          cat "$build_log"
+          exit "$build_status"
 
       - name: Lint (format, lint, types)
         run: vp check
