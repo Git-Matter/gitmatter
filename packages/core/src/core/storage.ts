@@ -10,6 +10,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@workspace/db/client";
 import { tenants, type StorageRegion } from "@workspace/db/schema";
 import { getEnv, requireEnv } from "./config.js";
+import type { AccessReader } from "./access.js";
 
 // Object storage. S3-compatible only — Cloudflare R2 (prod) or any S3 endpoint;
 // only the env vars change, never the code. S3 is required (no local fallback):
@@ -49,10 +50,13 @@ function target(region: StorageRegion): StorageTarget {
   return configured;
 }
 
-async function regionForTenant(tenantId: string): Promise<StorageRegion> {
+async function regionForTenant(
+  tenantId: string,
+  reader: AccessReader = db
+): Promise<StorageRegion> {
   const cached = tenantRegions.get(tenantId);
   if (cached) return cached;
-  const [row] = await db
+  const [row] = await reader
     .select({ storageRegion: tenants.storageRegion })
     .from(tenants)
     .where(eq(tenants.id, tenantId));
@@ -62,8 +66,8 @@ async function regionForTenant(tenantId: string): Promise<StorageRegion> {
   return row.storageRegion;
 }
 
-async function storage(tenantId: string): Promise<StorageTarget> {
-  return target(await regionForTenant(tenantId));
+async function storage(tenantId: string, reader: AccessReader = db): Promise<StorageTarget> {
+  return target(await regionForTenant(tenantId, reader));
 }
 
 // Tenant-scoped object key: tenantId/userId/matterId/artifactId[.ext | /v{n}.ext].
@@ -89,7 +93,8 @@ export async function putObject(
   tenantId: string,
   key: string,
   body: Buffer,
-  contentType?: string
+  contentType?: string,
+  options?: { signal?: AbortSignal }
 ): Promise<void> {
   const { client, bucket } = await storage(tenantId);
   await client.send(
@@ -98,19 +103,30 @@ export async function putObject(
       Key: key,
       Body: body as PutObjectCommandInput["Body"],
       ContentType: contentType,
-    })
+    }),
+    { abortSignal: options?.signal }
   );
 }
 
-export async function getObject(tenantId: string, key: string): Promise<Uint8Array> {
-  const { client, bucket } = await storage(tenantId);
+export async function getObject(
+  tenantId: string,
+  key: string,
+  reader: AccessReader = db
+): Promise<Uint8Array> {
+  const { client, bucket } = await storage(tenantId, reader);
   const res = await client.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
   return res.Body!.transformToByteArray();
 }
 
-export async function deleteObject(tenantId: string, key: string): Promise<void> {
+export async function deleteObject(
+  tenantId: string,
+  key: string,
+  options?: { signal?: AbortSignal }
+): Promise<void> {
   const { client, bucket } = await storage(tenantId);
-  await client.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
+  await client.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }), {
+    abortSignal: options?.signal,
+  });
 }
 
 /**

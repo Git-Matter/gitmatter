@@ -108,7 +108,7 @@ function SectionHeader({
         aria-expanded={!collapsed}
         className="flex flex-1 items-center gap-0.5 px-3 py-1.5 text-left"
       >
-        <h2 className="text-sm font-semibold text-foreground">{title}</h2>
+        <h2 className="font-sans text-xs font-medium text-muted-foreground">{title}</h2>
         <ChevronDown
           className={cn(
             "size-3 shrink-0 text-muted-foreground transition-transform",

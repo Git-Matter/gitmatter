@@ -27,8 +27,8 @@ export function ClientSelectionBar({
   if (selectedCount <= 0) return null;
 
   return (
-    <div className="flex h-10 items-center justify-between gap-3 border-b border-border text-sm">
-      <div className="flex items-center gap-3">
+    <div className="flex min-h-10 flex-wrap items-center justify-between gap-3 border-b border-border text-sm">
+      <div className="flex min-w-0 flex-wrap items-center gap-3">
         <span className="font-medium">{selectedCount} selected</span>
         {!selectAllMatching && table.getIsAllRowsSelected() && rowCount > pageCount && (
           <button
@@ -36,7 +36,7 @@ export function ClientSelectionBar({
             className="text-primary hover:underline"
             onClick={onSelectAllMatching}
           >
-            Select all {rowCount}
+            Select all {rowCount} matching clients
           </button>
         )}
         <button

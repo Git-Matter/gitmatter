@@ -1,8 +1,6 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
-import { api } from "@/lib/data/api";
-import { queryKeys } from "@/lib/data/queries";
+import { createFileRoute, Navigate } from "@tanstack/react-router";
 import { AssistantView } from "./index";
+import { SavedConversation } from "./-components/SavedConversation";
 
 // Resume a conversation. Fetched client-side (react-query) rather than in a route
 // loader — a loader fetches with a relative URL that fails under SSR/hard-reload.
@@ -12,12 +10,19 @@ export const Route = createFileRoute("/_auth/assistant/$id")({
 
 function ResumeChat() {
   const { id } = Route.useParams();
-  // AssistantView seeds its turns from `loaded` at mount (it's keyed by id), so
-  // wait for the fetch before mounting it.
-  const { data: loaded, isPending } = useQuery({
-    queryKey: queryKeys.chat(id),
-    queryFn: () => api.getChat(id).catch(() => null),
-  });
-  if (isPending) return null;
-  return <AssistantView key={id} loaded={loaded ?? null} />;
+  return (
+    <SavedConversation id={id}>
+      {(loaded, current) =>
+        loaded.matterId ? (
+          <Navigate
+            to="/matters/$id/assistant/$chatId"
+            params={{ id: loaded.matterId, chatId: id }}
+            replace
+          />
+        ) : (
+          <AssistantView key={id} loaded={loaded} current={current} />
+        )
+      }
+    </SavedConversation>
+  );
 }

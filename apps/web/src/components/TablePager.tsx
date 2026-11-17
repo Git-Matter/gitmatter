@@ -1,3 +1,4 @@
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import type { Table } from "@tanstack/react-table";
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -15,23 +16,25 @@ export function TablePager<T>({ table, pageSizes = [25, 50, 100] }: TablePagerPr
   const last = Math.min(rowCount, (pageIndex + 1) * pageSize);
 
   return (
-    <div className="flex h-11 shrink-0 items-center justify-between border-t border-border px-3 text-sm text-muted-foreground">
+    <nav
+      aria-label="Table pagination"
+      className="flex min-h-11 shrink-0 flex-wrap items-center justify-between gap-2 border-t border-grid-line py-2 text-sm text-muted-foreground"
+    >
       <div>
         {first}-{last} of {rowCount}
       </div>
-      <div className="flex items-center gap-2">
-        <select
+      <div className="flex min-w-0 flex-wrap items-center gap-2">
+        <NativeSelect
           value={pageSize}
           onChange={(e) => table.setPageSize(Number(e.target.value))}
-          className="h-8 rounded-md border border-input bg-background px-2 text-sm text-foreground outline-none"
           aria-label="Rows per page"
         >
           {pageSizes.map((size) => (
-            <option key={size} value={size}>
+            <NativeSelectOption key={size} value={size}>
               {size} rows
-            </option>
+            </NativeSelectOption>
           ))}
-        </select>
+        </NativeSelect>
         <span>
           Page {pageCount === 0 ? 0 : pageIndex + 1} of {pageCount}
         </span>
@@ -78,6 +81,6 @@ export function TablePager<T>({ table, pageSizes = [25, 50, 100] }: TablePagerPr
           </Button>
         </div>
       </div>
-    </div>
+    </nav>
   );
 }

@@ -6,6 +6,7 @@ import { user } from "./auth.js";
 // invite, and object access events that the spine does not cover.
 
 export type AuditEventType =
+  | "guided.sample_opened"
   | "auth.login"
   | "auth.logout"
   | "auth.failed"
@@ -28,10 +29,13 @@ export type AuditEventType =
   | "document.discard_staged"
   | "storage.delete_failed"
   | "tenant.storage_region_set"
+  | "practice.profile_updated"
   | "tenant.privacy_evidence_export"
   | "tenant.export"
   | "matter.audit_export"
-  | "budget.exceeded";
+  | "budget.exceeded"
+  | "job.controls_updated"
+  | "storage.orphan_deleted";
 
 export const auditEvents = pgTable(
   "audit_events",

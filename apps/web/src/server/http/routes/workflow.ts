@@ -164,7 +164,13 @@ workflowRoute.post(
     try {
       const run = await runPlaybook(
         { type: "user", userId: user.id },
-        { playbookId: id, documentIds: body.documentIds, matterId: body.matterId }
+        {
+          playbookId: id,
+          documentIds: body.documentIds,
+          matterId: body.matterId,
+          requestId: body.requestId,
+          reviewInstructions: body.reviewInstructions,
+        }
       );
       posthog.capture({
         distinctId: user.id,

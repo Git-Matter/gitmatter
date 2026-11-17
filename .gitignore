@@ -17,8 +17,11 @@ __unconfig*
 todos.json
 tmp
 
-# turbo
-.turbo
+# Vite+ task cache and generated hook dispatcher
+.vite/
+.vite-hooks/
+# Legacy generated task caches may remain in existing checkouts.
+.turbo/
 
 # typescript
 *.tsbuildinfo
@@ -33,9 +36,6 @@ tmp
 # gitmatter CLI build artifacts
 cli/dist/
 
-# remotion bundle output
-apps/video/build/
-
 # test artifacts
 test-results/
 
@@ -44,3 +44,8 @@ test-results/
 # …except the shipped agent-plugin MCP configs (no secrets — public OAuth URL)
 !plugins/*/.mcp.json
 .env
+
+# Local browser acceptance artifacts
+.playwright-cli/
+output/playwright/
+output/template-library/

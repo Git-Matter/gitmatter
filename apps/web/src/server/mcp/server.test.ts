@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, test } from "vite-plus/test";
+import { afterAll, beforeAll, describe, expect, test, vi } from "vite-plus/test";
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -6,18 +6,29 @@ import { CallToolResultSchema } from "@modelcontextprotocol/sdk/types.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { db, sql } from "@workspace/db/client";
-import { tenants, user } from "@workspace/db/schema";
-import { eq } from "drizzle-orm";
+import {
+  commits,
+  jobs,
+  jobSpendReservations,
+  tenants,
+  usageEvents,
+  user,
+} from "@workspace/db/schema";
+import { and, eq } from "drizzle-orm";
 import {
   buildToolCatalog,
   extractMarkdown,
   getObject,
   listVersions,
   processDocument,
+  queueReviewRun,
+  retryJob,
   resolveEdit,
+  setApprovalPolicy,
   updateWorkflow,
   uploadDocument,
 } from "@workspace/core";
+import * as extractionQueue from "../../../../../packages/core/src/content/extractionQueue.js";
 import { buildMcpServer, toolResult } from "./server";
 
 test("tool errors are protocol errors with structured data", () => {
@@ -53,7 +64,17 @@ test("subscription catalog excludes provider inference and human decisions", asy
   try {
     const { tools } = await client.listTools();
     expect(tools.map((tool) => tool.name)).toEqual(
-      expect.arrayContaining(["write_cell", "generate_docx", "write_workflow", "run_playbook"])
+      expect.arrayContaining([
+        "write_cell",
+        "generate_docx",
+        "write_workflow",
+        "run_playbook",
+        "get_job",
+        "list_document_jobs",
+        "list_review_jobs",
+        "cancel_job",
+        "retry_job",
+      ])
     );
     for (const name of ["run_cell", "draft_playbook", "resolve_document_edit"]) {
       expect(tools.some((tool) => tool.name === name)).toBe(false);
@@ -62,6 +83,9 @@ test("subscription catalog excludes provider inference and human decisions", asy
       true
     );
     expect(tools.find((tool) => tool.name === "write_cell")?.annotations?.readOnlyHint).toBe(false);
+    expect(tools.find((tool) => tool.name === "retry_job")?.description).toContain(
+      "Provider-backed review jobs must be retried in the GitMatter UI"
+    );
     expect(client.getInstructions()).toContain("your own reasoning and subscription");
     // Provider-funded execution remains available to the built-in assistant.
     const internal = buildToolCatalog(
@@ -99,6 +123,7 @@ const hasStorage = !!process.env.S3_ACCESS_KEY;
       email: `${userId}@example.com`,
       emailVerified: true,
       tenantId,
+      tenantRole: "admin",
     });
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
     await server.connect(serverTransport);
@@ -116,6 +141,105 @@ const hasStorage = !!process.env.S3_ACCESS_KEY;
     expect(result.isError, JSON.stringify(result.content)).not.toBe(true);
     return result;
   }
+  test("subscription retry preserves extraction recovery and cannot requeue provider work", async () => {
+    const wake = vi.fn();
+    const worker = vi.spyOn(extractionQueue, "startExtractionWorker").mockReturnValue({
+      stop: vi.fn(),
+      wake,
+    });
+    try {
+      const createdClient = await call("create_client", { name: "Retry client" });
+      const matter = await call("create_matter", {
+        clientId: createdClient.structuredContent!.clientId,
+        name: "Retry matter",
+      });
+      const matterId = matter.structuredContent!.matterId as string;
+      const generated = await call("generate_docx", {
+        matterId,
+        title: "Retry source",
+        blocks: [{ type: "paragraph", text: "Confidentiality lasts two years." }],
+      });
+      const documentId = generated.structuredContent!.documentId as string;
+      const review = await call("create_review", {
+        matterId,
+        title: "Retry review",
+        documentIds: [documentId],
+        columns: [{ name: "Term", prompt: "Find the term" }],
+      });
+      const reviewId = review.structuredContent!.reviewId as string;
+      const accepted = await queueReviewRun(
+        { type: "user", userId },
+        { reviewId, requestId: randomUUID() }
+      );
+      const jobId = accepted.jobIds[0]!;
+      await db
+        .update(jobs)
+        .set({ state: "failed", errorCode: "provider_unavailable" })
+        .where(eq(jobs.id, jobId));
+      const requestId = randomUUID();
+      for (const replay of [false, true]) {
+        if (replay)
+          await retryJob({ type: "agent", userId, agentLabel: `mcp:${label}` }, jobId, {
+            requestId,
+          });
+        const [before] = await db.select().from(jobs).where(eq(jobs.id, jobId));
+        const priorCommits = await db
+          .select()
+          .from(commits)
+          .where(eq(commits.artifactId, reviewId))
+          .orderBy(commits.seq);
+        const result = CallToolResultSchema.parse(
+          await client.callTool({ name: "retry_job", arguments: { jobId, requestId } })
+        );
+        expect(result.isError).toBe(true);
+        expect(result.structuredContent).toMatchObject({ code: "access_denied" });
+        const [after] = await db.select().from(jobs).where(eq(jobs.id, jobId));
+        expect(after).toEqual(before);
+        expect(
+          await db
+            .select()
+            .from(commits)
+            .where(eq(commits.artifactId, reviewId))
+            .orderBy(commits.seq)
+        ).toEqual(priorCommits);
+        expect(
+          await db.select().from(jobSpendReservations).where(eq(jobSpendReservations.jobId, jobId))
+        ).toHaveLength(0);
+        expect(
+          await db
+            .select()
+            .from(usageEvents)
+            .where(and(eq(usageEvents.userId, userId), eq(usageEvents.kind, "llm")))
+        ).toHaveLength(0);
+        expect(worker).not.toHaveBeenCalled();
+      }
+      const bytes = readFileSync(
+        fileURLToPath(
+          new URL("../../../../../packages/core/test/fixtures/nda/source.docx", import.meta.url)
+        )
+      );
+      const uploaded = await uploadDocument(userId, {
+        title: "Retry extraction",
+        fileType: "docx",
+        bytes,
+        matterId,
+      });
+      const [extraction] = await db.select().from(jobs).where(eq(jobs.artifactId, uploaded.id));
+      await db
+        .update(jobs)
+        .set({ state: "failed", errorCode: "extraction_failed" })
+        .where(eq(jobs.id, extraction!.id));
+      const retried = await call("retry_job", { jobId: extraction!.id, requestId: randomUUID() });
+      expect(retried.structuredContent).toMatchObject({
+        kind: "document_extraction",
+        state: "queued",
+      });
+      expect(worker).toHaveBeenCalledOnce();
+      expect(wake).toHaveBeenCalledOnce();
+    } finally {
+      worker.mockRestore();
+    }
+  });
   test("generate, read, save cited review, propose, human resolve and audit", async () => {
     const createdClient = await call("create_client", { name: "Synthetic client" });
     const matter = await call("create_matter", {
@@ -253,6 +377,35 @@ const hasStorage = !!process.env.S3_ACCESS_KEY;
       "imported"
     );
 
+    const work = await call("list_document_jobs", { documentId });
+    const extractionJobs = work.structuredContent!.items as Array<{ id: string; state: string }>;
+    expect(extractionJobs).toEqual(
+      expect.arrayContaining([expect.objectContaining({ state: "succeeded" })])
+    );
+    const extraction = await call("get_job", { jobId: extractionJobs[0]!.id });
+    expect(extraction.structuredContent).toMatchObject({ state: "succeeded", completed: 1 });
+    expect(extraction.structuredContent).not.toHaveProperty("actor");
+    expect(extraction.structuredContent).not.toHaveProperty("storagePath");
+    const outside = buildToolCatalog(
+      {
+        type: "agent",
+        userId,
+        agentLabel: "outside",
+        scope: { matterIds: [randomUUID()], maxRole: "owner" },
+      },
+      { jurisdiction: "AU", defaultMatterLabel: "outside", executionMode: "subscription" }
+    );
+    expect(
+      await outside
+        .find((tool) => tool.name === "get_job")!
+        .handler({ jobId: extractionJobs[0]!.id })
+    ).toMatchObject({ error: "Not found" });
+    expect(
+      await outside
+        .find((tool) => tool.name === "cancel_job")!
+        .handler({ jobId: extractionJobs[0]!.id })
+    ).toMatchObject({ error: "Not found" });
+
     const proposed = await call("propose_document_edit", {
       documentId,
       edits: [{ find: "imported", replace: "global", reason: "Synthetic fixture redline" }],
@@ -304,7 +457,53 @@ const hasStorage = !!process.env.S3_ACCESS_KEY;
     expect(tooEarly.isError).toBe(true);
 
     await updateWorkflow({ type: "user", userId }, playbookId, { status: "approved" });
-    const run = await call("run_playbook", { playbookId, documentIds: [documentId], matterId });
+    const requestId = randomUUID();
+    const reviewInstructions = {
+      representedParty: "Synthetic recipient",
+      disclosureRole: "receiving",
+      ndaStructure: "mutual",
+      businessPurpose: "Evaluate a fictional collaboration",
+      governingLaw: null,
+      additionalInstructions: "Escalate uncertainty for human review",
+    };
+    const run = await call("run_playbook", {
+      playbookId,
+      documentIds: [documentId],
+      matterId,
+      requestId,
+      reviewInstructions,
+    });
+    const instructedReviewId = String(run.structuredContent?.reviewId);
+    const completion = await call("get_review_completion", { reviewId: instructedReviewId });
+    expect(completion.structuredContent).toMatchObject({
+      inputSnapshotRevision: 2,
+      reviewInstructions,
+    });
+    const report = await call("get_review_report", { reviewId: instructedReviewId });
+    expect(report.structuredContent).toMatchObject({
+      manifest: { inputSnapshotRevision: 2, reviewInstructions },
+    });
+    const replay = await call("run_playbook", {
+      playbookId,
+      documentIds: [documentId],
+      matterId,
+      requestId,
+      reviewInstructions,
+    });
+    expect(replay.structuredContent?.reviewId).toBe(instructedReviewId);
+    const conflict = CallToolResultSchema.parse(
+      await client.callTool({
+        name: "run_playbook",
+        arguments: {
+          playbookId,
+          documentIds: [documentId],
+          matterId,
+          requestId,
+          reviewInstructions: { ...reviewInstructions, disclosureRole: "disclosing" },
+        },
+      })
+    );
+    expect(conflict.isError).toBe(true);
     expect(run.structuredContent!.ruleCount).toBe(1);
     const reviewId = run.structuredContent!.reviewId as string;
 
@@ -328,4 +527,39 @@ const hasStorage = !!process.env.S3_ACCESS_KEY;
       expect.arrayContaining([expect.objectContaining({ id: playbookId, status: "approved" })])
     );
   }, 60_000);
+
+  test("a governed workflow is reported as proposed until a person applies it", async () => {
+    const createdClient = await call("create_client", { name: "Workflow proposal client" });
+    const matter = await call("create_matter", {
+      clientId: createdClient.structuredContent!.clientId,
+      name: "Workflow proposal matter",
+    });
+    const matterId = matter.structuredContent!.matterId as string;
+    await setApprovalPolicy({ type: "user", userId }, matterId, {
+      policy: { agentCells: "direct", agentWorkflows: "owner" },
+      expectedRevision: 0,
+      reason: "Require human workflow approval in this fixture",
+    });
+    const proposed = await call("write_workflow", {
+      matterId,
+      title: "Synthetic proposed workflow",
+      type: "assistant",
+      promptMd: "Synthetic fixture instruction",
+    });
+    expect(proposed.structuredContent).toMatchObject({ outcome: "proposed", status: "pending" });
+    expect(proposed.structuredContent!.proposalId).toEqual(expect.any(String));
+    const unavailable = await client.callTool({
+      name: "read_workflow",
+      arguments: { workflowId: proposed.structuredContent!.workflowId },
+    });
+    expect(unavailable.isError).toBe(true);
+    const pending = await call("get_proposal", {
+      proposalId: proposed.structuredContent!.proposalId,
+    });
+    expect(pending.structuredContent).toMatchObject({
+      kind: "workflow",
+      status: "pending",
+      requiredRole: "owner",
+    });
+  });
 });

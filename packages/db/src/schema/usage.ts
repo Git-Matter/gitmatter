@@ -6,7 +6,23 @@ import { index, integer, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-c
 // (over-budget emits a `budget.exceeded` audit event, never rejects). Kept apart
 // from audit_events so high-volume metering never crowds the security log.
 
-export type UsageKind = "llm" | "tool" | "courtlistener" | "ipaustralia" | "extraction";
+export type UsageKind =
+  | "llm"
+  | "embedding"
+  | "tool"
+  | "extraction"
+  // External legal-data providers — one kind per registry ProviderId (kept as
+  // literals so the db package stays decoupled from @workspace/registry).
+  | "courtlistener"
+  | "ipaustralia"
+  | "uklegislation"
+  | "eurlex"
+  | "egovjapan"
+  | "rechtspraak"
+  | "legifrance"
+  | "canlii"
+  | "korealaw"
+  | "govinfo";
 
 export const usageEvents = pgTable(
   "usage_events",
@@ -26,6 +42,11 @@ export const usageEvents = pgTable(
     tool: text("tool"),
     inputTokens: integer("input_tokens"),
     outputTokens: integer("output_tokens"),
+    cachedInputTokens: integer("cached_input_tokens"),
+    cacheWriteTokens: integer("cache_write_tokens"),
+    cacheReadTokens: integer("cache_read_tokens"),
+    cacheMode: text("cache_mode"),
+    cacheKey: text("cache_key"),
     // Generic unit count for kinds that meter by occurrence (tool/cl/extraction).
     count: integer("count").notNull().default(1),
     createdAt: timestamp("created_at").defaultNow().notNull(),

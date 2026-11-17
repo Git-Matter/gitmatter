@@ -14,6 +14,11 @@ export function getRouter() {
 }
 
 declare module "@tanstack/react-router" {
+  interface HistoryState {
+    /** Set by the explicit in-app action; never accepted from a URL parameter. */
+    signOutRequested?: boolean;
+  }
+
   interface Register {
     router: ReturnType<typeof getRouter>;
   }

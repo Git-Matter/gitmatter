@@ -98,7 +98,7 @@ function DocRow({
     <label
       className={`flex cursor-pointer items-center gap-3 px-3 py-2.5 text-sm hover:bg-muted/50 ${topBorder ? "border-t border-border" : ""} ${indent ? "pl-9" : ""}`}
     >
-      <Checkbox checked={checked} onChange={onToggle} aria-label={`Select ${doc.title}`} />
+      <Checkbox checked={checked} onCheckedChange={onToggle} aria-label={`Select ${doc.title}`} />
       <FileText className="size-4 shrink-0 text-bronze" />
       <span className="min-w-0 flex-1 truncate">{doc.title}</span>
       <span className="shrink-0 text-xs text-muted-foreground">

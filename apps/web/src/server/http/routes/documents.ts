@@ -1,6 +1,13 @@
+import {
+  ApprovalError,
+  downloadDocumentBytes,
+  prepareReviewExport,
+  requestCleanReviewExport,
+} from "@workspace/core";
 import { type Context, Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import { zValidator } from "@hono/zod-validator";
+import { z } from "zod";
 import {
   activeStoragePath,
   addArtifactShareByEmail,
@@ -22,7 +29,6 @@ import {
   fileTypeFromName,
   getDocument,
   getDocumentDetail,
-  getObject,
   hasMatterAccess,
   listCommits,
   linkDocumentsToMatter,
@@ -37,6 +43,7 @@ import {
   resolveEdit,
   resolveEdits,
   retryDocument,
+  JobError,
   StorageQuotaError,
   uploadDocument,
 } from "@workspace/core";
@@ -173,7 +180,7 @@ documentsRoute.post("/api/documents/upload", async (c) => {
       tenantId: user.tenantId,
       staged,
     });
-    enqueueExtraction(doc); // extract in-process, serialized per user
+    enqueueExtraction(doc); // wake durable extraction polling
     // Opportunistic backstop: reclaim staged uploads abandoned past the window.
     void purgeAbandonedStaged().catch(() => {});
     void recordAudit({
@@ -197,6 +204,8 @@ documentsRoute.post("/api/documents/upload", async (c) => {
   } catch (err) {
     // Tenant over its shared storage quota: 507 Insufficient Storage.
     if (err instanceof StorageQuotaError) return c.json({ error: err.message }, 507);
+    if (err instanceof JobError)
+      return c.json({ error: err.code }, err.code === "access_denied" ? 404 : 409);
     // Storage/extraction-setup failures (e.g. S3 not configured) surface here.
     const message = err instanceof Error ? err.message : "upload failed";
     return c.json({ error: `Could not store file: ${message}` }, 502);
@@ -239,11 +248,47 @@ documentsRoute.get("/api/documents/events", (c) => {
 documentsRoute.get("/api/documents/:id/download", async (c) => {
   const id = c.req.param("id");
   if (!(await canReadDocument(c.get("user").id, id))) return c.json({ error: "Not found" }, 404);
-  const doc = await getDocument(id);
+  let doc = await getDocument(id);
   if (!doc) return c.json({ error: "no stored file" }, 404);
-  const storagePath = await activeStoragePath(doc);
+  let pinnedStoragePath: string | undefined;
+  let reviewCommitId: string | null = null;
+  const output = c.req.query("output");
+  if (output && output !== "clean" && output !== "tracked")
+    return c.json({ error: "Invalid output kind" }, 400);
+  if (output === "clean") {
+    const reviewId = c.req.query("reviewId");
+    if (!reviewId || doc.fileType !== "docx")
+      return c.json({ error: "A DOCX review is required for clean export" }, 400);
+    try {
+      const snapshot = await prepareReviewExport(
+        { type: "user", userId: c.get("user").id },
+        reviewId,
+        id,
+        { proposalId: c.req.query("approvalId") }
+      );
+      doc = snapshot.doc;
+      pinnedStoragePath = snapshot.storagePath;
+      reviewCommitId = snapshot.reviewCommitId;
+    } catch (error) {
+      if (error instanceof ApprovalError)
+        return c.json(
+          { error: error.message, code: error.code },
+          error.code === "access_denied" ? 404 : 409
+        );
+      return error instanceof Error && error.message === "input_not_ready"
+        ? c.json({ error: "Resolve review findings and pending changes before clean export" }, 409)
+        : c.json({ error: "Not found" }, 404);
+    }
+  }
+  const storagePath = pinnedStoragePath ?? (await activeStoragePath(doc));
   if (!storagePath) return c.json({ error: "no stored file" }, 404);
-  const bytes = await getObject(doc.tenantId, storagePath);
+  const bytes = await downloadDocumentBytes(
+    doc,
+    storagePath,
+    { type: "user", userId: c.get("user").id },
+    !!c.req.query("inline"),
+    output === "clean"
+  );
   void recordAudit({
     eventType: "document.download",
     actorId: c.get("user").id,
@@ -251,9 +296,15 @@ documentsRoute.get("/api/documents/:id/download", async (c) => {
     ...clientMeta(c),
   });
   const mime = MIME_BY_TYPE[doc.fileType] ?? "application/octet-stream";
-  const filename = doc.title.endsWith(`.${doc.fileType}`)
+  const baseFilename = doc.title.endsWith(`.${doc.fileType}`)
     ? doc.title
     : `${doc.title}.${doc.fileType}`;
+  const filename =
+    output === "clean"
+      ? `clean-${baseFilename}`
+      : output === "tracked"
+        ? `draft-redline-${baseFilename}`
+        : baseFilename;
   // `?inline=1` serves for in-browser preview (e.g. PDF in an iframe) instead of
   // forcing a download.
   const disposition = c.req.query("inline") ? "inline" : "attachment";
@@ -261,9 +312,40 @@ documentsRoute.get("/api/documents/:id/download", async (c) => {
     headers: {
       "Content-Type": mime,
       "Content-Disposition": `${disposition}; filename="${filename.replace(/"/g, "")}"`,
+      ...(doc.currentVersionId ? { "X-Gitmatter-Document-Version": doc.currentVersionId } : {}),
+      ...(doc.headCommitId ? { "X-Gitmatter-Document-Commit": doc.headCommitId } : {}),
+      ...(reviewCommitId ? { "X-Gitmatter-Review-Commit": reviewCommitId } : {}),
     },
   });
 });
+
+documentsRoute.post(
+  "/api/documents/:id/clean-export-requests",
+  zValidator("json", z.object({ requestId: z.uuid(), reviewId: z.uuid() }).strict()),
+  async (c) => {
+    try {
+      return c.json(
+        await requestCleanReviewExport(
+          { type: "user", userId: c.get("user").id },
+          { ...c.req.valid("json"), documentId: c.req.param("id") }
+        )
+      );
+    } catch (error) {
+      if (error instanceof ApprovalError)
+        return c.json(
+          { error: error.message, code: error.code },
+          error.code === "access_denied" ? 404 : 409
+        );
+      return c.json(
+        {
+          error:
+            "Resolve current review findings and document changes before requesting clean export.",
+        },
+        409
+      );
+    }
+  }
+);
 
 // Version history for a document (newest first); viewer access is enough.
 documentsRoute.get("/api/documents/:id/versions", async (c) => {
@@ -297,6 +379,8 @@ documentsRoute.post("/api/documents/:id/versions", async (c) => {
     return c.json(doc, 202);
   } catch (err) {
     if (err instanceof StorageQuotaError) return c.json({ error: err.message }, 507);
+    if (err instanceof JobError)
+      return c.json({ error: err.code }, err.code === "access_denied" ? 404 : 409);
     return c.json({ error: err instanceof Error ? err.message : "upload failed" }, 502);
   }
 });
@@ -309,7 +393,10 @@ documentsRoute.get("/api/documents/:id/versions/:versionId/download", async (c) 
   if (!version?.storagePath) return c.json({ error: "no stored file" }, 404);
   const doc = await getDocument(id);
   if (!doc) return c.json({ error: "Not found" }, 404);
-  const bytes = await getObject(doc.tenantId, version.storagePath);
+  const bytes = await downloadDocumentBytes(doc, version.storagePath, {
+    type: "user",
+    userId: c.get("user").id,
+  });
   const base = doc?.title ?? "document";
   const filename = base.endsWith(`.${version.fileType}`) ? base : `${base}.${version.fileType}`;
   return new Response(bytes as BodyInit, {
@@ -342,17 +429,23 @@ documentsRoute.post("/api/documents/:id/retry", async (c) => {
   const id = c.req.param("id");
   if (!(await canAccessArtifact(c.get("user").id, "document", id, "editor")))
     return c.json({ error: "Not found" }, 404);
-  const doc = await retryDocument(id);
-  if (!doc) return c.json({ error: "document not found or not retryable" }, 404);
-  enqueueExtraction(doc);
-  return c.json(doc);
+  try {
+    const doc = await retryDocument(id, { type: "user", userId: c.get("user").id });
+    if (!doc) return c.json({ error: "document not found or not retryable" }, 404);
+    enqueueExtraction(doc);
+    return c.json(doc);
+  } catch (error) {
+    if (error instanceof JobError)
+      return c.json({ error: error.code }, error.code === "access_denied" ? 404 : 409);
+    throw error;
+  }
 });
 
 // Document detail with its tracked edits + per-edit blame (for the redline view).
 documentsRoute.get("/api/documents/:id", async (c) => {
   const id = c.req.param("id");
   if (!(await canReadDocument(c.get("user").id, id))) return c.json({ error: "Not found" }, 404);
-  const result = await getDocumentDetail(id);
+  const result = await getDocumentDetail(id, { type: "user", userId: c.get("user").id });
   if (!result) return c.json({ error: "Not found" }, 404);
   return c.json(result);
 });
@@ -389,7 +482,7 @@ documentsRoute.post(
     } catch (e) {
       return c.json({ error: e instanceof Error ? e.message : "failed" }, 400);
     }
-    return c.json(await getDocumentDetail(id));
+    return c.json(await getDocumentDetail(id, { type: "user", userId: c.get("user").id }));
   }
 );
 
@@ -403,11 +496,16 @@ documentsRoute.post(
     if (!(await canAccessArtifact(user.id, "document", id, "editor")))
       return c.json({ error: "Not found" }, 404);
     try {
-      await resolveAllEdits({ type: "user", userId: user.id }, id, c.req.valid("json").decision);
+      await resolveAllEdits(
+        { type: "user", userId: user.id },
+        id,
+        c.req.valid("json").decision,
+        c.req.valid("json")
+      );
     } catch (e) {
       return c.json({ error: e instanceof Error ? e.message : "failed" }, 400);
     }
-    return c.json(await getDocumentDetail(id));
+    return c.json(await getDocumentDetail(id, { type: "user", userId: c.get("user").id }));
   }
 );
 
@@ -422,7 +520,13 @@ documentsRoute.post(
       return c.json({ error: "Not found" }, 404);
     const { changeIds, decision } = c.req.valid("json");
     try {
-      await resolveEdits({ type: "user", userId: user.id }, id, changeIds, decision);
+      await resolveEdits(
+        { type: "user", userId: user.id },
+        id,
+        changeIds,
+        decision,
+        c.req.valid("json")
+      );
     } catch (e) {
       return c.json({ error: e instanceof Error ? e.message : "failed" }, 400);
     }
@@ -435,7 +539,7 @@ documentsRoute.post(
         change_count: changeIds.length,
       },
     });
-    return c.json(await getDocumentDetail(id));
+    return c.json(await getDocumentDetail(id, { type: "user", userId: c.get("user").id }));
   }
 );
 
@@ -452,12 +556,13 @@ documentsRoute.post(
         { type: "user", userId: user.id },
         id,
         c.req.param("changeId"),
-        c.req.valid("json").decision
+        c.req.valid("json").decision,
+        c.req.valid("json")
       );
     } catch (e) {
       return c.json({ error: e instanceof Error ? e.message : "failed" }, 400);
     }
-    return c.json(await getDocumentDetail(id));
+    return c.json(await getDocumentDetail(id, { type: "user", userId: c.get("user").id }));
   }
 );
 

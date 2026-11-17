@@ -1,3 +1,6 @@
+import { FieldDescription } from "@/components/ui/field";
+import { captureActionOrigin, notifySuccess } from "@/lib/feedback";
+import { FormFeedback } from "@/components/FormFeedback";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -9,6 +12,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Progress, ProgressLabel } from "@/components/ui/progress";
 import { api } from "@/lib/data/api";
 import { useSession } from "@/lib/auth/auth-client";
+import { useSettingsDraft } from "./SettingsDrafts";
 
 const GB = 1024 * 1024 * 1024;
 const MB = 1024 * 1024;
@@ -35,7 +39,7 @@ export function OrganizationCard() {
     queryKey: ["tenant-members"],
     queryFn: () => api.listTenantMembers(),
   });
-  const { data: invites = [], isError } = useQuery({
+  const invitesQuery = useQuery({
     queryKey: ["invites"],
     queryFn: () => api.listInvites(),
     retry: false,
@@ -50,30 +54,41 @@ export function OrganizationCard() {
   const invalidate = () => qc.invalidateQueries({ queryKey: ["invites"] });
 
   const create = useMutation({
+    onMutate: () => captureActionOrigin(),
     mutationFn: () => api.createInvite(email.trim()),
-    onSuccess: (inv) => {
+    onSuccess: (inv, _variables, origin) => {
       setEmail("");
       // With a real email provider the server emails the link and omits the token.
       setFresh("token" in inv ? inv.token : null);
       void invalidate();
-      toast.success("Invite created");
+      notifySuccess("Invite created", origin);
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
   });
   const revoke = useMutation({
+    onMutate: () => captureActionOrigin(),
     mutationFn: (id: string) => api.revokeInvite(id),
-    onSuccess: () => invalidate(),
+    onSuccess: (_data, _variables, origin) => {
+      notifySuccess("Invite revoked", origin);
+      return invalidate();
+    },
   });
 
-  const isAdmin = !isError;
+  const invites = invitesQuery.isError ? [] : (invitesQuery.data ?? []);
+  const isAdmin = invitesQuery.isSuccess;
+  useSettingsDraft(Boolean(email), create.isPending || revoke.isPending);
   const pending = invites.filter((invite) => !invite.acceptedAt);
 
   return (
-    <Card>
+    <Card variant="section">
       <CardHeader>
         <CardTitle>Organization</CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-stack">
+        <FormFeedback
+          error={create.error || revoke.error}
+          title="Organization change was not saved"
+        />
         <p className="text-sm text-muted-foreground">
           {tenant ? tenant.name : "Your organization"}. Matters, reviews, and workflows can only be
           shared with people in this organization.
@@ -148,13 +163,15 @@ export function OrganizationCard() {
               className="flex items-end gap-2"
               onSubmit={(e) => {
                 e.preventDefault();
-                if (email.trim()) create.mutate();
+                if (email.trim() && !create.isPending && isAdmin) create.mutate();
               }}
             >
               <div className="flex flex-1 flex-col gap-1.5">
                 <Label htmlFor="invite-email">Invite a teammate</Label>
                 <Input
+                  disabled={create.isPending}
                   id="invite-email"
+                  aria-describedby="invite-email-hint"
                   type="email"
                   placeholder="colleague@firm.com"
                   value={email}
@@ -165,6 +182,10 @@ export function OrganizationCard() {
                 {create.isPending ? "Inviting..." : "Invite"}
               </Button>
             </form>
+            <FieldDescription id="invite-email-hint">
+              Enter a colleague’s email address to enable Invite. They receive access after
+              accepting the invitation.
+            </FieldDescription>
 
             {fresh && (
               <div className="rounded-md border border-bronze/40 bg-bronze-tint p-3 text-sm">
@@ -197,9 +218,20 @@ export function OrganizationCard() {
             </div>
           </>
         ) : (
-          <p className="text-xs text-muted-foreground">
-            Only organization admins can invite teammates.
-          </p>
+          <div className="flex flex-col gap-2 text-sm text-muted-foreground">
+            {invitesQuery.isPending
+              ? "Checking invitation access…"
+              : "Invitation access could not be confirmed. Only organization admins can invite teammates."}
+            {invitesQuery.isError && (
+              <Button
+                variant="outline"
+                className="self-start"
+                onClick={() => void invitesQuery.refetch()}
+              >
+                Retry invitation access
+              </Button>
+            )}
+          </div>
         )}
       </CardContent>
     </Card>

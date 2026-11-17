@@ -1,3 +1,4 @@
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -43,17 +44,17 @@ export function ReviewColumnEditor({
               value={c.prompt}
               onChange={(e) => setCol(i, { prompt: e.target.value })}
             />
-            <select
-              className="h-9 w-32 rounded-md border border-input bg-background px-2 text-sm"
+            <NativeSelect
+              className="w-32"
               value={c.format ?? ""}
               onChange={(e) => setCol(i, { format: e.target.value || undefined })}
             >
               {COLUMN_FORMATS.map((f) => (
-                <option key={f.value} value={f.value}>
+                <NativeSelectOption key={f.value} value={f.value}>
                   {f.label}
-                </option>
+                </NativeSelectOption>
               ))}
-            </select>
+            </NativeSelect>
           </div>
         ))}
       </div>

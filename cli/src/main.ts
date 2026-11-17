@@ -1,6 +1,8 @@
-#!/usr/bin/env bun
+#!/usr/bin/env node
 import { parseArgs } from "node:util";
-import { $ } from "bun";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { createInterface } from "node:readline/promises";
+import { run } from "./process.ts";
 import {
   buildEnv,
   type Config,
@@ -29,8 +31,7 @@ function composeFiles(config: Config): string[] {
 /** Run `docker compose --env-file … <args>` for the active config, inheriting the TTY. */
 async function compose(config: Config, args: string[]): Promise<number> {
   const full = ["docker", "compose", ...composeFiles(config), "--env-file", paths.env, ...args];
-  const proc = Bun.spawn(full, { stdin: "inherit", stdout: "inherit", stderr: "inherit" });
-  return proc.exited;
+  return run(full);
 }
 
 /** Abort with a message + exit 1. */
@@ -62,6 +63,15 @@ function printUrls(config: Config): void {
 
 // ── init ────────────────────────────────────────────────────────────────────
 
+async function prompt(question: string, fallback: string): Promise<string> {
+  const terminal = createInterface({ input: process.stdin, output: process.stdout });
+  try {
+    return (await terminal.question(`${question} [${fallback}]: `)).trim() || fallback;
+  } finally {
+    terminal.close();
+  }
+}
+
 async function cmdInit(flags: Record<string, unknown>): Promise<void> {
   const interactive = !flags.yes && process.stdin.isTTY;
   const existing = await loadConfig();
@@ -72,16 +82,17 @@ async function cmdInit(flags: Record<string, unknown>): Promise<void> {
   let databaseUrl = (flags["database-url"] as string) ?? existing?.databaseUrl ?? "";
 
   if (interactive) {
-    domain = prompt(`Domain to serve on?`, domain) ?? domain;
+    domain = (await prompt(`Domain to serve on?`, domain)) ?? domain;
     const dbAns =
-      prompt(
+      (await prompt(
         `Database — "bundled" (Postgres in Docker) or "external" (your DATABASE_URL)?`,
         dbMode
-      ) ?? dbMode;
+      )) ?? dbMode;
     dbMode = dbAns === "external" ? "external" : "bundled";
     if (dbMode === "external") {
       databaseUrl =
-        prompt(`DATABASE_URL (providers: neon.tech, supabase.com)?`, databaseUrl) ?? databaseUrl;
+        (await prompt(`DATABASE_URL (providers: neon.tech, supabase.com)?`, databaseUrl)) ??
+        databaseUrl;
     }
   }
 
@@ -104,11 +115,11 @@ async function cmdInit(flags: Record<string, unknown>): Promise<void> {
   if (existing?.env.BETTER_AUTH_SECRET) env.BETTER_AUTH_SECRET = existing.env.BETTER_AUTH_SECRET;
   if (existing?.env.ENCRYPTION_KEY) env.ENCRYPTION_KEY = existing.env.ENCRYPTION_KEY;
 
-  await $`mkdir -p ${paths.home}`.quiet();
-  await Bun.write(paths.env, serializeEnv(env));
-  await Bun.write(paths.composeBase, COMPOSE_BASE);
-  await Bun.write(paths.composeDb, COMPOSE_DB);
-  await Bun.write(paths.caddyfile, renderCaddyfile(domain, tls));
+  await mkdir(paths.home, { recursive: true });
+  await writeFile(paths.env, serializeEnv(env));
+  await writeFile(paths.composeBase, COMPOSE_BASE);
+  await writeFile(paths.composeDb, COMPOSE_DB);
+  await writeFile(paths.caddyfile, renderCaddyfile(domain, tls));
 
   log(`Wrote config to ${C.green}${paths.home}${C.off}`);
   log(`  domain   ${domain}`);
@@ -202,9 +213,9 @@ async function cmdConfig(args: string[], json: boolean): Promise<void> {
     const eq = kv.indexOf("=");
     const key = kv.slice(0, eq);
     const val = kv.slice(eq + 1);
-    const env = parseEnv(await Bun.file(paths.env).text());
+    const env = parseEnv(await readFile(paths.env, "utf8"));
     env[key] = val;
-    await Bun.write(paths.env, serializeEnv(env));
+    await writeFile(paths.env, serializeEnv(env));
     log(`Set ${key}. Re-run \`gitmatter up\` to apply.`);
     return;
   }
@@ -232,7 +243,7 @@ One prerequisite: Docker. Everything else is handled here. State lives in ${path
 
 async function main(): Promise<void> {
   const { values, positionals } = parseArgs({
-    args: Bun.argv.slice(2),
+    args: process.argv.slice(2),
     allowPositionals: true,
     strict: false,
     options: {
@@ -273,4 +284,7 @@ async function main(): Promise<void> {
   }
 }
 
-await main();
+void main().catch((error: unknown) => {
+  err(error instanceof Error ? error.message : String(error));
+  process.exitCode = 1;
+});

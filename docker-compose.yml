@@ -11,7 +11,7 @@
 # GITMATTER_IMAGE (e.g. ghcr.io/git-matter/gitmatter:v1.2.3).
 #
 # Postgres publishes on 127.0.0.1 only — never reachable from outside the host.
-# The loopback port lets a locally-run `bun dev` (outside the compose network)
+# The loopback port lets a locally-run `vp run dev` (outside the compose network)
 # reach it; the in-compose web service uses the internal hostname.
 services:
   postgres:
@@ -31,14 +31,36 @@ services:
       timeout: 5s
       retries: 10
 
+  # Job queue backend (BullMQ). Runs background embedding of document chunks off
+  # the request path. `--appendonly yes` persists the queue so a Redis restart
+  # doesn't silently drop enqueued jobs (a lazy in-query fallback still fills any
+  # gap). Loopback-only, like Postgres. Optional: with REDIS_URL unset the app
+  # skips background embedding and embeds lazily on first query instead.
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep -q PONG"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   web:
     image: ${GITMATTER_IMAGE:-ghcr.io/git-matter/gitmatter:latest}
     restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     environment:
       DATABASE_URL: postgres://gitmatter:gitmatter@postgres:5432/gitmatter
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?set in .env}
       BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:4280}
       BETTER_AUTH_TRUSTED_ORIGINS: ${BETTER_AUTH_TRUSTED_ORIGINS:-}
@@ -75,3 +97,4 @@ services:
 
 volumes:
   pgdata:
+  redisdata:

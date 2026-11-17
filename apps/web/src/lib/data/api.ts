@@ -1,3 +1,35 @@
+import type {
+  TemplateContent,
+  TemplateView,
+  TemplatePage,
+  templateActionSchema,
+  templateListQuerySchema,
+} from "@workspace/contracts";
+import type { z } from "zod";
+import type {
+  DocumentApprovalContext,
+  DocumentResolutionInput,
+  ReviewInstructions,
+  FirstReviewStatus,
+  DocumentWordInspection,
+} from "@workspace/contracts";
+import type { RunEstimate } from "@workspace/core";
+import type {
+  JobControlPolicy,
+  JobControlsSnapshot,
+  JobUsageAttribution,
+} from "@workspace/contracts";
+import type { SearchResult } from "@workspace/core";
+import type {
+  FindingProvenance,
+  FindingDisposition,
+  MatterJobsSummary,
+  JobSnapshot,
+  ApprovalProposal,
+  JobNotificationPage,
+} from "@workspace/contracts";
+import type { getReviewCompletion } from "@workspace/core";
+export type ReviewCompletion = NonNullable<Awaited<ReturnType<typeof getReviewCompletion>>>;
 export type {
   LlmModel,
   LlmProvider,
@@ -43,6 +75,8 @@ export type Cell = {
   columnIndex: number;
   content: CellContent | null;
   citations: CellCitation[] | null;
+  finding?: FindingProvenance | null;
+  disposition?: FindingDisposition | null;
   status: "pending" | "generating" | "done" | "error";
   lastCommitId: string | null;
   blame: Blame | null;
@@ -59,6 +93,7 @@ export type Column = {
 export type ReviewDetail = {
   review: {
     id: string;
+    matterId: string;
     title: string;
     columnsConfig: Column[];
     documentIds: string[];
@@ -152,12 +187,20 @@ export type MatterUsageSummary = {
     outputTokens: number;
     costUsd: number | null;
   }>;
+  embeddings: Array<{
+    provider: string | null;
+    model: string | null;
+    calls: number;
+    inputTokens: number;
+  }>;
   tools: Array<{ tool: string | null; calls: number }>;
   totals: {
     llmCalls: number;
     inputTokens: number;
     outputTokens: number;
     costUsd: number | null;
+    embeddingCalls: number;
+    embeddingInputTokens: number;
     toolCalls: number;
   };
 };
@@ -360,6 +403,8 @@ async function req<T>(path: string, opts?: RequestInit): Promise<T> {
   return (await r.json()) as T;
 }
 
+export { req as apiRequest };
+
 // Encodes the standard page params plus any extra string filters (status, scope,
 // tab, type, practice, …). The "all" sentinel is dropped so it maps to "no
 // filter" on the server.
@@ -384,9 +429,22 @@ function shareBase(scope: ArtifactShareScope): string {
 }
 
 // statusText is empty over HTTP/2, so always fall back to the status code.
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    public status: number,
+    public code?: string
+  ) {
+    super(message);
+  }
+}
 async function httpError(r: Response): Promise<Error> {
-  const body = (await r.json().catch(() => ({}))) as { error?: string };
-  return new Error(body.error || r.statusText || `Request failed (${r.status})`);
+  const body = (await r.json().catch(() => ({}))) as { error?: string; code?: unknown };
+  return new ApiError(
+    body.error || r.statusText || `Request failed (${r.status})`,
+    r.status,
+    typeof body.code === "string" ? body.code : undefined
+  );
 }
 
 // Multipart upload — let the browser set the multipart boundary (no JSON header).
@@ -397,6 +455,75 @@ async function upload<T>(path: string, form: FormData): Promise<T> {
 }
 
 export const api = {
+  listTemplates: (input: Partial<z.infer<typeof templateListQuerySchema>> = {}) => {
+    const search = new URLSearchParams();
+    for (const [key, value] of Object.entries(input))
+      if (value !== undefined && value !== "") search.set(key, String(value));
+    return req<TemplatePage>(`/api/templates?${search}`);
+  },
+  getTemplate: (id: string) => req<TemplateView>(`/api/templates/${id}`),
+  createTemplate: (content: TemplateContent) =>
+    req<{ id: string }>("/api/templates", { method: "POST", body: JSON.stringify(content) }),
+  saveTemplate: (id: string, expectedHead: string, content: TemplateContent, message: string) =>
+    req<{ ok: true }>(`/api/templates/${id}`, {
+      method: "PUT",
+      body: JSON.stringify({ expectedHead, content, message }),
+    }),
+  createTemplateFromFile: (content: TemplateContent, file: File) => {
+    const form = new FormData();
+    form.set("content", JSON.stringify(content));
+    form.set("file", file);
+    return upload<{ id: string }>("/api/templates/upload", form);
+  },
+  saveTemplateFromFile: (
+    id: string,
+    expectedHead: string,
+    content: TemplateContent,
+    message: string,
+    file: File
+  ) => {
+    const form = new FormData();
+    form.set("content", JSON.stringify(content));
+    form.set("file", file);
+    form.set("expectedHead", expectedHead);
+    form.set("message", message);
+    return upload<{ ok: true }>(`/api/templates/${id}/upload`, form);
+  },
+  downloadTemplate: async (id: string, revisionId?: string) => {
+    const response = await fetch(
+      `/api/templates/${id}/download${revisionId ? `?revisionId=${encodeURIComponent(revisionId)}` : ""}`
+    );
+    if (!response.ok) throw await httpError(response);
+    const filename =
+      response.headers.get("Content-Disposition")?.match(/filename="([^"]+)"/)?.[1] ??
+      "template.docx";
+    return { blob: await response.blob(), filename };
+  },
+  templateAction: (id: string, input: z.infer<typeof templateActionSchema>) =>
+    req<{ ok: true }>(`/api/templates/${id}/actions`, {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+  templateHistory: (id: string) =>
+    req<Array<Blame & { changes: Array<{ path: string; before: unknown; after: unknown }> }>>(
+      `/api/templates/${id}/history`
+    ),
+  getJobControls: () => req<JobControlsSnapshot>("/api/admin/job-controls"),
+  getJobUsageAttribution: () => req<JobUsageAttribution[]>("/api/admin/job-controls/usage"),
+  setJobControls: (input: { expectedRevision: number; reason: string; policy: JobControlPolicy }) =>
+    req<JobControlsSnapshot>("/api/admin/job-controls", {
+      method: "PATCH",
+      body: JSON.stringify(input),
+    }),
+  searchWork: (input: {
+    query: string;
+    matterId?: string;
+    type?: SearchResult["type"];
+    page?: number;
+  }) =>
+    req<{ results: SearchResult[]; rowCount: number }>(
+      `/api/search?${new URLSearchParams({ q: input.query, ...(input.matterId ? { matterId: input.matterId } : {}), ...(input.type ? { type: input.type } : {}), page: String(input.page ?? 0) })}`
+    ),
   getKeys: () => req<{ providers: ProviderKeyStatus[] }>("/api/keys"),
   setKey: (provider: LlmProvider, key: string) =>
     req<{ ok: true }>("/api/keys", { method: "PUT", body: JSON.stringify({ provider, key }) }),
@@ -456,6 +583,7 @@ export const api = {
     clientId: string;
     name: string;
     practiceArea?: string;
+    jurisdiction?: string;
     adverseParties?: string[];
   }) => req<Matter>("/api/matters", { method: "POST", body: JSON.stringify(d) }),
   closeMatter: (id: string) => req<null>(`/api/matters/${id}/close`, { method: "POST" }),
@@ -606,9 +734,15 @@ export const api = {
   discardStagedDocument: (id: string) =>
     req<null>(`/api/documents/${id}/staged`, { method: "DELETE" }),
   listReviews: () =>
-    req<Array<{ id: string; title: string; documentIds: string[]; createdAt: string }>>(
-      "/api/tabular/reviews"
-    ),
+    req<
+      Array<{
+        id: string;
+        title: string;
+        matterId: string;
+        documentIds: string[];
+        createdAt: string;
+      }>
+    >("/api/tabular/reviews"),
   listReviewsPage: (params: ListPageParams) =>
     req<PageResult<ReviewListItem>>(`/api/tabular/reviews?${listQuery(params)}`),
   createReview: (d: {
@@ -618,6 +752,58 @@ export const api = {
     matterId?: string;
   }) => req<{ id: string }>("/api/tabular/reviews", { method: "POST", body: JSON.stringify(d) }),
   getReview: (id: string) => req<ReviewDetail>(`/api/tabular/reviews/${id}`),
+  getReviewEstimate: (id: string, model?: string) =>
+    req<RunEstimate>(
+      `/api/tabular/reviews/${id}/estimate${model ? `?model=${encodeURIComponent(model)}` : ""}`
+    ),
+  getReviewCompletion: (id: string) =>
+    req<ReviewCompletion | null>(`/api/tabular/reviews/${id}/completion`),
+  queueFailedReviewRules: (
+    id: string,
+    requestId: string,
+    model?: string,
+    acknowledgeUnknown?: boolean
+  ) =>
+    req<{ jobIds: string[] }>(`/api/tabular/reviews/${id}/queue`, {
+      method: "POST",
+      body: JSON.stringify({ mode: "failed", requestId, model, acknowledgeUnknown }),
+    }),
+  listReviewJobs: (id: string) => req<JobSnapshot[]>(`/api/tabular/reviews/${id}/jobs`),
+  reviewReportUrl: (id: string) => `/api/tabular/reviews/${id}/report`,
+  reviewReportManifestUrl: (id: string) => `/api/tabular/reviews/${id}/report?format=json`,
+  setFindingDisposition: (
+    id: string,
+    body: {
+      documentId: string;
+      columnIndex: number;
+      revisionId: string;
+      status: "left_unchanged" | "escalated";
+      rationale: string;
+      policyRevision?: number;
+    }
+  ) =>
+    req<{ ok: true }>(`/api/tabular/reviews/${id}/disposition`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  proposeFindingRedline: (
+    id: string,
+    body: {
+      requestId: string;
+      documentId: string;
+      columnIndex: number;
+      revisionId: string;
+      expectedHeadCommitId: string | null;
+      clauseId: string;
+      find: string;
+      contextBefore?: string;
+      contextAfter?: string;
+    }
+  ) =>
+    req<{ changeIds: string[] }>(`/api/tabular/reviews/${id}/redline`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
   // Edit a column's config (e.g. its prompt); returns the refreshed review.
   updateReviewColumn: (
     id: string,
@@ -646,7 +832,26 @@ export const api = {
   matterAuditExportUrl: (id: string, format: "csv" | "docx") =>
     `/api/matters/${id}/audit-export?format=${format}`,
   getMatterUsage: (id: string) => req<MatterUsageSummary>(`/api/matters/${id}/usage`),
+  getMatterJobs: (id: string) => req<MatterJobsSummary>(`/api/matters/${id}/jobs`),
+  getMatterJobEvents: (id: string, cursor?: string) =>
+    req<JobNotificationPage>(
+      `/api/matters/${id}/job-events${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`
+    ),
+  markJobEventRead: (id: string) =>
+    req<{ ok: true }>(`/api/job-events/${id}/read`, { method: "POST" }),
+  retryJob: (id: string) => req<JobSnapshot>(`/api/jobs/${id}/retry`, { method: "POST" }),
+  cancelJob: (id: string) => req<JobSnapshot>(`/api/jobs/${id}/cancel`, { method: "POST" }),
+  getMatterPendingProposals: (id: string) =>
+    req<{ items: ApprovalProposal[]; nextCursor: string | null }>(
+      `/api/matters/${id}/proposals?status=pending`
+    ),
   matterUsageExportUrl: (id: string) => `/api/matters/${id}/usage?format=csv`,
+  requestCleanReviewExport: (documentId: string, reviewId: string, requestId: string) =>
+    req<{ approvalRequired: boolean; proposal: ApprovalProposal | null; replayed: boolean }>(
+      `/api/documents/${documentId}/clean-export-requests`,
+      { method: "POST", body: JSON.stringify({ requestId, reviewId }) }
+    ),
+  getApprovalProposal: (id: string) => req<ApprovalProposal>(`/api/proposals/${id}`),
 
   // Clause library
   listClauses: (opts?: {
@@ -709,20 +914,30 @@ export const api = {
     }),
   proposeEdit: (id: string, d: { find: string; replace: string; reason?: string }) =>
     req<DocumentDetail>(`/api/documents/${id}/edits`, { method: "POST", body: JSON.stringify(d) }),
-  resolveEdit: (id: string, changeId: string, decision: "accept" | "reject") =>
+  resolveEdit: (
+    id: string,
+    changeId: string,
+    decision: "accept" | "reject",
+    context?: DocumentResolutionInput
+  ) =>
     req<DocumentDetail>(`/api/documents/${id}/edits/${changeId}/resolve`, {
       method: "POST",
-      body: JSON.stringify({ decision }),
+      body: JSON.stringify({ decision, ...context }),
     }),
-  resolveAllEdits: (id: string, decision: "accept" | "reject") =>
+  resolveAllEdits: (id: string, decision: "accept" | "reject", context?: DocumentResolutionInput) =>
     req<DocumentDetail>(`/api/documents/${id}/edits/resolve-all`, {
       method: "POST",
-      body: JSON.stringify({ decision }),
+      body: JSON.stringify({ decision, ...context }),
     }),
-  resolveBatch: (id: string, changeIds: string[], decision: "accept" | "reject") =>
+  resolveBatch: (
+    id: string,
+    changeIds: string[],
+    decision: "accept" | "reject",
+    context?: DocumentResolutionInput
+  ) =>
     req<DocumentDetail>(`/api/documents/${id}/edits/resolve-batch`, {
       method: "POST",
-      body: JSON.stringify({ changeIds, decision }),
+      body: JSON.stringify({ changeIds, decision, ...context }),
     }),
   documentHistory: (id: string) => req<Blame[]>(`/api/documents/${id}/history`),
 
@@ -766,11 +981,23 @@ export const api = {
     }
   ) =>
     req<WorkflowDetail>(`/api/workflows/${id}`, { method: "PATCH", body: JSON.stringify(patch) }),
-  runPlaybook: (id: string, body: { matterId: string; documentIds: string[] }) =>
+  runPlaybook: (
+    id: string,
+    body: {
+      matterId: string;
+      documentIds: string[];
+      requestId?: string;
+      reviewInstructions?: ReviewInstructions;
+    }
+  ) =>
     req<{ reviewId: string; ruleCount: number }>(`/api/workflows/${id}/run-playbook`, {
       method: "POST",
       body: JSON.stringify(body),
     }),
+  getFirstReviewStatus: (matterId?: string) =>
+    req<FirstReviewStatus>(
+      `/api/first-review${matterId ? `?matterId=${encodeURIComponent(matterId)}` : ""}`
+    ),
   deleteWorkflow: (id: string) => req<null>(`/api/workflows/${id}`, { method: "DELETE" }),
   workflowHistory: (id: string) => req<Blame[]>(`/api/workflows/${id}/history`),
   // Hidden built-ins (per user)
@@ -918,7 +1145,13 @@ export type ChatTurn = {
   edits?: ChatEdit[];
   citations?: Citation[];
 };
-export type ChatDetail = { id: string; title: string | null; turns: ChatTurn[] };
+export type ChatDetail = {
+  id: string;
+  title: string | null;
+  matterId: string | null;
+  jurisdiction: string | null;
+  turns: ChatTurn[];
+};
 
 export type ChatStreamHandlers = {
   onText?: (delta: string) => void;
@@ -1030,7 +1263,7 @@ async function streamChat(
     signal,
   });
   if (!r.ok || !r.body) {
-    handlers.onError?.(await r.text().catch(() => "stream failed"));
+    handlers.onError?.(!r.ok ? (await httpError(r)).message : "The assistant response was empty.");
     return;
   }
 
@@ -1088,6 +1321,7 @@ export type DocEdit = {
 };
 
 export type DocumentDetail = {
+  wordInspection: DocumentWordInspection | null;
   document: {
     id: string;
     title: string;
@@ -1096,6 +1330,8 @@ export type DocumentDetail = {
     status: DocStatus;
     headCommitId: string | null;
     currentVersionId: string | null;
+    approvedVersionId: string | null;
+    approvedMarkdown: string | null;
     sizeBytes: number | null;
     pageCount: number | null;
     createdAt: string;
@@ -1103,6 +1339,13 @@ export type DocumentDetail = {
     ownerEmail: string | null;
   };
   edits: DocEdit[];
+  resolutionPolicy?: {
+    approvalContext: DocumentApprovalContext | null;
+    mayResolve: boolean;
+    mayPropose: boolean;
+    requiredRole: "editor" | "owner" | null;
+    blockedReason: string | null;
+  };
 };
 
 // A row in the workflows library list (built-ins + own + shared), tagged with

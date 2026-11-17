@@ -14,6 +14,7 @@ import {
   accessSummaryByArtifact,
   sharedArtifactIds,
 } from "../../platform/shares.js";
+import { quoteOnlyCitations } from "../../content/citations.js";
 
 // Read side: list reviews (flat, or paginated with scope/sort/share counts) and
 // load one full review with cells and per-cell blame.
@@ -139,6 +140,8 @@ export async function getReview(reviewId: string) {
     review,
     cells: cells.map((c) => ({
       ...c,
+      // Read projection only: legacy pages remain in their original audit records.
+      citations: c.citations === null ? null : quoteOnlyCitations(c.citations),
       blame: c.lastCommitId ? (blameById.get(c.lastCommitId) ?? null) : null,
     })),
     documentTitles,

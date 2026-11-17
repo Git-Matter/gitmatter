@@ -1,6 +1,5 @@
 import { FileDown, FileText } from "lucide-react";
 import { Message, MessageContent, MessageResponse } from "@/components/ai-elements/message";
-import { Shimmer } from "@/components/ai-elements/shimmer";
 import { api, type Citation, type SourceCard } from "../../../../lib/data/api";
 import { ChatEditCards } from "./ChatEditCards";
 import { StepsTimeline } from "./StepsTimeline";
@@ -63,6 +62,15 @@ export function ChatTurns({
           <Message key={i} from="user">
             <MessageContent>
               <p className="whitespace-pre-wrap">{t.text}</p>
+              {!!t.context?.length && (
+                <ul aria-label="Request context" className="mt-2 text-xs text-muted-foreground">
+                  {t.context.map((item) => (
+                    <li key={`${item.kind}:${item.id}`}>
+                      Attached {item.kind}: {item.label}
+                    </li>
+                  ))}
+                </ul>
+              )}
             </MessageContent>
           </Message>
         ) : (
@@ -70,10 +78,31 @@ export function ChatTurns({
             <MessageContent>
               {/* Pre-first-token cue: model reached but nothing streamed back yet. */}
               {busy && i === turns.length - 1 && !t.text && !(t.steps && t.steps.length) && (
-                <Shimmer duration={1}>Thinking…</Shimmer>
+                <p role="status" className="text-sm text-muted-foreground">
+                  Waiting for a response…
+                </p>
               )}
               {t.steps && t.steps.length > 0 && (
                 <StepsTimeline steps={t.steps} onOpenSource={onOpenSource} />
+              )}
+              {!!t.earlierCalls?.length && (
+                <details className="mb-3 text-sm">
+                  <summary className="cursor-pointer">Earlier tool call records</summary>
+                  <p className="mt-2 text-muted-foreground">
+                    These records contain call inputs. Their outcomes were not stored in this
+                    conversation history.
+                  </p>
+                  <ul className="mt-2 space-y-2">
+                    {t.earlierCalls.map((call, index) => (
+                      <li key={index}>
+                        <span className="font-medium">{call.tool.replaceAll("_", " ")}</span>
+                        <pre className="mt-1 max-h-48 overflow-auto text-xs whitespace-pre-wrap">
+                          {JSON.stringify(call.input, null, 2)}
+                        </pre>
+                      </li>
+                    ))}
+                  </ul>
+                </details>
               )}
               {t.text &&
                 (() => {

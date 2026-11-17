@@ -1,0 +1,18 @@
+{
+  "record": "design/evidence/australian.json",
+  "boundary": "Unmodified browser captures of production components from the successful final Australian replay, with fictional transport and simulated displayed-source readiness; finite animations disabled. Not live authentication, native Word rendering, production storage/authorization, provider or release proof.",
+  "sha256": {
+    "output/playwright/design-workflows/au/guided-mobile.png": "4eed55da25be90cee161c134f3eca3f5aff464917f18fa0f710575ce95ca57a9",
+    "output/playwright/design-workflows/au/practice-desktop.png": "141652179a7efbd661b620f82d3dd16123722633963748733a60bd083214a8ad",
+    "output/playwright/design-workflows/au/review-mobile.png": "b77a00411308a909f692d129121a72a8c7ec62f713203930d3a5908e35a8b4d8"
+  },
+  "recordSHA256": "010219e75f65b9dd62350a77764ab13c62582601eeb21fc48072b8f34f928f67",
+  "captureModifiedAtUTC": {
+    "output/playwright/design-workflows/au/guided-mobile.png": "2026-11-16T20:37:16.738021+00:00",
+    "output/playwright/design-workflows/au/practice-desktop.png": "2026-11-16T20:37:18.227282+00:00",
+    "output/playwright/design-workflows/au/review-mobile.png": "2026-11-16T20:37:19.303523+00:00"
+  },
+  "supersededCaptureDigests": {
+    "output/playwright/design-workflows/au/review-mobile.png": "8b2f5faf6e3315a897f6ddd6fa721e09d398c957073a4217455df2fcd96e400a"
+  }
+}

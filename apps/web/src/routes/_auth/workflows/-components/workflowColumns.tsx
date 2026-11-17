@@ -1,5 +1,5 @@
 import { createColumnHelper } from "@tanstack/react-table";
-import { Sparkles, User } from "lucide-react";
+import { Bot, User } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import type { WorkflowListItem } from "@/lib/data/api";
 import { RowActions } from "./RowActions";
@@ -22,14 +22,15 @@ export function workflowColumns(handlers: {
       header: ({ table }) => (
         <Checkbox
           checked={table.getIsAllRowsSelected()}
-          onChange={table.getToggleAllRowsSelectedHandler()}
-          aria-label="Select all"
+          indeterminate={table.getIsSomeRowsSelected() && !table.getIsAllRowsSelected()}
+          onCheckedChange={(checked) => table.toggleAllRowsSelected(checked)}
+          aria-label="Select all rows on this page"
         />
       ),
       cell: ({ row }) => (
         <Checkbox
           checked={row.getIsSelected()}
-          onChange={row.getToggleSelectedHandler()}
+          onCheckedChange={(checked) => row.toggleSelected(checked)}
           onClick={(e) => e.stopPropagation()}
           aria-label="Select row"
         />
@@ -73,7 +74,7 @@ export function workflowColumns(handlers: {
         if (w.isSystem) {
           return (
             <span className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-              <Sparkles className="h-3.5 w-3.5" />
+              <Bot className="h-3.5 w-3.5" />
               Built-in
             </span>
           );

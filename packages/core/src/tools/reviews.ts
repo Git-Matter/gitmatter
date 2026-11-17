@@ -6,7 +6,7 @@ import type { ToolContext, ToolSpec } from "./types.js";
 
 // Tabular review tools: list/read reviews and their cells, create reviews, and
 // run or hand-write a single cell (each cell write is a commit).
-export function buildReviewTools({ actor, resolveMatter }: ToolContext): ToolSpec[] {
+export function buildReviewTools({ actor, resolveMatter, credentialId }: ToolContext): ToolSpec[] {
   return [
     {
       name: "list_reviews",
@@ -138,6 +138,7 @@ export function buildReviewTools({ actor, resolveMatter }: ToolContext): ToolSpe
             documentId: documentId as string,
             columnIndex: columnIndex as number,
             model: model as string | undefined,
+            credentialId,
           });
           return { committed: result.commit?.seq, changes: result.changes };
         } catch (e) {
@@ -148,13 +149,14 @@ export function buildReviewTools({ actor, resolveMatter }: ToolContext): ToolSpe
     {
       name: "write_cell",
       description:
-        "Write your own extracted value into one review cell — for when you have read the document yourself and produced the answer. Committed under your name. This does not run a GitMatter model or require an LLM API key. flag is the RAG status: green=ok, yellow=caution, red=problem, grey=n/a.",
+        "Write your own extracted value into one review cell — for when you have read the document yourself and produced the answer. Committed under your name. This does not run a GitMatter model or require an LLM API key. Supply exact source quotations; page numbers are omitted because current review snapshots have no trusted page map. flag is the RAG status: green=ok, yellow=caution, red=problem, grey=n/a.",
       schema: {
         reviewId: z.string(),
         documentId: z.string(),
         columnIndex: z.number(),
         summary: z.string(),
         flag: z.enum(["green", "yellow", "red", "grey"]),
+        outcome: z.enum(["conforms", "deviates", "not_found", "inconclusive"]).optional(),
         reasoning: z.string(),
         citations: z.array(z.object({ page: z.number().optional(), quote: z.string() })).optional(),
       },
@@ -165,6 +167,7 @@ export function buildReviewTools({ actor, resolveMatter }: ToolContext): ToolSpe
         summary,
         flag,
         reasoning,
+        outcome,
         citations,
       }) => {
         if (!(await canAccessArtifact(actor, "tabular_review", reviewId as string, "editor")))
@@ -176,6 +179,7 @@ export function buildReviewTools({ actor, resolveMatter }: ToolContext): ToolSpe
             columnIndex: columnIndex as number,
             summary: summary as string,
             flag: flag as string,
+            outcome: outcome as "conforms" | "deviates" | "not_found" | "inconclusive" | undefined,
             reasoning: reasoning as string,
             citations: citations as { page?: number; quote: string }[] | undefined,
           });

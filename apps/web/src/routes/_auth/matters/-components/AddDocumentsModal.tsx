@@ -1,3 +1,5 @@
+import { captureActionOrigin, notifySuccess } from "@/lib/feedback";
+import { Input } from "@/components/ui/input";
 import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -52,9 +54,10 @@ export function AddDocumentsModal({
   }, [docs, existing, query]);
 
   const link = useMutation({
+    onMutate: () => captureActionOrigin(),
     mutationFn: () => api.linkDocumentsToMatter(matterId, [...selected]),
-    onSuccess: ({ linked }) => {
-      toast.success(`Added ${linked} document${linked === 1 ? "" : "s"}`);
+    onSuccess: ({ linked }, _variables, origin) => {
+      notifySuccess(`Added ${linked} document${linked === 1 ? "" : "s"}`, origin);
       onLinked();
       onOpenChange(false);
     },
@@ -89,7 +92,7 @@ export function AddDocumentsModal({
         <div className="flex flex-col gap-3">
           <div className="flex items-center gap-2 rounded-md border border-input bg-background px-2.5">
             <Search className="size-4 shrink-0 text-muted-foreground" />
-            <input
+            <Input
               autoFocus
               value={query}
               onChange={(e) => setQuery(e.target.value)}

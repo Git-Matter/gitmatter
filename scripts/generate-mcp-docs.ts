@@ -1,3 +1,5 @@
+import "dotenv/config";
+import { readFile, writeFile } from "node:fs/promises";
 import { buildToolCatalog } from "../packages/core/src/tools/catalog";
 
 const tools = new Map(
@@ -29,12 +31,12 @@ Inputs: ${Object.keys(tool.schema).map((key) => `\`${key}${tool.schema[key]!.isO
 
 ${tool.readOnly ? "Reads existing data." : "Changes workspace data; recorded under the acting account."}${tool.openWorld ? " Uses an external research service." : ""}
 `).join("\n")}`;
-const file = Bun.file(new URL("../docs/api-reference/mcp-tools.mdx", import.meta.url));
+const file = new URL("../docs/api-reference/mcp-tools.mdx", import.meta.url);
 if (process.argv.includes("--check")) {
-  if (await file.text() !== body) {
+  if (await readFile(file, "utf8") !== body) {
     console.error("MCP reference is out of date. Run vp run docs:tools.");
     process.exitCode = 1;
   }
 } else {
-  await Bun.write(file, body);
+  await writeFile(file, body);
 }

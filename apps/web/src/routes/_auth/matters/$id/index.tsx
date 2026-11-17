@@ -1,3 +1,10 @@
+import { captureActionOrigin, notifySuccess } from "@/lib/feedback";
+import { CollectionPanel } from "@/components/CollectionPanel";
+import { useWorkspaceViewState } from "@/lib/hooks/state/useWorkspaceViewState";
+import { MatterWorkSearch } from "../-components/MatterWorkSearch";
+import { MatterOverview } from "../-components/MatterOverview";
+import { ContractReviewSetup } from "../-components/ContractReviewSetup";
+import { AgentActivity } from "../-components/AgentActivity";
 import { createFileRoute, Link, useNavigate, useParams } from "@tanstack/react-router";
 import { useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -41,9 +48,14 @@ import { useMatters } from "@/lib/context/matters-context";
 import { formatShortDate } from "@/lib/format/format";
 import { AgentHandoff } from "@/routes/_auth/matters/-components/AgentHandoff";
 
-export const Route = createFileRoute("/_auth/matters/$id/")({ component: MatterWorkspace });
+export const Route = createFileRoute("/_auth/matters/$id/")({
+  component: MatterWorkspace,
+  validateSearch: (input: Record<string, unknown>): { tab?: "activity" } => ({
+    tab: input.tab === "activity" ? "activity" : undefined,
+  }),
+});
 
-type Tab = "documents" | "chats" | "reviews" | "usage";
+type Tab = "overview" | "documents" | "chats" | "reviews" | "usage" | "activity" | "search";
 
 function MatterWorkspace() {
   const { id } = useParams({ from: "/_auth/matters/$id/" });
@@ -51,7 +63,9 @@ function MatterWorkspace() {
   const navigate = useNavigate();
   const { data: session } = useSession();
   const { refresh: refreshMatters, setCurrent } = useMatters();
-  const [tab, setTab] = useState<Tab>("documents");
+  const searchParams = Route.useSearch();
+  const [tab, setTab] = useState<Tab>(searchParams.tab ?? "overview");
+  const [reviewSetupOpen, setReviewSetupOpen] = useState(false);
   const [peopleOpen, setPeopleOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
 
@@ -63,7 +77,7 @@ function MatterWorkspace() {
   // New Chat opens the matter's own 3-pane assistant workspace.
   const openMatterChat = () => void navigate({ to: "/matters/$id/assistant", params: { id } });
 
-  const { data: matter, isError: notFound } = useQuery({
+  const matterQuery = useQuery({
     queryKey: ["matter", id],
     queryFn: () => api.getMatter(id),
   });
@@ -77,31 +91,30 @@ function MatterWorkspace() {
     refreshMatters();
   };
 
-  if (notFound)
+  const matter = matterQuery.data;
+  if (matterQuery.isPending || matterQuery.isError)
     return (
-      <p className="text-muted-foreground">
-        Matter not found, or you don't have access.{" "}
-        <Link to="/matters" className="underline">
-          Back to matters
-        </Link>
-      </p>
+      <CollectionPanel query={matterQuery} label="Matter">
+        <Link to="/matters">Back to matters</Link>
+      </CollectionPanel>
     );
   if (!matter) return null;
 
   const myRole = members.find((m) => m.userId === session?.user.id)?.role;
   const isOwner = myRole === "owner";
+  const canEdit = myRole === "owner" || myRole === "editor";
 
   return (
     <PageShell
       mode="fill"
       bodyClassName="gap-stack"
       header={
-        /* Inline "Matters › Name" trail + two action groups: a frosted icon pill
+        /* Inline "Matters › Name" trail + two action groups: icon actions
            (search / people / …) and New Chat / New Review. */
         <PageHeader
           breadcrumbs={[{ label: "Matters", to: "/matters" }, { label: matter.name }]}
           actions={[
-            <div key="icons" className="flex items-center gap-0.5 rounded-full glass-panel p-1">
+            <div key="icons" className="flex items-center gap-0.5 p-1">
               <Button
                 variant="ghost"
                 size="icon-sm"
@@ -143,7 +156,7 @@ function MatterWorkspace() {
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>,
-            <div key="create" className="flex items-center gap-0.5 rounded-full glass-panel p-1">
+            <div key="create" className="flex items-center gap-0.5 p-1">
               <Button
                 variant="ghost"
                 size="icon-sm"
@@ -167,22 +180,64 @@ function MatterWorkspace() {
         />
       }
     >
+      <div className="flex flex-wrap items-center gap-2" aria-label="Matter tasks">
+        {canEdit && (
+          <Button size="sm" onClick={() => setReviewSetupOpen((v) => !v)}>
+            Review contract
+          </Button>
+        )}
+        <Button size="sm" variant="ghost" onClick={openMatterChat}>
+          Ask documents
+        </Button>
+        {canEdit && (
+          <Button size="sm" variant="ghost" onClick={() => openInMatter("/reviews")}>
+            Bulk extraction
+          </Button>
+        )}
+        <Button size="sm" variant="ghost" onClick={() => setTab("reviews")}>
+          Export work
+        </Button>
+        {canEdit && (
+          <Button size="sm" variant="ghost" onClick={openMatterChat}>
+            Draft document
+          </Button>
+        )}
+      </div>
+      {reviewSetupOpen && (
+        <ContractReviewSetup matterId={id} onClose={() => setReviewSetupOpen(false)} />
+      )}
       <AgentHandoff matter={matter} />
-      <ToolbarTabs
-        tabs={[
-          { id: "documents" as const, label: "Documents" },
-          { id: "chats" as const, label: "Assistant Chats" },
-          { id: "reviews" as const, label: "Tabular Reviews" },
-          { id: "usage" as const, label: "Usage" },
-        ]}
-        active={tab}
-        onChange={setTab}
-      />
+      <div className="shrink-0 overflow-x-auto">
+        <ToolbarTabs
+          tabs={[
+            { id: "overview" as const, label: "Overview" },
+            { id: "documents" as const, label: "Documents" },
+            { id: "chats" as const, label: "Assistant Chats" },
+            { id: "reviews" as const, label: "Tabular Reviews" },
+            { id: "usage" as const, label: "Usage" },
+            { id: "activity" as const, label: "Agent activity" },
+            { id: "search" as const, label: "Find prior work" },
+          ]}
+          active={tab}
+          onChange={setTab}
+        />
+      </div>
 
-      {tab === "documents" && <DocumentsTab matterId={id} canEdit={myRole !== "viewer"} />}
+      {tab === "overview" && (
+        <MatterOverview
+          matterId={id}
+          canEdit={canEdit}
+          onOpenApprovals={() => setTab("activity")}
+          onOpenUsage={() => setTab("usage")}
+          onOpenDocuments={() => setTab("documents")}
+        />
+      )}
+      {tab === "documents" && <DocumentsTab matterId={id} canEdit={canEdit} />}
       {tab === "chats" && <ChatsTab matterId={id} />}
       {tab === "reviews" && <ReviewsTab matterId={id} />}
       {tab === "usage" && <UsageTab matterId={id} />}
+      {tab === "activity" && <AgentActivity matterId={id} isOwner={isOwner} />}
+      {tab === "search" && <MatterWorkSearch matterId={id} />}
 
       <PeopleModal
         matterId={id}
@@ -256,11 +311,11 @@ function DocumentsTab({ matterId, canEdit }: { matterId: string; canEdit: boolea
   const versionInputRef = useRef<HTMLInputElement>(null);
   const versionTargetId = useRef<string | null>(null);
 
-  const { data: folders = [] } = useQuery({
+  const foldersQuery = useQuery({
     queryKey: ["folders", matterId],
     queryFn: () => api.listFolders(matterId),
   });
-  const { data: docs = [] } = useQuery({
+  const docsQuery = useQuery({
     queryKey: ["matter-docs", matterId, folderId],
     queryFn: () => api.listMatterDocuments(matterId, folderId),
     // Auto-advance rows while extraction runs (Queued/Extracting -> Ready/Failed)
@@ -268,59 +323,75 @@ function DocumentsTab({ matterId, canEdit }: { matterId: string; canEdit: boolea
     refetchInterval: (q) =>
       q.state.data?.some((d) => d.status === "pending" || d.status === "processing") ? 2000 : false,
   });
+  const folders = foldersQuery.data ?? [];
+  const docs = docsQuery.data ?? [];
+  const documentsQuery = {
+    ...docsQuery,
+    isPending: docsQuery.isPending || foldersQuery.isPending,
+    isError: docsQuery.isError || foldersQuery.isError,
+    isFetching: docsQuery.isFetching || foldersQuery.isFetching,
+    error: foldersQuery.error ?? docsQuery.error,
+    refetch: () => Promise.all([foldersQuery.refetch(), docsQuery.refetch()]),
+  };
 
   const invalidateDocs = () =>
     qc.invalidateQueries({ queryKey: ["matter-docs", matterId, folderId] });
 
   const uploadDoc = useMutation({
+    onMutate: () => captureActionOrigin(),
     mutationFn: (file: File) => api.uploadDocument(file, undefined, matterId, folderId),
-    onSuccess: () => {
-      toast.success("Uploaded");
+    onSuccess: (_data, _variables, origin) => {
+      notifySuccess("Uploaded", origin);
       void invalidateDocs();
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Upload failed"),
   });
 
   const addFolderMut = useMutation({
+    onMutate: () => captureActionOrigin(),
     mutationFn: (name: string) => api.createFolder(matterId, name, folderId),
-    onSuccess: () => {
-      toast.success("Folder added");
+    onSuccess: (_data, _variables, origin) => {
+      notifySuccess("Folder added", origin);
       void qc.invalidateQueries({ queryKey: ["folders", matterId] });
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
   });
 
   const renameDoc = useMutation({
+    onMutate: () => captureActionOrigin(),
     mutationFn: (v: { id: string; title: string }) => api.renameDocument(v.id, v.title),
-    onSuccess: () => {
-      toast.success("Renamed");
+    onSuccess: (_data, _variables, origin) => {
+      notifySuccess("Renamed", origin);
       void invalidateDocs();
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Rename failed"),
   });
 
   const uploadVersion = useMutation({
+    onMutate: () => captureActionOrigin(),
     mutationFn: (v: { id: string; file: File }) => api.uploadDocumentVersion(v.id, v.file),
-    onSuccess: () => {
-      toast.success("New version uploaded — extracting…");
+    onSuccess: (_data, _variables, origin) => {
+      notifySuccess("New version uploaded — extracting…", origin);
       void invalidateDocs();
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Upload failed"),
   });
 
   const deleteDoc = useMutation({
+    onMutate: () => captureActionOrigin(),
     mutationFn: (id: string) => api.deleteDocument(id),
-    onSuccess: () => {
-      toast.success("Document deleted");
+    onSuccess: (_data, _variables, origin) => {
+      notifySuccess("Document deleted", origin);
       void invalidateDocs();
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Delete failed"),
   });
 
   const retryExtract = useMutation({
+    onMutate: () => captureActionOrigin(),
     mutationFn: (id: string) => api.retryDocument(id),
-    onSuccess: () => {
-      toast.success("Re-extracting…");
+    onSuccess: (_data, _variables, origin) => {
+      notifySuccess("Re-extracting…", origin);
       void invalidateDocs();
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Re-extract failed"),
@@ -350,6 +421,10 @@ function DocumentsTab({ matterId, canEdit }: { matterId: string; canEdit: boolea
   const columns = useMemo(
     () =>
       matterDocumentColumns({
+        onOpen: (row) => {
+          if (row.kind === "folder") setFolderId(row.folder.id);
+          else if (row.kind === "doc") setPreviewId(row.doc.id);
+        },
         canEdit,
         onReExtract: (id) => retryExtract.mutate(id),
         onRename: (doc) => {
@@ -458,14 +533,16 @@ function DocumentsTab({ matterId, canEdit }: { matterId: string; canEdit: boolea
         }}
       />
 
-      <DataTable
-        table={table}
-        empty={`No documents yet.${canEdit ? " Add documents to get started." : ""}`}
-        onRowClick={(r) => {
-          if (r.kind === "folder") setFolderId(r.folder.id);
-          else if (r.kind === "doc") setPreviewId(r.doc.id);
-        }}
-      />
+      <CollectionPanel query={documentsQuery} label="Documents">
+        <DataTable
+          table={table}
+          empty={`No documents yet.${canEdit ? " Add documents to get started." : ""}`}
+          onRowClick={(r) => {
+            if (r.kind === "folder") setFolderId(r.folder.id);
+            else if (r.kind === "doc") setPreviewId(r.doc.id);
+          }}
+        />
+      </CollectionPanel>
 
       {/* Selection footer (shadcn data-table pattern). */}
       <div className="shrink-0 text-sm text-muted-foreground">
@@ -493,8 +570,9 @@ function UsageTab({ matterId }: { matterId: string }) {
         <p className="text-sm text-muted-foreground">
           AI spend attributable to this matter — {fmt(usage.totals.llmCalls)} completions,{" "}
           {fmt(usage.totals.inputTokens + usage.totals.outputTokens)} tokens, est.{" "}
-          {cost(usage.totals.costUsd)}, {fmt(usage.totals.toolCalls)} agent tool calls. Costs are
-          estimates from list prices; unpriced models show tokens only.
+          {cost(usage.totals.costUsd)}, {fmt(usage.totals.embeddingCalls)} embedding calls,{" "}
+          {fmt(usage.totals.toolCalls)} agent tool calls. Costs are estimates from list prices;
+          unpriced models show tokens only.
         </p>
         <Button
           size="sm"
@@ -539,6 +617,24 @@ function UsageTab({ matterId }: { matterId: string }) {
         </tbody>
       </table>
 
+      {usage.embeddings.length > 0 && (
+        <div className="flex flex-col gap-1.5">
+          <p className="text-sm font-medium">Embedding calls</p>
+          <ul className="text-sm text-muted-foreground">
+            {usage.embeddings.map((r, i) => (
+              <li key={i} className="flex justify-between border-b py-1">
+                <span>
+                  {r.model ?? "unknown"} {r.provider ? `(${r.provider})` : ""}
+                </span>
+                <span>
+                  {fmt(r.calls)} calls · {fmt(r.inputTokens)} tokens
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {usage.tools.length > 0 && (
         <div className="flex flex-col gap-1.5">
           <p className="text-sm font-medium">Agent tool calls</p>
@@ -576,8 +672,9 @@ function ChatsTab({ matterId }: { matterId: string }) {
   // See Documents tab: opt out of React Compiler memoization for the DataTable.
   "use no memo";
   const navigate = useNavigate();
-  const { data: chats = [] } = useChats(matterId);
-  const [search, setSearch] = useState("");
+  const chatsQuery = useChats(matterId);
+  const chats = chatsQuery.data ?? [];
+  const [search, setSearch] = useWorkspaceViewState(`matter:${matterId}:chatSearch`, "");
   const { sorting, setSorting } = useTableState("matter-chats", {
     defaultSorting: [{ id: "updatedAt", desc: true }],
   });
@@ -606,16 +703,20 @@ function ChatsTab({ matterId }: { matterId: string }) {
         </Button>
       </div>
 
-      <DataTable
-        table={table}
-        empty="No chats yet."
-        onRowClick={(ch) =>
-          navigate({
-            to: "/matters/$id/assistant/$chatId",
-            params: { id: matterId, chatId: ch.id },
-          })
-        }
-      />
+      <CollectionPanel query={chatsQuery} label="Chats">
+        <DataTable
+          rowActionColumn="title"
+          getRowHref={(row) => `/matters/${matterId}/assistant/${row.id}`}
+          table={table}
+          empty="No chats yet."
+          onRowClick={(ch) =>
+            navigate({
+              to: "/matters/$id/assistant/$chatId",
+              params: { id: matterId, chatId: ch.id },
+            })
+          }
+        />
+      </CollectionPanel>
     </div>
   );
 }
@@ -642,12 +743,13 @@ function ReviewsTab({ matterId }: { matterId: string }) {
   "use no memo";
   const navigate = useNavigate();
   const { setCurrent } = useMatters();
-  const { data: reviews = [] } = useQuery({
+  const reviewsQuery = useQuery({
     queryKey: ["reviews"],
     queryFn: () => api.listReviews(),
   });
 
-  const [search, setSearch] = useState("");
+  const reviews = reviewsQuery.data ?? [];
+  const [search, setSearch] = useWorkspaceViewState(`matter:${matterId}:reviewSearch`, "");
   const { sorting, setSorting } = useTableState("matter-reviews", {
     defaultSorting: [{ id: "createdAt", desc: true }],
   });
@@ -657,8 +759,10 @@ function ReviewsTab({ matterId }: { matterId: string }) {
     void navigate({ to: "/reviews" });
   };
 
-  const filtered = reviews.filter((r) =>
-    (r.title || "Untitled review").toLowerCase().includes(search.toLowerCase())
+  const filtered = reviews.filter(
+    (r) =>
+      r.matterId === matterId &&
+      (r.title || "Untitled review").toLowerCase().includes(search.toLowerCase())
   );
 
   const { table } = useDataTable({
@@ -679,11 +783,15 @@ function ReviewsTab({ matterId }: { matterId: string }) {
         </Button>
       </div>
 
-      <DataTable
-        table={table}
-        empty="No reviews yet."
-        onRowClick={(r) => navigate({ to: "/reviews/$id", params: { id: r.id } })}
-      />
+      <CollectionPanel query={reviewsQuery} label="Reviews">
+        <DataTable
+          rowActionColumn="title"
+          getRowHref={(row) => `/reviews/${row.id}`}
+          table={table}
+          empty="No reviews yet."
+          onRowClick={(r) => navigate({ to: "/reviews/$id", params: { id: r.id } })}
+        />
+      </CollectionPanel>
     </div>
   );
 }

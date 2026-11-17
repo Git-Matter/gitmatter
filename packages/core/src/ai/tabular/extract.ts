@@ -1,4 +1,5 @@
 import type { CellCitation, CellContent, TabularColumn } from "@workspace/db/schema";
+import type { ReviewInstructions } from "@workspace/contracts";
 import { DEFAULT_MODEL, completeText } from "../provider/index.js";
 import { buildCellPrompt, buildRowPrompt, normalizeCell } from "../prompts/tabular.js";
 
@@ -12,7 +13,7 @@ const CITATIONS_SCHEMA = {
   type: "array",
   items: {
     type: "object",
-    properties: { page: { type: "number" }, quote: { type: "string" } },
+    properties: { quote: { type: "string" } },
     required: ["quote"],
     additionalProperties: false,
   },
@@ -26,6 +27,7 @@ const CELL_SCHEMA = {
     summary: { type: "string" },
     flag: { type: "string", enum: FLAGS },
     reasoning: { type: "string" },
+    outcome: { type: "string", enum: ["conforms", "deviates", "not_found", "inconclusive"] },
     citations: CITATIONS_SCHEMA,
   },
   required: ["summary", "flag", "reasoning"],
@@ -45,6 +47,7 @@ const ROW_SCHEMA = {
           summary: { type: "string" },
           flag: { type: "string", enum: FLAGS },
           reasoning: { type: "string" },
+          outcome: { type: "string", enum: ["conforms", "deviates", "not_found", "inconclusive"] },
           citations: CITATIONS_SCHEMA,
         },
         required: ["column_index", "summary", "flag", "reasoning"],
@@ -65,10 +68,9 @@ export function coerceFlag(flag: unknown): CellContent["flag"] {
 export function coerceCitations(raw: unknown): CellCitation[] {
   if (!Array.isArray(raw)) return [];
   return raw
-    .filter((c): c is { page?: unknown; quote?: unknown } => !!c && typeof c === "object")
+    .filter((c): c is { quote?: unknown } => !!c && typeof c === "object")
     .map((c) => ({
       quote: (typeof c.quote === "string" ? c.quote : "").trim(),
-      ...(typeof c.page === "number" ? { page: c.page } : {}),
     }))
     .filter((c) => c.quote);
 }
@@ -82,12 +84,15 @@ export function stripJsonFence(raw: string): string {
 
 /** Extract a single cell value from a document. */
 export async function queryCell(params: {
+  spendContext?: Parameters<typeof completeText>[0]["spendContext"];
   model?: string;
   filename: string;
   documentText: string;
   columnPrompt: string;
+  maxRetries?: number;
   format?: string;
   tags?: string[];
+  reviewInstructions?: ReviewInstructions | null;
   apiKey?: string | null;
   // Cache the document (it's in the system prefix) so the next column over the
   // same document reuses it instead of re-billing the full text. `cacheKey`
@@ -98,10 +103,12 @@ export async function queryCell(params: {
 }): Promise<CellResult> {
   const { system, user } = buildCellPrompt(params);
   const raw = await completeText({
+    spendContext: params.spendContext,
     model: params.model ?? DEFAULT_MODEL,
     systemPrompt: system,
     user,
     maxTokens: 2048,
+    maxRetries: params.maxRetries,
     apiKey: params.apiKey,
     // Deterministic, schema-constrained extraction so cell values are reproducible.
     temperature: 0,
@@ -117,6 +124,7 @@ export async function queryCell(params: {
       flag?: unknown;
       reasoning?: string;
       citations?: unknown;
+      outcome?: CellContent["outcome"];
     };
     return {
       content: normalizeCell(
@@ -124,6 +132,7 @@ export async function queryCell(params: {
           summary: String(parsed.summary ?? parsed.value ?? "").trim() || "Not addressed",
           flag: coerceFlag(parsed.flag),
           reasoning: String(parsed.reasoning ?? ""),
+          ...(parsed.outcome ? { outcome: parsed.outcome } : {}),
         },
         params.format,
         params.tags
@@ -148,15 +157,18 @@ export async function queryCell(params: {
  * runDocument. Missing columns simply don't appear in the returned map.
  */
 export async function queryRow(params: {
+  spendContext?: Parameters<typeof completeText>[0]["spendContext"];
   model?: string;
   filename: string;
   documentText: string;
   columns: TabularColumn[];
+  reviewInstructions?: ReviewInstructions | null;
   apiKey?: string | null;
   onUsage?: Parameters<typeof completeText>[0]["onUsage"];
 }): Promise<Map<number, CellResult>> {
   const { system, user } = buildRowPrompt(params);
   const raw = await completeText({
+    spendContext: params.spendContext,
     model: params.model ?? DEFAULT_MODEL,
     systemPrompt: system,
     user,
@@ -185,6 +197,9 @@ export async function queryRow(params: {
           summary: (typeof cell.summary === "string" ? cell.summary : "").trim() || "Not addressed",
           flag: coerceFlag(cell.flag),
           reasoning: typeof cell.reasoning === "string" ? cell.reasoning : "",
+          ...(["conforms", "deviates", "not_found", "inconclusive"].includes(String(cell.outcome))
+            ? { outcome: cell.outcome as CellContent["outcome"] }
+            : {}),
         },
         col.format,
         col.tags

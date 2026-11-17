@@ -1,5 +1,6 @@
+import { notifySuccess } from "@/lib/feedback";
 import { useRef, useState } from "react";
-import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
+import { Sheet, SheetContent, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import { Download, ExternalLink, Pencil, RefreshCw, Trash2, Upload, X } from "lucide-react";
@@ -13,6 +14,7 @@ import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { CommitHistory } from "@/components/CommitHistory";
 import { useSession } from "@/lib/auth/auth-client";
 import { DocxView } from "./DocxView";
+import { WordInspectionNotice } from "./WordInspectionNotice";
 import { api, type DocVersion } from "../../../../lib/data/api";
 import {
   documentSourceLabel,
@@ -20,6 +22,8 @@ import {
   hasExtensionChanged,
 } from "../../../../lib/format/documentLabels";
 import { formatBytes, formatDateTime } from "../../../../lib/format/format";
+import { SnapshotNotice } from "@/components/SnapshotNotice";
+import { readableSnapshot, snapshotIsCurrent } from "@/lib/data/snapshot-refresh";
 
 /**
  * Slide-in drawer with a document's preview + metadata + version history — a
@@ -58,33 +62,19 @@ export function DocumentDrawer({
   };
 
   return (
-    <DialogPrimitive.Root open={open} onOpenChange={(next) => !next && onClose()}>
-      <DialogPrimitive.Portal>
-        <DialogPrimitive.Backdrop
-          className={cn(
-            "fixed inset-0 z-50 bg-black/10 duration-150 supports-backdrop-filter:backdrop-blur-xs",
-            "data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0"
-          )}
+    <Sheet open={open} onOpenChange={(next) => !next && onClose()}>
+      <SheetContent showCloseButton={false} style={{ width, maxWidth: "96vw" }}>
+        {/* Drag the left edge to resize the drawer. */}
+        <div
+          onMouseDown={startResize}
+          className="absolute inset-y-0 start-0 z-10 hidden w-1.5 cursor-col-resize transition-colors hover:bg-primary/40 lg:block"
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize drawer"
         />
-        <DialogPrimitive.Popup
-          style={{ width, maxWidth: "96vw" }}
-          className={cn(
-            "fixed inset-y-0 end-0 z-50 flex w-[96vw] flex-col bg-card text-foreground shadow-2xl duration-150 outline-none",
-            "data-open:animate-in data-open:slide-in-from-right data-closed:animate-out data-closed:slide-out-to-right"
-          )}
-        >
-          {/* Drag the left edge to resize the drawer. */}
-          <div
-            onMouseDown={startResize}
-            className="absolute inset-y-0 start-0 z-10 hidden w-1.5 cursor-col-resize transition-colors hover:bg-primary/40 lg:block"
-            role="separator"
-            aria-orientation="vertical"
-            aria-label="Resize drawer"
-          />
-          {docId && <DrawerBody docId={docId} onClose={onClose} page={page} />}
-        </DialogPrimitive.Popup>
-      </DialogPrimitive.Portal>
-    </DialogPrimitive.Root>
+        {docId && <DrawerBody docId={docId} onClose={onClose} page={page} />}
+      </SheetContent>
+    </Sheet>
   );
 }
 
@@ -113,15 +103,24 @@ function DrawerBody({
   const docKey = ["document", docId];
   const versionsKey = ["document-versions", docId];
   const historyKey = ["document-history", docId];
-  const { data } = useQuery({ queryKey: docKey, queryFn: () => api.getDocumentDetail(docId) });
-  const { data: versions = [] } = useQuery({
+  const documentQuery = useQuery({ queryKey: docKey, queryFn: () => api.getDocumentDetail(docId) });
+  const data = readableSnapshot(documentQuery);
+  const versionsQuery = useQuery({
     queryKey: versionsKey,
     queryFn: () => api.listDocVersions(docId),
+    enabled: !!data,
   });
-  const { data: history = [] } = useQuery({
+  const versions = readableSnapshot(versionsQuery) ?? [];
+  const historyQuery = useQuery({
     queryKey: historyKey,
     queryFn: () => api.documentHistory(docId),
+    enabled: !!data,
   });
+  const history = readableSnapshot(historyQuery) ?? [];
+  const current = snapshotIsCurrent(documentQuery) && snapshotIsCurrent(versionsQuery);
+  const requireCurrent = () => {
+    if (!current) throw new Error("Refresh the document and versions before making changes.");
+  };
 
   // Both the global documents list (["documents"]) and a matter's document list
   // (["matter-docs", …]) show these docs — refresh whichever is mounted.
@@ -140,7 +139,10 @@ function DrawerBody({
   };
 
   const renameMut = useMutation({
-    mutationFn: (title: string) => api.renameDocument(docId, title),
+    mutationFn: (title: string) => {
+      requireCurrent();
+      return api.renameDocument(docId, title);
+    },
     onSuccess: (updated) => {
       qc.setQueryData(docKey, updated);
       void qc.invalidateQueries({ queryKey: historyKey });
@@ -152,16 +154,22 @@ function DrawerBody({
   });
 
   const uploadMut = useMutation({
-    mutationFn: (file: File) => api.uploadDocumentVersion(docId, file),
+    mutationFn: (file: File) => {
+      requireCurrent();
+      return api.uploadDocumentVersion(docId, file);
+    },
     onSuccess: () => {
       invalidate();
-      toast.success("New version uploaded — extracting…");
+      notifySuccess("New version uploaded — extracting…");
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Upload failed"),
   });
 
   const deleteVersionMut = useMutation({
-    mutationFn: (versionId: string) => api.deleteDocVersion(docId, versionId),
+    mutationFn: (versionId: string) => {
+      requireCurrent();
+      return api.deleteDocVersion(docId, versionId);
+    },
     onSuccess: () => {
       invalidate();
       setPendingDelete(null);
@@ -170,7 +178,10 @@ function DrawerBody({
   });
 
   const deleteDocMut = useMutation({
-    mutationFn: () => api.deleteDocument(docId),
+    mutationFn: () => {
+      requireCurrent();
+      return api.deleteDocument(docId);
+    },
     onSuccess: () => {
       void invalidateLists();
       onClose();
@@ -181,8 +192,21 @@ function DrawerBody({
   if (!data) {
     return (
       <div className="flex flex-1 flex-col gap-4 p-6">
-        <Skeleton className="h-7 w-72" />
-        <Skeleton className="min-h-0 w-full flex-1" />
+        <div className="flex items-center justify-between gap-3">
+          <SheetTitle>Document</SheetTitle>
+          <Button variant="ghost" size="icon-sm" onClick={onClose} tooltip="Close">
+            <X className="size-4" />
+          </Button>
+        </div>
+        <SheetDescription className="sr-only">Document preview and details</SheetDescription>
+        {documentQuery.error ? (
+          <SnapshotNotice query={documentQuery} label="Document" />
+        ) : (
+          <>
+            <Skeleton className="h-7 w-72" />
+            <Skeleton className="min-h-0 w-full flex-1" />
+          </>
+        )}
       </div>
     );
   }
@@ -219,7 +243,14 @@ function DrawerBody({
 
   return (
     <>
-      <input ref={fileRef} type="file" accept={accept} className="hidden" onChange={onPick} />
+      <input
+        ref={fileRef}
+        type="file"
+        accept={accept}
+        className="hidden"
+        disabled={!current}
+        onChange={onPick}
+      />
 
       <header className="flex h-14 shrink-0 items-center gap-3 border-b border-border px-4">
         {currentVersion && (
@@ -227,7 +258,13 @@ function DrawerBody({
             V{currentVersion.versionNumber}
           </span>
         )}
-        <span className="min-w-0 flex-1 truncate text-sm font-medium">{doc.title}</span>
+        <SheetTitle className="min-w-0 flex-1 truncate font-sans text-sm font-medium">
+          {doc.title}
+        </SheetTitle>
+        <SheetDescription className="sr-only">
+          Current draft preview for {doc.title}. Review findings refer to their captured source
+          version.
+        </SheetDescription>
         <Button
           variant="ghost"
           size="sm"
@@ -245,8 +282,13 @@ function DrawerBody({
         </Button>
       </header>
 
+      <div className="flex shrink-0 flex-col gap-3 px-4">
+        <SnapshotNotice query={documentQuery} label="Document" />
+        <SnapshotNotice query={versionsQuery} label="Document versions" />
+      </div>
+
       {/* Mobile pane switch — both panes show side-by-side from lg up. */}
-      <div className="flex shrink-0 gap-1 border-b border-border p-2 lg:hidden">
+      <div inert={!current} className="flex shrink-0 gap-1 border-b border-border p-2 lg:hidden">
         {(["document", "details"] as const).map((p) => (
           <Button
             key={p}
@@ -263,7 +305,10 @@ function DrawerBody({
       {/* minmax(0,1fr): let the preview shrink (it scrolls) instead of the
           fixed-width DOCX page forcing the grid wider than the panel and
           pushing the details column off-screen. */}
-      <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_clamp(280px,32%,360px)]">
+      <div
+        inert={!current}
+        className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_clamp(280px,32%,360px)]"
+      >
         <div
           className={cn(
             "flex min-h-0 min-w-0 flex-col border-border bg-muted/30 lg:border-e",
@@ -293,8 +338,14 @@ function DrawerBody({
             />
           ) : (
             <ScrollArea className="min-h-0 flex-1">
-              <div className="p-6">
-                {showRendered && isDocx ? (
+              <div className="flex flex-col gap-4 p-6">
+                {isDocx && <WordInspectionNotice inspection={data.wordInspection} />}
+                {showRendered && isDocx && data.wordInspection?.inspection.status !== "complete" ? (
+                  <p className="text-sm text-muted-foreground">
+                    Preview is unavailable because this Word source could not be fully inspected.
+                    Download the source file and inspect it in Word.
+                  </p>
+                ) : showRendered && isDocx ? (
                   <DocxView
                     url={api.documentDownloadUrl(docId)}
                     versionToken={doc.currentVersionId}
@@ -326,6 +377,7 @@ function DrawerBody({
                   <div className="flex items-center gap-2">
                     <Input
                       value={name}
+                      disabled={!current || renameMut.isPending}
                       onChange={(e) => setName(e.target.value)}
                       autoFocus
                       onKeyDown={(e) => {
@@ -397,6 +449,7 @@ function DrawerBody({
 
               <section className="flex flex-col gap-1.5">
                 <h3 className="text-sm font-medium">History</h3>
+                <SnapshotNotice query={historyQuery} label="Document history" />
                 <CommitHistory commits={history} currentUserId={session?.user.id} />
               </section>
             </div>
@@ -425,7 +478,7 @@ function DrawerBody({
       </div>
 
       <ConfirmDialog
-        open={pendingDelete !== null}
+        open={current && pendingDelete !== null}
         onOpenChange={(next) => !next && setPendingDelete(null)}
         title={pendingDelete === "doc" ? "Delete document?" : "Delete version?"}
         description={
@@ -435,20 +488,22 @@ function DrawerBody({
         }
         confirmLabel="Delete"
         pending={deleteDocMut.isPending || deleteVersionMut.isPending}
+        error={deleteDocMut.error || deleteVersionMut.error}
         onConfirm={() => {
-          if (pendingDelete === "doc") deleteDocMut.mutate();
-          else if (pendingDelete) deleteVersionMut.mutate(pendingDelete.versionId);
+          if (pendingDelete === "doc") return deleteDocMut.mutateAsync();
+          else if (pendingDelete) return deleteVersionMut.mutateAsync(pendingDelete.versionId);
         }}
       />
 
       <ConfirmDialog
-        open={extWarnTitle !== null}
+        open={current && extWarnTitle !== null}
         onOpenChange={(next) => !next && setExtWarnTitle(null)}
         title="Change file extension?"
         description={`Renaming changes the file extension. The stored file type stays ${fileTypeLabel(doc.fileType)} — only the displayed name changes.`}
         confirmLabel="Rename anyway"
         pending={renameMut.isPending}
-        onConfirm={() => extWarnTitle && renameMut.mutate(extWarnTitle)}
+        error={renameMut.error}
+        onConfirm={() => (extWarnTitle ? renameMut.mutateAsync(extWarnTitle) : undefined)}
       />
     </>
   );

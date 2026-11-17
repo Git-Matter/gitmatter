@@ -1,4 +1,8 @@
-import { useEffect, useState } from "react";
+import { captureActionOrigin, notifySuccess } from "@/lib/feedback";
+import { useDraftExit } from "@/lib/hooks/useDraftExit";
+import { FormFeedback } from "@/components/FormFeedback";
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Check, ChevronsUpDown, Search } from "lucide-react";
@@ -66,7 +70,7 @@ function ClientCombobox({
       <PopoverContent align="start" className="w-(--anchor-width) gap-0 overflow-hidden p-0">
         <div className="flex items-center gap-1.5 border-b border-border px-2 py-2.5">
           <Search className="size-4 shrink-0 text-muted-foreground" />
-          <input
+          <Input
             autoFocus
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -137,8 +141,14 @@ export function EditMatterModal({
   });
 
   // Reset the form whenever a different matter (or fresh data) opens.
+  const seeded = useRef<string | null>(null);
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      seeded.current = null;
+      return;
+    }
+    if (seeded.current === matter.id) return;
+    seeded.current = matter.id;
     setClientId(matter.clientId);
     setClientName(currentClient?.client.name ?? "");
     setName(matter.name);
@@ -150,6 +160,7 @@ export function EditMatterModal({
   }, [open, matter, currentClient]);
 
   const save = useMutation({
+    onMutate: () => captureActionOrigin(),
     mutationFn: () =>
       api.updateMatter(matter.id, {
         clientId,
@@ -163,106 +174,139 @@ export function EditMatterModal({
           conflictNotes: conflictCleared ? conflictNotes.trim() || null : null,
         }),
       }),
-    onSuccess: () => {
-      toast.success("Matter updated");
+    onSuccess: (_data, _variables, origin) => {
+      exit.resolve();
+      notifySuccess("Matter updated", origin);
       onSaved();
       onOpenChange(false);
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Update failed"),
   });
 
+  const dirty =
+    open &&
+    (name !== matter.name ||
+      clientId !== matter.clientId ||
+      practiceArea !== (matter.practiceArea ?? null) ||
+      jurisdiction !== (matter.jurisdiction ?? "") ||
+      status !== matter.status ||
+      conflictCleared !== matter.conflictCleared ||
+      conflictNotes !== (matter.conflictNotes ?? ""));
+  const exit = useDraftExit({
+    dirty,
+    saving: open && save.isPending,
+    discard: () => {
+      setName(matter.name);
+      setClientId(matter.clientId);
+      setPracticeArea(matter.practiceArea ?? null);
+      setJurisdiction(matter.jurisdiction ?? "");
+      setStatus(matter.status);
+      setConflictCleared(matter.conflictCleared);
+      setConflictNotes(matter.conflictNotes ?? "");
+    },
+  });
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Edit matter</DialogTitle>
-        </DialogHeader>
+    <>
+      {exit.guard}
+      <Dialog
+        open={open}
+        onOpenChange={(next, details) => {
+          if (next) onOpenChange(true);
+          else if (!exit.requestClose(() => onOpenChange(false))) details.cancel();
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit matter</DialogTitle>
+          </DialogHeader>
 
-        <div className="flex flex-col gap-3">
-          <div className="flex flex-col gap-1.5">
-            <Label>Client</Label>
-            <ClientCombobox
-              clientId={clientId}
-              clientName={clientName}
-              onPick={(id, n) => {
-                setClientId(id);
-                setClientName(n);
-              }}
-            />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label>Matter name</Label>
-            <Input value={name} onChange={(e) => setName(e.target.value)} />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label>Practice area</Label>
-            <PracticeAreaPicker value={practiceArea} onChange={setPracticeArea} />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label>Jurisdiction</Label>
-            <select
-              className={selectClass}
-              value={jurisdiction}
-              onChange={(e) => setJurisdiction(e.target.value)}
-            >
-              <option value="">System default (US)</option>
-              {JURISDICTIONS.map((j) => (
-                <option key={j.code} value={j.code}>
-                  {j.label}
-                </option>
-              ))}
-            </select>
-          </div>
+          <FormFeedback error={save.error} title="Matter was not saved" />
+          <fieldset disabled={save.isPending} className="flex flex-col gap-3">
+            <div className="flex flex-col gap-1.5">
+              <Label>Client</Label>
+              <ClientCombobox
+                clientId={clientId}
+                clientName={clientName}
+                onPick={(id, n) => {
+                  setClientId(id);
+                  setClientName(n);
+                }}
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label>Matter name</Label>
+              <Input value={name} onChange={(e) => setName(e.target.value)} />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label>Practice area</Label>
+              <PracticeAreaPicker value={practiceArea} onChange={setPracticeArea} />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label>Jurisdiction</Label>
+              <NativeSelect
+                className={selectClass}
+                value={jurisdiction}
+                onChange={(e) => setJurisdiction(e.target.value)}
+              >
+                <NativeSelectOption value="">System default (US)</NativeSelectOption>
+                {JURISDICTIONS.map((j) => (
+                  <NativeSelectOption key={j.code} value={j.code}>
+                    {j.label}
+                  </NativeSelectOption>
+                ))}
+              </NativeSelect>
+            </div>
 
-          {canClose && (
-            <div className="flex flex-col gap-3 border-t border-border pt-3">
-              <div className="flex items-center justify-between gap-3">
-                <Label>Status</Label>
-                <Select value={status} onValueChange={(v) => setStatus(v as Matter["status"])}>
-                  <SelectTrigger className="w-32 capitalize">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(["open", "closed"] as const).map((s) => (
-                      <SelectItem key={s} value={s} className="capitalize">
-                        {s}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex items-center justify-between gap-3">
-                <Label htmlFor="conflict-cleared">Conflicts cleared</Label>
-                <Switch
-                  id="conflict-cleared"
-                  checked={conflictCleared}
-                  onCheckedChange={setConflictCleared}
-                />
-              </div>
-              {conflictCleared && (
-                <div className="flex flex-col gap-1.5">
-                  <Label>Conflict notes</Label>
-                  <Textarea
-                    value={conflictNotes}
-                    onChange={(e) => setConflictNotes(e.target.value)}
-                    placeholder="What was reviewed to clear conflicts…"
+            {canClose && (
+              <div className="flex flex-col gap-3 border-t border-border pt-3">
+                <div className="flex items-center justify-between gap-3">
+                  <Label>Status</Label>
+                  <Select value={status} onValueChange={(v) => setStatus(v as Matter["status"])}>
+                    <SelectTrigger className="w-32 capitalize">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(["open", "closed"] as const).map((s) => (
+                        <SelectItem key={s} value={s} className="capitalize">
+                          {s}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <Label htmlFor="conflict-cleared">Conflicts cleared</Label>
+                  <Switch
+                    id="conflict-cleared"
+                    checked={conflictCleared}
+                    onCheckedChange={setConflictCleared}
                   />
                 </div>
-              )}
-            </div>
-          )}
-        </div>
+                {conflictCleared && (
+                  <div className="flex flex-col gap-1.5">
+                    <Label>Conflict notes</Label>
+                    <Textarea
+                      value={conflictNotes}
+                      onChange={(e) => setConflictNotes(e.target.value)}
+                      placeholder="What was reviewed to clear conflicts…"
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+          </fieldset>
 
-        <DialogFooter>
-          <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
-          <Button
-            disabled={!name.trim() || !clientId || save.isPending}
-            onClick={() => save.mutate()}
-          >
-            {save.isPending ? "Saving…" : "Save"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+          <DialogFooter>
+            <DialogClose render={<Button variant="outline" />}>Cancel</DialogClose>
+            <Button
+              disabled={!name.trim() || !clientId || save.isPending}
+              onClick={() => save.mutate()}
+            >
+              {save.isPending ? "Saving…" : "Save"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

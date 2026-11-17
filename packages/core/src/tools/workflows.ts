@@ -1,6 +1,8 @@
 import { z } from "zod";
+import { reviewInstructionsSchema } from "@workspace/contracts";
 import type { PlaybookRule } from "@workspace/db/schema";
-import { canAccessArtifact, canReadDocument } from "../core/index.js";
+import { canAccessArtifact, canReadDocument, getPendingWorkflowProposal } from "../core/index.js";
+import { getDocumentContext } from "../content/chunks.js";
 import { getDocument } from "../content/documents.js";
 import { generatePlaybookRules, runPlaybook } from "../ai/tabular/playbook.js";
 import { resolveRunModel } from "../ai/provider/index.js";
@@ -23,7 +25,11 @@ const withIds = (rules: Array<z.infer<typeof ruleSchema>>): PlaybookRule[] =>
 
 // Workflow templates (system + user) and playbooks: list, read with per-field
 // blame, create/update, draft rules from a document, and run a playbook.
-export function buildWorkflowTools({ actor, resolveMatter }: ToolContext): ToolSpec[] {
+export function buildWorkflowTools({
+  actor,
+  resolveMatter,
+  credentialId,
+}: ToolContext): ToolSpec[] {
   return [
     {
       name: "list_workflows",
@@ -80,13 +86,22 @@ export function buildWorkflowTools({ actor, resolveMatter }: ToolContext): ToolS
           // Approved library items change only through the UI's admin flow.
           if (existing.workflow.status === "approved" && existing.workflow.type === "playbook")
             return { error: "Forbidden: approved playbooks are edited by firm admins in the UI" };
-          await updateWorkflow(actor, workflowId as string, {
+          const result = await updateWorkflow(actor, workflowId as string, {
             title: title as string | undefined,
             type: type as "assistant" | "tabular" | "playbook" | undefined,
             promptMd: promptMd as string | undefined,
             rules: parsedRules,
           });
-          return { workflowId };
+          const pending = await getPendingWorkflowProposal(actor, workflowId as string);
+          return pending
+            ? {
+                workflowId,
+                proposalId: pending.id,
+                outcome: "proposed",
+                status: "pending",
+                note: "Accepted workflow fields are unchanged until an eligible person applies this exact proposal.",
+              }
+            : { workflowId, outcome: "committed", committed: result.commit?.seq };
         }
         if (!title || !type || (type !== "playbook" && !promptMd))
           return { error: "title, type, promptMd required to create" };
@@ -96,15 +111,23 @@ export function buildWorkflowTools({ actor, resolveMatter }: ToolContext): ToolS
           type === "playbook" ? null : await resolveMatter(matterId as string | undefined);
         if (type !== "playbook" && !resolved)
           return { error: "Forbidden: no access to that matter" };
-        return {
-          workflowId: await createWorkflow(actor, {
-            title: title as string,
-            type: type as "assistant" | "tabular" | "playbook",
-            promptMd: (promptMd as string | undefined) ?? "",
-            rules: parsedRules ?? null,
-            matterId: resolved,
-          }),
-        };
+        const createdId = await createWorkflow(actor, {
+          title: title as string,
+          type: type as "assistant" | "tabular" | "playbook",
+          promptMd: (promptMd as string | undefined) ?? "",
+          rules: parsedRules ?? null,
+          matterId: resolved,
+        });
+        const pending = await getPendingWorkflowProposal(actor, createdId);
+        return pending
+          ? {
+              workflowId: createdId,
+              proposalId: pending.id,
+              outcome: "proposed",
+              status: "pending",
+              note: "This proposed workflow is unavailable until an eligible person applies it. No accepted workflow exists yet.",
+            }
+          : { workflowId: createdId, outcome: "committed" };
       },
     },
     {
@@ -121,9 +144,20 @@ export function buildWorkflowTools({ actor, resolveMatter }: ToolContext): ToolS
         if (!(await canReadDocument(actor, documentId as string))) return { error: "Not found" };
         const doc = await getDocument(documentId as string);
         if (!doc?.markdown) return { error: "Document has no extracted text" };
+        const context = await getDocumentContext(doc, {
+          mode: "query",
+          query: [contractType, "standard position fallback unacceptable guidance clause"]
+            .filter(Boolean)
+            .join(" "),
+          task: "playbook",
+          repeated: true,
+          maxChunks: 24,
+          allowEmbedding: true,
+        });
         const run = await resolveRunModel(actor.userId, model as string | undefined);
         const rules = await generatePlaybookRules({
-          documentText: doc.markdown,
+          spendContext: { actor, credentialId, matterId: doc.matterId, sourceKind: "generation" },
+          documentText: context.text,
           filename: doc.title,
           contractType: contractType as string | undefined,
           model: run.model,
@@ -135,13 +169,15 @@ export function buildWorkflowTools({ actor, resolveMatter }: ToolContext): ToolS
     {
       name: "run_playbook",
       description:
-        "Prepare a review from an approved playbook with one verdict column per rule. This creates pending cells; it does not run a model. Read each document with get_document, analyse it yourself, then save cited findings with write_cell. Read results with read_review_cells.",
+        "Prepare a review from an approved playbook with one verdict column per rule. Supply reviewInstructions to capture the represented party, disclosure role, NDA structure, business purpose and governing law; null/unknown means not known. These instructions are frozen in the review. This creates pending cells; it does not run a model. Read each document with get_document, analyse it yourself, then save cited findings with write_cell. Read results with read_review_cells and get_review_completion.",
       schema: {
         playbookId: z.string(),
+        requestId: z.uuid().optional(),
+        reviewInstructions: reviewInstructionsSchema.optional(),
         documentIds: z.array(z.string()).min(1),
         matterId: z.string().optional(),
       },
-      handler: async ({ playbookId, documentIds, matterId }) => {
+      handler: async ({ playbookId, documentIds, matterId, requestId, reviewInstructions }) => {
         const wf = await getWorkflow(playbookId as string);
         if (
           !wf ||
@@ -157,6 +193,11 @@ export function buildWorkflowTools({ actor, resolveMatter }: ToolContext): ToolS
         try {
           const result = await runPlaybook(actor, {
             playbookId: playbookId as string,
+            requestId: requestId as string | undefined,
+            reviewInstructions:
+              reviewInstructions === undefined
+                ? undefined
+                : reviewInstructionsSchema.parse(reviewInstructions),
             documentIds: documentIds as string[],
             matterId: resolved,
           });

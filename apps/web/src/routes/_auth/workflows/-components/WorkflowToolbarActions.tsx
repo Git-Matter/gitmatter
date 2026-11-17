@@ -13,6 +13,7 @@ import { workflowTypeMeta } from "./workflowList";
 
 export function WorkflowToolbarActions({
   selectedCount,
+  actionsDisabled = false,
   tab,
   practices,
   typeFilter,
@@ -23,6 +24,7 @@ export function WorkflowToolbarActions({
   onBulkUnhide,
 }: {
   selectedCount: number;
+  actionsDisabled?: boolean;
   tab: WorkflowTab;
   practices: string[];
   typeFilter: WorkflowListItem["type"] | null;
@@ -38,7 +40,10 @@ export function WorkflowToolbarActions({
         <DropdownMenu>
           <DropdownMenuTrigger
             render={
-              <button className="flex items-center gap-1 text-xs font-medium text-foreground transition-colors hover:text-foreground/80" />
+              <button
+                disabled={actionsDisabled}
+                className="flex items-center gap-1 text-xs font-medium text-foreground transition-colors hover:text-foreground/80"
+              />
             }
           >
             Actions

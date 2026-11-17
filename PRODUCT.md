@@ -6,13 +6,13 @@ product
 
 ## Users
 
-Lawyers and legal staff at small-to-mid firms, plus the AI agents they drive. Context: bright
+Australian sole practitioners and general practices are the primary audience, alongside the AI
+agents they drive. The first jobs are understanding a matter file, reviewing an agreement, and
+preparing a client update. Other legal teams remain supported. Context: bright
 office, large monitor, long sessions reading contracts and review tables. The primary job on any
 screen is reading and judging legal text: a redline, an extracted table, a cited answer. The
-secondary job is trusting the audit trail (who changed what, when, why).
-
-Marketing pages address the buying lawyer or firm IT: skeptical of AI hype, allergic to vendor
-gloss, convinced by evidence (audit spine, citations, bring-your-own-key).
+secondary job is trusting the audit trail (who changed what, when, why). A recorded agent action
+is distinct from a practitioner's own review of a particular document state.
 
 ## Product Purpose
 

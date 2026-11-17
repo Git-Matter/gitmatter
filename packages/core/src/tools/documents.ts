@@ -3,6 +3,7 @@ import { canAccessArtifact } from "../core/index.js";
 import {
   buildDocxSpec,
   createGeneratedDocument,
+  type ContextMode,
   getDocumentDetail,
   type EditSpec,
   proposeEditDetail,
@@ -48,13 +49,29 @@ export function buildDocumentTools({ actor, resolveMatter }: ToolContext): ToolS
       name: "get_document",
       readOnly: true,
       description:
-        "Get a document's text (markdown) and its tracked edits (with status and blame).",
-      schema: { documentId: z.string() },
-      handler: async ({ documentId }) => {
-        const result = await getDocumentDetail(documentId as string);
+        "Get a document's text/context and tracked edits. For large documents, use mode 'query' with a focused query, or mode 'chunks' with chunkRefs returned by an earlier read.",
+      schema: {
+        documentId: z.string(),
+        mode: z.enum(["auto", "full", "overview", "query", "chunks"]).optional(),
+        query: z.string().optional(),
+        chunkRefs: z.array(z.union([z.string(), z.number()])).optional(),
+      },
+      handler: async ({ documentId, mode, query, chunkRefs }) => {
+        if (!(await canAccessArtifact(actor, "document", documentId as string)))
+          return { error: "Not found" };
+        const result = await getDocumentDetail(documentId as string, actor, {
+          mode: mode as ContextMode | undefined,
+          query: query as string | undefined,
+          chunkRefs: chunkRefs as Array<string | number> | undefined,
+        });
         if (!result || !(await canAccessArtifact(actor, "document", documentId as string)))
           return { error: "Not found" };
-        return { ...result, documentId };
+        const { context, ...document } = result.document;
+        return {
+          ...result,
+          documentId,
+          document: { ...document, markdown: context.text, context },
+        };
       },
     },
     {

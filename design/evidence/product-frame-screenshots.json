@@ -1,0 +1,95 @@
+{
+  "version": 2,
+  "recordedOn": "2026-11-13",
+  "scope": "Current gitmatter production components and AppFrame, captured unmodified in isolated local fixtures with fictional demo data. No actual authentication, paid inference, legal quality or deployment claim. Source hashes identify relevant files, not a full runtime attestation.",
+  "sourceSHA256": {
+    "design/tokens.json": "813095f790f1bf8e125f8d634d587ccc4db3d4d2f29bc74b4b3250b84e87d117",
+    "apps/web/src/styles/tokens.css": "24ed4b63c621f2b9e871b9fc151412f7d9397d379903fbd63380fce655df61d7",
+    "apps/web/src/styles/globals.css": "399faa1aa751ab40fd875d5bc3a20de4d3bf342719bf2d127cdca3a1400bcf42",
+    "apps/web/src/components/AppFrame.tsx": "c010eaf3525f156b9a378533a6098b108cb0a0f864a4a0eca73b519c5a45cc76",
+    "apps/web/src/components/AppSidebar.tsx": "578bd5b3e068c94d3c803f9593f1eb2265be8e287c6e8525f83b685a21513f3a",
+    "apps/web/src/components/PageHeader.tsx": "95ac27cfcedd454439ce1c70e298ed8ed6b58fd6d17090e564f396bd277bc409",
+    "apps/web/src/components/PageShell.tsx": "70307dc8ea75097544317efc3598a5f41ef4e2fd13b81ad24a202ce349d41329",
+    "apps/web/src/components/ui/card.tsx": "7c4c2118b887fe48ac2fd707f3cbff2b6cb85e49e44b34a3f414cad23551b52f",
+    "apps/web/src/lib/hooks/useMediaQuery.ts": "092f707ce31f97db7a337ac87f2159a9b007c036e980f73242ff44372ce93c91",
+    "apps/web/src/routes/_auth/route.tsx": "99f017aee527dad6c3dcbeafa43a0b5c43153e44012997d61fc701d28a5eff9c",
+    "apps/web/src/routes/_auth/settings/index.tsx": "130b319444bbcc20f6484f7aa13792735c1131aeae299702722056b4281c2ec5",
+    "apps/web/src/routes/_auth/settings/-components/AccountSettings.tsx": "b422e2ac69116a8f3a3484bb78a7fc691fc0c90e2b03ca2b8fa157eb87831027",
+    "apps/web/src/routes/_auth/settings/-components/TwoFactorCard.tsx": "c90f5ef9ca5e8177262901f2560a0fbcc93961c8bae433917e859c781243f876",
+    "apps/web/src/routes/_auth/reviews/$id.tsx": "2288b47d0e0775572ef06fe430e8844ad864463f7f26f45fdfad2aba75ad8228",
+    "apps/web/src/routes/_auth/reviews/-components/ContractReviewWorkspace.tsx": "6e489496bcad32af4bf69df43cb2c5c3d2f62ae465f8b98af2f572ad8d97c9d8",
+    "apps/web/src/routes/_auth/reviews/-components/ContractReviewActions.tsx": "c11297c6e1eee37c88638be8b9b6a9bd7e44792c7841c1fd01668d6a9ec806b2",
+    "apps/web/src/routes/_auth/documents/-components/WordInspectionNotice.tsx": "71fc147ae29fb314c409d2589442b37932812eb476884a9be5e18af7ef1b9ff7",
+    "apps/web/src/routes/_auth/matters/-components/MatterChatWorkspace.tsx": "614481147ea9214ec4f9930422943ee34239e1d879400a3a2cf63307002e7c7b",
+    "test/acceptance/account-ui-fixture/main.tsx": "565eae3f7a1da62e6b083f9b66426637fb1e89e5ae72d97d207e5d12e81c0fec",
+    "test/acceptance/assistant-ui-fixture/main.tsx": "c4e8c2e673233fb170d9e9b89a920b76deb1febee671bf9a93646df6cf149a55",
+    "test/acceptance/mvp-ui-fixture/main.tsx": "b73eab6ef4eaf7bfdf6e64f66775d5b777c91a2c65ad2aa7884bdde41dc91d52"
+  },
+  "captures": [
+    {
+      "label": "Settings",
+      "path": "output/playwright/harvey-settings-desktop.png",
+      "width": 1440,
+      "height": 1000,
+      "sha256": "9bfff82f86b4a94470315c8dfa9a514978de3daa7460cc044de6f75aa7363d12",
+      "scope": "Shared production AppFrame and flat settings sections; fictional identity and intercepted metadata."
+    },
+    {
+      "label": "Settings — dark",
+      "path": "output/playwright/harvey-settings-dark.png",
+      "width": 1440,
+      "height": 1000,
+      "sha256": "ec5c762dcc3ba23f3e203a6e73bff132c66f38b67f5a64aed1dd1b3748cfe2a3",
+      "scope": "Actual Appearance control in the same frame."
+    },
+    {
+      "label": "Settings — mobile",
+      "path": "output/playwright/harvey-settings-mobile.png",
+      "width": 390,
+      "height": 844,
+      "sha256": "fc93e4f9f77fd5b77360e4c1a5cedc4d073de1de81395fbec75e4efef3692a2a",
+      "scope": "390px frame with native section navigation and retained fields."
+    },
+    {
+      "label": "Contract review",
+      "path": "output/playwright/harvey-review-desktop.png",
+      "width": 1440,
+      "height": 1000,
+      "sha256": "c069e70b89a16d0a692947384ffef9c75ceff915180031a71b90d05882875d5b",
+      "scope": "Production review and frame with fictional source/findings; selected quotation highlighted."
+    },
+    {
+      "label": "Review decision",
+      "path": "output/playwright/harvey-review-decision.png",
+      "width": 1440,
+      "height": 1000,
+      "sha256": "e4f6f6814473cc95085aaace945ac716a3107cfb367a56c749d0a98c11887d98",
+      "scope": "The inspector scrolls independently while source and context remain visible."
+    },
+    {
+      "label": "Review — mobile",
+      "path": "output/playwright/harvey-review-mobile.png",
+      "width": 390,
+      "height": 844,
+      "sha256": "e9302a1472110dbbe4b0d1e66d48bd132e96dac4bc0fca318fd19b4fa1b6f25a",
+      "scope": "390px finding selector and collapsible status/history; source, decisions and safety context preserved."
+    },
+    {
+      "label": "Matter assistant",
+      "path": "output/playwright/harvey-assistant-desktop.png",
+      "width": 1440,
+      "height": 1000,
+      "sha256": "6aac12abd988174b984ef1d59861ba977f267c428330bbbbd56568afee035069",
+      "scope": "Production file/document/conversation panes within the shared frame; fictional text and an unsent prompt."
+    },
+    {
+      "label": "Assistant — mobile",
+      "path": "output/playwright/harvey-assistant-mobile.png",
+      "width": 390,
+      "height": 844,
+      "sha256": "0c75c33eb3585d368001e4beb7888a34e32c60212a343921231e9078bf194d58",
+      "scope": "390px conversation pane with full matter/document scope. Zero inference requests."
+    }
+  ],
+  "revision": "shared-product-frame"
+}

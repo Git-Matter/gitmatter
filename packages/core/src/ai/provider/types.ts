@@ -5,6 +5,7 @@ import type {
   OpenRouterModel,
   ProviderCatalog,
 } from "@workspace/contracts";
+import type { CacheMode } from "./cache.js";
 
 export type { LlmModel, LlmProvider, ModelCapabilities, OpenRouterModel, ProviderCatalog };
 
@@ -28,6 +29,8 @@ export type ChatMessage =
 export type ToolDef = { name: string; description: string; inputSchema: Record<string, unknown> };
 
 export type CompleteRequest = {
+  /** Durable workers own retries; 0 disables SDK-internal retry loops. */
+  maxRetries?: number;
   model: string;
   system?: string;
   messages: ChatMessage[];
@@ -47,14 +50,24 @@ export type CompleteRequest = {
   cacheKey?: string;
 };
 
+export type UsageInfo = {
+  inputTokens: number;
+  outputTokens: number;
+  cachedInputTokens?: number;
+  cacheWriteTokens?: number;
+  cacheReadTokens?: number;
+  cacheMode?: CacheMode;
+  cacheKey?: string;
+};
+
 export type CompleteResult = {
   text: string;
   toolCalls: ToolCall[];
   stop: "end" | "tool_use";
   reasoning?: unknown[];
-  // Token usage as reported by the provider, when it exposes it. Optional —
-  // absent providers leave it undefined; metering treats that as zero.
-  usage?: { inputTokens: number; outputTokens: number };
+  // Provider-reported usage is optional. Missing usage retains an unknown spend
+  // reservation rather than reporting a free completion.
+  usage?: UsageInfo;
 };
 
 // Live callbacks for streaming. onText fires per answer-token delta; onReasoning

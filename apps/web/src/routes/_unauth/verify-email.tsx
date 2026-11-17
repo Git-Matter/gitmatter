@@ -1,3 +1,4 @@
+import { safeLoginNext } from "@/lib/auth/redirect";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { MailCheck } from "lucide-react";
 import { useState } from "react";
@@ -28,23 +29,25 @@ function VerifyEmail() {
   const [error, setError] = useState<string | null>(null);
 
   async function resendVerification() {
-    if (!email) return;
+    if (!email || busy) return;
     setError(null);
     setBusy(true);
-    const callbackURL = new URL(
-      next && next.startsWith("/") ? next : "/assistant",
-      window.location.origin
-    );
-    const { error: verificationError } = await sendVerificationEmail({
-      email,
-      callbackURL: callbackURL.toString(),
-    });
-    setBusy(false);
-    if (verificationError) {
-      setError(verificationError.message ?? "Could not send verification email");
-      return;
+    try {
+      const callbackURL = new URL(safeLoginNext(next), window.location.origin);
+      const { error: verificationError } = await sendVerificationEmail({
+        email,
+        callbackURL: callbackURL.toString(),
+      });
+      if (verificationError) {
+        setError(verificationError.message ?? "Could not send verification email");
+        return;
+      }
+      setSentNow(true);
+    } catch {
+      setError("Could not connect. Try requesting the verification link again.");
+    } finally {
+      setBusy(false);
     }
-    setSentNow(true);
   }
 
   return (
@@ -62,7 +65,9 @@ function VerifyEmail() {
                     Verify your email to continue
                   </h2>
                   <p className="text-muted-foreground">
-                    {sentNow ? "We sent a verification link to " : "Send a verification link to "}
+                    {sentNow
+                      ? "A verification link was requested for "
+                      : "Send a verification link to "}
                     <span className="break-all text-foreground">{email}</span>. Open it, then return
                     here to log in.
                   </p>
@@ -72,11 +77,14 @@ function VerifyEmail() {
               <Button type="button" disabled={busy} className="w-full" onClick={resendVerification}>
                 {busy ? "Sending..." : sentNow ? "Send another link" : "Send verification link"}
               </Button>
-              <Link to="/login" search={next ? { next } : {}} className="w-full">
-                <Button type="button" variant="outline" className="w-full">
-                  Use a different email
-                </Button>
-              </Link>
+              <Button
+                variant="outline"
+                className="w-full"
+                nativeButton={false}
+                render={<Link to="/login" search={next ? { next } : {}} />}
+              >
+                Use a different email
+              </Button>
               <p className="text-center text-xs text-muted-foreground">
                 Already verified? Return to login and sign in again.
               </p>
@@ -89,9 +97,13 @@ function VerifyEmail() {
                   Return to login and enter the email you used to create your account.
                 </p>
               </div>
-              <Link to="/login" search={next ? { next } : {}} className="w-full">
-                <Button className="w-full">Back to login</Button>
-              </Link>
+              <Button
+                className="w-full"
+                nativeButton={false}
+                render={<Link to="/login" search={next ? { next } : {}} />}
+              >
+                Back to login
+              </Button>
             </div>
           )}
         </CardContent>

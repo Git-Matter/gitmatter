@@ -2,16 +2,20 @@ import type { LlmProvider } from "@workspace/contracts";
 import { getEnv } from "../../core/config.js";
 import { DEFAULT_MODEL, PROVIDERS, providerForModel } from "./catalog.js";
 import { getLlmClient } from "./factory.js";
+import { withProviderSpend, type ProviderCallContext } from "./spend.js";
+import type { UsageInfo } from "./types.js";
 
 /**
  * Single-shot text completion across any provider — used by tabular extraction.
  * Resolves the provider from the model, the key from explicit > env.
  */
 export async function completeText(params: {
+  spendContext?: ProviderCallContext;
   model?: string;
   systemPrompt?: string;
   user: string;
   maxTokens?: number;
+  maxRetries?: number;
   apiKey?: string | null;
   provider?: LlmProvider;
   temperature?: number;
@@ -22,33 +26,33 @@ export async function completeText(params: {
   cacheKey?: string;
   // Reports the provider's token usage after the call so callers can meter it
   // (best-effort: some providers omit usage; never blocks the completion).
-  onUsage?: (u: {
-    provider: LlmProvider;
-    model: string;
-    inputTokens: number;
-    outputTokens: number;
-  }) => void;
+  onUsage?: (u: UsageInfo & { provider: LlmProvider; model: string }) => void;
 }): Promise<string> {
   const model = params.model ?? DEFAULT_MODEL;
   const provider = params.provider ?? providerForModel(model);
   const key = params.apiKey ?? getEnv(PROVIDERS[provider].envKey);
   if (!key) throw new Error(`No API key for ${provider} (set one in account settings)`);
-  const res = await getLlmClient(provider, key).complete({
-    model,
-    system: params.systemPrompt,
-    messages: [{ role: "user", content: params.user }],
-    maxTokens: params.maxTokens,
-    temperature: params.temperature,
-    jsonSchema: params.jsonSchema,
-    cache: params.cache,
-    cacheKey: params.cacheKey,
-  });
+  const res = await withProviderSpend(
+    params.spendContext,
+    {
+      model,
+      system: params.systemPrompt,
+      messages: [{ role: "user", content: params.user }],
+      maxTokens: params.maxTokens,
+      maxRetries: params.maxRetries,
+      temperature: params.temperature,
+      jsonSchema: params.jsonSchema,
+      cache: params.cache,
+      cacheKey: params.cacheKey,
+    },
+    (request) => getLlmClient(provider, key).complete(request)
+  );
   if (res.usage && params.onUsage)
     params.onUsage({
       provider,
       model,
-      inputTokens: res.usage.inputTokens,
-      outputTokens: res.usage.outputTokens,
+      ...res.usage,
+      cacheKey: res.usage.cacheKey ?? params.cacheKey,
     });
   return res.text;
 }

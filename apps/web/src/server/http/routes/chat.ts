@@ -22,7 +22,6 @@ import {
   getLlmClient,
   getMatter,
   getUserJurisdiction,
-  getUserTenant,
   hasMatterAccess,
   listAllChats,
   listChats,
@@ -33,7 +32,6 @@ import {
   parseCitations,
   persistChat,
   providerForModel,
-  recordLlmUsage,
   resolveLlmKey,
   setChatPinned,
   streamComplete,
@@ -41,7 +39,7 @@ import {
   summarizeToolOutput,
   type ToolDef,
 } from "@workspace/core";
-import { resolveJurisdiction } from "@workspace/registry";
+import { resolveChatJurisdiction } from "@workspace/registry";
 import { type AuthEnv } from "../middleware/auth.js";
 import { posthog } from "../../posthog.js";
 import { chatSchema, pinSchema } from "../schemas/chat.js";
@@ -600,13 +598,26 @@ async function runAssistant(
   const caps = LLM_MODELS.find((m) => m.id === model)?.capabilities;
   const reasoning = caps && !caps.reasoning ? undefined : body.reasoning;
 
-  // Jurisdiction: request override > user default > system default.
-  const jurisdiction = resolveJurisdiction(body.jurisdiction, await getUserJurisdiction(user.id));
+  // Resolve the persisted conversation before choosing jurisdiction-dependent
+  // tools. A continuation cannot silently switch to the user's US default.
+  const prior = body.chatId ? await getChat(user.id, body.chatId) : null;
+  if (body.chatId && !prior) throw new HttpError(404, "Conversation not found");
+  const matterId = prior ? (prior.matterId ?? undefined) : body.matterId;
+  if (matterId && !(await hasMatterAccess(user.id, matterId, "viewer")))
+    throw new HttpError(404, "Matter not found");
+  const matter = matterId ? await getMatter(matterId) : null;
+  const jurisdiction = resolveChatJurisdiction({
+    request: body.jurisdiction,
+    conversation: prior?.jurisdiction,
+    matter: matter?.jurisdiction,
+    user: await getUserJurisdiction(user.id),
+  });
 
   // Shared gitmatter tools — the same catalog the MCP server exposes.
   const actor: Actor = { type: "agent", userId: user.id, agentLabel: "chat" };
   const catalog = buildToolCatalog(actor, {
     jurisdiction,
+    matterId,
     defaultMatterLabel: user.name,
     sourceIds: body.sourceIds,
   });
@@ -629,7 +640,6 @@ async function runAssistant(
 
   // Continue a conversation: replay prior user/assistant turns (text only) so the
   // model has context, then append this turn.
-  const prior = body.chatId ? await getChat(user.id, body.chatId) : null;
   const messages: ChatMessage[] = [];
   for (const turn of prior?.turns ?? [])
     messages.push(
@@ -682,7 +692,6 @@ async function runAssistant(
 
   // Matter scope: from the request (new chat) or the chat row (continuation).
   // Inject the matter's document index into the system prompt once per request.
-  const matterId = body.matterId ?? prior?.matterId ?? undefined;
   const base = `${CITATIONS_INSTRUCTION}\n\n${REDLINE_INSTRUCTION}`;
   const system =
     (matterId
@@ -753,7 +762,8 @@ async function runAssistant(
         attachmentDocIds: turnDocIds.length ? turnDocIds : undefined,
       },
       body.chatId,
-      body.matterId
+      matterId,
+      jurisdiction
     );
     logEvent("info", "assistant.run.finish", {
       userId: user.id,
@@ -800,8 +810,7 @@ async function runAssistant(
   const { key } = await resolveLlmKey(user.id, provider);
   if (!key) throw new HttpError(400, `No API key for ${provider} (set one in Settings)`);
   const client = getLlmClient(provider, key);
-  // Resolved once for usage metering across the tool loop's completions.
-  const tenantId = await getUserTenant(user.id);
+  const spendRunId = crypto.randomUUID();
 
   const toolCalls: Array<{ tool: string; input: unknown }> = [];
   let cacheableToolCall: { documentId: string; input: Record<string, unknown> } | null = null;
@@ -846,6 +855,12 @@ async function runAssistant(
           }
           handlers.onReasoning?.(delta);
         },
+      },
+      {
+        actor: { type: "user", userId: user.id },
+        matterId: matterId ?? null,
+        runId: spendRunId,
+        sourceKind: "chat",
       }
     );
     const activeThinking = thinking as ChatTraceEvent | null;
@@ -876,18 +891,10 @@ async function runAssistant(
       toolCallCount: res.toolCalls.length,
       inputTokens: res.usage?.inputTokens,
       outputTokens: res.usage?.outputTokens,
+      cachedInputTokens: res.usage?.cachedInputTokens,
+      cacheReadTokens: res.usage?.cacheReadTokens,
+      cacheWriteTokens: res.usage?.cacheWriteTokens,
     });
-    // Meter this completion's token spend (log-only; never blocks the turn).
-    if (res.usage)
-      void recordLlmUsage({
-        userId: user.id,
-        tenantId,
-        matterId: matterId ?? null,
-        provider,
-        model,
-        inputTokens: res.usage.inputTokens,
-        outputTokens: res.usage.outputTokens,
-      });
     messages.push({
       role: "assistant",
       content: res.text,
@@ -949,7 +956,8 @@ async function runAssistant(
       attachmentDocIds: turnDocIds.length ? turnDocIds : undefined,
     },
     body.chatId,
-    body.matterId
+    matterId,
+    jurisdiction
   );
   logEvent("info", "assistant.run.finish", {
     userId: user.id,

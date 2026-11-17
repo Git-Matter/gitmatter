@@ -140,19 +140,36 @@ GEMINI_API_KEY=...
 OPENROUTER_API_KEY=...
 ```
 
-A user's own key always **overrides** the server key. Pick the model per chat message or per review run. OpenRouter is the zero-data-retention default (the provider that, by default, keeps and trains on nothing).
+A user's own key takes precedence over the server key. Removing that saved key can make the server fallback active. Pick the model per chat message or per review run. For OpenRouter, gitmatter sends `provider.dataCollection: "deny"`; it does not send an explicit `zdr` routing flag or verify the account's retention settings. Check the provider's current terms and account controls before sending confidential material.
+
+### Semantic search embeddings
+
+Large-document query mode can use embeddings to find relevant chunks before the
+chat model reads them. This uses the deployment's server key only; gitmatter does
+not build a shared document index with an individual user's personal key.
+
+```bash
+EMBEDDING_PROVIDER=openai      # optional: openai, gemini or voyage
+EMBEDDING_MODEL=text-embedding-3-small
+EMBEDDING_DIMENSIONS=1536
+```
+
+Leave `EMBEDDING_PROVIDER` blank to disable paid embeddings and use keyword chunk
+search. Configuring a provider explicitly enables embeddings for generation and
+background indexing. Read-only document tools, including subscription connector
+reads, always use keyword retrieval without an embedding-provider call.
 
 For the full per-provider privacy detail, see [AI data handling](/admin/ai-data-handling).
 
 ## Local development
 
-Use this path when you are changing gitmatter source code. It requires [Bun](https://bun.sh).
+Use this path when you are changing gitmatter source code. It requires [Vite+](https://viteplus.dev/guide/), which manages the pinned Node.js and pnpm toolchain.
 
-`bun run dev` starts the supporting services (Postgres) in Docker, applies the database schema, then runs the app. Text extraction from uploaded documents runs in-process — there is no separate extraction service:
+`vp run dev` starts the supporting services (Postgres) in Docker, applies the database schema, then runs the app. Text extraction from uploaded documents runs in-process — there is no separate extraction service:
 
 ```bash
-bun install
-bun run dev   # deps in Docker + web on http://localhost:4280
+vp install
+vp run dev   # deps in Docker + web on http://localhost:4280
 ```
 
 Useful flags:
@@ -165,6 +182,6 @@ To do the same steps by hand (equivalent to `--skip-deps --skip-migrate`):
 
 ```bash
 docker compose up -d postgres     # Postgres with pgvector
-cd packages/db && bun run migrate  # apply schema
-turbo run dev                      # web on http://localhost:4280
+vp run @workspace/db#migrate  # apply schema
+vp run web#dev                      # web on http://localhost:4280
 ```

@@ -1,76 +1,23 @@
 import { config as loadEnv } from "dotenv";
-import { defineConfig } from "vite-plus";
+import { defineConfig, searchForWorkspaceRoot } from "vite-plus";
+import { fileURLToPath } from "node:url";
 import { devtools } from "@tanstack/devtools-vite";
 import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 import viteReact, { reactCompilerPreset } from "@vitejs/plugin-react";
 import babel from "@rolldown/plugin-babel";
 import tailwindcss from "@tailwindcss/vite";
-import mdx from "@mdx-js/rollup";
-import remarkGfm from "remark-gfm";
 
 // Load monorepo-root .env into process.env so server handlers (db, auth) see it.
 loadEnv({ path: "../../.env" });
 
-// Avoid 3000 (the default every other dev app grabs). Configurable via PORT;
-// strictPort is off so a busy port falls through to the next free one.
+// Avoid 3000 (the default every other dev app grabs). Configurable via PORT.
+// Reject a duplicate start rather than silently launching another instance.
 const port = Number(process.env.PORT) || 4280;
 
-// DEPLOYMENT=cloud ships the public marketing landing at "/"; anything else
-// (local/self-host) drops it and "/" redirects to login. Exposed as a build
-// constant so the cloud-only marketing chunk tree-shakes out of local builds.
+// Cloud builds prerender only session-free access and legal pages. Protected
+// routes resolve each visitor's session at request time.
 const deployment = process.env.DEPLOYMENT === "cloud" ? "cloud" : "local";
-
-// Public, session-free pages safe to render to static HTML at build time (then
-// served from the edge / CF cache). Cloud only: in a local build the marketing
-// chunk is tree-shaken out and these paths redirect to /login, so there is
-// nothing to prerender. Everything under _auth/* is per-session and must NOT be
-// listed here.
-const PUBLIC_PRERENDER_PATHS = [
-  "/", // marketing home
-  "/about",
-  "/privacy",
-  "/security",
-  "/terms",
-  "/login",
-  "/signup",
-  "/legal-ai",
-  "/legal-ai-audit-trail",
-  "/self-hosted-legal-ai",
-  // Platform + solutions indexes and one path per catalog entry (slugs come
-  // from src/marketing/catalog.ts). Keep in sync with public/sitemap.xml.
-  "/platform",
-  "/platform/assistant",
-  "/platform/tabular-review",
-  "/platform/redline-and-drafting",
-  "/platform/workflows",
-  "/platform/clause-library-and-playbooks",
-  "/platform/audit-trail",
-  "/platform/bring-your-own-agent",
-  "/solutions",
-  "/solutions/contract-redline",
-  "/solutions/data-extraction",
-  "/solutions/drafting",
-  "/solutions/audit-trail",
-  "/solutions/bring-your-own-agent",
-  "/solutions/bring-your-own-key",
-  // Resources hub + one watch page per video (slugs from
-  // src/marketing/resourceCatalog.ts VIDEOS).
-  "/resources",
-  "/resources/platform-overview",
-  "/resources/product-tour",
-  "/resources/install",
-  "/resources/who-changed-this-clause",
-  "/resources/agent-at-work",
-  "/resources/ai-first-pass-redline",
-  "/resources/where-your-key-goes",
-  // Blog index + one path per post (slug = filename in src/marketing/blog/posts).
-  // Keep in sync when adding a post, along with public/sitemap.xml.
-  "/blog",
-  "/blog/ai-audit-trail-legal-work",
-  "/blog/chatgpt-claude-legal-work-audit-trail",
-  "/blog/contract-redlining-best-practices-ai-first-pass",
-  "/blog/byok-zero-data-retention-legal-ai",
-];
+const PUBLIC_PRERENDER_PATHS = ["/privacy", "/terms", "/login", "/signup"];
 
 // Lock prerender to the explicit whitelist: discovery and link-crawling are off
 // so the prerenderer can never wander into the authenticated app shell (which
@@ -94,8 +41,18 @@ const prerenderOptions =
     : undefined;
 
 const config = defineConfig({
+  run: {
+    tasks: {
+      build: {
+        command: "vp build",
+        env: ["DEPLOYMENT", "TURNSTILE_SITE_KEY", "NODE_ENV"],
+        untrackedEnv: ["DATABASE_URL", "BETTER_AUTH_SECRET", "ENCRYPTION_KEY"],
+        input: [{ auto: true }, "!dist/**", "!.tanstack/**"],
+        output: ["dist/**"],
+      },
+    },
+  },
   define: {
-    "import.meta.env.VITE_DEPLOYMENT": JSON.stringify(deployment),
     // Public Turnstile site key, baked in as a build constant (safe to expose).
     // Empty when unset, which disables the widget client-side.
     "import.meta.env.VITE_TURNSTILE_SITE_KEY": JSON.stringify(process.env.TURNSTILE_SITE_KEY ?? ""),
@@ -105,18 +62,29 @@ const config = defineConfig({
   // with ANALYZE=1 vp build. Experimental; needs @vitejs/devtools.
   devtools: !!process.env.ANALYZE,
   resolve: { tsconfigPaths: true },
-  server: { port, strictPort: false },
+  server: {
+    port,
+    strictPort: true,
+    // TanStack devtools already forwards console output. A second relay can
+    // echo browser/server errors back into itself during HMR.
+    forwardConsole: false,
+    fs: {
+      allow: [
+        searchForWorkspaceRoot(process.cwd()),
+        // pnpm can keep Fontsource assets in its global virtual store. Allow
+        // only the two font package directories, never the whole store.
+        ...["inter", "newsreader"].map((font) =>
+          fileURLToPath(
+            new URL(".", import.meta.resolve(`@fontsource-variable/${font}/package.json`))
+          )
+        ),
+      ],
+    },
+  },
   // allowedHosts: the prod/staging containers serve via `vp preview` behind
   // Traefik, which already routes by host — so accept whatever host it forwards.
-  preview: { port, strictPort: false, allowedHosts: true },
+  preview: { port, strictPort: true, allowedHosts: true },
   plugins: [
-    // Blog posts are authored as .mdx and compiled to plain React at build time.
-    // Must run before the react/babel plugins so they only ever see compiled JS.
-    // Post metadata lives in src/marketing/blog/posts.ts, not in frontmatter.
-    {
-      enforce: "pre" as const,
-      ...mdx({ remarkPlugins: [remarkGfm] }),
-    },
     devtools(),
     tailwindcss(),
     tanstackStart(prerenderOptions),

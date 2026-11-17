@@ -6,12 +6,13 @@ import type {
   ReasoningEffort,
   StreamHandlers,
 } from "./types.js";
+import { withProviderSpend, type ProviderCallContext } from "./spend.js";
 
-// Optional hard timeout (ms) for LLM SDK calls. Unset by default so long
-// streaming generations are never cut off; set LLM_TIMEOUT_MS to enforce one.
+// Every admitted provider call has a finite timeout. Ambiguous timeouts retain
+// the spend reservation; SDK retries are disabled by the shared admission path.
 export function llmTimeoutMs(): number | undefined {
   const v = Number(getEnv("LLM_TIMEOUT_MS"));
-  return Number.isFinite(v) && v > 0 ? v : undefined;
+  return Number.isFinite(v) && v > 0 ? Math.min(v, 600_000) : 120_000;
 }
 
 // Per-effort token allowance reserved for reasoning, on top of the answer budget.
@@ -48,10 +49,13 @@ export function tryJson(s: string): unknown {
 export async function streamComplete(
   client: LlmClient,
   req: CompleteRequest,
-  handlers: StreamHandlers
+  handlers: StreamHandlers,
+  context?: ProviderCallContext
 ): Promise<CompleteResult> {
-  if (client.stream) return client.stream(req, handlers);
-  const res = await client.complete(req);
-  if (res.text) handlers.onText?.(res.text);
-  return res;
+  return withProviderSpend(context, req, async (protectedRequest) => {
+    if (client.stream) return client.stream(protectedRequest, handlers);
+    const res = await client.complete(protectedRequest);
+    if (res.text) handlers.onText?.(res.text);
+    return res;
+  });
 }

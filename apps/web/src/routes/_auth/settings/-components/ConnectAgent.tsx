@@ -1,3 +1,5 @@
+import { captureActionOrigin, notifySuccess } from "@/lib/feedback";
+import { FormFeedback } from "@/components/FormFeedback";
 import { useState } from "react";
 import { SUBSCRIPTION_WORKFLOW } from "@workspace/registry";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -15,16 +17,19 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { api, type MatterRole } from "@/lib/data/api";
+import { useSettingsDraft } from "./SettingsDrafts";
+import { SettingsQueryNotice, settingsSnapshotVisible } from "./SettingsQueryNotice";
 
 const CONNECT_TABS = ["ChatGPT", "Claude", "Claude Code", "Codex"] as const;
 type ConnectTab = (typeof CONNECT_TABS)[number];
 
 export function ConnectAgent() {
   const qc = useQueryClient();
-  const { data: tokens = [] } = useQuery({
+  const tokensQuery = useQuery({
     queryKey: ["tokens"],
     queryFn: () => api.listTokens(),
   });
+  const tokens = settingsSnapshotVisible(tokensQuery) ? (tokensQuery.data ?? []) : [];
   const [label, setLabel] = useState("");
   const [fresh, setFresh] = useState<string | null>(null);
   const [tab, setTab] = useState<ConnectTab>("Claude");
@@ -56,13 +61,21 @@ export function ConnectAgent() {
     mutationFn: (id: string) => api.revokeToken(id),
     onSuccess: () => invalidate(),
   });
+  useSettingsDraft(
+    Boolean(label || maxRole || matterIds.length),
+    mintMutation.isPending || revokeMutation.isPending
+  );
 
   return (
-    <Card>
+    <Card variant="section">
       <CardHeader>
         <CardTitle>Connect an agent</CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
+        <FormFeedback
+          error={mintMutation.error || revokeMutation.error}
+          title="Agent access change failed"
+        />
         <p className="text-sm text-muted-foreground">{SUBSCRIPTION_WORKFLOW}</p>
 
         <AgentClientTabs tab={tab} onChange={setTab} />
@@ -73,8 +86,9 @@ export function ConnectAgent() {
           className="self-start"
           onClick={async () => {
             try {
+              const actionOrigin = captureActionOrigin();
               await navigator.clipboard.writeText(mcpUrl);
-              toast.success("Connection address copied.");
+              notifySuccess("Connection address copied.", actionOrigin);
             } catch {
               toast.error("Couldn't copy. Select the address above and copy it manually.");
             }
@@ -99,11 +113,12 @@ export function ConnectAgent() {
           <summary className="cursor-pointer text-sm text-muted-foreground">
             Advanced access and existing connections
           </summary>
+          <SettingsQueryNotice query={tokensQuery} label="Agent connections" />
           <TokenMintForm
             label={label}
             fresh={fresh}
             tokens={tokens}
-            pending={mintMutation.isPending}
+            pending={mintMutation.isPending || revokeMutation.isPending || !tokensQuery.isSuccess}
             maxRole={maxRole}
             matterIds={matterIds}
             onLabelChange={setLabel}
@@ -232,6 +247,7 @@ function TokenMintForm({
           <Label htmlFor="label">New token label</Label>
           <Input
             id="label"
+            disabled={pending}
             placeholder="claude-desktop"
             value={label}
             onChange={(e) => onLabelChange(e.target.value)}
@@ -240,6 +256,7 @@ function TokenMintForm({
         <div className="flex flex-col gap-1.5">
           <Label>Access</Label>
           <Select
+            disabled={pending}
             value={maxRole ?? "full"}
             onValueChange={(v) => onMaxRoleChange(v === "full" ? null : (v as MatterRole))}
           >
@@ -265,12 +282,11 @@ function TokenMintForm({
             {matters.map(({ matter }) => (
               <label key={matter.id} className="flex items-center gap-2 text-sm">
                 <Checkbox
+                  disabled={pending}
                   checked={matterIds.includes(matter.id)}
-                  onChange={(e) =>
+                  onCheckedChange={(e) =>
                     onMatterIdsChange(
-                      e.target.checked
-                        ? [...matterIds, matter.id]
-                        : matterIds.filter((id) => id !== matter.id)
+                      e ? [...matterIds, matter.id] : matterIds.filter((id) => id !== matter.id)
                     )
                   }
                 />

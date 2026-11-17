@@ -6,6 +6,7 @@ import type {
   CompleteRequest,
   CompleteResult,
   LlmClient,
+  UsageInfo,
   StreamHandlers,
 } from "../types.js";
 
@@ -72,7 +73,10 @@ export class OpenRouterClient implements LlmClient {
   }
 
   async complete(req: CompleteRequest): Promise<CompleteResult> {
-    const client = new OpenRouter({ apiKey: this.apiKey });
+    const client = new OpenRouter({
+      apiKey: this.apiKey,
+      ...(req.maxRetries === 0 ? { retryConfig: { strategy: "none" as const } } : {}),
+    });
     const res = await client.chat.send(
       { chatRequest: { stream: false, ...this.chatRequest(req) } },
       llmTimeoutMs() ? { timeoutMs: llmTimeoutMs() } : undefined
@@ -87,12 +91,15 @@ export class OpenRouterClient implements LlmClient {
       text: typeof choice?.message.content === "string" ? choice.message.content : "",
       toolCalls,
       stop: choice?.finishReason === "tool_calls" ? "tool_use" : "end",
-      usage: openrouterUsage(res.usage),
+      usage: openrouterUsage(res.usage, req),
     };
   }
 
   async stream(req: CompleteRequest, handlers: StreamHandlers): Promise<CompleteResult> {
-    const client = new OpenRouter({ apiKey: this.apiKey });
+    const client = new OpenRouter({
+      apiKey: this.apiKey,
+      ...(req.maxRetries === 0 ? { retryConfig: { strategy: "none" as const } } : {}),
+    });
     const events = await client.chat.send(
       { chatRequest: { stream: true, ...this.chatRequest(req) } },
       llmTimeoutMs() ? { timeoutMs: llmTimeoutMs() } : undefined
@@ -100,7 +107,7 @@ export class OpenRouterClient implements LlmClient {
 
     let text = "";
     let finishReason: string | null = null;
-    let usage: { inputTokens: number; outputTokens: number } | undefined;
+    let usage: UsageInfo | undefined;
     // Tool-call fragments arrive split across chunks; merge by their position index.
     const acc = new Map<number, { id?: string; name?: string; args: string }>();
 
@@ -121,7 +128,7 @@ export class OpenRouterClient implements LlmClient {
         acc.set(idx, cur);
       }
       if (choice?.finishReason) finishReason = choice.finishReason;
-      if (chunk.usage) usage = openrouterUsage(chunk.usage); // last chunk carries usage
+      if (chunk.usage) usage = openrouterUsage(chunk.usage, req); // last chunk carries usage
     }
 
     const toolCalls = [...acc.values()]
@@ -137,11 +144,22 @@ export class OpenRouterClient implements LlmClient {
 }
 
 // OpenRouter usage comes back snake- or camel-cased depending on path; read both.
-function openrouterUsage(u: unknown): { inputTokens: number; outputTokens: number } | undefined {
+function openrouterUsage(u: unknown, req: CompleteRequest): UsageInfo | undefined {
   if (!u || typeof u !== "object") return undefined;
   const o = u as Record<string, number | undefined>;
   const input = o.promptTokens ?? o.prompt_tokens;
   const output = o.completionTokens ?? o.completion_tokens;
+  const cached = o.cachedTokens ?? o.cached_tokens;
+  const cacheWrite = o.cacheWriteTokens ?? o.cache_write_tokens ?? o.cache_creation_input_tokens;
+  const cacheRead = o.cacheReadTokens ?? o.cache_read_tokens ?? o.cache_read_input_tokens;
   if (input === undefined && output === undefined) return undefined;
-  return { inputTokens: input ?? 0, outputTokens: output ?? 0 };
+  return {
+    inputTokens: input ?? 0,
+    outputTokens: output ?? 0,
+    cachedInputTokens: cached ?? cacheRead,
+    cacheWriteTokens: cacheWrite,
+    cacheReadTokens: cacheRead,
+    cacheMode: req.cache ? "gateway" : undefined,
+    cacheKey: req.cacheKey,
+  };
 }

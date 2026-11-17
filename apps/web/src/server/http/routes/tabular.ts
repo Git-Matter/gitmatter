@@ -1,3 +1,13 @@
+import {
+  getReviewCompletion,
+  setFindingDisposition,
+  proposeFindingRedline,
+  findingDispositionSchema,
+  findingRedlineSchema,
+  captureReviewReport,
+  renderReviewReportMarkdown,
+} from "@workspace/core";
+import { recordFunnel } from "@workspace/core";
 import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import { zValidator } from "@hono/zod-validator";
@@ -163,8 +173,9 @@ tabularRoute.post(
       try {
         await runReviewStreaming(
           { type: "user", userId: user.id },
-          { reviewId, model: body.model },
+          { reviewId, model: body.model, requestId: body.requestId },
           {
+            shouldStop: () => stream.aborted,
             onCellStart: (documentId, columnIndex) =>
               void stream.writeSSE({
                 event: "cell-start",
@@ -276,3 +287,96 @@ tabularRoute.delete("/api/tabular/reviews/:id/shares/:userId", async (c) => {
   await removeArtifactShare("tabular_review", id, c.req.param("userId"));
   return c.body(null, 204);
 });
+
+// Only an authorized cell view may emit this event; the browser sends no legal text.
+tabularRoute.post(
+  "/api/tabular/reviews/:id/findings/:documentId/:columnIndex/opened",
+  async (c) => {
+    const reviewId = c.req.param("id");
+    const result = await access(c.get("user").id, reviewId);
+    if (!result) return c.json({ error: "Not found" }, 404);
+    const documentId = c.req.param("documentId");
+    const columnIndex = Number(c.req.param("columnIndex"));
+    if (
+      !result.cells.some(
+        (cell) =>
+          cell.documentId === documentId &&
+          cell.columnIndex === columnIndex &&
+          cell.status === "done"
+      )
+    )
+      return c.json({ error: "Not found" }, 404);
+    recordFunnel("finding_opened", { actorType: "user", reviewId, documentId, columnIndex });
+    return c.body(null, 204);
+  }
+);
+
+// Contract-review decisions share the same engine as the MCP connector.
+tabularRoute.get("/api/tabular/reviews/:id/completion", async (c) => {
+  if (!(await access(c.get("user").id, c.req.param("id"))))
+    return c.json({ error: "Not found" }, 404);
+  return c.json(
+    await getReviewCompletion({ type: "user", userId: c.get("user").id }, c.req.param("id"))
+  );
+});
+tabularRoute.get("/api/tabular/reviews/:id/report", async (c) => {
+  try {
+    const report = await captureReviewReport(
+      { type: "user", userId: c.get("user").id },
+      c.req.param("id")
+    );
+    if (c.req.query("format") === "json") return c.json(report);
+    const name = report.title.replace(/[^\w.-]+/g, "_") || "review";
+    return new Response(renderReviewReportMarkdown(report), {
+      headers: {
+        "Content-Type": "text/markdown; charset=utf-8",
+        "Content-Disposition": `attachment; filename="${name}-review-report.md"`,
+        "Cache-Control": "private, no-store",
+        "X-Gitmatter-Review-Commit": report.manifest.reviewCommitId ?? "none",
+      },
+    });
+  } catch (error) {
+    if (error instanceof Error && error.message === "access_denied")
+      return c.json({ error: "Not found" }, 404);
+    if (error instanceof Error && error.message === "input_not_ready")
+      return c.json({ error: "Review inputs are not captured yet" }, 409);
+    throw error;
+  }
+});
+tabularRoute.post(
+  "/api/tabular/reviews/:id/disposition",
+  zValidator("json", findingDispositionSchema),
+  async (c) => {
+    if (!(await access(c.get("user").id, c.req.param("id"), "editor")))
+      return c.json({ error: "Not found" }, 404);
+    try {
+      await setFindingDisposition(
+        { type: "user", userId: c.get("user").id },
+        c.req.param("id"),
+        c.req.valid("json")
+      );
+      return c.json({ ok: true });
+    } catch (e) {
+      return c.json({ error: e instanceof Error ? e.message : "Decision failed" }, 409);
+    }
+  }
+);
+tabularRoute.post(
+  "/api/tabular/reviews/:id/redline",
+  zValidator("json", findingRedlineSchema),
+  async (c) => {
+    if (!(await access(c.get("user").id, c.req.param("id"), "editor")))
+      return c.json({ error: "Not found" }, 404);
+    try {
+      return c.json(
+        await proposeFindingRedline(
+          { type: "user", userId: c.get("user").id },
+          c.req.param("id"),
+          c.req.valid("json")
+        )
+      );
+    } catch (e) {
+      return c.json({ error: e instanceof Error ? e.message : "Proposal failed" }, 409);
+    }
+  }
+);

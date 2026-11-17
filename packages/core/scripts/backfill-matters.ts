@@ -1,7 +1,7 @@
 /**
  * One-time backfill: assign every matter-less artifact to its owner's default
  * matter, so matter_id can be flipped NOT NULL. Idempotent — safe to re-run; a
- * fresh deploy has no legacy rows and is a no-op. Run: bun packages/core/scripts/backfill-matters.ts
+ * fresh deploy has no legacy rows and is a no-op. Run: pnpm exec tsx packages/core/scripts/backfill-matters.ts
  */
 import { eq, isNull } from "drizzle-orm";
 import { db, sql } from "@workspace/db/client";

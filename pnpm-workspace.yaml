@@ -1,0 +1,27 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+  - "services/*"
+  - "cli"
+catalog:
+  vite: "npm:@voidzero-dev/vite-plus-core@0.1.24"
+  vitest: "npm:@voidzero-dev/vite-plus-test@0.1.24"
+  "vite-plus": "0.1.24"
+overrides:
+  vite: "catalog:"
+  vitest: "catalog:"
+  "@opentelemetry/api@": "1.9.1"
+  # The Postgres adapter does not use Drizzle's optional runtime types.
+  bun-types: "-"
+allowBuilds:
+  esbuild: true
+  lightningcss: true
+  sharp: true
+  "@google/genai": false
+  "@openrouter/sdk": false
+  protobufjs: false
+  msgpackr-extract: false
+addMissingPeerTypes: true
+
+# Keep Vite+ native bindings and editor peers in the project resolution tree.
+virtualStoreType: project

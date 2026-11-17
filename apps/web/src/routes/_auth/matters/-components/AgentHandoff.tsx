@@ -1,3 +1,4 @@
+import { captureActionOrigin, notifySuccess } from "@/lib/feedback";
 import { useState } from "react";
 import { matterReviewPrompt, SUBSCRIPTION_WORKFLOW } from "@workspace/registry";
 import { toast } from "sonner";
@@ -8,9 +9,10 @@ export function AgentHandoff({ matter }: { matter: { id: string; name: string } 
   const prompt = matterReviewPrompt(matter);
   async function copy() {
     try {
+      const actionOrigin = captureActionOrigin();
       await navigator.clipboard.writeText(prompt);
       setCopied(true);
-      toast.success("Review prompt copied. Paste it into your connected assistant.");
+      notifySuccess("Review prompt copied. Paste it into your connected assistant.", actionOrigin);
     } catch {
       toast.error("Couldn't copy. Select the prompt below and copy it manually.");
     }

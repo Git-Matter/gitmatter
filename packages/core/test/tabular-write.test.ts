@@ -72,11 +72,17 @@ describe("writeCell", () => {
     });
 
     // The commit reports the cell change on the audit spine.
-    expect(result.changes[0]!.path).toBe(`cell/${documentId}/0`);
+    expect(
+      result.changes.find((change) => change.path === `cell/${documentId}/0`)?.after
+    ).toMatchObject({ summary: "Delaware", flag: "green" });
+    expect(
+      result.changes.find((change) => change.path === `cell/${documentId}/0/citations`)?.after
+    ).toEqual([{ quote: "Governing law: Delaware." }]);
 
     const [cell] = await db.select().from(tabularCells).where(eq(tabularCells.reviewId, reviewId));
     expect(cell!.content).toMatchObject({ summary: "Delaware", flag: "green" });
-    expect(cell!.citations).toEqual([{ page: 1, quote: "Governing law: Delaware." }]);
+    // Pasted page markers plus a PDF label do not establish a captured page map.
+    expect(cell!.citations).toEqual([{ quote: "Governing law: Delaware." }]);
     expect(cell!.status).toBe("done");
 
     const commits = await listCommits("tabular_review", reviewId);

@@ -1,8 +1,12 @@
+import { captureActionOrigin, notifySuccess } from "@/lib/feedback";
+import { useWorkspaceViewState } from "@/lib/hooks/state/useWorkspaceViewState";
+import { CollectionPanel, collectionBlocked } from "@/components/CollectionPanel";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import { toast } from "sonner";
+import { Empty, EmptyHeader, EmptyTitle, EmptyDescription } from "@/components/ui/empty";
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/DataTable";
 import { PageHeader } from "@/components/PageHeader";
@@ -37,7 +41,7 @@ function Clients() {
   const { view = "all", client } = Route.useSearch();
   const navigate = useNavigate();
   const [creating, setCreating] = useState(false);
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useWorkspaceViewState("clients:query", "");
   const [selected, setSelected] = useState<Client | null>(null);
   const [peopleFor, setPeopleFor] = useState<ClientListItem | null>(null);
   const { sorting, setSorting, pagination, setPagination, ready } = useTableState("clients", {
@@ -64,12 +68,20 @@ function Clients() {
     setSelectAllMatching(false);
   }, [pageParams.q, pageParams.sort, pageParams.dir, view]);
 
-  const { data, isPending } = useQuery({
+  const listQuery = useQuery({
     queryKey: queryKeys.clientsPage(pageParams),
     queryFn: () => api.listClientsPage(pageParams),
     placeholderData: keepPreviousData,
     enabled: ready,
   });
+  const { data } = listQuery;
+  const inputPending = query.trim() !== pageParams.q;
+  const viewQuery = {
+    ...listQuery,
+    isFetching: listQuery.isFetching || inputPending,
+    isPlaceholderData: listQuery.isPlaceholderData || inputPending,
+  };
+  const blocked = collectionBlocked(viewQuery);
   const clients = data?.rows ?? [];
   const rowCount = data?.rowCount ?? 0;
 
@@ -132,13 +144,15 @@ function Clients() {
   }
 
   const deleteMutation = useMutation({
+    onMutate: () => captureActionOrigin(),
     mutationFn: () => api.bulkDeleteClients(selection),
-    onSuccess: ({ deleted, skipped }) => {
+    onSuccess: ({ deleted, skipped }, _variables, origin) => {
       void qc.invalidateQueries({ queryKey: queryKeys.clients });
-      toast.success(
+      notifySuccess(
         skipped > 0
           ? `Deleted ${deleted}. Skipped ${skipped} with matters.`
-          : `Deleted ${deleted} client${deleted === 1 ? "" : "s"}.`
+          : `Deleted ${deleted} client${deleted === 1 ? "" : "s"}.`,
+        origin
       );
       clearSelection();
       setConfirmDelete(false);
@@ -147,59 +161,71 @@ function Clients() {
   });
 
   return (
-    <div className="-mb-12 flex min-h-0 flex-1 flex-col gap-stack">
+    <div className="flex min-h-0 flex-1 flex-col gap-stack">
       <PageHeader
         title="Clients"
         action={
           <Button
             variant="outline"
-            size="icon-sm"
-            className="rounded-full"
+            size="sm"
             title="New client"
             aria-label="New client"
-            onClick={() => setCreating((v) => !v)}
+            disabled={creating || blocked}
+            onClick={() => setCreating(true)}
           >
-            <Plus className="size-4" />
+            <Plus data-icon="inline-start" />
+            New client
           </Button>
         }
       />
 
-      {creating && <CreateClient onCreated={() => setCreating(false)} />}
+      {creating && (
+        <CreateClient onCreated={() => setCreating(false)} onCancel={() => setCreating(false)} />
+      )}
 
       {showTable && (
-        <>
-          <div className="flex h-10 items-center justify-end border-b border-border">
-            <TableSearch value={query} onChange={setQuery} placeholder="Search clients…" />
-          </div>
-          <ClientSelectionBar
-            table={table}
-            selectedCount={selectedCount}
-            selectAllMatching={selectAllMatching}
-            rowCount={rowCount}
-            pageCount={clients.length}
-            onSelectAllMatching={() => setSelectAllMatching(true)}
-            onClear={clearSelection}
-            onExport={exportCsv}
-            onDelete={() => setConfirmDelete(true)}
-          />
-          <DataTable
-            table={table}
-            onRowClick={(client) => setSelected(client)}
-            empty={`No clients match "${query}".`}
-          />
-          <TablePager table={table} />
-        </>
-      )}
-      {isPending && !showTable && (
-        <div className="flex flex-1 items-center justify-center text-muted-foreground">
-          <Loader2 className="size-6 animate-spin" />
+        <div className="flex h-10 items-center justify-end border-b border-border">
+          <TableSearch value={query} onChange={setQuery} placeholder="Search clients…" />
         </div>
       )}
-      {!isPending && !showTable && (
-        <p className="py-section text-center text-sm text-muted-foreground">
-          No clients yet. Add one to open your first matter.
-        </p>
-      )}
+
+      {
+        <CollectionPanel query={viewQuery} label="Clients">
+          {showTable ? (
+            <>
+              <ClientSelectionBar
+                table={table}
+                selectedCount={selectedCount}
+                selectAllMatching={selectAllMatching}
+                rowCount={rowCount}
+                pageCount={clients.length}
+                onSelectAllMatching={() => setSelectAllMatching(true)}
+                onClear={clearSelection}
+                onExport={exportCsv}
+                onDelete={() => {
+                  deleteMutation.reset();
+                  setConfirmDelete(true);
+                }}
+              />
+              <DataTable
+                rowActionColumn="name"
+                scrollKey={`clients:${JSON.stringify(pageParams)}`}
+                table={table}
+                onRowClick={(client) => setSelected(client)}
+                empty={`No clients match "${query}".`}
+              />
+              <TablePager table={table} />
+            </>
+          ) : (
+            <Empty>
+              <EmptyHeader>
+                <EmptyTitle>No clients yet</EmptyTitle>
+                <EmptyDescription>Add a client to open your first matter.</EmptyDescription>
+              </EmptyHeader>
+            </Empty>
+          )}
+        </CollectionPanel>
+      }
 
       <ClientDialog
         client={selected}
@@ -214,8 +240,9 @@ function Clients() {
         open={confirmDelete}
         selectedCount={selectedCount}
         pending={deleteMutation.isPending}
+        error={deleteMutation.error}
         onOpenChange={setConfirmDelete}
-        onConfirm={() => deleteMutation.mutate()}
+        onConfirm={() => deleteMutation.mutateAsync()}
       />
 
       {peopleFor && (

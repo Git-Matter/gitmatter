@@ -1,9 +1,21 @@
+import { captureActionOrigin, notifySuccess } from "@/lib/feedback";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { FormFeedback } from "@/components/FormFeedback";
+import { CollectionPanel, collectionBlocked } from "@/components/CollectionPanel";
+import { useWorkspaceViewState } from "@/lib/hooks/state/useWorkspaceViewState";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
 import { Library, Plus } from "lucide-react";
 import { api, type WorkflowListItem } from "@/lib/data/api";
+import {
+  Empty,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+  EmptyDescription,
+  EmptyContent,
+} from "@/components/ui/empty";
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/DataTable";
 import { PageHeader } from "@/components/PageHeader";
@@ -31,16 +43,24 @@ function Workflows() {
   const navigate = useNavigate();
   const qc = useQueryClient();
 
-  const [tab, setTab] = useState<WorkflowTab>("all");
-  const [search, setSearch] = useState("");
-  const [practiceFilter, setPracticeFilter] = useState<string | null>(null);
-  const [typeFilter, setTypeFilter] = useState<WorkflowListItem["type"] | null>(null);
+  const [tab, setTab] = useWorkspaceViewState<WorkflowTab>("workflows:tab", "all");
+  const [search, setSearch] = useWorkspaceViewState("workflows:search", "");
+  const [practiceFilter, setPracticeFilter] = useWorkspaceViewState<string | null>(
+    "workflows:practiceFilter",
+    null
+  );
+  const [typeFilter, setTypeFilter] = useWorkspaceViewState<WorkflowListItem["type"] | null>(
+    "workflows:typeFilter",
+    null
+  );
   const { sorting, setSorting, pagination, setPagination, ready } = useTableState("workflows", {
     defaultSorting: [],
   });
   const [rowSelection, setRowSelection] = useState({});
   const [selected, setSelected] = useState<WorkflowListItem | null>(null);
   const [newOpen, setNewOpen] = useState(false);
+  const [removal, setRemoval] = useState<WorkflowListItem[]>([]);
+  const [removeError, setRemoveError] = useState<Error | null>(null);
 
   // Invalidating the "workflows" prefix covers the paged list, the practices
   // dropdown, and the non-paged list the modals use.
@@ -54,10 +74,29 @@ function Workflows() {
     mutationFn: (id: string) => api.unhideWorkflow(id),
     onSuccess: invalidate,
   });
-  const deleteMutation = useMutation({
-    mutationFn: (id: string) => api.deleteWorkflow(id),
-    onSuccess: invalidate,
-    onError: (e) => toast.error(e instanceof Error ? e.message : "Delete failed"),
+  const removeMutation = useMutation({
+    onMutate: () => captureActionOrigin(),
+    mutationFn: async () => {
+      setRemoveError(null);
+      const results = await Promise.allSettled(
+        removal.map((item) =>
+          item.isSystem ? api.hideWorkflow(item.id) : api.deleteWorkflow(item.id)
+        )
+      );
+      return removal.filter((_item, index) => results[index]?.status === "rejected");
+    },
+    onSuccess: (failed, _variables, origin) => {
+      void invalidate();
+      setRowSelection({});
+      setRemoval(failed);
+      if (failed.length)
+        setRemoveError(
+          new Error(
+            `${failed.length} workflow(s) could not be removed. Successful changes are retained; retry affects only the remaining items.`
+          )
+        );
+      else notifySuccess("Selected workflows removed", origin);
+    },
   });
 
   const pageParams = useTablePageParams({
@@ -74,12 +113,20 @@ function Workflows() {
     },
   });
 
-  const { data } = useQuery({
+  const listQuery = useQuery({
     queryKey: queryKeys.workflowsPage(pageParams),
     queryFn: () => api.listWorkflowsPage(pageParams),
     placeholderData: keepPreviousData,
     enabled: ready,
   });
+  const { data } = listQuery;
+  const inputPending = search.trim() !== pageParams.q;
+  const viewQuery = {
+    ...listQuery,
+    isFetching: listQuery.isFetching || inputPending,
+    isPlaceholderData: listQuery.isPlaceholderData || inputPending,
+  };
+  const blocked = collectionBlocked(viewQuery);
   const rows = data?.rows ?? [];
   const rowCount = data?.rowCount ?? 0;
 
@@ -100,9 +147,12 @@ function Workflows() {
         tab,
         onHide: (w) => hideMutation.mutate(w.id),
         onUnhide: (w) => unhideMutation.mutate(w.id),
-        onDelete: (w) => deleteMutation.mutate(w.id),
+        onDelete: (w) => {
+          setRemoveError(null);
+          setRemoval([w]);
+        },
       }),
-    [tab, hideMutation, unhideMutation, deleteMutation]
+    [tab, hideMutation, unhideMutation]
   );
 
   const { table } = useDataTable({
@@ -123,15 +173,9 @@ function Workflows() {
   const selectedRows = () => table.getSelectedRowModel().rows.map((r) => r.original);
   const selectedCount = Object.keys(rowSelection).length;
 
-  async function bulkRemove() {
-    const ws = selectedRows();
-    setRowSelection({});
-    await Promise.all(
-      ws.map((w) =>
-        (w.isSystem ? api.hideWorkflow(w.id) : api.deleteWorkflow(w.id)).catch(() => {})
-      )
-    );
-    void invalidate();
+  function bulkRemove() {
+    setRemoveError(null);
+    setRemoval(selectedRows());
   }
   async function bulkUnhide() {
     const ws = selectedRows();
@@ -145,13 +189,14 @@ function Workflows() {
       <TableSearch value={search} onChange={setSearch} placeholder="Search workflows…" />
       <WorkflowToolbarActions
         selectedCount={selectedCount}
+        actionsDisabled={blocked}
         tab={tab}
         practices={practices}
         typeFilter={typeFilter}
         practiceFilter={practiceFilter}
         onTypeFilterChange={setTypeFilter}
         onPracticeFilterChange={setPracticeFilter}
-        onBulkRemove={() => void bulkRemove()}
+        onBulkRemove={bulkRemove}
         onBulkUnhide={() => void bulkUnhide()}
       />
     </div>
@@ -167,13 +212,14 @@ function Workflows() {
           action={
             <Button
               variant="outline"
-              size="icon-sm"
-              className="rounded-full"
+              size="sm"
+              disabled={blocked}
               title="New workflow"
               aria-label="New workflow"
               onClick={() => setNewOpen(true)}
             >
-              <Plus className="size-4" />
+              <Plus data-icon="inline-start" />
+              New workflow
             </Button>
           }
         />
@@ -181,14 +227,35 @@ function Workflows() {
     >
       <ToolbarTabs tabs={WORKFLOW_TABS} active={tab} onChange={setTab} actions={toolbarActions} />
 
-      <DataTable
-        table={table}
-        onRowClick={setSelected}
-        empty={<EmptyState tab={tab} onNew={() => setNewOpen(true)} />}
+      <CollectionPanel query={viewQuery} label="Workflows">
+        <DataTable
+          rowActionColumn="title"
+          scrollKey={`workflows:${JSON.stringify(pageParams)}`}
+          table={table}
+          onRowClick={setSelected}
+          empty={<EmptyState tab={tab} onNew={() => setNewOpen(true)} />}
+        />
+
+        {rowCount > 0 && <TablePager table={table} />}
+      </CollectionPanel>
+
+      <ConfirmDialog
+        open={removal.length > 0}
+        title={`Remove ${removal.length} workflow(s)?`}
+        description="Built-in workflows will be hidden. Custom workflows will be deleted."
+        confirmLabel="Remove workflows"
+        pending={removeMutation.isPending}
+        onCancel={() => {
+          setRemoval([]);
+          setRemoveError(null);
+        }}
+        onConfirm={() => removeMutation.mutateAsync()}
+        error={removeError}
       />
-
-      {rowCount > 0 && <TablePager table={table} />}
-
+      <FormFeedback
+        error={hideMutation.error || unhideMutation.error}
+        title="Workflow action failed"
+      />
       <DisplayWorkflowModal workflow={selected} onClose={() => setSelected(null)} />
 
       <WorkflowFormModal
@@ -206,33 +273,34 @@ function Workflows() {
 
 function EmptyState({ tab, onNew }: { tab: WorkflowTab; onNew: () => void }) {
   return (
-    <div className="mx-auto flex w-full max-w-xs flex-col items-start py-24">
-      <Library className="mb-4 h-8 w-8 text-muted-foreground/30" />
-      {tab === "custom" ? (
-        <>
-          <p className="font-serif text-2xl">Custom Workflows</p>
-          <p className="mt-1 text-left text-xs text-muted-foreground">
-            Build reusable prompts and tabular review templates tailored to your practice.
-          </p>
-          <Button size="sm" className="mt-4 rounded-full" onClick={onNew}>
-            <Plus className="size-3.5" /> Create New
+    <Empty>
+      <EmptyHeader>
+        <EmptyMedia variant="icon">
+          <Library />
+        </EmptyMedia>
+        <EmptyTitle>
+          {tab === "custom"
+            ? "Custom workflows"
+            : tab === "hidden"
+              ? "Hidden workflows"
+              : "Workflows"}
+        </EmptyTitle>
+        <EmptyDescription>
+          {tab === "custom"
+            ? "Create a reusable workflow for your team's document analysis."
+            : tab === "hidden"
+              ? "Built-in workflows you've hidden appear here. You can unhide them at any time."
+              : "Automate document analysis with reusable prompts and review templates."}
+        </EmptyDescription>
+      </EmptyHeader>
+      {tab === "custom" && (
+        <EmptyContent>
+          <Button size="sm" onClick={onNew}>
+            <Plus data-icon="inline-start" />
+            Create workflow
           </Button>
-        </>
-      ) : tab === "hidden" ? (
-        <>
-          <p className="font-serif text-2xl">Hidden Workflows</p>
-          <p className="mt-1 text-left text-xs text-muted-foreground">
-            Built-in workflows you've hidden appear here. You can unhide them at any time.
-          </p>
-        </>
-      ) : (
-        <>
-          <p className="font-serif text-2xl">Workflows</p>
-          <p className="mt-1 text-left text-xs text-muted-foreground">
-            Automate document analysis with reusable prompts and tabular review templates.
-          </p>
-        </>
+        </EmptyContent>
       )}
-    </div>
+    </Empty>
   );
 }

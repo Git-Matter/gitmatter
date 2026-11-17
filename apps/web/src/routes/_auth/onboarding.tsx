@@ -40,7 +40,7 @@ function Onboarding() {
     setError(null);
     try {
       await api.setTenantStorageRegion(selected);
-      window.location.href = "/assistant";
+      window.location.href = "/first-review";
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save your data region");
       setBusy(false);
@@ -89,7 +89,7 @@ function Onboarding() {
       </p>
       {error && <p className="text-sm text-destructive">{error}</p>}
       <Button onClick={continueToApp} disabled={!selected || busy} className="self-start">
-        {busy ? "Saving…" : "Continue"}
+        {busy ? "Saving…" : "Continue to first review"}
       </Button>
     </div>
   );

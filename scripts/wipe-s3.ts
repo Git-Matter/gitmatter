@@ -1,4 +1,4 @@
-#!/usr/bin/env bun
+#!/usr/bin/env node
 // One-off: delete EVERY object in S3_BUCKET. Irreversible. Reads S3_* from .env.
 import {
   S3Client,

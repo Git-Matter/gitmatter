@@ -143,6 +143,20 @@ the shared Drizzle ORM dependency to `0.45.2`, added the 1.7 two-factor lockout 
 1.7.0-1.7.2 `issuer` column. A fresh local account then completed TOTP enrollment, TOTP login, and
 backup-code recovery on Better Auth 1.7.5.
 
+## Sign-off review (2026-10-11)
+
+Source and repository checks were repeated on the current branch. Fixed an open redirect in the
+post-login `next` handling: login, email verification, and MFA now share `safeLoginNext`, rejecting
+protocol-relative destinations, backslashes, and control/whitespace characters. The regression test
+preserves legitimate matter/OAuth return paths. Migration generation reports no schema drift.
+The current MFA page renders both authenticator and backup-code states with empty submit disabled.
+
+The 2026-09-21 enrollment/login/recovery/disable/audit evidence above remains historical runtime
+proof; fresh enrollment and recovery were not repeated in this review. The repository requires the
+`aws-secrets-manager` skill before credential work, and that skill is unavailable in this session.
+No deployment, production acceptance, or marketing availability claim was made. Keep the status
+Runtime-verified (local historical proof), with fresh authenticated and production sign-off pending.
+
 ## Open questions
 
 - Enforcement: opt-in only for v1, or let tenant admins require 2FA for their members? (Leave the

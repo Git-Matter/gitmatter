@@ -5,6 +5,7 @@ import {
   Copy,
   FileText,
   Lightbulb,
+  ListChecks,
   type LucideIcon,
   Pencil,
   Search,
@@ -20,7 +21,6 @@ import {
 import { ToolInput, ToolOutput } from "@/components/ai-elements/tool";
 import { SourceList } from "@/components/ai-elements/source-card";
 import { Badge } from "@/components/ui/badge";
-import { Shimmer } from "@/components/ai-elements/shimmer";
 import { type SourceCard } from "@/lib/data/api";
 import { useActivityPanel } from "./activity-context";
 import { type Step } from "./useChatSession";
@@ -226,7 +226,7 @@ function StepDetail({
 }
 
 /** The full activity timeline — every step with its detail. Rendered inside the
- *  pushing ActivityPanel. */
+ *  responsive ActivityPanel. */
 export function ActivityTimeline({
   steps,
   onOpenSource,
@@ -279,7 +279,7 @@ export function ActivityTimeline({
 
 /**
  * Inline, the assistant's work collapses to one quiet "Thought for Ns" pill.
- * Clicking it opens the right-side activity panel (which pushes the chat aside)
+ * Clicking it opens the responsive activity panel
  * holding the whole timeline — reasoning text, tool params/results, and
  * Perplexity-style source cards.
  */
@@ -304,12 +304,14 @@ export function StepsTimeline({
         onClick={() => panel?.open(steps, onOpenSource)}
         className="flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
       >
-        <Lightbulb className="size-4" />
-        {running ? (
-          <Shimmer duration={1}>Thinking…</Shimmer>
-        ) : (
-          <span>Thought for {duration === null ? "a moment" : formatDuration(duration)}</span>
-        )}
+        <ListChecks className="size-4" />
+        <span>
+          {running
+            ? "Activity in progress"
+            : duration === null
+              ? "Recorded activity"
+              : `Recorded activity · ${formatDuration(duration)}`}
+        </span>
         <ChevronRight className="size-3.5" />
       </button>
       <button

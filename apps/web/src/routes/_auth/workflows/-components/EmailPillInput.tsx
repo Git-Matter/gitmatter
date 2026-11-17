@@ -1,3 +1,4 @@
+import { Input } from "@/components/ui/input";
 import { useState } from "react";
 import { X } from "lucide-react";
 import { cn } from "@/lib/util/utils";
@@ -38,7 +39,7 @@ export function EmailPillInput(props: WorkflowEmailInputProps) {
         {emails.map((email) => (
           <EmailPill key={email} email={email} onRemove={input.removeEmail} />
         ))}
-        <input
+        <Input
           type="email"
           value={input.value}
           onChange={(event) => input.setValue(event.target.value)}

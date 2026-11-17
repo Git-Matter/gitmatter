@@ -13,22 +13,32 @@ import {
   purgeOldChats,
   recordAudit,
   seedBuiltinWorkflows,
+  setFunnelSink,
+  startExtractionWorker,
+  startEmbeddingWorker,
 } from "@workspace/core";
 import { resolveJurisdiction } from "@workspace/registry";
 import { chatRoute } from "./routes/chat.js";
+import { approvalRoute } from "./routes/approval.js";
+import { jobsRoute } from "./routes/jobs.js";
+import { searchRoute } from "./routes/search.js";
+import { firstReviewRoute } from "./routes/first-review.js";
+import { templatesRoute } from "./routes/templates.js";
 import { clausesRoute } from "./routes/clauses.js";
 import { documentsRoute } from "./routes/documents.js";
+import { documentReviewRoute } from "./routes/document-review.js";
+import { practiceProfileRoute } from "./routes/practice-profile.js";
+import { guidedRoute } from "./routes/guided.js";
 import { keysRoute } from "./routes/keys.js";
 import { mattersRoute } from "./routes/matters.js";
 import { oauthRoute } from "./routes/oauth.js";
-import { ogRoute } from "./routes/og.js";
 import { tabularRoute } from "./routes/tabular.js";
 import { tenantsRoute } from "./routes/tenants.js";
 import { tokensRoute } from "./routes/tokens.js";
 import { workflowRoute } from "./routes/workflow.js";
 import { authenticateMcp } from "../mcp/auth.js";
 import { buildMcpServer } from "../mcp/server.js";
-import { checkReadiness } from "./lib/health.js";
+import { readinessResponse } from "./lib/health.js";
 import { serverOrigin } from "./lib/origin.js";
 import { clientMeta } from "./lib/request-meta.js";
 import { type AuthEnv, requireUser } from "./middleware/auth.js";
@@ -40,6 +50,16 @@ import { posthog } from "../posthog.js";
 // Initialize error tracking first, so anything thrown during boot is captured.
 // No-op when SENTRY_DSN is unset.
 initSentry();
+setFunnelSink((event, properties) => {
+  // An opaque matter/document/review id groups the journey without user identity.
+  const distinctId = properties.matterId ?? properties.reviewId ?? properties.documentId;
+  if (!distinctId || !getEnv("POSTHOG_API_KEY")) return;
+  posthog.capture({
+    distinctId,
+    event,
+    properties: { ...properties, $process_person_profile: false, $geoip_disable: true },
+  });
+});
 
 // Probe which AI providers have a server env key at boot, so the model catalog
 // can mark unavailable ones. Logs the result for ops visibility.
@@ -53,6 +73,7 @@ initSentry();
 
 // Seed system workflows once on boot (idempotent).
 void seedBuiltinWorkflows().catch(() => {});
+startExtractionWorker();
 
 // Retention sweeps. No scheduler here, so boot is the periodic sweep: hard-delete
 // documents past their soft-delete window, dead auth/MCP tokens, old audit events,
@@ -69,6 +90,15 @@ if (!g[SWEPT]) {
   void purgeExpiredTokens().catch(() => {});
   void purgeOldAuditEvents().catch(() => {});
   void purgeOldChats().catch(() => {});
+}
+
+// Start the background embedding worker once per process. No-op when REDIS_URL is
+// unset (embedding then happens lazily on first query). Guarded like the sweeps
+// above so a dev HMR reload doesn't spawn duplicate workers.
+const EMBED_WORKER = Symbol.for("gitmatter.embedWorkerStarted");
+if (!g[EMBED_WORKER]) {
+  g[EMBED_WORKER] = true;
+  startEmbeddingWorker();
 }
 
 // All server endpoints live under /api and are dispatched here from the
@@ -106,10 +136,7 @@ app.get("/api/health", (c) => c.json({ ok: true }));
 
 // Readiness: can we actually serve? (DB required → 503 on failure.) See
 // lib/health.ts.
-app.get("/api/health/ready", async (c) => {
-  const report = await checkReadiness();
-  return c.json(report, report.ok ? 200 : 503);
-});
+app.get("/api/health/ready", () => readinessResponse(getEnv("SENTRY_RELEASE")));
 
 app.get("/api/config/signup", (c) => {
   return c.json({ open: getEnv("ALLOW_SIGNUPS") !== "false" });
@@ -177,17 +204,6 @@ app.use(
     key: tokenOrIpKey,
   })
 );
-// Public OG image renderer is CPU-heavy (font + raster), so cap per-IP bursts.
-app.use(
-  "/api/og",
-  rateLimit({
-    name: "og",
-    limit: getEnvNumber("OG_RATE_LIMIT", 60),
-    windowMs: 60_000,
-    key: ipKey,
-  })
-);
-
 // better-auth owns /api/auth/* (sign-up, sign-in, session, etc.). We wrap it to
 // record security events that need the final HTTP outcome: failed sign-in,
 // sign-out, and two-factor lifecycle events. Ordinary login is captured by the
@@ -281,24 +297,30 @@ app.use("/api/*", (c, next) => {
     p === "/api/config/signup" ||
     p.startsWith("/api/auth/") ||
     p === "/api/mcp" ||
-    p === "/api/og" ||
     p.startsWith("/api/oauth/")
   )
     return next();
   return requireUser(c, next);
 });
 
-app.route("/", ogRoute);
 app.route("/", keysRoute);
 app.route("/", mattersRoute);
 app.route("/", tenantsRoute);
 app.route("/", oauthRoute);
 app.route("/", documentsRoute);
+app.route("/", documentReviewRoute);
+app.route("/", practiceProfileRoute);
+app.route("/", guidedRoute);
 app.route("/", tabularRoute);
 app.route("/", workflowRoute);
 app.route("/", chatRoute);
 app.route("/", tokensRoute);
 app.route("/", clausesRoute);
+app.route("/", templatesRoute);
+app.route("/", approvalRoute);
+app.route("/", jobsRoute);
+app.route("/", searchRoute);
+app.route("/", firstReviewRoute);
 
 // Exposed MCP server for Claude Desktop / CLI / Cowork. Authenticated by a
 // gitmatter access token; a fresh stateless server/transport per request.

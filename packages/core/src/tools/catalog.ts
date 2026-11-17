@@ -1,12 +1,16 @@
 import { type ProviderId, providersFor } from "@workspace/registry";
 import { type Actor, getUserTenant, hasMatterAccess, logEvent } from "../core/index.js";
 import { ensureDefaultMatter } from "../platform/index.js";
+import { buildApprovalTools } from "./approval.js";
 import { buildAuditTools } from "./audit.js";
+import { buildContractReviewTools } from "./contract-review.js";
+import { buildTemplateTools } from "./templates.js";
 import { buildClauseTools } from "./clauses.js";
 import { buildDiscoveryTools } from "./discovery.js";
 import { buildDocumentTools } from "./documents.js";
+import { buildJobTools } from "./jobs.js";
 import { buildMatterTools } from "./matters.js";
-import { buildResearchTools } from "./research.js";
+import { buildResearchTools } from "./research/index.js";
 import { buildReviewTools } from "./reviews.js";
 import type { ToolContext, ToolSpec } from "./types.js";
 import { buildWorkflowTools } from "./workflows.js";
@@ -36,7 +40,12 @@ export function summarizeToolInput(tool: string, input: Record<string, unknown>)
         matterProvided: typeof input.matterId === "string",
       };
     case "get_document":
-      return { documentId: input.documentId };
+      return {
+        documentId: input.documentId,
+        mode: input.mode,
+        hasQuery: typeof input.query === "string" && input.query.length > 0,
+        chunkCount: arrayCount(input.chunkRefs),
+      };
     case "propose_document_edit":
       return {
         documentId: input.documentId,
@@ -177,8 +186,11 @@ export function buildToolCatalog(
   opts: {
     jurisdiction: string;
     defaultMatterLabel: string;
+    /** Fixed, server-authorized conversation context for newly created artifacts. */
+    matterId?: string;
     sourceIds?: ProviderId[];
     executionMode?: "subscription";
+    credentialId?: string;
   }
 ): ToolSpec[] {
   const allowedSourceIds = opts.sourceIds ? new Set(opts.sourceIds) : null;
@@ -192,8 +204,10 @@ export function buildToolCatalog(
   // matterId, or the acting user's default matter. Returns null when forbidden.
   const scope = actor.type === "agent" ? (actor.scope ?? null) : null;
   const resolveMatter = async (matterId?: string): Promise<string | null> => {
-    if (matterId) {
-      return (await hasMatterAccess(actor, matterId, "editor")) ? matterId : null;
+    if (opts.matterId && matterId && opts.matterId !== matterId) return null;
+    const targetMatterId = opts.matterId ?? matterId;
+    if (targetMatterId) {
+      return (await hasMatterAccess(actor, targetMatterId, "editor")) ? targetMatterId : null;
     }
     // A scoped token gets no implicit default matter: a matter-restricted token
     // must name one of its matters, and a viewer-capped token cannot create.
@@ -204,16 +218,25 @@ export function buildToolCatalog(
     return ensureDefaultMatter(actor.userId, opts.defaultMatterLabel, tenantId);
   };
 
-  const ctx: ToolContext = { actor, resolveMatter };
+  const ctx: ToolContext = {
+    actor,
+    resolveMatter,
+    credentialId: opts.credentialId,
+    executionMode: opts.executionMode,
+  };
 
   return [
     ...buildReviewTools(ctx),
+    ...buildContractReviewTools(ctx),
     ...buildAuditTools(ctx),
+    ...buildApprovalTools(ctx),
     ...buildMatterTools(ctx),
     ...buildDocumentTools(ctx),
+    ...buildJobTools(ctx),
     ...buildDiscoveryTools(ctx),
     ...buildWorkflowTools(ctx),
     ...buildClauseTools(ctx),
+    ...buildTemplateTools(ctx),
     ...buildResearchTools(ctx, providerIds),
   ]
     .filter((t) => !(actor.type === "agent" && t.humanOnly))

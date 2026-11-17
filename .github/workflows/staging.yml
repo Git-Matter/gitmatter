@@ -25,13 +25,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Bun
-        uses: oven-sh/setup-bun@v2
+      - name: Set up Vite+
+        uses: voidzero-dev/setup-vp@v1
         with:
-          bun-version: 1.3.14
+          version: 0.3.2
+          node-version-file: .node-version
+          cache: true
+          run-install: false
 
       - name: Install
-        run: bun install --frozen-lockfile
+        run: vp install --frozen-lockfile
 
       # Build the web app into apps/web/dist here (not in the Docker build): the
       # cloud prerender boots the SSR server and crawls it, which needs a real
@@ -51,7 +54,7 @@ jobs:
           # browser), so it lives in the workflow, not a secret. The matching
           # TURNSTILE_SECRET_KEY is set as runtime env on the dokploy app.
           TURNSTILE_SITE_KEY: "0x4AAAAAADoWezFOHdsCDIF-"
-        run: cd apps/web && bun run build
+        run: vp run web#build
 
       - name: Log in to GHCR
         uses: docker/login-action@v3
@@ -135,6 +138,14 @@ jobs:
           # its self-signed origin certificate on the direct Tailnet address.
           curl --insecure --resolve "$DOKPLOY_HOST:443:$DOKPLOY_TAILNET_IP" --connect-timeout 10 --retry 2 --retry-delay 5 -fsSL -X POST -H "Content-Type: application/json" -H "x-github-event: push" -d "$PAYLOAD" "$WEBHOOK"
 
+      # A successful webhook only accepts work. Require the new web process and
+      # a healthy DB before this job succeeds; docs is deployed independently.
+      - name: Verify staging web runtime
+        timeout-minutes: 6
+        env:
+          EXPECTED_RELEASE: ${{ github.sha }}
+        run: vp exec tsx scripts/verify-web-deployment.ts https://staging.gitmatter.com/api/health/ready "$EXPECTED_RELEASE"
+
   # Docs is a standalone Next.js app served under /docs. It builds and ships
   # independently of the web image: next build on the runner produces a
   # self-contained standalone bundle, packaged by Dockerfile.docs (context is the
@@ -146,18 +157,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Bun
-        uses: oven-sh/setup-bun@v2
+      - name: Set up Vite+
+        uses: voidzero-dev/setup-vp@v1
         with:
-          bun-version: 1.3.14
+          version: 0.3.2
+          node-version-file: .node-version
+          cache: true
+          run-install: false
 
       - name: Install
-        run: bun install --frozen-lockfile
+        run: vp install --frozen-lockfile
 
       # next build → standalone server output; postbuild copies .next/static and
       # the repo-root docs/ content into the standalone bundle.
       - name: Build docs
-        run: cd apps/docs && bun run build
+        run: vp run docs#build
 
       - name: Log in to GHCR
         uses: docker/login-action@v3

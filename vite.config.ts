@@ -6,9 +6,10 @@ export default defineConfig({
     "*": "vp check --fix",
   },
   test: {
-    exclude: [...configDefaults.exclude, ".claude/**"],
+    // Generated operational clones are not canonical test sources.
+    exclude: [...configDefaults.exclude, ".claude/**", ".scratch/**"],
     // Load root .env into process.env for integration tests (db, auth).
-    // bun test did this implicitly; vitest does not expose non-VITE_ vars.
+    // Vitest needs the non-VITE_ variables loaded explicitly by the test setup.
     setupFiles: [new URL("./vitest.setup.ts", import.meta.url).pathname],
   },
   lint: {
@@ -17,10 +18,7 @@ export default defineConfig({
     options: { typeAware: true, typeCheck: true },
     // Vendored shadcn/ai-elements registry components — owned but not authored
     // here. Exclude from app-strict lint instead of editing 40+ upstream files.
-    // cli/ is a standalone package with its own lockfile and node_modules; the
-    // root verify doesn't install its deps, so type-aware lint can't resolve its
-    // ambient types. It is checked independently, not as part of the workspace.
-    ignorePatterns: ["**/components/ai-elements/**", ".claude/", "scripts/", "cli/"],
+    ignorePatterns: ["**/components/ai-elements/**", ".claude/", "scripts/"],
   },
   fmt: {
     endOfLine: "lf",
@@ -37,7 +35,9 @@ export default defineConfig({
     ignorePatterns: [
       "dist/",
       "node_modules/",
-      ".turbo/",
+      ".vite-hooks/",
+      "**/.next/",
+      "**/.source/",
       ".output/",
       ".nitro/",
       ".tanstack/",

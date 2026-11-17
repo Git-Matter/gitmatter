@@ -26,20 +26,28 @@ function ForgotPassword() {
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    if (busy || (turnstileEnabled && !captchaToken)) return;
     setError(null);
     setBusy(true);
-    const redirectTo = new URL("/reset-password", window.location.origin).toString();
-    const { error: resetError } = await requestPasswordReset(
-      { email, redirectTo },
-      captchaToken ? { headers: { "x-captcha-response": captchaToken } } : undefined
-    );
-    setBusy(false);
-    if (resetError) {
+    try {
+      const redirectTo = new URL("/reset-password", window.location.origin).toString();
+      const { error: resetError } = await requestPasswordReset(
+        { email, redirectTo },
+        captchaToken ? { headers: { "x-captcha-response": captchaToken } } : undefined
+      );
+      if (resetError) {
+        setCaptchaToken(null);
+        setCaptchaKey((k) => k + 1);
+        return setError(resetError.message ?? "Could not send reset email");
+      }
+      setSent(true);
+    } catch {
       setCaptchaToken(null);
       setCaptchaKey((k) => k + 1);
-      return setError(resetError.message ?? "Could not send reset email");
+      setError("Could not connect. Check your connection and try again.");
+    } finally {
+      setBusy(false);
     }
-    setSent(true);
   }
 
   return (

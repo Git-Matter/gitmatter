@@ -1,10 +1,11 @@
 import { afterAll, beforeAll, describe, expect, test } from "vite-plus/test";
 import { randomUUID } from "node:crypto";
 import { db, sql } from "@workspace/db/client";
-import { documents, tabularReviews, tenants, user, workflows } from "@workspace/db/schema";
+import { tabularReviews, tenants, user, workflows } from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 import type { Actor } from "../src/core/commit.js";
 import { deriveBlame } from "../src/core/commit.js";
+import { createDocument } from "../src/content/documents.js";
 import { createClause } from "../src/content/clauses.js";
 import { playbookColumns, rulePrompt, runPlaybook } from "../src/ai/tabular/playbook.js";
 import { createClient, createMatter } from "../src/platform/matters.js";
@@ -25,14 +26,16 @@ beforeAll(async () => {
     email: `${userId}@example.com`,
     emailVerified: true,
     tenantId,
+    tenantRole: "admin",
   });
   const client = await createClient(userId, tenantId, { name: "PB Client" });
   matterId = (await createMatter(userId, { clientId: client.id, name: "PB Matter" })).id;
-  const [doc] = await db
-    .insert(documents)
-    .values({ userId, tenantId, matterId, title: "Inbound NDA", fileType: "pdf" })
-    .returning();
-  docId = doc!.id;
+  const doc = await createDocument(userId, {
+    title: "Inbound NDA",
+    markdown: "Synthetic confidential information is protected. Liability is capped.",
+    matterId,
+  });
+  docId = doc.id;
 });
 
 afterAll(async () => {

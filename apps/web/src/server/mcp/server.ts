@@ -66,6 +66,7 @@ export function buildMcpServer(account: {
     jurisdiction: account.jurisdiction,
     defaultMatterLabel: account.label,
     executionMode: "subscription",
+    credentialId: account.tokenId,
   });
 
   for (const tool of catalog) {

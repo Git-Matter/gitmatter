@@ -1,256 +1,301 @@
 ---
 name: gitmatter
-description: Audited legal review — calm warm-paper surface where the document is the hero
-colors:
-  ink: "oklch(0.17 0.008 90)"
-  ink-soft: "oklch(0.50 0.012 90)"
-  paper: "oklch(0.985 0.005 90)"
-  paper-card: "oklch(0.999 0.003 90)"
-  paper-sunken: "oklch(0.965 0.006 90)"
-  hairline: "oklch(0.92 0.007 90)"
-  bronze: "oklch(0.55 0.09 75)"
-  bronze-tint: "oklch(0.94 0.025 75)"
-  destructive: "oklch(0.577 0.245 27.325)"
-  destructive-surface: "oklch(0.955 0.035 27)"
-typography:
-  display:
-    fontFamily: "Newsreader Variable, ui-serif, Georgia, serif"
-    fontSize: "2rem"
-    fontWeight: 500
-    lineHeight: 1.15
-    letterSpacing: "-0.01em"
-  headline:
-    fontFamily: "Newsreader Variable, ui-serif, Georgia, serif"
-    fontSize: "1.5rem"
-    fontWeight: 500
-    lineHeight: 1.2
-    letterSpacing: "-0.01em"
-  title:
-    fontFamily: "Geist Variable, sans-serif"
-    fontSize: "1rem"
-    fontWeight: 600
-    lineHeight: 1.4
-  body:
-    fontFamily: "Geist Variable, sans-serif"
-    fontSize: "0.875rem"
-    fontWeight: 400
-    lineHeight: 1.6
-  label:
-    fontFamily: "Geist Variable, sans-serif"
-    fontSize: "0.75rem"
-    fontWeight: 500
-    lineHeight: 1.3
-    letterSpacing: "0.01em"
-rounded:
-  sm: "0.375rem"
-  md: "0.5rem"
-  lg: "0.625rem"
-  xl: "0.875rem"
-spacing:
-  field: "0.375rem"
-  stack: "1rem"
-  section: "2.5rem"
-  page: "2rem"
-components:
-  button-primary:
-    backgroundColor: "{colors.ink}"
-    textColor: "{colors.paper}"
-    rounded: "{rounded.md}"
-    padding: "0 0.625rem"
-    height: "2.25rem"
-  button-outline:
-    backgroundColor: "{colors.paper-card}"
-    textColor: "{colors.ink}"
-    rounded: "{rounded.md}"
-    padding: "0 0.625rem"
-    height: "2.25rem"
-  button-ghost:
-    backgroundColor: "transparent"
-    textColor: "{colors.ink}"
-    rounded: "{rounded.md}"
-    padding: "0 0.625rem"
-    height: "2.25rem"
-  badge-state:
-    backgroundColor: "{colors.bronze-tint}"
-    textColor: "{colors.bronze}"
-    rounded: "{rounded.sm}"
-    padding: "0.125rem 0.5rem"
-  card:
-    backgroundColor: "{colors.paper-card}"
-    textColor: "{colors.ink}"
-    rounded: "{rounded.xl}"
-    padding: "1.5rem"
-  input:
-    backgroundColor: "{colors.paper-card}"
-    textColor: "{colors.ink}"
-    rounded: "{rounded.md}"
-    height: "2.25rem"
-    padding: "0 0.75rem"
+description: Warm monochrome legal workspace with a serif display voice and flat, compact controls
+reference: https://www.design-extractor.com/gallery/harvey
 ---
 
-# Design System: gitmatter
+# gitmatter design system
 
-## 1. Overview
+The document and its decisions lead. Navigation, forms, and metadata provide a quiet frame.
+The product implementation follows Harvey's published [system architecture](https://www.harvey.ai/blog/rebuilding-harveys-design-system-from-the-ground-up)
+and [design principles](https://www.harvey.ai/blog/how-we-approach-design-at-harvey): intent-based
+tokens, consistent component anatomy, contextual composition and complete interaction states.
+This remains gitmatter's own implementation.
 
-**Creative North Star: "The Quiet Chambers"**
+`AppFrame` owns a compact navigation rail and an unboxed work surface. `PageHeader` uses operational
+sans typography; `PageShell` separates context from scrolling work. Settings use flat sections and
+stable section navigation; review defaults to a table with an independently scrolling inspector.
+See [the product frame contract](design/workflows/product-frame.md). Use shadcn’s default radius scale,
+with a 0.625rem base and derived component radii.
 
-A calm counsel's office. Warm ivory paper, dark ink, serif headings; the document on the desk gets
-the light. The interface is the room, not the conversation: it holds the work steady and never
-raises its voice. Where Harvey is cream-corporate and Legora is stone-cool, gitmatter is the more
-breathable child of both: fewer boxes, wider margins, hierarchy carried by type instead of chrome.
+Review the live components at `/design-system` on the development server. The page is excluded
+from production use and marked noindex. Its controls only affect preview state. The implementation
+lives in `apps/web/src/design-system/DesignSystem.tsx` and imports the actual product primitives.
 
-This system explicitly rejects the generic shadcn/SaaS look (default-theme gray, identical card
-grids, hero metrics), dense enterprise legal chrome (cramped toolbars, tiny text), and dark techy
-AI styling (neon, glassmorphism, sparkle gradients). When a screen needs more structure, the answer
-is more whitespace and stronger type, not another border.
+## Research, philosophy and enforcement
 
-**Key Characteristics:**
+The deeper [design program](design/README.md) separates documented vendor behavior, public visual
+observations, inference, and gitmatter decisions. Read the [philosophy](design/philosophy.md),
+[Harvey/Legora research](design/research/harvey-legora.md), [SaaS workflow composition](design/research/saas-patterns.md),
+[anti-slop taxonomy](design/research/anti-slop.md), and [guardrails](design/guardrails.md).
+Workflow acceptance is tracked explicitly in [the ledger](design/acceptance.md).
 
-- Warm ivory neutrals tinted toward hue 90; never pure white or black.
-- Serif (Newsreader) for page identity, sans (Geist) for everything operational.
-- Whitespace separates; hairlines confirm; boxes are a last resort.
-- One quiet accent (bronze) reserved for state cues: ≤10% of any screen.
-- Soft ambient elevation: barely-there shadows that read as paper lift, not floating panels.
+Foundation values and shared recipes are owned by `design/tokens.json`. Run `vp run design:generate`
+to update the generated CSS, then `vp run design:check`. The design policy checks known structural
+risks and token contrast; it does not certify taste, intuitive workflows, or complete accessibility.
 
-## 2. Colors
+## Sources and implementation
 
-Warm paper and ink, with one bronze voice for state.
+- [Harvey website extraction](https://www.design-extractor.com/gallery/harvey), reviewed November 11, 2026. The extraction reports uncertainty around responsive breakpoints, motion, and some recipes.
+- [Paralect’s design audit](https://www.paralect.com/blog/signs-of-ai-slop-in-design), used to remove
+  repeated decoration, unnecessary boxes, low-contrast type, and autonomous motion.
+- `apps/web/src/styles/globals.css` owns shadcn semantic mappings and base document styles.
+- `design/tokens.json` owns light/dark colors, typography, spacing, status, shape and elevation;
+  `apps/web/src/styles/tokens.css` is its generated output.
+- `apps/web/src/components/ui` owns shared controls. Change primitives here before adding local styles.
 
-### Primary
+## Color
 
-- **Counsel Ink** (oklch(0.17 0.008 90)): all primary text, primary buttons, active nav. The ink
-  of the office; carries authority without color.
+Use semantic utilities instead of literal colors in product components. The light palette follows
+measured reference values; the dark theme and legal status colors are gitmatter adaptations.
 
-### Secondary
+| Role                | Light     | Dark      | Utility / purpose                               |
+| ------------------- | --------- | --------- | ----------------------------------------------- |
+| Page                | `#FAFAF9` | `#0F0E0D` | `bg-background`                                 |
+| Surface             | `#FFFFFF` | `#1F1D1A` | `bg-card`, `bg-popover`                         |
+| Muted surface       | `#F2F1F0` | `#292723` | `bg-muted`, `bg-secondary`                      |
+| Primary ink         | `#0F0E0D` | `#FAFAF9` | `text-foreground`                               |
+| Secondary ink       | `#33312C` | `#E7E5E1` | `text-ink-secondary`                            |
+| Metadata            | `#706D66` | `#B4B0A8` | `text-muted-foreground`                         |
+| Grid rule           | `#E5E4E1` | `#373531` | `border-grid-line`, decorative table separation |
+| Hairline            | `#CCCAC6` | `#44413A` | `border-border`                                 |
+| Field edge          | `#8F8B85` | `#8F8B85` | `border-input`                                  |
+| Focus               | `#005FCC` | `#99C8FF` | `ring-ring`, visible outline                    |
+| Approved / addition | `#285D40` | `#A6D2B3` | `text-success` on `bg-success-surface`          |
+| Needs attention     | `#795010` | `#E6C681` | `text-warning` on `bg-warning-surface`          |
+| Error / deletion    | `#A12D25` | `#F2978E` | `text-destructive` on `bg-destructive-surface`  |
 
-- **Quiet Bronze** (oklch(0.55 0.09 75)): the only accent. State cues exclusively: commit/audit
-  markers, agent-made indicators, citation affordances, selected-state dots. Its tint
-  (**Bronze Wash**, oklch(0.94 0.025 75)) backs state badges.
+Keep text at full opacity; use a different ink token for secondary hierarchy. Body text must meet
+4.5:1 on its actual surface, and focus indicators must stay visible in both themes. Status color
+always comes with text. Do not use a colored dot as the only state indicator.
 
-### Neutral
+`text-bronze` and `bg-bronze-tint` remain compatibility aliases for older audit components; they
+now resolve to neutral foreground and muted surface. New components should use semantic names.
+The sidebar uses the muted paper tint.
+Do not add a decorative brand hue, gradient text, neon edges, background grids, or glows.
 
-- **Warm Paper** (oklch(0.985 0.005 90)): the app background. Ivory, not white.
-- **Raised Paper** (oklch(0.999 0.003 90)): cards, inputs, popovers; one breath lighter than the page.
-- **Sunken Paper** (oklch(0.965 0.006 90)): wells, table headers, code/diff gutters.
-- **Soft Ink** (oklch(0.50 0.012 90)): secondary text, descriptions, timestamps. Meets AA on Warm Paper.
-- **Hairline** (oklch(0.92 0.007 90)): 1px rules and borders. The only border weight that exists.
+## Typography
 
-### Named Rules
+Newsreader Variable is the display and legal quotation face. Inter Variable is the operational
+face. Both are bundled through Fontsource and available under the SIL Open Font License. Harvey’s
+proprietary fonts are not included. `font-heading` and `font-serif` map to Newsreader; `font-sans`
+maps to Inter. Keep font optical sizing enabled.
 
-**The One Voice Rule.** Bronze appears on at most 10% of any screen. If two bronze elements sit in
-the same view region, one of them is wrong.
-**The No Pure Extremes Rule.** `#fff` and `#000` are forbidden. Every neutral carries the hue-90
-tint, light and dark theme alike.
+| Role             | Size          | Weight | Leading | Usage                                 |
+| ---------------- | ------------- | ------ | ------- | ------------------------------------- |
+| Display          | fluid 44–72px | 400    | 1.05    | `text-display`, display heading       |
+| Section          | fluid 32–48px | 400    | 1.1     | `text-section`, major sections        |
+| App page         | 18–20px       | 500    | 1.2     | Sans PageHeader and object context    |
+| App section      | 14px          | 600    | 1.4     | Sans operational group identity       |
+| UI title         | 20px          | 500    | 1.3     | `text-title`, operational heading     |
+| Lead             | 20px          | 400    | 1.5     | `text-lead`, introductions            |
+| Body             | 16px          | 400    | 1.5     | Long explanations and reading pages   |
+| UI body          | 14px          | 400    | 1.5     | Tables, forms, dense workspaces       |
+| Label            | 14px          | 500    | 1.3     | Controls, navigation, field labels    |
+| Compact metadata | 12px          | 400    | 1.3     | Audit details beside readable content |
 
-## 3. Typography
+Use sentence case. Omit a section label when the heading already identifies it. Display type
+stays regular; controls never use serif. Use short task-oriented headings and digits for concrete
+counts. Keep legal text emphasis from source documents intact. Monospace belongs to code, hashes,
+and copyable identifiers, not navigation or ordinary inputs.
 
-**Display Font:** Newsreader Variable (with ui-serif, Georgia fallback)
-**Body Font:** Geist Variable (with sans-serif fallback)
+## Space and layout
 
-**Character:** A law library pairing: a bookish, slightly warm serif for identity moments above a
-precise, quiet grotesque doing the operational work. The serif appears where a page states its
-name or a document speaks; the sans does everything else.
+Use a 4px rhythm: 4, 8, 16, 24, 32, 64, and 128px. Existing semantic spacing remains compatible:
+field = 6px, stack = 16px, section = 40px, page = 32px. Avoid arbitrary spacer elements.
 
-### Hierarchy
+`page-container` caps content at 1280px with fluid 24–48px gutters. Reading content stays within
+60–70 characters. Tables may scroll horizontally inside their own container. Pages must not overflow.
+Use the existing project breakpoints (sm/md/lg), rather than claiming they were measured at Harvey.
 
-- **Display** (500, 2rem, 1.15): one per screen at most; the page title in PageHeader.
-- **Headline** (500, 1.5rem, 1.2): section titles inside long pages, dialog titles for weighty acts.
-- **Title** (600, 1rem, 1.4): card titles, table-row primary text, form section labels.
-- **Body** (400, 0.875rem, 1.6): default text. Max line length 70ch; legal prose gets the full measure.
-- **Label** (500, 0.75rem, +0.01em): metadata, column headers, badges, timestamps.
+The app frame has its own density: `navigation` = 224px, `chrome` = 56px minimum and `work` = 20px.
+These roles are generated from the canonical foundations. `Card variant="section"` groups settings with proximity and a divider; `surface` is reserved
+for standalone contained content. Operational titles stay sans; legal reading and brand identity
+can use serif.
 
-### Named Rules
+Group by proximity first. Use a horizontal rule only where it makes scanning easier. Avoid boxes
+inside boxes, identical card grids for unrelated content, and a metric card for every number.
+An app page should make its immediate work and required decisions apparent before secondary tools.
+Use tabs, menus, and inline expansion for supporting content.
 
-**The Serif Earns It Rule.** Serif is reserved for identity (page titles, document names, marketing
-headlines) and quoted legal text. Buttons, nav, tables, and form controls are always sans.
-**The Two-Step Rule.** Adjacent hierarchy levels differ by both size and weight, never size alone.
+## Shape and elevation
 
-## 4. Elevation
+- Use the [shadcn default scale](https://ui.shadcn.com/docs/theming#radius-scale), derived from a
+  0.625rem base. Fields and controls are 8px (`rounded-md`); small elements are 6px (`rounded-sm`).
+- Dialogs use the 10px base (`rounded-lg`); cards use 14px (`rounded-xl`).
+- This replaces the earlier custom 16/24/28px treatment at the user’s request.
+- Circular people and truly circular icon/media controls may use `rounded-full`.
+- Pages, cards, inputs, and buttons cast no shadow.
+- Menus and popovers use `shadow-float`; dialogs use `shadow-modal`.
+- No frosted cards or glass toolbars. Overlays use an opaque readable surface. A scrim may blur
+  the obscured page; blur must never be required to read foreground text.
 
-Soft ambient. Surfaces rest almost flat on the paper; cards carry a barely-perceptible diffuse
-shadow that reads as a sheet lifted a millimeter, not a floating panel. Depth beyond that comes
-from the three paper tints (Sunken, Warm, Raised), with hairlines confirming edges. Floating
-layers (popover, dropdown, dialog) are the only surfaces allowed a visible shadow.
-
-### Shadow Vocabulary
-
-- **Paper lift** (`box-shadow: 0 1px 2px oklch(0.17 0.008 90 / 0.05)`): cards and inputs at rest.
-- **Float** (`box-shadow: 0 4px 16px oklch(0.17 0.008 90 / 0.10)`): popovers, dropdowns, command menus.
-- **Modal** (`box-shadow: 0 12px 40px oklch(0.17 0.008 90 / 0.14)`): dialogs only.
-
-### Named Rules
-
-**The Millimeter Rule.** If a shadow is noticeable at a glance, it is too strong. Shadows confirm
-edges; they never create drama.
-
-## 5. Components
+## Controls and state
 
 ### Buttons
 
-- **Shape:** gently rounded (0.5rem), 2.25rem tall, sans Label-to-Body sized text.
-- **Primary:** Counsel Ink fill, Warm Paper text. One per view region.
-- **Hover / Focus:** primary lightens to 80% opacity; all buttons take a 3px soft ring
-  (`ring-ring/50`) on focus-visible; active nudges 1px down.
-- **Outline / Ghost:** hairline border + Raised Paper, or borderless with Sunken Paper hover.
-  Ghost is the default for toolbars and row actions.
+Use the shared Button. Default height is 36px; compact is 32px, extra-small 24px, and large 48px.
+Icon buttons keep a visible focus indicator and an accessible name. Compact table controls are a
+density exception.
+Primary is ink with paper text. Outline uses a hairline edge. Ghost belongs in toolbars; links
+remain clearly identifiable. One primary action per local group. Destructive actions use the
+semantic error treatment. Hover changes tone; it does not bounce or shift the layout.
 
-### Badges / State cues
+Links styled as buttons must use `nativeButton={false}` with `render={<a ... />}` or the router
+Link, so interactive elements are never nested. Disabled controls keep their meaning in text.
+Use native button semantics for actual actions.
 
-- **Style:** pill (rounded-4xl), Label type. State badges use Bronze Wash background with Quiet
-  Bronze text; lifecycle states may also render as a tinted 6px dot beside Label text instead of a
-  filled badge: quieter, preferred in dense tables.
-- **State:** committed/audited = bronze; draft = neutral (Sunken Paper bg, Soft Ink text);
-  destructive states use the destructive-surface tokens.
+### Fields
 
-### Cards / Containers
+Use Input, Textarea, Select, Checkbox, Switch, and their visible Label. Fields use a 1px input
+border, default 8px corners, and no shadow. Hover darkens the edge; keyboard focus uses the focus token.
+Describe errors next to the field, connect them with `aria-describedby`, and set `aria-invalid`.
+Placeholders give an example; they do not replace labels. Errors cannot rely on color alone.
 
-- **Corner Style:** 0.875rem radius.
-- **Background:** Raised Paper.
-- **Shadow Strategy:** Paper lift only (see Elevation).
-- **Border:** none by default; the shadow and tint difference carry the edge. A hairline ring is
-  the fallback on Sunken Paper backgrounds.
-- **Internal Padding:** 1.5rem (1rem for `size="sm"`). Never nest a card in a card.
+### Navigation
 
-### Inputs / Fields
+The sidebar is flat muted paper. Active rows use a neutral tint, ink text, and `aria-current`.
+Do not add a second dot to repeat the selected state. Line tabs mark their active label with an
+underline. Menus reveal supporting actions. Mobile navigation has a 44px hit area.
 
-- **Style:** hairline border, Raised Paper background, 0.5rem radius, 2.25rem height.
-- **Focus:** border shifts to ring color + 3px soft ring. No glow.
-- **Error:** destructive border + destructive-surface tint; message in destructive text below at
-  Label size, never inside a tooltip.
+### Tables, lists, and documents
 
-### Navigation (sidebar)
+Tables use readable column headings, horizontal separators, and a muted hover or selected row.
+Keep number alignment consistent; use tabular figures for comparable numeric values. Content
+stays unboxed when spacing suffices. Form boundaries and selectable items may keep their edges.
 
-- **Style:** Warm Paper (slightly sunken from content area), no border against content when tint
-  difference suffices; hairline if not. Items are ghost rows: Label-weight sans, Soft Ink at rest,
-  Counsel Ink + Sunken Paper fill when active. Active item may carry a bronze dot, not a filled
-  background in brand color.
-- **Mobile:** collapses to an overlay sheet with the Float shadow.
+### Audit and diff
 
-### Diff / Audit trail (signature)
+Keep author, reason, revision, and the exact language together. Legal quotations can use the
+serif. Operational metadata stays sans. Additions and removals use semantic tinted surfaces,
+with `ins` / `del` or equivalent textual meaning. An AI author uses a literal label or bot icon,
+not sparkles. Preserve the underlying commit and permission paths during visual changes.
 
-The product's identity component. Field-level diffs render on Sunken Paper gutters with serif for
-quoted document text and sans for metadata. Additions/removals use tinted backgrounds at
-readable-text contrast, never saturated fills. Blame metadata (author, time, commit message) is
-Label type in Soft Ink, with bronze marking agent-authored commits.
+### Dialogs and feedback
 
-## 6. Do's and Don'ts
+Use Dialog’s existing accessible focus trap, title, description, Escape behavior, and focus return.
+Dialog surfaces are opaque and distinct from the backdrop. Popovers and menus are the only other
+surfaces with elevation. Toasts should confirm completed work without becoming permanent banners.
+Loading UI describes the work in words. Empty states explain the next action. State badges are
+reserved for actual status, not promotion or decoration.
 
-### Do:
+## Motion and media
 
-- **Do** tint every neutral toward hue 90; the page is ivory (oklch(0.985 0.005 90)), not white.
-- **Do** carry hierarchy with type scale + weight; remove a border before adding one.
-- **Do** keep bronze under 10% of any screen and tied to state meaning, never decoration.
-- **Do** give legal text the serif and the full 70ch measure; it is the hero.
-- **Do** meet WCAG AA: 4.5:1 body text, visible 3px focus rings, `prefers-reduced-motion` honored.
+Use 100–200ms transitions for hover, focus, and opening UI. Content is visible immediately; no
+scroll-triggered appearance effects. Respect `prefers-reduced-motion` globally. Loading indicators
+may move while work is running. Do not animate idle content.
 
-### Don't:
+Authored video playback starts paused and has controls. Prefer `preload="metadata"` when appropriate.
 
-- **Don't** ship the generic shadcn/SaaS look: default gray theme, identical card grids, hero
-  metrics, gradient buttons.
-- **Don't** recreate dense enterprise legal chrome (iManage, Westlaw): cramped toolbars, tiny
-  text, borders on everything.
-- **Don't** drift dark-techy: neon on black, glassmorphism, "AI sparkle" gradients. Agent activity
-  is marked with quiet bronze, not magic sparkles.
-- **Don't** use side-stripe borders (`border-left` > 1px as accent), gradient text, or modals as
-  the first answer; prefer inline and progressive disclosure.
-- **Don't** put serif in buttons, nav, tables, or controls. The Serif Earns It Rule.
+## Review against the 21-pattern audit
+
+| Pattern                      | gitmatter rule                                                          |
+| ---------------------------- | ----------------------------------------------------------------------- |
+| Colored card stripes         | Reserve colored edges for genuine errors or attention states.           |
+| Border around every block    | Space first; rules for scannable rows; fields retain useful boundaries. |
+| Colored italic accent        | No decorative mixed-face accent words.                                  |
+| Repeated uppercase labels    | Omit redundant kickers; useful categories remain ordinary metadata.     |
+| Meaningless markers          | State labels describe an actual condition.                              |
+| Monospace UI                 | Restrict to code, identifiers, and appropriate numeric data.            |
+| Spelled-out numbers          | Use digits for counts and steps.                                        |
+| Noun-stack titles            | Name the task or result briefly.                                        |
+| Emoji icons                  | Use the installed Lucide set where an icon helps.                       |
+| Placeholder media            | Use real captures; user initials remain a legitimate account fallback.  |
+| Overstuffed screens          | Lead with the work; disclose supporting controls.                       |
+| Labeled abstract diagrams    | Show the actual product or explain it directly.                         |
+| Text pretending to be a demo | Use product footage or a screenshot.                                    |
+| Glass cards                  | Flat opaque surfaces.                                                   |
+| Same shape and shadow        | Small controls, larger media, elevation only for overlays.              |
+| Faint text                   | Full-opacity semantic ink with measured contrast.                       |
+| Idle motion                  | Nothing moves without a state change or user playback.                  |
+| Heavy appear effects         | Render content immediately.                                             |
+| Uncheckable proof            | No invented customer identities, metrics, or certifications.            |
+| Purple gradients             | Warm monochrome, flat fills.                                            |
+| Dark neon and grids          | Plain dark paper and readable ink.                                      |
+
+## Adding a screen
+
+Start with PageShell, PageHeader, and the existing primitives. Choose the primary task, then the
+supporting information. Reuse tokens before adding values. Check both themes, a narrow mobile
+viewport, keyboard focus, and reduced motion. Use the development specimen to inspect shared
+changes. Keep custom styles local only when a shared component cannot express the behavior.
+
+## Validation for this revision
+
+Historical verification on November 11, 2026: `vp check`, `vp run typecheck`, all 354 tests across
+63 files, and the cloud production build passed. Development specimen checks covered desktop and
+390px mobile widths, light/dark contrast, reduced motion, field errors, dialog focus, Escape, and
+focus return. `/design-system` returned 404 in production, with specimen content absent from
+production JS. Signed-in end-to-end flows and deployment were not exercised.
+
+The project keeps pnpm’s virtual store local (`enableGlobalVirtualStore: false` in `pnpm-workspace.yaml`).
+The machine’s global-store setting caused Vite+ native-binding and editor peer-dependency resolution
+errors; a local reinstall resolved them. Final checks use the ordinary project commands without
+runtime path overrides. `vp env doctor` passed. Postgres was started with the project’s existing
+Compose service for integration tests. No schema changes were required.
+
+## Review table recipe
+
+The review route defaults to the Vault-inspired document-by-question matrix. Use the canonical
+`review-row` (44px cell control) and `review-header` (36px) spacing roles, compact filename objects
+and thin grid separators. The fixed virtual-row estimate is 45px, including the 1px ruling. Keep the document column pinned from medium widths; the entire table scrolls horizontally
+on narrow screens. Question text is single-line at scan time; the cell inspector supplies complete
+findings, explanations, quotations and decisions. Citation counts are not human verification.
+
+Desktop inspection is a nonmodal 24rem region, with modal inspection on narrow screens. Document is
+an explicit secondary representation. Both share revision-keyed drafts and URL selection. Retain the
+user's rounded surface/control geometry; do not copy the published illustration's sharper corners.
+
+## Standard component ownership
+
+Use the installed shadcn primitives for general interface behavior. `PageHeader` composes Breadcrumb;
+review view navigation composes Tabs with retained TabsContent; document and mobile finding overlays
+compose one Sheet implementation; status indicators use Badge variants. The virtualized DataTable
+continues to compose shadcn Table with TanStack data/virtualization. Client, matter, source identity,
+revision-keyed drafts and audited actions belong to the application layer.
+
+Workspace frames and data grids are not cards. They have square edges, no outer rounded perimeter,
+and a distinct light `grid-line` role for decorative rulings. Controls, dialogs and standalone cards use the default
+shadcn radius scale. Horizontal data overflow stays inside the table, with
+visible previous/next-column controls and keyboard scrolling. Column headings can wrap; full
+finding text remains available in the inspector.
+
+## Application-wide primitive composition
+
+Generic interface behavior has one shared implementation across the product:
+
+| Concern                       | Shared primitive                | Application boundary                                                                                                                                      |
+| ----------------------------- | ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Navigation                    | Sidebar, SidebarMenu, Sheet     | AppFrame preserves the saved desktop preference; mobile navigation restores focus and closes on selection. Editor shortcuts take precedence while typing. |
+| List/matter view filters      | ToggleGroup                     | ToolbarTabs is a controlled adapter; selected filters do not run work.                                                                                    |
+| Form and search input         | Input, InputGroup, NativeSelect | NativeSelect retains browser/mobile selection semantics and existing change handlers. File uploads retain native file inputs.                             |
+| Selection and acknowledgement | Checkbox                        | TanStack selection receives booleans; revision review and unknown-outcome acknowledgements retain their explicit gates.                                   |
+| Status and people             | Badge, Avatar                   | Existing status/actor/role labels remain authoritative; extraction readiness is not legal approval.                                                       |
+| Empty/error states            | Empty, Button                   | Retry and first actions retain their original scope.                                                                                                      |
+| Activity                      | Sheet on narrow screens         | Existing activity/source identity remains in the application layer.                                                                                       |
+
+Do not rebuild these patterns in route components. Retain domain compositions for document rendering,
+version identity, audit actions, revision-keyed drafts, streaming conversations and virtualized tables.
+Native file inputs and semantic disclosure elements do not need replacement with new widgets.
+
+List pages have no negative viewport-margin compensation. The shared pager wraps at narrow widths;
+body scrolling remains within each workspace. The canonical navigation width roles apply to the
+shadcn Sidebar rather than a second custom rail implementation.
+
+## Workspace recovery and interaction consistency
+
+Use [the workspace recovery contract](design/workflows/workspace-recovery.md) for collection
+loading/failure/denial, pending confirmations, unfinished forms, keyboard object actions, named
+dialogs, persistent field errors, return navigation, primary-action labels and mixed selection.
+CollectionPanel, FormFeedback, ConfirmDialog and the shared exit/view-state hooks own these patterns.
+The [nine-issue replay](design/evidence/ux-nine.json) records current client behavior with fictional
+API outcomes. Default shadcn radii remain unchanged.
+
+## Input and action feedback
+
+Follow [the input and action feedback contract](design/workflows/action-feedback.md). FieldDescription
+makes prerequisites visible and associated with inputs. Confirmed actions use one persistent,
+session-scoped ActionFeedback receipt; new edits and failed requests never imply success. Workflow
+autosave retains its local status. Shared buttons, toggles and tabs react subtly while pressed without
+moving layout, with transitions removed for reduced motion. Current UI evidence is recorded separately
+in [the feedback replay](design/evidence/feedback.json).

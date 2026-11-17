@@ -5,6 +5,7 @@ import type {
   CompleteRequest,
   CompleteResult,
   LlmClient,
+  UsageInfo,
   StreamHandlers,
 } from "../types.js";
 
@@ -152,17 +153,19 @@ export class AnthropicClient implements LlmClient {
   async complete(req: CompleteRequest): Promise<CompleteResult> {
     const anthropic = new Anthropic({
       apiKey: this.apiKey,
+      ...(req.maxRetries !== undefined ? { maxRetries: req.maxRetries } : {}),
       ...(llmTimeoutMs() ? { timeout: llmTimeoutMs() } : {}),
     });
     const res = await anthropic.messages.create(this.buildParams(req));
     const out = this.finalize(req, res.content, res.stop_reason);
-    out.usage = { inputTokens: res.usage.input_tokens, outputTokens: res.usage.output_tokens };
+    out.usage = anthropicUsage(res.usage, req);
     return out;
   }
 
   async stream(req: CompleteRequest, handlers: StreamHandlers): Promise<CompleteResult> {
     const anthropic = new Anthropic({
       apiKey: this.apiKey,
+      ...(req.maxRetries !== undefined ? { maxRetries: req.maxRetries } : {}),
       ...(llmTimeoutMs() ? { timeout: llmTimeoutMs() } : {}),
     });
     const s = anthropic.messages.stream(this.buildParams(req));
@@ -170,7 +173,33 @@ export class AnthropicClient implements LlmClient {
     if (handlers.onReasoning) s.on("thinking", (delta) => handlers.onReasoning!(delta));
     const msg = await s.finalMessage();
     const out = this.finalize(req, msg.content, msg.stop_reason);
-    out.usage = { inputTokens: msg.usage.input_tokens, outputTokens: msg.usage.output_tokens };
+    out.usage = anthropicUsage(msg.usage, req);
     return out;
   }
+}
+
+/** Cache read/write tokens count toward token limits even when priced differently. */
+function anthropicUsage(
+  usage: {
+    input_tokens: number;
+    output_tokens: number;
+    cache_creation_input_tokens?: number | null;
+    cache_read_input_tokens?: number | null;
+  },
+  req: CompleteRequest
+): UsageInfo | undefined {
+  const cached = [usage.cache_creation_input_tokens, usage.cache_read_input_tokens];
+  if (req.cache && cached.some((n) => n == null)) return undefined;
+  const inputTokens = usage.input_tokens + (cached[0] ?? 0) + (cached[1] ?? 0);
+  const outputTokens = usage.output_tokens;
+  return [inputTokens, outputTokens].every((n) => Number.isSafeInteger(n) && n >= 0)
+    ? {
+        inputTokens,
+        outputTokens,
+        cacheReadTokens: cached[1] ?? undefined,
+        cacheWriteTokens: cached[0] ?? undefined,
+        cacheMode: req.cache ? ("explicit" as const) : ("none" as const),
+        cacheKey: req.cacheKey,
+      }
+    : undefined;
 }

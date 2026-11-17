@@ -1,4 +1,5 @@
-import { $ } from "bun";
+import { createConnection } from "node:net";
+import { run } from "./process.ts";
 import { type Config, loadConfig, parseDbHost, paths } from "./config.ts";
 
 export interface Check {
@@ -10,21 +11,22 @@ export interface Check {
 }
 
 async function cmdOk(cmd: string[]): Promise<boolean> {
-  return (await $`${cmd}`.quiet().nothrow()).exitCode === 0;
+  return (await run(cmd, { stdio: "ignore" }).catch(() => 1)) === 0;
 }
 
 /** TCP connect with a timeout. Used to probe an external Postgres. */
 async function tcpReachable(host: string, port: number, ms = 3000): Promise<boolean> {
-  try {
-    const socket = await Promise.race([
-      Bun.connect({ hostname: host, port, socket: { data() {} } }),
-      new Promise<never>((_, rej) => setTimeout(() => rej(new Error("timeout")), ms)),
-    ]);
-    socket.end();
-    return true;
-  } catch {
-    return false;
-  }
+  return new Promise((resolve) => {
+    const socket = createConnection({ host, port });
+    const finish = (ok: boolean) => {
+      socket.destroy();
+      resolve(ok);
+    };
+    socket.setTimeout(ms);
+    socket.once("connect", () => finish(true));
+    socket.once("timeout", () => finish(false));
+    socket.once("error", () => finish(false));
+  });
 }
 
 /**

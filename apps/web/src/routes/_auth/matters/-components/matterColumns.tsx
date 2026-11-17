@@ -28,14 +28,15 @@ export function matterColumns(handlers: {
       header: ({ table }) => (
         <Checkbox
           checked={table.getIsAllRowsSelected()}
-          onChange={table.getToggleAllRowsSelectedHandler()}
-          aria-label="Select all"
+          indeterminate={table.getIsSomeRowsSelected() && !table.getIsAllRowsSelected()}
+          onCheckedChange={(checked) => table.toggleAllRowsSelected(checked)}
+          aria-label="Select all rows on this page"
         />
       ),
       cell: ({ row }) => (
         <Checkbox
           checked={row.getIsSelected()}
-          onChange={row.getToggleSelectedHandler()}
+          onCheckedChange={(checked) => row.toggleSelected(checked)}
           onClick={(e) => e.stopPropagation()}
           aria-label="Select row"
         />

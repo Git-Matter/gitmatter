@@ -1,6 +1,6 @@
 // Runtime config accessor. Reads from a bound env object first (e.g. a Cloudflare
 // Worker `env` passed at request bootstrap via setRuntimeEnv), falling back to
-// process.env for Node/Bun. Lets the same code run on both without sprinkling
+// process.env for Node.js. Lets the same code run on both without sprinkling
 // `process.env` (which does not exist in the Workers runtime) across modules.
 
 type EnvSource = Record<string, string | undefined>;

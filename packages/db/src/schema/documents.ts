@@ -1,8 +1,16 @@
+import { sql } from "drizzle-orm";
+import type {
+  DocumentApprovalContext,
+  FindingEditProvenance,
+  WordInspection,
+} from "@workspace/contracts";
 import {
   type AnyPgColumn,
   boolean,
+  customType,
   index,
   integer,
+  jsonb,
   pgTable,
   primaryKey,
   text,
@@ -13,6 +21,18 @@ import {
 import { user } from "./auth.js";
 import { matters } from "./matters.js";
 import { tenants } from "./tenants.js";
+
+const vector = customType<{ data: number[]; driverData: string }>({
+  dataType() {
+    return "vector";
+  },
+  toDriver(value) {
+    return `[${value.join(",")}]`;
+  },
+  fromDriver(value) {
+    return value.slice(1, -1).split(",").filter(Boolean).map(Number);
+  },
+});
 
 // Uploaded source documents. `markdown` holds the extracted text (PDF via
 // pdf.js, DOCX via mammoth) used as LLM context. Extraction
@@ -67,6 +87,10 @@ export const documents = pgTable(
     // Extracted text (pdf/text) AND the editable draft body. Redlines on a
     // non-docx document operate as find->replace on this field.
     markdown: text("markdown"),
+    // Accepted source baseline, separate from the latest tracked draft. This is
+    // a content pointer, never a claim that a lawyer approved the uploaded file.
+    approvedVersionId: uuid("approved_version_id"),
+    approvedMarkdown: text("approved_markdown"),
     sizeBytes: integer("size_bytes"),
     // Page count of the active file when extraction can determine it (PDF via
     // pdf.js, DOCX via docProps/app.xml). Null when unknown.
@@ -98,6 +122,10 @@ export const documents = pgTable(
     deletedBy: text("deleted_by").references(() => user.id, { onDelete: "set null" }),
   },
   (t) => [
+    index("documents_search_idx").using(
+      "gin",
+      sql`to_tsvector('english', coalesce(${t.title}, '') || ' ' || coalesce(${t.markdown}, ''))`
+    ),
     index("documents_matter_idx").on(t.matterId),
     index("documents_tenant_idx").on(t.tenantId),
   ]
@@ -154,12 +182,89 @@ export const documentVersions = pgTable(
       .notNull(),
     sizeBytes: integer("size_bytes"),
     fileType: text("file_type").notNull(),
+    // Immutable technical evidence captured from this version's exact bytes.
+    // Null means legacy/uninspected, never safe by default.
+    wordInspection: jsonb("word_inspection").$type<WordInspection>(),
     deletedAt: timestamp("deleted_at"),
     deletedBy: text("deleted_by").references(() => user.id, { onDelete: "set null" }),
     lastCommitId: uuid("last_commit_id"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (t) => [unique("document_version_unique").on(t.documentId, t.versionNumber)]
+);
+
+// Derived read index for large-document AI context. Chunks are rebuilt from the
+// active version's markdown after extraction or document edits; they are not the
+// mutation source of truth.
+export const documentChunks = pgTable(
+  "document_chunks",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    documentId: uuid("document_id")
+      .notNull()
+      .references(() => documents.id, { onDelete: "cascade" }),
+    versionId: uuid("version_id").references(() => documentVersions.id, { onDelete: "cascade" }),
+    index: integer("chunk_index").notNull(),
+    text: text("text").notNull(),
+    tokenEstimate: integer("token_estimate").notNull(),
+    pageStart: integer("page_start"),
+    pageEnd: integer("page_end"),
+    label: text("label"),
+    contentHash: text("content_hash").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => [
+    unique("document_chunks_doc_version_index_unique").on(t.documentId, t.versionId, t.index),
+    index("document_chunks_doc_idx").on(t.documentId),
+    index("document_chunks_version_idx").on(t.versionId),
+  ]
+);
+
+// Semantic read index for RAG. One chunk can have multiple embedding rows when
+// the deployment changes provider/model/dimensions. The chunk text remains the
+// source for retrieval output; vectors are only a derived search aid.
+export const documentChunkEmbeddings = pgTable(
+  "document_chunk_embeddings",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    chunkId: uuid("chunk_id")
+      .notNull()
+      .references(() => documentChunks.id, { onDelete: "cascade" }),
+    tenantId: uuid("tenant_id")
+      .notNull()
+      .references(() => tenants.id, { onDelete: "cascade" }),
+    documentId: uuid("document_id")
+      .notNull()
+      .references(() => documents.id, { onDelete: "cascade" }),
+    versionId: uuid("version_id").references(() => documentVersions.id, { onDelete: "cascade" }),
+    provider: text("provider").notNull(),
+    model: text("model").notNull(),
+    dimensions: integer("dimensions").notNull(),
+    contentHash: text("content_hash").notNull(),
+    embedding: vector("embedding").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (t) => [
+    unique("document_chunk_embeddings_profile_unique").on(
+      t.chunkId,
+      t.provider,
+      t.model,
+      t.dimensions,
+      t.contentHash
+    ),
+    index("document_chunk_embeddings_doc_idx").on(t.documentId),
+    index("document_chunk_embeddings_tenant_idx").on(t.tenantId),
+    index("document_chunk_embeddings_profile_idx").on(t.provider, t.model, t.dimensions),
+    index("document_chunk_embeddings_hnsw_768")
+      .using("hnsw", sql`(${t.embedding}::vector(768)) vector_cosine_ops`)
+      .where(sql`${t.dimensions} = 768`),
+    index("document_chunk_embeddings_hnsw_1024")
+      .using("hnsw", sql`(${t.embedding}::vector(1024)) vector_cosine_ops`)
+      .where(sql`${t.dimensions} = 1024`),
+    index("document_chunk_embeddings_hnsw_1536")
+      .using("hnsw", sql`(${t.embedding}::vector(1536)) vector_cosine_ops`)
+      .where(sql`${t.dimensions} = 1536`),
+  ]
 );
 
 // Tracked changes (redlines) on a document. For docx documents the w-ids point at
@@ -179,6 +284,8 @@ export const documentEdits = pgTable("document_edits", {
   contextBefore: text("context_before"),
   contextAfter: text("context_after"),
   reason: text("reason"),
+  findingProvenance: jsonb("finding_provenance").$type<FindingEditProvenance>(),
+  approvalContext: jsonb("approval_context").$type<DocumentApprovalContext>(),
   status: text("status").$type<"pending" | "accepted" | "rejected">().default("pending").notNull(),
   createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
   resolvedBy: text("resolved_by").references(() => user.id, { onDelete: "set null" }),
@@ -187,8 +294,34 @@ export const documentEdits = pgTable("document_edits", {
   resolvedAt: timestamp("resolved_at"),
 });
 
+// One append-only exact human decision per tracked change. Legacy proposals bind
+// the current draft and current policy when reviewed, without inventing history.
+export const documentEditDecisions = pgTable("document_edit_decisions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  editId: uuid("edit_id")
+    .notNull()
+    .unique()
+    .references(() => documentEdits.id, { onDelete: "cascade" }),
+  documentId: uuid("document_id")
+    .notNull()
+    .references(() => documents.id, { onDelete: "cascade" }),
+  proposedVersionId: uuid("proposed_version_id"),
+  reviewedVersionId: uuid("reviewed_version_id"),
+  contentHash: text("content_hash").notNull(),
+  policyContext: jsonb("policy_context").$type<DocumentApprovalContext>().notNull(),
+  legacy: boolean("legacy").notNull(),
+  actorId: text("actor_id")
+    .notNull()
+    .references(() => user.id),
+  decision: text("decision").$type<"accept" | "reject">().notNull(),
+  applicationCommitId: uuid("application_commit_id").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 export type DocumentFolder = typeof documentFolders.$inferSelect;
 export type Document = typeof documents.$inferSelect;
 export type MatterDocument = typeof matterDocuments.$inferSelect;
 export type DocumentVersion = typeof documentVersions.$inferSelect;
+export type DocumentChunk = typeof documentChunks.$inferSelect;
+export type DocumentChunkEmbedding = typeof documentChunkEmbeddings.$inferSelect;
 export type DocumentEdit = typeof documentEdits.$inferSelect;

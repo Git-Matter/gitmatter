@@ -1,6 +1,13 @@
+import { FieldDescription } from "@/components/ui/field";
+import { captureActionOrigin, notifySuccess } from "@/lib/feedback";
+import { useDraftExit } from "@/lib/hooks/useDraftExit";
+import { FormFeedback } from "@/components/FormFeedback";
+import { useWorkspaceViewState } from "@/lib/hooks/state/useWorkspaceViewState";
+import { CollectionPanel } from "@/components/CollectionPanel";
+import { TemplatesSection } from "./-components/TemplatesSection";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { createColumnHelper } from "@tanstack/react-table";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { BookMarked, ClipboardCheck, Play, Plus, Trash2, User } from "lucide-react";
@@ -41,7 +48,37 @@ import { useSession } from "@/lib/auth/auth-client";
 import { queryKeys } from "@/lib/data/queries";
 import { useDataTable } from "@/lib/hooks/table/useDataTable";
 
-export const Route = createFileRoute("/_auth/library/")({ component: LibraryPage });
+export const Route = createFileRoute("/_auth/library/")({
+  component: LibraryPage,
+  validateSearch: (
+    input: Record<string, unknown>
+  ): {
+    tab?: "templates" | "clauses" | "playbooks";
+    clause?: string;
+    template?: string;
+    templateView?: "all" | "review" | "returned" | "archived";
+  } => ({
+    tab:
+      input.tab === "templates" || input.tab === "clauses" || input.tab === "playbooks"
+        ? input.tab
+        : undefined,
+    clause:
+      typeof input.clause === "string" && /^[0-9a-f-]{36}$/i.test(input.clause)
+        ? input.clause
+        : undefined,
+    template:
+      typeof input.template === "string" && /^[0-9a-f-]{36}$/i.test(input.template)
+        ? input.template
+        : undefined,
+    templateView:
+      input.templateView === "all" ||
+      input.templateView === "review" ||
+      input.templateView === "returned" ||
+      input.templateView === "archived"
+        ? input.templateView
+        : undefined,
+  }),
+});
 
 // The firm's library: curated, admin-approved knowledge in two sections that
 // share one lifecycle (draft -> approved -> deprecated) and live on the commit
@@ -50,9 +87,10 @@ export const Route = createFileRoute("/_auth/library/")({ component: LibraryPage
 const RISK_LABEL = { acceptable: "Acceptable", negotiable: "Negotiable", escalate: "Escalate" };
 const STATUS_VARIANT = { approved: "default", draft: "secondary", deprecated: "outline" } as const;
 
-type LibraryTab = "clauses" | "playbooks";
+type LibraryTab = "templates" | "clauses" | "playbooks";
 type ClauseScope = "firm" | "client" | "matter";
 const LIBRARY_TABS = [
+  { id: "templates" as const, label: "Templates" },
   { id: "clauses" as const, label: "Clauses" },
   { id: "playbooks" as const, label: "Playbooks" },
 ];
@@ -62,17 +100,30 @@ const playbookColumn = createColumnHelper<WorkflowListItem>();
 function LibraryPage() {
   // DataTable receives a stable TanStack table whose rows mutate in place.
   "use no memo";
-  const [tab, setTab] = useState<LibraryTab>("clauses");
-  const [clauseSearch, setClauseSearch] = useState("");
-  const [playbookSearch, setPlaybookSearch] = useState("");
+  const { clause, template, templateView, tab: routeTab } = Route.useSearch();
+  const navigate = useNavigate();
+  const [tab, setTab] = useWorkspaceViewState<LibraryTab>(
+    "library:tab",
+    routeTab ?? (clause && !template && !templateView ? "clauses" : "templates")
+  );
+  useEffect(() => {
+    if (routeTab) setTab(routeTab);
+    else if (clause) setTab("clauses");
+    else if (template || templateView) setTab("templates");
+  }, [routeTab, clause, template, templateView, setTab]);
+  const [clauseSearch, setClauseSearch] = useWorkspaceViewState("library:clauseSearch", "");
+  const [playbookSearch, setPlaybookSearch] = useWorkspaceViewState("library:playbookSearch", "");
   const [creatingClause, setCreatingClause] = useState(false);
   const [creatingPlaybook, setCreatingPlaybook] = useState(false);
-  const [clauseScope, setClauseScope] = useState<ClauseScope>("firm");
-  const [scopeId, setScopeId] = useState<string | null>(null);
+  const [clauseScope, setClauseScope] = useWorkspaceViewState<ClauseScope>(
+    "library:clauseScope",
+    "firm"
+  );
+  const [scopeId, setScopeId] = useWorkspaceViewState<string | null>("library:scopeId", null);
   const { data: session } = useSession();
   // Keep both library collections warm when the workspace opens. Tabs only
   // change which table is visible; they should not decide whether its data loads.
-  const { data: clausesList = [] } = useQuery({
+  const clausesQuery = useQuery({
     queryKey: ["clauses", clauseScope, scopeId],
     queryFn: () =>
       api.listClauses(
@@ -92,10 +143,12 @@ function LibraryPage() {
     queryKey: ["matters"],
     queryFn: () => api.listMatters(),
   });
-  const { data: allWorkflows = [] } = useQuery({
+  const workflowsQuery = useQuery({
     queryKey: queryKeys.workflows,
     queryFn: () => api.listWorkflows(),
   });
+  const clausesList = clausesQuery.data ?? [];
+  const allWorkflows = workflowsQuery.data ?? [];
   const isAdmin =
     session?.user && "tenantRole" in session.user
       ? (session.user as { tenantRole?: string }).tenantRole === "admin"
@@ -111,17 +164,19 @@ function LibraryPage() {
         <PageHeader
           title="Library"
           action={
-            <Button
-              variant="outline"
-              size="icon-sm"
-              className="rounded-full"
-              tooltip={tab === "clauses" ? "New clause" : "New playbook"}
-              onClick={() =>
-                tab === "clauses" ? setCreatingClause(true) : setCreatingPlaybook(true)
-              }
-            >
-              <Plus className="size-4" />
-            </Button>
+            tab !== "templates" && (
+              <Button
+                variant="outline"
+                size="sm"
+                tooltip={tab === "clauses" ? "New clause" : "New playbook"}
+                onClick={() =>
+                  tab === "clauses" ? setCreatingClause(true) : setCreatingPlaybook(true)
+                }
+              >
+                <Plus data-icon="inline-start" />
+                {tab === "clauses" ? "New clause" : "New playbook"}
+              </Button>
+            )
           }
         />
       }
@@ -129,86 +184,135 @@ function LibraryPage() {
       <ToolbarTabs
         tabs={LIBRARY_TABS}
         active={tab}
-        onChange={setTab}
+        onChange={(next) => {
+          setTab(next);
+          void navigate({
+            to: "/library",
+            search: (previous) => ({
+              ...previous,
+              tab: next,
+              clause: undefined,
+              template: undefined,
+              templateView: undefined,
+            }),
+          });
+        }}
         actions={
-          <div className="flex items-center gap-2">
-            {tab === "clauses" && (
-              <>
-                <Select
-                  value={clauseScope}
-                  onValueChange={(value) => {
-                    setClauseScope(value as ClauseScope);
-                    setScopeId(null);
-                  }}
-                >
-                  <SelectTrigger className="h-8 w-36 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="firm">Firm standards</SelectItem>
-                    <SelectItem value="client">Client exceptions</SelectItem>
-                    <SelectItem value="matter">Matter exceptions</SelectItem>
-                  </SelectContent>
-                </Select>
-                {clauseScope === "client" && (
-                  <Select value={scopeId ?? ""} onValueChange={setScopeId}>
-                    <SelectTrigger className="h-8 w-44 text-xs">
-                      <SelectValue placeholder="Select client…" />
+          tab !== "templates" && (
+            <div className="flex items-center gap-2">
+              {tab === "clauses" && (
+                <>
+                  <Select
+                    value={clauseScope}
+                    onValueChange={(value) => {
+                      setClauseScope(value as ClauseScope);
+                      setScopeId(null);
+                    }}
+                  >
+                    <SelectTrigger className="h-8 w-36 text-xs">
+                      <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {clients.map((client) => (
-                        <SelectItem key={client.id} value={client.id}>
-                          {client.name}
-                        </SelectItem>
-                      ))}
+                      <SelectItem value="firm">Firm standards</SelectItem>
+                      <SelectItem value="client">Client exceptions</SelectItem>
+                      <SelectItem value="matter">Matter exceptions</SelectItem>
                     </SelectContent>
                   </Select>
-                )}
-                {clauseScope === "matter" && (
-                  <Select value={scopeId ?? ""} onValueChange={setScopeId}>
-                    <SelectTrigger className="h-8 w-44 text-xs">
-                      <SelectValue placeholder="Select matter…" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {matters.map(({ matter }) => (
-                        <SelectItem key={matter.id} value={matter.id}>
-                          {matter.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-              </>
-            )}
-            <TableSearch
-              value={search}
-              onChange={setSearch}
-              placeholder={tab === "clauses" ? "Search clauses…" : "Search playbooks…"}
-            />
-          </div>
+                  {clauseScope === "client" && (
+                    <Select value={scopeId ?? ""} onValueChange={setScopeId}>
+                      <SelectTrigger className="h-8 w-44 text-xs">
+                        <SelectValue placeholder="Select client…" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {clients.map((client) => (
+                          <SelectItem key={client.id} value={client.id}>
+                            {client.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                  {clauseScope === "matter" && (
+                    <Select value={scopeId ?? ""} onValueChange={setScopeId}>
+                      <SelectTrigger className="h-8 w-44 text-xs">
+                        <SelectValue placeholder="Select matter…" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {matters.map(({ matter }) => (
+                          <SelectItem key={matter.id} value={matter.id}>
+                            {matter.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                </>
+              )}
+              <TableSearch
+                value={search}
+                onChange={setSearch}
+                placeholder={tab === "clauses" ? "Search clauses…" : "Search playbooks…"}
+              />
+            </div>
+          )
         }
       />
-      {tab === "clauses" && (
-        <ClausesSection
-          isAdmin={isAdmin}
-          clausesList={clausesList}
-          clauseScope={clauseScope}
-          scopeId={scopeId}
-          clients={clients}
-          matters={matters}
-          search={clauseSearch}
-          creating={creatingClause}
-          onCreatingChange={setCreatingClause}
+      {tab === "templates" && (
+        <TemplatesSection
+          templateId={template ?? null}
+          initialView={templateView}
+          onTemplateChange={(id) =>
+            void navigate({
+              to: "/library",
+              search: (previous) => ({
+                ...previous,
+                tab: "templates",
+                clause: undefined,
+                template: id,
+              }),
+              replace: true,
+            })
+          }
+          onViewChange={(view) =>
+            void navigate({
+              to: "/library",
+              search: (previous) => ({
+                ...previous,
+                clause: undefined,
+                tab: "templates",
+                templateView: view,
+                template: undefined,
+              }),
+              replace: true,
+            })
+          }
         />
       )}
+      {tab === "clauses" && (
+        <CollectionPanel query={clausesQuery} label="Clauses">
+          <ClausesSection
+            isAdmin={isAdmin}
+            clausesList={clausesList}
+            clauseScope={clauseScope}
+            scopeId={scopeId}
+            clients={clients}
+            matters={matters}
+            search={clauseSearch}
+            creating={creatingClause}
+            onCreatingChange={setCreatingClause}
+          />
+        </CollectionPanel>
+      )}
       {tab === "playbooks" && (
-        <PlaybooksSection
-          isAdmin={isAdmin}
-          allWorkflows={allWorkflows}
-          search={playbookSearch}
-          creating={creatingPlaybook}
-          onCreatingChange={setCreatingPlaybook}
-        />
+        <CollectionPanel query={workflowsQuery} label="Playbooks">
+          <PlaybooksSection
+            isAdmin={isAdmin}
+            allWorkflows={allWorkflows}
+            search={playbookSearch}
+            creating={creatingPlaybook}
+            onCreatingChange={setCreatingPlaybook}
+          />
+        </CollectionPanel>
       )}
     </PageShell>
   );
@@ -240,7 +344,8 @@ function ClausesSection({
   "use no memo";
   const qc = useQueryClient();
   const navigate = useNavigate();
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const searchParams = Route.useSearch();
+  const [selectedId, setSelectedId] = useState<string | null>(searchParams.clause ?? null);
   const [editing, setEditing] = useState<Clause | null>(null);
   const [creatingParent, setCreatingParent] = useState<Clause | null>(null);
 
@@ -256,17 +361,19 @@ function ClausesSection({
   };
 
   const approveMutation = useMutation({
+    onMutate: () => captureActionOrigin(),
     mutationFn: (id: string) => api.updateClause(id, { status: "approved" }),
-    onSuccess: () => {
-      toast.success("Clause approved");
+    onSuccess: (_data, _variables, origin) => {
+      notifySuccess("Clause approved", origin);
       invalidate();
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
   });
   const deprecateMutation = useMutation({
+    onMutate: () => captureActionOrigin(),
     mutationFn: (id: string) => api.updateClause(id, { status: "deprecated" }),
-    onSuccess: () => {
-      toast.success("Clause deprecated");
+    onSuccess: (_data, _variables, origin) => {
+      notifySuccess("Clause deprecated", origin);
       invalidate();
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
@@ -299,6 +406,8 @@ function ClausesSection({
     <>
       <DataTable
         table={table}
+        rowActionColumn="title"
+        scrollKey="clauses"
         onRowClick={(cl) => setSelectedId(cl.id)}
         empty={
           search.trim()
@@ -578,7 +687,21 @@ function ClauseFormDialog({
     (item) => item.status === "approved" && !item.parentClauseId
   );
 
+  const initialDraft = useRef(
+    JSON.stringify({
+      title,
+      category,
+      body,
+      guidance,
+      jurisdiction,
+      riskRating,
+      scope,
+      scopeId,
+      overridesClauseId,
+    })
+  ).current;
   const saveMutation = useMutation({
+    onMutate: () => captureActionOrigin(),
     mutationFn: async () => {
       const input: ClauseInput = {
         title,
@@ -595,186 +718,221 @@ function ClauseFormDialog({
       if (clause) await api.updateClause(clause.id, input);
       else await api.createClause(input);
     },
-    onSuccess: () => {
-      toast.success(clause ? "Clause updated" : "Clause created (draft)");
+    onSuccess: (_data, _variables, origin) => {
+      exit.resolve();
+      notifySuccess(clause ? "Clause updated" : "Clause created (draft)", origin);
       onSaved();
       onClose();
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
   });
 
+  const exit = useDraftExit({
+    dirty:
+      JSON.stringify({
+        title,
+        category,
+        body,
+        guidance,
+        jurisdiction,
+        riskRating,
+        scope,
+        scopeId,
+        overridesClauseId,
+      }) !== initialDraft,
+    saving: saveMutation.isPending,
+    discard: onClose,
+  });
   return (
-    <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-xl">
-        <DialogHeader>
-          <DialogTitle>
-            {clause ? "Edit clause" : parent ? "Add fallback position" : "New clause"}
-          </DialogTitle>
-        </DialogHeader>
-        <div className="flex flex-col gap-3">
-          <div className="flex gap-2">
-            <div className="flex flex-1 flex-col gap-1.5">
-              <Label htmlFor="cl-title">Title</Label>
-              <Input id="cl-title" value={title} onChange={(e) => setTitle(e.target.value)} />
-            </div>
-            <div className="flex flex-1 flex-col gap-1.5">
-              <Label htmlFor="cl-category">Category</Label>
-              <Input
-                id="cl-category"
-                placeholder="limitation-of-liability"
-                value={category}
-                disabled={!!parent}
-                onChange={(e) => setCategory(e.target.value)}
-              />
-            </div>
-          </div>
-          {!clause && !parent && (
+    <>
+      {exit.guard}
+      <Dialog
+        open
+        onOpenChange={(open, details) => {
+          if (!open && !exit.requestClose(onClose)) details.cancel();
+        }}
+      >
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle>
+              {clause ? "Edit clause" : parent ? "Add fallback position" : "New clause"}
+            </DialogTitle>
+          </DialogHeader>
+          <FormFeedback error={saveMutation.error} title="Library changes were not saved" />
+          <FieldDescription id="clause-save-hint">
+            Title, category and clause text are required to enable Save. Client and matter
+            exceptions also require a scope and the firm clause they override.
+          </FieldDescription>
+          <fieldset disabled={saveMutation.isPending} className="flex min-w-0 flex-col gap-3">
             <div className="flex gap-2">
               <div className="flex flex-1 flex-col gap-1.5">
-                <Label>Position scope</Label>
+                <Label htmlFor="cl-title">Title</Label>
+                <Input
+                  id="cl-title"
+                  aria-describedby="clause-save-hint"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                />
+              </div>
+              <div className="flex flex-1 flex-col gap-1.5">
+                <Label htmlFor="cl-category">Category</Label>
+                <Input
+                  id="cl-category"
+                  placeholder="limitation-of-liability"
+                  value={category}
+                  disabled={!!parent}
+                  onChange={(e) => setCategory(e.target.value)}
+                />
+              </div>
+            </div>
+            {!clause && !parent && (
+              <div className="flex gap-2">
+                <div className="flex flex-1 flex-col gap-1.5">
+                  <Label>Position scope</Label>
+                  <Select
+                    value={scope}
+                    onValueChange={(value) => {
+                      setScope(value as ClauseScope);
+                      setScopeId(null);
+                      setOverridesClauseId(null);
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="firm">Firm standard</SelectItem>
+                      <SelectItem value="client">Client exception</SelectItem>
+                      <SelectItem value="matter">Matter exception</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {scope === "client" && (
+                  <div className="flex flex-1 flex-col gap-1.5">
+                    <Label>Client</Label>
+                    <Select value={scopeId ?? ""} onValueChange={setScopeId}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select client…" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {clients.map((client) => (
+                          <SelectItem key={client.id} value={client.id}>
+                            {client.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+                {scope === "matter" && (
+                  <div className="flex flex-1 flex-col gap-1.5">
+                    <Label>Matter</Label>
+                    <Select value={scopeId ?? ""} onValueChange={setScopeId}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select matter…" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {matters.map(({ matter }) => (
+                          <SelectItem key={matter.id} value={matter.id}>
+                            {matter.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+              </div>
+            )}
+            {!clause && !parent && scope !== "firm" && (
+              <div className="flex flex-col gap-1.5">
+                <Label>Overrides firm standard</Label>
+                <Select value={overridesClauseId ?? ""} onValueChange={setOverridesClauseId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select the firm position this replaces…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {approvedFirmClauses
+                      .filter((item) => !category || item.category === category)
+                      .map((item) => (
+                        <SelectItem key={item.id} value={item.id}>
+                          {item.title} · {item.category}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+                {!approvedFirmClauses.length && (
+                  <p className="text-xs text-muted-foreground">
+                    Approve a firm standard first, then create its client or matter exception.
+                  </p>
+                )}
+              </div>
+            )}
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="cl-body">Clause language</Label>
+              <Textarea
+                id="cl-body"
+                rows={6}
+                value={body}
+                onChange={(e) => setBody(e.target.value)}
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="cl-guidance">Guidance (why this position, when to escalate)</Label>
+              <Textarea
+                id="cl-guidance"
+                rows={2}
+                value={guidance}
+                onChange={(e) => setGuidance(e.target.value)}
+              />
+            </div>
+            <div className="flex gap-2">
+              <div className="flex flex-1 flex-col gap-1.5">
+                <Label htmlFor="cl-jurisdiction">Jurisdiction (optional)</Label>
+                <Input
+                  id="cl-jurisdiction"
+                  placeholder="US, US-NY, EU, AU…"
+                  value={jurisdiction}
+                  onChange={(e) => setJurisdiction(e.target.value)}
+                />
+              </div>
+              <div className="flex flex-1 flex-col gap-1.5">
+                <Label>Risk rating</Label>
                 <Select
-                  value={scope}
-                  onValueChange={(value) => {
-                    setScope(value as ClauseScope);
-                    setScopeId(null);
-                    setOverridesClauseId(null);
-                  }}
+                  value={riskRating}
+                  onValueChange={(v) => setRiskRating(v as Clause["riskRating"])}
                 >
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="firm">Firm standard</SelectItem>
-                    <SelectItem value="client">Client exception</SelectItem>
-                    <SelectItem value="matter">Matter exception</SelectItem>
+                    <SelectItem value="acceptable">Acceptable</SelectItem>
+                    <SelectItem value="negotiable">Negotiable</SelectItem>
+                    <SelectItem value="escalate">Escalate</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-              {scope === "client" && (
-                <div className="flex flex-1 flex-col gap-1.5">
-                  <Label>Client</Label>
-                  <Select value={scopeId ?? ""} onValueChange={setScopeId}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select client…" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {clients.map((client) => (
-                        <SelectItem key={client.id} value={client.id}>
-                          {client.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-              {scope === "matter" && (
-                <div className="flex flex-1 flex-col gap-1.5">
-                  <Label>Matter</Label>
-                  <Select value={scopeId ?? ""} onValueChange={setScopeId}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select matter…" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {matters.map(({ matter }) => (
-                        <SelectItem key={matter.id} value={matter.id}>
-                          {matter.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
             </div>
-          )}
-          {!clause && !parent && scope !== "firm" && (
-            <div className="flex flex-col gap-1.5">
-              <Label>Overrides firm standard</Label>
-              <Select value={overridesClauseId ?? ""} onValueChange={setOverridesClauseId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select the firm position this replaces…" />
-                </SelectTrigger>
-                <SelectContent>
-                  {approvedFirmClauses
-                    .filter((item) => !category || item.category === category)
-                    .map((item) => (
-                      <SelectItem key={item.id} value={item.id}>
-                        {item.title} · {item.category}
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
-              {!approvedFirmClauses.length && (
-                <p className="text-xs text-muted-foreground">
-                  Approve a firm standard first, then create its client or matter exception.
-                </p>
-              )}
-            </div>
-          )}
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="cl-body">Clause language</Label>
-            <Textarea
-              id="cl-body"
-              rows={6}
-              value={body}
-              onChange={(e) => setBody(e.target.value)}
-            />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="cl-guidance">Guidance (why this position, when to escalate)</Label>
-            <Textarea
-              id="cl-guidance"
-              rows={2}
-              value={guidance}
-              onChange={(e) => setGuidance(e.target.value)}
-            />
-          </div>
-          <div className="flex gap-2">
-            <div className="flex flex-1 flex-col gap-1.5">
-              <Label htmlFor="cl-jurisdiction">Jurisdiction (optional)</Label>
-              <Input
-                id="cl-jurisdiction"
-                placeholder="US, US-NY, EU, AU…"
-                value={jurisdiction}
-                onChange={(e) => setJurisdiction(e.target.value)}
-              />
-            </div>
-            <div className="flex flex-1 flex-col gap-1.5">
-              <Label>Risk rating</Label>
-              <Select
-                value={riskRating}
-                onValueChange={(v) => setRiskRating(v as Clause["riskRating"])}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="acceptable">Acceptable</SelectItem>
-                  <SelectItem value="negotiable">Negotiable</SelectItem>
-                  <SelectItem value="escalate">Escalate</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button
-            onClick={() => saveMutation.mutate()}
-            disabled={
-              saveMutation.isPending ||
-              !title.trim() ||
-              !body.trim() ||
-              !category.trim() ||
-              ((scope === "client" || scope === "matter") && (!scopeId || !overridesClauseId))
-            }
-          >
-            {saveMutation.isPending ? "Saving…" : "Save"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+          </fieldset>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => exit.requestClose(onClose)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => saveMutation.mutate()}
+              disabled={
+                saveMutation.isPending ||
+                !title.trim() ||
+                !body.trim() ||
+                !category.trim() ||
+                ((scope === "client" || scope === "matter") && (!scopeId || !overridesClauseId))
+              }
+            >
+              {saveMutation.isPending ? "Saving…" : "Save"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
@@ -808,10 +966,11 @@ function PlaybooksSection({
   const invalidate = () => void qc.invalidateQueries({ queryKey: queryKeys.workflows });
 
   const statusMutation = useMutation({
+    onMutate: () => captureActionOrigin(),
     mutationFn: (v: { id: string; status: "approved" | "deprecated" }) =>
       api.updateWorkflow(v.id, { status: v.status }),
-    onSuccess: () => {
-      toast.success("Updated");
+    onSuccess: (_data, _variables, origin) => {
+      notifySuccess("Playbook status updated", origin);
       invalidate();
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
@@ -840,6 +999,8 @@ function PlaybooksSection({
     <>
       <DataTable
         table={table}
+        rowActionColumn="title"
+        scrollKey="playbooks"
         onRowClick={setSelected}
         empty={
           search.trim()
@@ -1142,183 +1303,208 @@ function PlaybookFormDialog({
     rules.length &&
     rules.every((r) => r.clauseType.trim() && r.standardPosition.trim());
 
+  const initialDraft = useRef(JSON.stringify({ title, rules })).current;
   const saveMutation = useMutation({
+    onMutate: () => captureActionOrigin(),
     mutationFn: async () => {
       if (playbook) await api.updateWorkflow(playbook.id, { title, rules });
       else await api.createWorkflow({ title, type: "playbook", rules });
     },
-    onSuccess: () => {
-      toast.success(playbook ? "Playbook updated" : "Playbook created (draft)");
+    onSuccess: (_data, _variables, origin) => {
+      exit.resolve();
+      notifySuccess(playbook ? "Playbook updated" : "Playbook created (draft)", origin);
       onSaved();
       onClose();
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
   });
 
+  const exit = useDraftExit({
+    dirty: JSON.stringify({ title, rules }) !== initialDraft,
+    saving: saveMutation.isPending,
+    discard: onClose,
+  });
   return (
-    <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-h-[85vh] max-w-2xl overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>{playbook ? "Edit playbook" : "New playbook"}</DialogTitle>
-        </DialogHeader>
-        <div className="flex flex-col gap-3">
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="pb-title">Title (one contract type per playbook)</Label>
-            <Input
-              id="pb-title"
-              placeholder="NDA Playbook"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-            />
-          </div>
-          {rules.map((rule, i) => (
-            <div key={rule.id} className="flex flex-col gap-2 rounded-md border p-3">
-              <div className="flex items-center justify-between">
-                <p className="text-sm font-medium">Rule {i + 1}</p>
-                <div className="flex items-center gap-1.5">
+    <>
+      {exit.guard}
+      <Dialog
+        open
+        onOpenChange={(open, details) => {
+          if (!open && !exit.requestClose(onClose)) details.cancel();
+        }}
+      >
+        <DialogContent className="max-h-[85vh] max-w-2xl overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{playbook ? "Edit playbook" : "New playbook"}</DialogTitle>
+          </DialogHeader>
+          <FormFeedback error={saveMutation.error} title="Library changes were not saved" />
+          <FieldDescription id="playbook-save-hint">
+            Enter a title and at least one rule. Each rule needs a clause type and a standard
+            position to enable Save.
+          </FieldDescription>
+          <fieldset disabled={saveMutation.isPending} className="flex min-w-0 flex-col gap-3">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="pb-title">Title (one contract type per playbook)</Label>
+              <Input
+                id="pb-title"
+                aria-describedby="playbook-save-hint"
+                placeholder="NDA Playbook"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+              />
+            </div>
+            {rules.map((rule, i) => (
+              <div key={rule.id} className="flex flex-col gap-2 rounded-md border p-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-medium">Rule {i + 1}</p>
+                  <div className="flex items-center gap-1.5">
+                    <Select
+                      value={rule.severity}
+                      onValueChange={(v) => setRule(rule.id, { severity: v as "red" | "yellow" })}
+                    >
+                      <SelectTrigger className="h-7 w-28 text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="yellow">Yellow</SelectItem>
+                        <SelectItem value="red">Red</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      size="icon-sm"
+                      variant="ghost"
+                      aria-label="Remove rule"
+                      onClick={() => setRules((rs) => rs.filter((r) => r.id !== rule.id))}
+                    >
+                      <Trash2 className="size-3.5" />
+                    </Button>
+                  </div>
+                </div>
+                <Input
+                  placeholder="Clause type, e.g. Limitation of liability"
+                  value={rule.clauseType}
+                  onChange={(e) => setRule(rule.id, { clauseType: e.target.value })}
+                />
+                <div className="flex flex-col gap-1.5">
+                  <Label>Approved standard clause</Label>
                   <Select
-                    value={rule.severity}
-                    onValueChange={(v) => setRule(rule.id, { severity: v as "red" | "yellow" })}
+                    value={rule.standardClauseId}
+                    onValueChange={(clauseId) => {
+                      const clause = approvedClauses.find((c) => c.id === clauseId);
+                      if (clause)
+                        setRule(rule.id, {
+                          standardClauseId: clause.id,
+                          standardPosition: clause.body,
+                        });
+                    }}
                   >
-                    <SelectTrigger className="h-7 w-28 text-xs">
-                      <SelectValue />
+                    <SelectTrigger>
+                      <SelectValue placeholder="Use written standard below…" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="yellow">Yellow</SelectItem>
-                      <SelectItem value="red">Red</SelectItem>
+                      {approvedClauses.map((clause) => (
+                        <SelectItem key={clause.id} value={clause.id}>
+                          {clause.title} · {clause.category}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
-                  <Button
-                    size="icon-sm"
-                    variant="ghost"
-                    aria-label="Remove rule"
-                    onClick={() => setRules((rs) => rs.filter((r) => r.id !== rule.id))}
-                  >
-                    <Trash2 className="size-3.5" />
-                  </Button>
+                  {rule.standardClauseId && (
+                    <Button
+                      size="xs"
+                      variant="ghost"
+                      className="self-start"
+                      onClick={() => setRule(rule.id, { standardClauseId: undefined })}
+                    >
+                      Use written standard instead
+                    </Button>
+                  )}
+                </div>
+                <Textarea
+                  placeholder="Standard position"
+                  rows={2}
+                  value={rule.standardPosition}
+                  onChange={(e) => setRule(rule.id, { standardPosition: e.target.value })}
+                />
+                <Textarea
+                  placeholder="Unacceptable / red line (optional)"
+                  rows={1}
+                  value={rule.unacceptable ?? ""}
+                  onChange={(e) => setRule(rule.id, { unacceptable: e.target.value || undefined })}
+                />
+                <Textarea
+                  placeholder="Guidance (optional)"
+                  rows={1}
+                  value={rule.guidance ?? ""}
+                  onChange={(e) => setRule(rule.id, { guidance: e.target.value || undefined })}
+                />
+                <div className="flex flex-col gap-1.5">
+                  <Label>Approved library fallbacks</Label>
+                  <Select onValueChange={(clauseId) => addFallback(rule.id, clauseId as string)}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Add an approved clause…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {approvedClauses.map((clause) => (
+                        <SelectItem key={clause.id} value={clause.id}>
+                          {clause.title} · {clause.category}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {rule.fallbacks?.map((fallback, index) => {
+                    const clause =
+                      typeof fallback === "string"
+                        ? null
+                        : approvedClauses.find((c) => c.id === fallback.clauseId);
+                    return (
+                      <div
+                        key={`${typeof fallback === "string" ? fallback : fallback.clauseId}-${index}`}
+                        className="flex items-center justify-between gap-2 text-xs text-muted-foreground"
+                      >
+                        <span>
+                          {clause
+                            ? clause.title
+                            : typeof fallback === "string"
+                              ? fallback
+                              : "Unavailable clause"}
+                        </span>
+                        <Button
+                          size="icon-sm"
+                          variant="ghost"
+                          aria-label="Remove fallback"
+                          onClick={() => removeFallback(rule.id, index)}
+                        >
+                          <Trash2 className="size-3.5" />
+                        </Button>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
-              <Input
-                placeholder="Clause type, e.g. Limitation of liability"
-                value={rule.clauseType}
-                onChange={(e) => setRule(rule.id, { clauseType: e.target.value })}
-              />
-              <div className="flex flex-col gap-1.5">
-                <Label>Approved standard clause</Label>
-                <Select
-                  value={rule.standardClauseId}
-                  onValueChange={(clauseId) => {
-                    const clause = approvedClauses.find((c) => c.id === clauseId);
-                    if (clause)
-                      setRule(rule.id, {
-                        standardClauseId: clause.id,
-                        standardPosition: clause.body,
-                      });
-                  }}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Use written standard below…" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {approvedClauses.map((clause) => (
-                      <SelectItem key={clause.id} value={clause.id}>
-                        {clause.title} · {clause.category}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {rule.standardClauseId && (
-                  <Button
-                    size="xs"
-                    variant="ghost"
-                    className="self-start"
-                    onClick={() => setRule(rule.id, { standardClauseId: undefined })}
-                  >
-                    Use written standard instead
-                  </Button>
-                )}
-              </div>
-              <Textarea
-                placeholder="Standard position"
-                rows={2}
-                value={rule.standardPosition}
-                onChange={(e) => setRule(rule.id, { standardPosition: e.target.value })}
-              />
-              <Textarea
-                placeholder="Unacceptable / red line (optional)"
-                rows={1}
-                value={rule.unacceptable ?? ""}
-                onChange={(e) => setRule(rule.id, { unacceptable: e.target.value || undefined })}
-              />
-              <Textarea
-                placeholder="Guidance (optional)"
-                rows={1}
-                value={rule.guidance ?? ""}
-                onChange={(e) => setRule(rule.id, { guidance: e.target.value || undefined })}
-              />
-              <div className="flex flex-col gap-1.5">
-                <Label>Approved library fallbacks</Label>
-                <Select onValueChange={(clauseId) => addFallback(rule.id, clauseId as string)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Add an approved clause…" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {approvedClauses.map((clause) => (
-                      <SelectItem key={clause.id} value={clause.id}>
-                        {clause.title} · {clause.category}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {rule.fallbacks?.map((fallback, index) => {
-                  const clause =
-                    typeof fallback === "string"
-                      ? null
-                      : approvedClauses.find((c) => c.id === fallback.clauseId);
-                  return (
-                    <div
-                      key={`${typeof fallback === "string" ? fallback : fallback.clauseId}-${index}`}
-                      className="flex items-center justify-between gap-2 text-xs text-muted-foreground"
-                    >
-                      <span>
-                        {clause
-                          ? clause.title
-                          : typeof fallback === "string"
-                            ? fallback
-                            : "Unavailable clause"}
-                      </span>
-                      <Button
-                        size="icon-sm"
-                        variant="ghost"
-                        aria-label="Remove fallback"
-                        onClick={() => removeFallback(rule.id, index)}
-                      >
-                        <Trash2 className="size-3.5" />
-                      </Button>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => setRules((rs) => [...rs, EMPTY_RULE()])}
-          >
-            <Plus className="size-4" /> Add rule
-          </Button>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending || !valid}>
-            {saveMutation.isPending ? "Saving…" : "Save"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+            ))}
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setRules((rs) => [...rs, EMPTY_RULE()])}
+            >
+              <Plus className="size-4" /> Add rule
+            </Button>
+          </fieldset>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => exit.requestClose(onClose)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => saveMutation.mutate()}
+              disabled={saveMutation.isPending || !valid}
+            >
+              {saveMutation.isPending ? "Saving…" : "Save"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
@@ -1344,9 +1530,10 @@ function RunPlaybookDialog({
   });
 
   const runMutation = useMutation({
+    onMutate: () => captureActionOrigin(),
     mutationFn: () => api.runPlaybook(playbook.id, { matterId: matterId!, documentIds: docIds }),
-    onSuccess: ({ reviewId }) => {
-      toast.success("Playbook review created — press Run to extract verdicts");
+    onSuccess: ({ reviewId }, _variables, origin) => {
+      notifySuccess("Playbook review created — press Run to extract verdicts", origin);
       onClose();
       void navigate({ to: "/reviews/$id", params: { id: reviewId } });
     },
@@ -1389,10 +1576,8 @@ function RunPlaybookDialog({
                   <label key={d.id} className="flex items-center gap-2 text-sm">
                     <Checkbox
                       checked={docIds.includes(d.id)}
-                      onChange={(e) =>
-                        setDocIds(
-                          e.target.checked ? [...docIds, d.id] : docIds.filter((id) => id !== d.id)
-                        )
+                      onCheckedChange={(e) =>
+                        setDocIds(e ? [...docIds, d.id] : docIds.filter((id) => id !== d.id))
                       }
                     />
                     {d.title}
