@@ -253,4 +253,13 @@ describe("bounded web deployment verification (no network)", () => {
       expect(fetcher).not.toHaveBeenCalled();
     }
   );
+
+  test("a missing expected release fails before any request from an untyped caller", async () => {
+    const fetcher = vi.fn<typeof fetch>();
+    await expect(
+      // @ts-expect-error Exercise missing runtime configuration despite the required TypeScript field.
+      verifyWebDeployment({ url, fetcher })
+    ).rejects.toThrow("Invalid deployment verification configuration");
+    expect(fetcher).not.toHaveBeenCalled();
+  });
 });

@@ -30,9 +30,9 @@ export function describeDeploymentObservation(observation: DeploymentObservation
   return `attempt ${observation.attempt}: ${observation.state}${observation.status === undefined ? "" : ` (HTTP ${observation.status})`}${observation.release ? ` (release ${observation.release})` : ""}`;
 }
 
-function isReleaseId(release: string): boolean {
+function isReleaseId(release: unknown): release is string {
   // Comparing the whole match also rejects a trailing line terminator allowed by $.
-  return RELEASE_ID.exec(release)?.[0] === release;
+  return typeof release === "string" && RELEASE_ID.exec(release)?.[0] === release;
 }
 
 function inspect(body: unknown, expectedRelease: string): Observation {
@@ -41,8 +41,7 @@ function inspect(body: unknown, expectedRelease: string): Observation {
   if (typeof report.ok !== "boolean" || !report.checks || typeof report.checks !== "object")
     return { state: "invalid_response" };
   if (!report.ok || report.checks.db !== "up") return { state: "database_not_ready" };
-  if (typeof report.release !== "string" || !isReleaseId(report.release))
-    return { state: "release_unknown" };
+  if (!isReleaseId(report.release)) return { state: "release_unknown" };
   return {
     state: report.release === expectedRelease ? "ready" : "release_mismatch",
     release: report.release,
